@@ -93,7 +93,6 @@ public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
 	private ClusterClientProvider<String> createClusterClientProvider(String clusterId) {
 		return () -> {
 			final Configuration configuration = new Configuration(flinkConfig);
-			System.out.println("current cluster id is :" + clusterId);
 			final Optional<Endpoint> restEndpoint = client.getRestEndpoint(clusterId);
 
 			if (restEndpoint.isPresent()) {
