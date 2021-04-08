@@ -19,16 +19,22 @@
 package org.apache.flink.table.planner.runtime.stream.sql
 
 import org.apache.flink.api.scala._
+import org.apache.flink.core.testutils.FlinkMatchers.containsCause
+import org.apache.flink.table.api.TableException
 import org.apache.flink.table.api.bridge.scala._
 import org.apache.flink.table.planner.factories.TestValuesTableFactory
 import org.apache.flink.table.planner.runtime.utils.{StreamingTestBase, TestData, TestingAppendSink, TestingRetractSink}
 import org.apache.flink.table.planner.utils._
+import org.apache.flink.table.runtime.functions.scalar.SourceWatermarkFunction
+import org.apache.flink.table.utils.LegacyRowResource
 import org.apache.flink.types.Row
-
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.{Before, Rule, Test}
 
 class TableSourceITCase extends StreamingTestBase {
+
+  @Rule
+  def usesLegacyRows: LegacyRowResource = LegacyRowResource.INSTANCE
 
   @Before
   override def before(): Unit = {
@@ -72,6 +78,7 @@ class TableSourceITCase extends StreamingTestBase {
          |  `other_metadata` INT METADATA FROM 'metadata_3',
          |  `b` BIGINT,
          |  `metadata_1` INT METADATA,
+         |  `computed` AS `metadata_1` * 2,
          |  `metadata_2` STRING METADATA
          |) WITH (
          |  'connector' = 'values',
@@ -96,24 +103,6 @@ class TableSourceITCase extends StreamingTestBase {
          |  'connector' = 'values',
          |  'nested-projection-supported' = 'true',
          |  'data-id' = '$nestedTableDataId'
-         |)
-         |""".stripMargin
-    )
-    tEnv.executeSql(
-      s"""
-         |CREATE TABLE NestedTableWithMetadata (
-         |  id BIGINT,
-         |  deepNested ROW<
-         |     nested1 ROW<name STRING, `value.` INT>,
-         |     `nested2.` ROW<num INT, flag BOOLEAN>
-         |   >,
-         |   nested ROW<name STRING, `value` INT>,
-         |   name STRING METADATA
-         |) WITH (
-         |  'connector' = 'values',
-         |  'nested-projection-supported' = 'true',
-         |  'data-id' = '$nestedTableDataId',
-         |  'readable-metadata' = 'name:string'
          |)
          |""".stripMargin
     )
@@ -290,19 +279,20 @@ class TableSourceITCase extends StreamingTestBase {
 
   @Test
   def testComplexMetadataAccess(): Unit = {
-    val result = tEnv.sqlQuery("SELECT `a`, `other_metadata`, `b`, `metadata_2` FROM MetadataTable")
+    val result = tEnv.sqlQuery(
+        "SELECT `a`, `other_metadata`, `b`, `metadata_2`, `computed` FROM MetadataTable")
       .toAppendStream[Row]
     val sink = new TestingAppendSink
     result.addSink(sink)
     env.execute()
-    // (a, b, metadata_1, metadata_2, other_metadata)
-    // (1, 1L, 0, "Hallo", 1L)
-    // (2, 2L, 1, "Hallo Welt", 2L)
-    // (2, 3L, 2, "Hallo Welt wie", 1L)
+    // (a, b, metadata_1, computed, metadata_2, other_metadata)
+    // (1, 1L, 0, 0, "Hallo", 1L)
+    // (2, 2L, 1, 2, "Hallo Welt", 2L)
+    // (2, 3L, 2, 4, "Hallo Welt wie", 1L)
     val expected = Seq(
-      "1,1,1,Hallo",
-      "2,2,2,Hallo Welt",
-      "2,1,3,Hallo Welt wie")
+      "1,1,1,Hallo,0",
+      "2,2,2,Hallo Welt,2",
+      "2,1,3,Hallo Welt wie,4")
     assertEquals(expected.sorted, sink.getAppendResults.sorted)
   }
 
@@ -329,5 +319,44 @@ class TableSourceITCase extends StreamingTestBase {
       "2,Rob,20000,false,2200,bob",
       "3,Mike,30000,true,3300,liz")
     assertEquals(expected.sorted, sink.getAppendResults.sorted)
+  }
+
+  @Test
+  def testSourceWatermarkInDDL(): Unit = {
+    val dataId = TestValuesTableFactory.registerData(TestData.data3WithTimestamp)
+    tEnv.executeSql(
+      s"""
+         |CREATE TABLE tableWithWatermark (
+         |  `a` INT,
+         |  `b` BIGINT,
+         |  `c` STRING,
+         |  `ts` TIMESTAMP(3),
+         |  WATERMARK FOR ts AS SOURCE_WATERMARK()
+         |) WITH (
+         |  'connector' = 'values',
+         |  'data-id' = '$dataId',
+         |  'bounded' = 'false'
+         |)
+         |""".stripMargin)
+
+
+    try {
+      tEnv.executeSql("SELECT * FROM tableWithWatermark").await()
+      fail("should fail")
+    } catch {
+      case t: Throwable =>
+        assertThat(t, containsCause(new TableException(SourceWatermarkFunction.ERROR_MESSAGE)))
+    }
+  }
+
+  @Test
+  def testSourceWatermarkInQuery(): Unit = {
+    try {
+      tEnv.executeSql("SELECT *, SOURCE_WATERMARK() FROM MyTable").print()
+      fail("should fail")
+    } catch {
+      case t: Throwable =>
+        assertThat(t, containsCause(new TableException(SourceWatermarkFunction.ERROR_MESSAGE)))
+    }
   }
 }

@@ -128,21 +128,11 @@ under the License.
 			<fileMode>0755</fileMode>
 		</fileSet>
 
-		<!-- flink scala shell-->
-		<fileSet>
-			<directory>../flink-scala-shell/start-script/</directory>
-			<outputDirectory>bin</outputDirectory>
-			<fileMode>755</fileMode>
-		</fileSet>
-
 		<!-- copy python scripts -->
 		<fileSet>
 			<directory>../flink-python/bin/</directory>
 			<outputDirectory>bin</outputDirectory>
 			<fileMode>0755</fileMode>
-			<excludes>
-				<exclude>pyflink-udf-runner.*</exclude>
-			</excludes>
 		</fileSet>
 
 		<!-- copy SQL client -->

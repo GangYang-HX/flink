@@ -20,6 +20,7 @@ package org.apache.flink.table.planner.plan.rules.logical
 import org.apache.flink.table.api.{DataTypes, TableSchema}
 import org.apache.flink.table.planner.expressions.utils.Func1
 import org.apache.flink.table.planner.plan.optimize.program.{FlinkBatchProgram, FlinkHepRuleSetProgramBuilder, HEP_RULES_EXECUTION_TYPE}
+import org.apache.flink.table.planner.utils.DateTimeTestUtil.localDateTime
 import org.apache.flink.table.planner.utils.{TableConfigUtils, TableTestBase, TestLegacyFilterableTableSource}
 import org.apache.flink.types.Row
 
@@ -72,64 +73,64 @@ class PushFilterIntoLegacyTableSourceScanRuleTest extends TableTestBase {
 
   @Test
   def testCanPushDown(): Unit = {
-    util.verifyPlan("SELECT * FROM MyTable WHERE amount > 2")
+    util.verifyRelPlan("SELECT * FROM MyTable WHERE amount > 2")
   }
 
   @Test
   def testCanPushDownWithVirtualColumn(): Unit = {
-    util.verifyPlan("SELECT * FROM VirtualTable WHERE amount > 2")
+    util.verifyRelPlan("SELECT * FROM VirtualTable WHERE amount > 2")
   }
 
   @Test
   def testCannotPushDown(): Unit = {
     // TestFilterableTableSource only accept predicates with `amount`
-    util.verifyPlan("SELECT * FROM MyTable WHERE price > 10")
+    util.verifyRelPlan("SELECT * FROM MyTable WHERE price > 10")
   }
 
   @Test
   def testCannotPushDownWithVirtualColumn(): Unit = {
     // TestFilterableTableSource only accept predicates with `amount`
-    util.verifyPlan("SELECT * FROM VirtualTable WHERE price > 10")
+    util.verifyRelPlan("SELECT * FROM VirtualTable WHERE price > 10")
   }
 
   @Test
   def testPartialPushDown(): Unit = {
-    util.verifyPlan("SELECT * FROM MyTable WHERE amount > 2 AND price > 10")
+    util.verifyRelPlan("SELECT * FROM MyTable WHERE amount > 2 AND price > 10")
   }
 
   @Test
   def testPartialPushDownWithVirtualColumn(): Unit = {
-    util.verifyPlan("SELECT * FROM VirtualTable WHERE amount > 2 AND price > 10")
+    util.verifyRelPlan("SELECT * FROM VirtualTable WHERE amount > 2 AND price > 10")
   }
 
   @Test
   def testFullyPushDown(): Unit = {
-    util.verifyPlan("SELECT * FROM MyTable WHERE amount > 2 AND amount < 10")
+    util.verifyRelPlan("SELECT * FROM MyTable WHERE amount > 2 AND amount < 10")
   }
 
   @Test
   def testFullyPushDownWithVirtualColumn(): Unit = {
-    util.verifyPlan("SELECT * FROM VirtualTable WHERE amount > 2 AND amount < 10")
+    util.verifyRelPlan("SELECT * FROM VirtualTable WHERE amount > 2 AND amount < 10")
   }
 
   @Test
   def testPartialPushDown2(): Unit = {
-    util.verifyPlan("SELECT * FROM MyTable WHERE amount > 2 OR price > 10")
+    util.verifyRelPlan("SELECT * FROM MyTable WHERE amount > 2 OR price > 10")
   }
 
   @Test
   def testPartialPushDown2WithVirtualColumn(): Unit = {
-    util.verifyPlan("SELECT * FROM VirtualTable WHERE amount > 2 OR price > 10")
+    util.verifyRelPlan("SELECT * FROM VirtualTable WHERE amount > 2 OR price > 10")
   }
 
   @Test
   def testCannotPushDown3(): Unit = {
-    util.verifyPlan("SELECT * FROM MyTable WHERE amount > 2 OR amount < 10")
+    util.verifyRelPlan("SELECT * FROM MyTable WHERE amount > 2 OR amount < 10")
   }
 
   @Test
   def testCannotPushDown3WithVirtualColumn(): Unit = {
-    util.verifyPlan("SELECT * FROM VirtualTable WHERE amount > 2 OR amount < 10")
+    util.verifyRelPlan("SELECT * FROM VirtualTable WHERE amount > 2 OR amount < 10")
   }
 
   @Test
@@ -139,13 +140,13 @@ class PushFilterIntoLegacyTableSourceScanRuleTest extends TableTestBase {
         |SELECT * FROM MyTable WHERE
         |    amount > 2 AND id < 100 AND CAST(amount AS BIGINT) > 10
       """.stripMargin
-    util.verifyPlan(sqlQuery)
+    util.verifyRelPlan(sqlQuery)
   }
 
   @Test
   def testWithUdf(): Unit = {
     util.addFunction("myUdf", Func1)
-    util.verifyPlan("SELECT * FROM MyTable WHERE amount > 2 AND myUdf(amount) < 32")
+    util.verifyRelPlan("SELECT * FROM MyTable WHERE amount > 2 AND myUdf(amount) < 32")
   }
 
   @Test
@@ -165,6 +166,34 @@ class PushFilterIntoLegacyTableSourceScanRuleTest extends TableTestBase {
       data,
       List("a", "b"))
 
-    util.verifyPlan("SELECT * FROM MTable WHERE LOWER(a) = 'foo' AND UPPER(b) = 'bar'")
+    util.verifyRelPlan("SELECT * FROM MTable WHERE LOWER(a) = 'foo' AND UPPER(b) = 'bar'")
+  }
+
+  @Test
+  def testWithInterval(): Unit = {
+    val schema = TableSchema
+      .builder()
+      .field("a", DataTypes.TIMESTAMP)
+      .field("b", DataTypes.TIMESTAMP)
+      .build()
+
+    val data = List(Row.of(
+      localDateTime("2021-03-30 10:00:00"), localDateTime("2021-03-30 15:00:00")))
+    TestLegacyFilterableTableSource.createTemporaryTable(
+      util.tableEnv,
+      schema,
+      "MTable",
+      isBounded = true,
+      data,
+      List("a", "b"))
+
+    util.verifyRelPlan(
+      """
+        |SELECT * FROM MTable
+        |WHERE
+        |  TIMESTAMPADD(HOUR, 5, a) >= b
+        |  OR
+        |  TIMESTAMPADD(YEAR, 2, b) >= a
+        |""".stripMargin)
   }
 }

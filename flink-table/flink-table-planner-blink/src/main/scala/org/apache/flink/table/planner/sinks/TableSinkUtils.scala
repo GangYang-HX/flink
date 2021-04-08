@@ -28,6 +28,7 @@ import org.apache.flink.table.connector.sink.abilities.{SupportsOverwrite, Suppo
 import org.apache.flink.table.data.RowData
 import org.apache.flink.table.operations.CatalogSinkModifyOperation
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
+import org.apache.flink.table.planner.connectors.DynamicSinkUtils
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter.fromDataTypeToTypeInfo
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo
 import org.apache.flink.table.sinks._
@@ -137,7 +138,9 @@ object TableSinkUtils {
       // and infer the sink schema via field names, see expandPojoTypeToSchema().
       fromDataTypeToTypeInfo(requestedOutputType) match {
         case pj: PojoTypeInfo[_] => expandPojoTypeToSchema(pj, queryLogicalType)
-        case _ => DataTypeUtils.expandCompositeTypeToSchema(requestedOutputType)
+        case _ =>
+          TableSchema.fromResolvedSchema(
+            DataTypeUtils.expandCompositeTypeToSchema(requestedOutputType))
       }
     } else {
       // atomic type
@@ -171,7 +174,8 @@ object TableSinkUtils {
       }
       DataTypes.FIELD(name, fieldDataType)
     })
-    DataTypeUtils.expandCompositeTypeToSchema(DataTypes.ROW(reorderedFields: _*))
+    TableSchema.fromResolvedSchema(
+      DataTypeUtils.expandCompositeTypeToSchema(DataTypes.ROW(reorderedFields: _*)))
   }
 
   /**
@@ -276,8 +280,8 @@ object TableSinkUtils {
   /**
    * Gets the NOT NULL physical field indices on the [[CatalogTable]].
    */
-  def getNotNullFieldIndices(catalogTable: CatalogTable): Array[Int] = {
-    val rowType = catalogTable.getSchema.toPhysicalRowDataType.getLogicalType.asInstanceOf[RowType]
+  def getNotNullFieldIndices(tableSchema: TableSchema): Array[Int] = {
+    val rowType = tableSchema.toPhysicalRowDataType.getLogicalType.asInstanceOf[RowType]
     val fieldTypes = rowType.getFields.map(_.getType).toArray
     fieldTypes.indices.filter { index =>
       !fieldTypes(index).isNullable
