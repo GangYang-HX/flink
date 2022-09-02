@@ -21,13 +21,14 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.scheduler.VertexParallelismInformation;
 import org.apache.flink.runtime.scheduler.VertexParallelismStore;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.JobInformation;
 import org.apache.flink.util.InstantiationUtil;
 
-import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
+import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -66,6 +67,10 @@ public class JobGraphJobInformation implements JobInformation {
 
     public String getName() {
         return name;
+    }
+
+    public JobCheckpointingSettings getCheckpointingSettings() {
+        return jobGraph.getCheckpointingSettings();
     }
 
     public Iterable<JobInformation.VertexInformation> getVertices() {

@@ -106,6 +106,33 @@ that the planner can handle.
 
 {{< top >}}
 
+
+Project Configuration
+---------------------
+
+If you want to implement a custom connector or a custom format, the following dependency is usually 
+sufficient:
+
+{{< artifact_tabs flink-table-common withProvidedScope >}}
+
+If you want to develop a connector that needs to bridge with DataStream APIs (i.e. if you want to adapt
+a DataStream connector to the Table API), you need to add this dependency:
+
+{{< artifact_tabs flink-table-api-java-bridge withProvidedScope >}}
+
+When developing the connector/format, we suggest shipping both a thin JAR and an uber JAR, so users 
+can easily load the uber JAR in the SQL client or in the Flink distribution and start using it.
+The uber JAR should include all the third-party dependencies of the connector, 
+excluding the table dependencies listed above.
+
+{{< hint warning >}}
+You should not depend on `flink-table-planner{{< scala_version >}}` in production code.
+With the new module `flink-table-planner-loader` introduced in Flink 1.15, the 
+application's classpath will not have direct access to `org.apache.flink.table.planner` classes anymore. 
+If you need a feature available only internally within the `org.apache.flink.table.planner` package and subpackages, please open an issue.
+To learn more, check out [Anatomy of Table Dependencies]({{< ref "docs/dev/configuration/advanced" >}}#anatomy-of-table-dependencies).
+{{< /hint >}}
+
 Extension Points
 ----------------
 
@@ -196,40 +223,40 @@ will be called with values for the given lookup keys during runtime.
     </thead>
     <tbody>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsFilterPushDown.java'>SupportsFilterPushDown</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsFilterPushDown.java" name="SupportsFilterPushDown" >}}</td>
         <td>Enables to push down the filter into the <code>DynamicTableSource</code>. For efficiency, a source can
         push filters further down in order to be close to the actual data generation.</td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsLimitPushDown.java'>SupportsLimitPushDown</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsLimitPushDown.java" name="SupportsLimitPushDown" >}}</td>
         <td>Enables to push down a limit (the expected maximum number of produced records) into a <code>DynamicTableSource</code>.</td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsPartitionPushDown.java'>SupportsPartitionPushDown</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsPartitionPushDown.java" name="SupportsPartitionPushDown" >}}</td>
         <td>Enables to pass available partitions to the planner and push down partitions into a <code>DynamicTableSource</code>.
         During the runtime, the source will only read data from the passed partition list for efficiency.</td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsProjectionPushDown.java'>SupportsProjectionPushDown</a> </td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsProjectionPushDown.java" name="SupportsProjectionPushDown" >}}</td>
         <td>Enables to push down a (possibly nested) projection into a <code>DynamicTableSource</code>. For efficiency,
         a source can push a projection further down in order to be close to the actual data generation. If the source
         also implements <code>SupportsReadingMetadata</code>, the source will also read the required metadata only.
         </td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsReadingMetadata.java'>SupportsReadingMetadata</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsReadingMetadata.java" name="SupportsReadingMetadata" >}}</td>
         <td>Enables to read metadata columns from a <code>DynamicTableSource</code>. The source
         is responsible to add the required metadata at the end of the produced rows. This includes
         potentially forwarding metadata column from contained formats.</td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsWatermarkPushDown.java'>SupportsWatermarkPushDown</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsWatermarkPushDown.java" name="SupportsWatermarkPushDown" >}}</td>
         <td>Enables to push down a watermark strategy into a <code>DynamicTableSource</code>. The watermark
         strategy is a builder/factory for timestamp extraction and watermark generation. During the runtime, the
         watermark generator is located inside the source and is able to generate per-partition watermarks.</td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsSourceWatermark.java'>SupportsSourceWatermark</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/source/abilities/SupportsSourceWatermark.java" name="SupportsSourceWatermark" >}}</td>
         <td>Enables to fully rely on the watermark strategy provided by the <code>ScanTableSource</code>
         itself. Thus, a <code>CREATE TABLE</code> DDL is able to use <code>SOURCE_WATERMARK()</code> which
         is a built-in marker function that will be detected by the planner and translated into a call
@@ -275,17 +302,17 @@ that a sink can still work on common data structures and perform a conversion at
     </thead>
     <tbody>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/sink/abilities/SupportsOverwrite.java'>SupportsOverwrite</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/sink/abilities/SupportsOverwrite.java" name="SupportsOverwrite" >}}</td>
         <td>Enables to overwrite existing data in a <code>DynamicTableSink</code>. By default, if
         this interface is not implemented, existing tables or partitions cannot be overwritten using
         e.g. the SQL <code>INSERT OVERWRITE</code> clause.</td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/sink/abilities/SupportsPartitioning.java'>SupportsPartitioning</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/sink/abilities/SupportsPartitioning.java" name="SupportsPartitioning" >}}</td>
         <td>Enables to write partitioned data in a <code>DynamicTableSink</code>.</td>
     </tr>
     <tr>
-        <td><a href='https://github.com/apache/flink/blob/master/flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/sink/abilities/SupportsWritingMetadata.java'>SupportsWritingMetadata</a></td>
+        <td>{{< gh_link file="flink-table/flink-table-common/src/main/java/org/apache/flink/table/connector/sink/abilities/SupportsWritingMetadata.java" name="SupportsWritingMetadata" >}}</td>
         <td>Enables to write metadata columns into a <code>DynamicTableSource</code>. A table sink is
         responsible for accepting requested metadata columns at the end of consumed rows and persist
         them. This includes potentially forwarding metadata columns to contained formats.</td>
@@ -452,7 +479,8 @@ public class SocketDynamicTableFactory implements DynamicTableSourceFactory {
     final byte byteDelimiter = (byte) (int) options.get(BYTE_DELIMITER);
 
     // derive the produced data type (excluding computed columns) from the catalog table
-    final DataType producedDataType = context.getCatalogTable().getSchema().toPhysicalRowDataType();
+    final DataType producedDataType =
+            context.getCatalogTable().getResolvedSchema().toPhysicalRowDataType();
 
     // create and return dynamic table source
     return new SocketDynamicTableSource(hostname, port, byteDelimiter, decodingFormat, producedDataType);

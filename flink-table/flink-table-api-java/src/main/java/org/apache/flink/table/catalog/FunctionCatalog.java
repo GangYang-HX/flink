@@ -21,7 +21,6 @@ package org.apache.flink.table.catalog;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
@@ -41,10 +40,13 @@ import org.apache.flink.table.functions.TableFunctionDefinition;
 import org.apache.flink.table.functions.UserDefinedFunction;
 import org.apache.flink.table.functions.UserDefinedFunctionHelper;
 import org.apache.flink.table.module.ModuleManager;
+import org.apache.flink.table.resource.ResourceManager;
+import org.apache.flink.table.resource.ResourceUri;
 import org.apache.flink.util.Preconditions;
 
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -63,6 +65,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 @Internal
 public final class FunctionCatalog {
     private final ReadableConfig config;
+    private final ResourceManager resourceManager;
     private final CatalogManager catalogManager;
     private final ModuleManager moduleManager;
 
@@ -77,13 +80,12 @@ public final class FunctionCatalog {
     private PlannerTypeInferenceUtil plannerTypeInferenceUtil;
 
     public FunctionCatalog(
-            TableConfig config, CatalogManager catalogManager, ModuleManager moduleManager) {
-        this(checkNotNull(config).getConfiguration(), catalogManager, moduleManager);
-    }
-
-    public FunctionCatalog(
-            ReadableConfig config, CatalogManager catalogManager, ModuleManager moduleManager) {
+            ReadableConfig config,
+            ResourceManager resourceManager,
+            CatalogManager catalogManager,
+            ModuleManager moduleManager) {
         this.config = checkNotNull(config);
+        this.resourceManager = checkNotNull(resourceManager);
         this.catalogManager = checkNotNull(catalogManager);
         this.moduleManager = checkNotNull(moduleManager);
     }
@@ -152,7 +154,7 @@ public final class FunctionCatalog {
                                         normalizedIdentifier.toObjectPath(), catalogFunction);
             }
             try {
-                validateAndPrepareFunction(catalogFunction);
+                validateAndPrepareFunction(identifier.asSummaryString(), catalogFunction);
             } catch (Throwable t) {
                 throw new ValidationException(
                         String.format(
@@ -287,7 +289,50 @@ public final class FunctionCatalog {
      * functions and catalog functions in the current catalog and current database.
      */
     public String[] getUserDefinedFunctions() {
-        return getUserDefinedFunctionNames().toArray(new String[0]);
+        return getUserDefinedFunctions(
+                        catalogManager.getCurrentCatalog(), catalogManager.getCurrentDatabase())
+                .stream()
+                .map(FunctionIdentifier::getFunctionName)
+                .toArray(String[]::new);
+    }
+
+    /**
+     * Get names of all user including temp system functions, temp catalog * functions and catalog
+     * functions in the specified catalog and specified database.
+     */
+    public Set<FunctionIdentifier> getUserDefinedFunctions(
+            String catalogName, String databaseName) {
+        // add temp system functions
+        Set<FunctionIdentifier> result =
+                tempSystemFunctions.keySet().stream()
+                        .map(FunctionIdentifier::of)
+                        .collect(Collectors.toSet());
+
+        // add temp catalog functions
+        result.addAll(
+                tempCatalogFunctions.keySet().stream()
+                        .filter(
+                                oi ->
+                                        oi.getCatalogName().equals(catalogName)
+                                                && oi.getDatabaseName().equals(databaseName))
+                        .map(FunctionIdentifier::of)
+                        .collect(Collectors.toSet()));
+
+        // add catalog functions
+        Catalog catalog = catalogManager.getCatalog(catalogName).get();
+        try {
+            catalog.listFunctions(databaseName)
+                    .forEach(
+                            name ->
+                                    result.add(
+                                            FunctionIdentifier.of(
+                                                    ObjectIdentifier.of(
+                                                            catalogName, databaseName, name))));
+        } catch (DatabaseNotExistException e) {
+            // Ignore since there will always be a current database of the current catalog
+        }
+
+        return result;
     }
 
     /**
@@ -295,7 +340,13 @@ public final class FunctionCatalog {
      * functions and catalog functions in the current catalog and current database.
      */
     public String[] getFunctions() {
-        Set<String> result = getUserDefinedFunctionNames();
+        Set<String> result =
+                getUserDefinedFunctions(
+                                catalogManager.getCurrentCatalog(),
+                                catalogManager.getCurrentDatabase())
+                        .stream()
+                        .map(FunctionIdentifier::getFunctionName)
+                        .collect(Collectors.toSet());
 
         // add system functions
         result.addAll(moduleManager.listFunctions());
@@ -333,13 +384,14 @@ public final class FunctionCatalog {
     public FunctionLookup asLookup(Function<String, UnresolvedIdentifier> parser) {
         return new FunctionLookup() {
             @Override
-            public Optional<Result> lookupFunction(String stringIdentifier) {
+            public Optional<ContextResolvedFunction> lookupFunction(String stringIdentifier) {
                 UnresolvedIdentifier unresolvedIdentifier = parser.apply(stringIdentifier);
                 return lookupFunction(unresolvedIdentifier);
             }
 
             @Override
-            public Optional<FunctionLookup.Result> lookupFunction(UnresolvedIdentifier identifier) {
+            public Optional<ContextResolvedFunction> lookupFunction(
+                    UnresolvedIdentifier identifier) {
                 return FunctionCatalog.this.lookupFunction(identifier);
             }
 
@@ -353,7 +405,7 @@ public final class FunctionCatalog {
         };
     }
 
-    public Optional<FunctionLookup.Result> lookupFunction(UnresolvedIdentifier identifier) {
+    public Optional<ContextResolvedFunction> lookupFunction(UnresolvedIdentifier identifier) {
         // precise function reference
         if (identifier.getDatabaseName().isPresent()) {
             return resolvePreciseFunctionReference(catalogManager.qualifyIdentifier(identifier));
@@ -498,7 +550,7 @@ public final class FunctionCatalog {
         final String normalizedName = FunctionIdentifier.normalizeName(name);
 
         try {
-            validateAndPrepareFunction(function);
+            validateAndPrepareFunction(name, function);
         } catch (Throwable t) {
             throw new ValidationException(
                     String.format(
@@ -519,36 +571,7 @@ public final class FunctionCatalog {
 
     // --------------------------------------------------------------------------------------------
 
-    private Set<String> getUserDefinedFunctionNames() {
-
-        // add temp system functions
-        Set<String> result = new HashSet<>(tempSystemFunctions.keySet());
-
-        String currentCatalog = catalogManager.getCurrentCatalog();
-        String currentDatabase = catalogManager.getCurrentDatabase();
-
-        // add temp catalog functions
-        result.addAll(
-                tempCatalogFunctions.keySet().stream()
-                        .filter(
-                                oi ->
-                                        oi.getCatalogName().equals(currentCatalog)
-                                                && oi.getDatabaseName().equals(currentDatabase))
-                        .map(ObjectIdentifier::getObjectName)
-                        .collect(Collectors.toSet()));
-
-        // add catalog functions
-        Catalog catalog = catalogManager.getCatalog(currentCatalog).get();
-        try {
-            result.addAll(catalog.listFunctions(currentDatabase));
-        } catch (DatabaseNotExistException e) {
-            // Ignore since there will always be a current database of the current catalog
-        }
-
-        return result;
-    }
-
-    private Optional<FunctionLookup.Result> resolvePreciseFunctionReference(ObjectIdentifier oi) {
+    private Optional<ContextResolvedFunction> resolvePreciseFunctionReference(ObjectIdentifier oi) {
         // resolve order:
         // 1. Temporary functions
         // 2. Catalog functions
@@ -557,7 +580,7 @@ public final class FunctionCatalog {
 
         if (potentialResult != null) {
             return Optional.of(
-                    new FunctionLookup.Result(
+                    ContextResolvedFunction.temporary(
                             FunctionIdentifier.of(oi),
                             getFunctionDefinition(oi.getObjectName(), potentialResult)));
         }
@@ -574,15 +597,21 @@ public final class FunctionCatalog {
                 FunctionDefinition fd;
                 if (catalog.getFunctionDefinitionFactory().isPresent()
                         && catalogFunction.getFunctionLanguage() != FunctionLanguage.PYTHON) {
+                    registerFunctionJarResources(
+                            oi.asSummaryString(), catalogFunction.getFunctionResources());
                     fd =
                             catalog.getFunctionDefinitionFactory()
                                     .get()
-                                    .createFunctionDefinition(oi.getObjectName(), catalogFunction);
+                                    .createFunctionDefinition(
+                                            oi.getObjectName(),
+                                            catalogFunction,
+                                            resourceManager::getUserClassLoader);
                 } else {
                     fd = getFunctionDefinition(oi.asSummaryString(), catalogFunction);
                 }
 
-                return Optional.of(new FunctionLookup.Result(FunctionIdentifier.of(oi), fd));
+                return Optional.of(
+                        ContextResolvedFunction.permanent(FunctionIdentifier.of(oi), fd));
             } catch (FunctionNotExistException e) {
                 // Ignore
             }
@@ -591,7 +620,7 @@ public final class FunctionCatalog {
         return Optional.empty();
     }
 
-    private Optional<FunctionLookup.Result> resolveAmbiguousFunctionReference(String funcName) {
+    private Optional<ContextResolvedFunction> resolveAmbiguousFunctionReference(String funcName) {
         // resolve order:
         // 1. Temporary system functions
         // 2. System functions
@@ -601,7 +630,7 @@ public final class FunctionCatalog {
         String normalizedName = FunctionIdentifier.normalizeName(funcName);
         if (tempSystemFunctions.containsKey(normalizedName)) {
             return Optional.of(
-                    new FunctionLookup.Result(
+                    ContextResolvedFunction.temporary(
                             FunctionIdentifier.of(funcName),
                             getFunctionDefinition(
                                     normalizedName, tempSystemFunctions.get(normalizedName))));
@@ -619,33 +648,36 @@ public final class FunctionCatalog {
                 .map(
                         fd ->
                                 Optional.of(
-                                        new FunctionLookup.Result(
+                                        ContextResolvedFunction.permanent(
                                                 FunctionIdentifier.of(funcName), fd)))
                 .orElseGet(() -> resolvePreciseFunctionReference(oi));
     }
 
     @SuppressWarnings("unchecked")
-    private void validateAndPrepareFunction(CatalogFunction function)
+    private void validateAndPrepareFunction(String name, CatalogFunction function)
             throws ClassNotFoundException {
         // If the input is instance of UserDefinedFunction, it means it uses the new type inference.
         // In this situation the UDF have not been validated and cleaned, so we need to validate it
         // and clean its closure here.
         // If the input is instance of `ScalarFunctionDefinition`, `TableFunctionDefinition` and so
-        // on,
-        // it means it uses the old type inference. We assume that they have been validated before
-        // being
-        // wrapped.
-        if (function instanceof InlineCatalogFunction
-                && ((InlineCatalogFunction) function).getDefinition()
-                        instanceof UserDefinedFunction) {
-
+        // on, it means it uses the old type inference. We assume that they have been validated
+        // before being wrapped.
+        if (function instanceof InlineCatalogFunction) {
             FunctionDefinition definition = ((InlineCatalogFunction) function).getDefinition();
-            UserDefinedFunctionHelper.prepareInstance(config, (UserDefinedFunction) definition);
+            if (definition instanceof UserDefinedFunction) {
+                UserDefinedFunctionHelper.prepareInstance(config, (UserDefinedFunction) definition);
+            }
+            // Skip validation if it's not a UserDefinedFunction.
         } else if (function.getFunctionLanguage() == FunctionLanguage.JAVA) {
-            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+            // If the jar resource of UDF used is not empty, register it to classloader before
+            // validate.
+            registerFunctionJarResources(name, function.getFunctionResources());
+
             UserDefinedFunctionHelper.validateClass(
                     (Class<? extends UserDefinedFunction>)
-                            contextClassLoader.loadClass(function.getClassName()));
+                            resourceManager
+                                    .getUserClassLoader()
+                                    .loadClass(function.getClassName()));
         }
     }
 
@@ -656,16 +688,33 @@ public final class FunctionCatalog {
             // directly.
             return ((InlineCatalogFunction) function).getDefinition();
         }
+        // If the jar resource of UDF used is not empty, register it to classloader before
+        // validate.
+        registerFunctionJarResources(name, function.getFunctionResources());
+
         return UserDefinedFunctionHelper.instantiateFunction(
-                Thread.currentThread()
-                        .getContextClassLoader(), // TODO use classloader of catalog manager in the
+                resourceManager.getUserClassLoader(),
                 // future
                 config,
                 name,
                 function);
     }
 
-    /** The CatalogFunction which holds a instantiated UDF. */
+    private void registerFunctionJarResources(String functionName, List<ResourceUri> resourceUris) {
+        try {
+            if (!resourceUris.isEmpty()) {
+                resourceManager.registerJarResources(resourceUris);
+            }
+        } catch (Exception e) {
+            throw new TableException(
+                    String.format(
+                            "Failed to register jar resource '%s' of function '%s'.",
+                            resourceUris, functionName),
+                    e);
+        }
+    }
+
+    /** The CatalogFunction which holds an instantiated UDF. */
     public static class InlineCatalogFunction implements CatalogFunction {
 
         private final FunctionDefinition definition;
@@ -709,6 +758,11 @@ public final class FunctionCatalog {
         @Override
         public FunctionLanguage getFunctionLanguage() {
             return FunctionLanguage.JAVA;
+        }
+
+        @Override
+        public List<ResourceUri> getFunctionResources() {
+            return Collections.emptyList();
         }
 
         public FunctionDefinition getDefinition() {

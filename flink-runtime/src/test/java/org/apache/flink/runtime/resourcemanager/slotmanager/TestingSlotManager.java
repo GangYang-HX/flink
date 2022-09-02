@@ -18,12 +18,13 @@
 
 package org.apache.flink.runtime.resourcemanager.slotmanager;
 
+import org.apache.flink.api.common.JobID;
+import org.apache.flink.runtime.blocklist.BlockedTaskManagerChecker;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.clusterframework.types.SlotID;
 import org.apache.flink.runtime.instance.InstanceID;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
-import org.apache.flink.runtime.resourcemanager.SlotRequest;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
 import org.apache.flink.runtime.rest.messages.taskmanager.SlotInfo;
@@ -42,12 +43,21 @@ public class TestingSlotManager implements SlotManager {
 
     private final Consumer<Boolean> setFailUnfulfillableRequestConsumer;
     private final Supplier<Map<WorkerResourceSpec, Integer>> getRequiredResourcesSupplier;
+    private final Consumer<ResourceRequirements> processRequirementsConsumer;
+    private final Consumer<JobID> clearRequirementsConsumer;
+    private final Consumer<Void> triggerRequirementsCheckConsumer;
 
     TestingSlotManager(
             Consumer<Boolean> setFailUnfulfillableRequestConsumer,
-            Supplier<Map<WorkerResourceSpec, Integer>> getRequiredResourcesSupplier) {
+            Supplier<Map<WorkerResourceSpec, Integer>> getRequiredResourcesSupplier,
+            Consumer<ResourceRequirements> processRequirementsConsumer,
+            Consumer<JobID> clearRequirementsConsumer,
+            Consumer<Void> triggerRequirementsCheckConsumer) {
         this.setFailUnfulfillableRequestConsumer = setFailUnfulfillableRequestConsumer;
         this.getRequiredResourcesSupplier = getRequiredResourcesSupplier;
+        this.processRequirementsConsumer = processRequirementsConsumer;
+        this.clearRequirementsConsumer = clearRequirementsConsumer;
+        this.triggerRequirementsCheckConsumer = triggerRequirementsCheckConsumer;
     }
 
     @Override
@@ -101,30 +111,23 @@ public class TestingSlotManager implements SlotManager {
     }
 
     @Override
-    public int getNumberPendingSlotRequests() {
-        return 0;
-    }
-
-    @Override
     public void start(
             ResourceManagerId newResourceManagerId,
             Executor newMainThreadExecutor,
-            ResourceActions newResourceActions) {}
+            ResourceActions newResourceActions,
+            BlockedTaskManagerChecker newBlockedTaskManagerChecker) {}
 
     @Override
     public void suspend() {}
 
     @Override
-    public void processResourceRequirements(ResourceRequirements resourceRequirements) {}
-
-    @Override
-    public boolean registerSlotRequest(SlotRequest slotRequest) {
-        return false;
+    public void clearResourceRequirements(JobID jobId) {
+        clearRequirementsConsumer.accept(jobId);
     }
 
     @Override
-    public boolean unregisterSlotRequest(AllocationID allocationId) {
-        return false;
+    public void processResourceRequirements(ResourceRequirements resourceRequirements) {
+        processRequirementsConsumer.accept(resourceRequirements);
     }
 
     @Override
@@ -152,6 +155,11 @@ public class TestingSlotManager implements SlotManager {
     @Override
     public void setFailUnfulfillableRequest(boolean failUnfulfillableRequest) {
         setFailUnfulfillableRequestConsumer.accept(failUnfulfillableRequest);
+    }
+
+    @Override
+    public void triggerResourceRequirementsCheck() {
+        triggerRequirementsCheckConsumer.accept(null);
     }
 
     @Override

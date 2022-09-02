@@ -126,6 +126,9 @@ public class TypeExtractor {
 
     private static final Logger LOG = LoggerFactory.getLogger(TypeExtractor.class);
 
+    private static final String GENERIC_TYPE_DOC_HINT =
+            "Please read the Flink documentation on \"Data Types & Serialization\" for details of the effect on performance and schema evolution.";
+
     public static final int[] NO_INDEX = new int[] {};
 
     protected TypeExtractor() {
@@ -894,6 +897,15 @@ public class TypeExtractor {
             if (subTypesInfo == null) {
                 return analyzePojo(t, new ArrayList<>(typeHierarchy), in1Type, in2Type);
             }
+            for (int i = 0; i < subTypesInfo.length; i++) {
+                if (subTypesInfo[i] instanceof GenericTypeInfo) {
+                    LOG.info(
+                            "Tuple field #{} of type '{}' will be processed as GenericType. {}",
+                            i + 1,
+                            subTypesInfo[i].getTypeClass().getSimpleName(),
+                            GENERIC_TYPE_DOC_HINT);
+                }
+            }
             // return tuple info
             return new TupleTypeInfo(typeToClass(t), subTypesInfo);
 
@@ -1308,6 +1320,19 @@ public class TypeExtractor {
         }
         final Type factoryDefiningType = factoryHierarchy.get(factoryHierarchy.size() - 1);
 
+        return createTypeInfoFromFactory(
+                t, in1Type, in2Type, factoryHierarchy, factory, factoryDefiningType);
+    }
+
+    /** Creates type information using a given factory. */
+    @SuppressWarnings("unchecked")
+    private <IN1, IN2, OUT> TypeInformation<OUT> createTypeInfoFromFactory(
+            Type t,
+            TypeInformation<IN1> in1Type,
+            TypeInformation<IN2> in2Type,
+            List<Type> factoryHierarchy,
+            TypeInfoFactory<? super OUT> factory,
+            Type factoryDefiningType) {
         // infer possible type parameters from input
         final Map<String, TypeInformation<?>> genericParams;
         if (factoryDefiningType instanceof ParameterizedType) {
@@ -1689,6 +1714,23 @@ public class TypeExtractor {
         return (TypeInfoFactory<OUT>) InstantiationUtil.instantiate(factoryClass);
     }
 
+    /** Returns the type information factory for an annotated field. */
+    @Internal
+    @SuppressWarnings("unchecked")
+    public static <OUT> TypeInfoFactory<OUT> getTypeInfoFactory(Field field) {
+        if (!isClassType(field.getType()) || !field.isAnnotationPresent(TypeInfo.class)) {
+            return null;
+        }
+
+        Class<?> factoryClass = field.getAnnotation(TypeInfo.class).value();
+        // check for valid factory class
+        if (!TypeInfoFactory.class.isAssignableFrom(factoryClass)) {
+            throw new InvalidTypesException(
+                    "TypeInfo annotation does not specify a valid TypeInfoFactory.");
+        }
+        return (TypeInfoFactory<OUT>) InstantiationUtil.instantiate(factoryClass);
+    }
+
     /** @return number of items with equal type or same raw type */
     private static int countTypeInHierarchy(List<Type> typeHierarchy, Type type) {
         int count = 0;
@@ -2011,8 +2053,8 @@ public class TypeExtractor {
                     "Class "
                             + clazz.getName()
                             + " is not public so it cannot be used as a POJO type "
-                            + "and must be processed as GenericType. Please read the Flink documentation "
-                            + "on \"Data Types & Serialization\" for details of the effect on performance.");
+                            + "and must be processed as GenericType. {}",
+                    GENERIC_TYPE_DOC_HINT);
             return new GenericTypeInfo<>(clazz);
         }
 
@@ -2025,8 +2067,8 @@ public class TypeExtractor {
                     "No fields were detected for "
                             + clazz
                             + " so it cannot be used as a POJO type "
-                            + "and must be processed as GenericType. Please read the Flink documentation "
-                            + "on \"Data Types & Serialization\" for details of the effect on performance.");
+                            + "and must be processed as GenericType. {}",
+                    GENERIC_TYPE_DOC_HINT);
             return new GenericTypeInfo<>(clazz);
         }
 
@@ -2038,17 +2080,37 @@ public class TypeExtractor {
                         "Class "
                                 + clazz
                                 + " cannot be used as a POJO type because not all fields are valid POJO fields, "
-                                + "and must be processed as GenericType. Please read the Flink documentation "
-                                + "on \"Data Types & Serialization\" for details of the effect on performance.");
+                                + "and must be processed as GenericType. {}",
+                        GENERIC_TYPE_DOC_HINT);
                 return null;
             }
             try {
+                final TypeInformation<?> typeInfo;
                 List<Type> fieldTypeHierarchy = new ArrayList<>(typeHierarchy);
-                fieldTypeHierarchy.add(fieldType);
-                TypeInformation<?> ti =
-                        createTypeInfoWithTypeHierarchy(
-                                fieldTypeHierarchy, fieldType, in1Type, in2Type);
-                pojoFields.add(new PojoField(field, ti));
+                TypeInfoFactory factory = getTypeInfoFactory(field);
+                if (factory != null) {
+                    typeInfo =
+                            createTypeInfoFromFactory(
+                                    fieldType,
+                                    in1Type,
+                                    in2Type,
+                                    fieldTypeHierarchy,
+                                    factory,
+                                    fieldType);
+                } else {
+                    fieldTypeHierarchy.add(fieldType);
+                    typeInfo =
+                            createTypeInfoWithTypeHierarchy(
+                                    fieldTypeHierarchy, fieldType, in1Type, in2Type);
+                }
+                if (typeInfo instanceof GenericTypeInfo) {
+                    LOG.info(
+                            "Field {}#{} will be processed as GenericType. {}",
+                            clazz.getSimpleName(),
+                            field.getName(),
+                            GENERIC_TYPE_DOC_HINT);
+                }
+                pojoFields.add(new PojoField(field, typeInfo));
             } catch (InvalidTypesException e) {
                 Class<?> genericClass = Object.class;
                 if (isClassType(fieldType)) {
@@ -2072,8 +2134,8 @@ public class TypeExtractor {
                         "Class "
                                 + clazz
                                 + " contains custom serialization methods we do not call, so it cannot be used as a POJO type "
-                                + "and must be processed as GenericType. Please read the Flink documentation "
-                                + "on \"Data Types & Serialization\" for details of the effect on performance.");
+                                + "and must be processed as GenericType. {}",
+                        GENERIC_TYPE_DOC_HINT);
                 return null;
             }
         }
@@ -2093,8 +2155,8 @@ public class TypeExtractor {
                 LOG.info(
                         clazz
                                 + " is missing a default constructor so it cannot be used as a POJO type "
-                                + "and must be processed as GenericType. Please read the Flink documentation "
-                                + "on \"Data Types & Serialization\" for details of the effect on performance.");
+                                + "and must be processed as GenericType. {}",
+                        GENERIC_TYPE_DOC_HINT);
                 return null;
             }
         }
@@ -2103,8 +2165,8 @@ public class TypeExtractor {
                     "The default constructor of "
                             + clazz
                             + " is not Public so it cannot be used as a POJO type "
-                            + "and must be processed as GenericType. Please read the Flink documentation "
-                            + "on \"Data Types & Serialization\" for details of the effect on performance.");
+                            + "and must be processed as GenericType. {}",
+                    GENERIC_TYPE_DOC_HINT);
             return null;
         }
 

@@ -44,16 +44,17 @@ only physical resources of the executing machine matter in this case.
 
 It is recommended to configure [total process memory]({{< ref "docs/deployment/memory/mem_setup" >}}#configure-total-memory)
 ([`taskmanager.memory.process.size`]({{< ref "docs/deployment/config" >}}#taskmanager-memory-process-size) or [`jobmanager.memory.process.size`]({{< ref "docs/deployment/config" >}}#jobmanager-memory-process-size))
-for the containerized deployments ([Kubernetes]({{< ref "docs/deployment/resource-providers/standalone/kubernetes" >}}), [Yarn]({{< ref "docs/deployment/resource-providers/yarn" >}}) or [Mesos]({{< ref "docs/deployment/resource-providers/mesos" >}})).
+for the containerized deployments ([Kubernetes]({{< ref "docs/deployment/resource-providers/standalone/kubernetes" >}}) or [Yarn]({{< ref "docs/deployment/resource-providers/yarn" >}})).
 It declares how much memory in total should be assigned to the Flink *JVM process* and corresponds to the size of the requested container.
 
 <span class="label label-info">Note</span> If you configure the *total Flink memory* Flink will implicitly add JVM memory components
 to derive the *total process memory* and request a container with the memory of that derived size.
 
-<div class="alert alert-warning">
-  <strong>Warning:</strong> If Flink or user code allocates unmanaged off-heap (native) memory beyond the container size
-  the job can fail because the deployment environment can kill the offending containers.
-</div>
+{{< hint warning >}}
+**Warning:** If Flink or user code allocates unmanaged off-heap (native) memory beyond the container size
+the job can fail because the deployment environment can kill the offending containers.
+{{< /hint >}}
+
 See also description of [container memory exceeded]({{< ref "docs/deployment/memory/mem_trouble" >}}#container-memory-exceeded) failure.
 
 ## Configure memory for state backends
@@ -89,23 +90,3 @@ on the performance of your applications. Flink will attempt to allocate and use 
 as configured for batch jobs but not go beyond its limits. This prevents `OutOfMemoryError`'s because Flink knows precisely
 how much memory it has to leverage. If the [managed memory]({{< ref "docs/deployment/memory/mem_setup_tm" >}}#managed-memory) is not sufficient,
 Flink will gracefully spill to disk.
-
-## Configure memory for sort-merge blocking shuffle
-
-The number of required network buffers per sort-merge blocking result partition is controlled by 
-[taskmanager.network.sort-shuffle.min-buffers]({{< ref "docs/deployment/config" >}}#taskmanager-network-sort-shuffle-min-buffers)
-and the default value is 64 which is quite small. Though it can work for arbitrary parallelism, the 
-performance may not be the best. For large scale jobs, it is suggested to increase this config value 
-to improve compression ratio and reduce small network packets which is good for performance. To increase 
-this value, you may also need to increase the size of total network memory by adjusting the config 
-values of [taskmanager.memory.network.fraction]({{< ref "docs/deployment/config" >}}#taskmanager-memory-network-fraction),
-[taskmanager.memory.network.min]({{< ref "docs/deployment/config" >}}#taskmanager-memory-network-min) and [taskmanager.
-memory.network.max]({{< ref "docs/deployment/config" >}}#taskmanager-memory-network-max) to avoid `insufficient number of 
-network buffers` error.
-
-Except for network memory, the sort-merge blocking shuffle implementation also uses some unmanaged 
-direct memory for shuffle data writing and reading. So to use sort-merge blocking shuffle, you may 
-need to reserve some direct memory for it by increasing the config value of [taskmanager.memory.task
-.off-heap.size]({{< ref "docs/deployment/config" >}}#taskmanager-memory-task-off-heap-size). If direct memory OOM error 
-occurs after you enable the sort-merge blocking shuffle, you can just give more direct memory until 
-the OOM error disappears.

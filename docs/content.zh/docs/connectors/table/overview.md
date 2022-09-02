@@ -95,6 +95,8 @@ Flink natively support various connectors. The following tables list all availab
 
 {{< top >}}
 
+请查阅[配置]({{< ref "docs/dev/configuration/connector" >}})小节了解如何添加连接器依赖。
+
 How to use connectors
 --------
 
@@ -155,13 +157,13 @@ In this situation, the recommended way is transforming these resource files unde
         <!--  other project dependencies  ...-->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-sql-connector-hive-3.1.2_{{< scala_version >}}</artifactId>
+            <artifactId>flink-sql-connector-hive-3.1.2{{< scala_version >}}</artifactId>
             <version>{{< version >}}</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-parquet_{{< scala_version >}}<</artifactId>
+            <artifactId>flink-parquet{{< scala_version >}}</artifactId>
             <version>{{< version >}}</version>
         </dependency>
 
@@ -270,7 +272,7 @@ The computed column is a virtual column which is not stored in the physical data
 CREATE TABLE MyTable (
   MyField1 INT,
   MyField2 STRING,
-  MyField3 BOOLEAN
+  MyField3 BOOLEAN,
   MyField4 AS PROCTIME() -- declares a proctime attribute
 ) WITH (
   ...

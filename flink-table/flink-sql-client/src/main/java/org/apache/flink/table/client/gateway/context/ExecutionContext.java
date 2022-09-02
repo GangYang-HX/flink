@@ -18,29 +18,26 @@
 
 package org.apache.flink.table.client.gateway.context;
 
-import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableException;
-import org.apache.flink.table.api.bridge.java.internal.BatchTableEnvironmentImpl;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.bridge.java.internal.StreamTableEnvironmentImpl;
 import org.apache.flink.table.catalog.CatalogManager;
 import org.apache.flink.table.catalog.FunctionCatalog;
 import org.apache.flink.table.delegation.Executor;
 import org.apache.flink.table.delegation.ExecutorFactory;
 import org.apache.flink.table.delegation.Planner;
-import org.apache.flink.table.delegation.PlannerFactory;
-import org.apache.flink.table.factories.ComponentFactoryService;
+import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.factories.PlannerFactoryUtil;
 import org.apache.flink.table.module.ModuleManager;
-import org.apache.flink.util.TemporaryClassLoaderContext;
+import org.apache.flink.table.resource.ResourceManager;
+import org.apache.flink.util.MutableURLClassLoader;
 
 import java.lang.reflect.Method;
-import java.net.URLClassLoader;
-import java.util.Map;
-import java.util.function.Supplier;
 
 import static org.apache.flink.table.client.gateway.context.SessionContext.SessionState;
 
@@ -55,16 +52,17 @@ public class ExecutionContext {
     // Members that should be reused in the same session.
     private final Configuration flinkConfig;
     private final SessionState sessionState;
-    private final URLClassLoader classLoader;
+    private final MutableURLClassLoader classLoader;
 
-    private final TableEnvironment tableEnv;
+    private final StreamTableEnvironment tableEnv;
 
     public ExecutionContext(
-            Configuration flinkConfig, URLClassLoader classLoader, SessionState sessionState) {
+            Configuration flinkConfig,
+            MutableURLClassLoader classLoader,
+            SessionState sessionState) {
         this.flinkConfig = flinkConfig;
         this.sessionState = sessionState;
         this.classLoader = classLoader;
-
         this.tableEnv = createTableEnvironment();
     }
 
@@ -78,20 +76,11 @@ public class ExecutionContext {
         this.flinkConfig = context.flinkConfig;
         this.sessionState = context.sessionState;
         this.classLoader = context.classLoader;
-        // create a new table env
+
         this.tableEnv = createTableEnvironment();
     }
 
-    /**
-     * Executes the given supplier using the execution context's classloader as thread classloader.
-     */
-    public <R> R wrapClassLoader(Supplier<R> supplier) {
-        try (TemporaryClassLoaderContext ignored = TemporaryClassLoaderContext.of(classLoader)) {
-            return supplier.get();
-        }
-    }
-
-    public TableEnvironment getTableEnvironment() {
+    public StreamTableEnvironment getTableEnvironment() {
         return tableEnv;
     }
 
@@ -99,95 +88,83 @@ public class ExecutionContext {
     // Helper to create Table Environment
     // ------------------------------------------------------------------------------------------------------------------
 
-    private TableEnvironment createTableEnvironment() {
-        // check the value of TABLE_PLANNER and RUNTIME_MODE
-        EnvironmentSettings settings = EnvironmentSettings.fromConfiguration(flinkConfig);
-        TableConfig config = new TableConfig();
-        config.addConfiguration(flinkConfig);
-        if (!settings.isStreamingMode() && !settings.isBlinkPlanner()) {
-            ExecutionEnvironment execEnv = createExecutionEnvironment();
-            return new BatchTableEnvironmentImpl(
-                    execEnv, config, sessionState.catalogManager, sessionState.moduleManager);
-        } else {
-            StreamExecutionEnvironment streamExecEnv = createStreamExecutionEnvironment();
+    private StreamTableEnvironment createTableEnvironment() {
+        EnvironmentSettings settings =
+                EnvironmentSettings.newInstance().withConfiguration(flinkConfig).build();
 
-            final Map<String, String> executorProperties = settings.toExecutorProperties();
-            Executor executor = lookupExecutor(executorProperties, streamExecEnv);
-            return createStreamTableEnvironment(
-                    streamExecEnv,
-                    settings,
-                    config,
-                    executor,
-                    sessionState.catalogManager,
-                    sessionState.moduleManager,
-                    sessionState.functionCatalog,
-                    classLoader);
-        }
+        // We need not different StreamExecutionEnvironments to build and submit flink job,
+        // instead we just use StreamExecutionEnvironment#executeAsync(StreamGraph) method
+        // to execute existing StreamGraph.
+        // This requires StreamExecutionEnvironment to have a full flink configuration.
+        StreamExecutionEnvironment streamExecEnv =
+                new StreamExecutionEnvironment(new Configuration(flinkConfig), classLoader);
+
+        final Executor executor = lookupExecutor(streamExecEnv, classLoader);
+
+        return createStreamTableEnvironment(
+                streamExecEnv,
+                settings,
+                executor,
+                sessionState.catalogManager,
+                sessionState.moduleManager,
+                sessionState.resourceManager,
+                sessionState.functionCatalog,
+                classLoader);
     }
 
-    private TableEnvironment createStreamTableEnvironment(
+    private static StreamTableEnvironment createStreamTableEnvironment(
             StreamExecutionEnvironment env,
             EnvironmentSettings settings,
-            TableConfig config,
             Executor executor,
             CatalogManager catalogManager,
             ModuleManager moduleManager,
+            ResourceManager resourceManager,
             FunctionCatalog functionCatalog,
             ClassLoader userClassLoader) {
 
-        final Map<String, String> plannerProperties = settings.toPlannerProperties();
+        TableConfig tableConfig = TableConfig.getDefault();
+        tableConfig.setRootConfiguration(executor.getConfiguration());
+        tableConfig.addConfiguration(settings.getConfiguration());
+
         final Planner planner =
-                ComponentFactoryService.find(PlannerFactory.class, plannerProperties)
-                        .create(
-                                plannerProperties,
-                                executor,
-                                config,
-                                functionCatalog,
-                                catalogManager);
+                PlannerFactoryUtil.createPlanner(
+                        executor,
+                        tableConfig,
+                        userClassLoader,
+                        moduleManager,
+                        catalogManager,
+                        functionCatalog);
 
         return new StreamTableEnvironmentImpl(
                 catalogManager,
                 moduleManager,
+                resourceManager,
                 functionCatalog,
-                config,
+                tableConfig,
                 env,
                 planner,
                 executor,
-                settings.isStreamingMode(),
-                userClassLoader);
+                settings.isStreamingMode());
     }
 
-    private Executor lookupExecutor(
-            Map<String, String> executorProperties,
-            StreamExecutionEnvironment executionEnvironment) {
+    private static Executor lookupExecutor(
+            StreamExecutionEnvironment executionEnvironment, ClassLoader userClassLoader) {
         try {
-            ExecutorFactory executorFactory =
-                    ComponentFactoryService.find(ExecutorFactory.class, executorProperties);
-            Method createMethod =
+            final ExecutorFactory executorFactory =
+                    FactoryUtil.discoverFactory(
+                            userClassLoader,
+                            ExecutorFactory.class,
+                            ExecutorFactory.DEFAULT_IDENTIFIER);
+            final Method createMethod =
                     executorFactory
                             .getClass()
-                            .getMethod("create", Map.class, StreamExecutionEnvironment.class);
+                            .getMethod("create", StreamExecutionEnvironment.class);
 
-            return (Executor)
-                    createMethod.invoke(executorFactory, executorProperties, executionEnvironment);
+            return (Executor) createMethod.invoke(executorFactory, executionEnvironment);
         } catch (Exception e) {
             throw new TableException(
                     "Could not instantiate the executor. Make sure a planner module is on the classpath",
                     e);
         }
-    }
-
-    private StreamExecutionEnvironment createStreamExecutionEnvironment() {
-        // We need not different StreamExecutionEnvironments to build and submit flink job,
-        // instead we just use StreamExecutionEnvironment#executeAsync(StreamGraph) method
-        // to execute existing StreamGraph.
-        // This requires StreamExecutionEnvironment to have a full flink configuration.
-        return new StreamExecutionEnvironment(new Configuration(flinkConfig), classLoader);
-    }
-
-    private ExecutionEnvironment createExecutionEnvironment() {
-        ExecutionEnvironment execEnv = ExecutionEnvironment.getExecutionEnvironment();
-        execEnv.getConfiguration().addAll(flinkConfig);
-        return execEnv;
     }
 }

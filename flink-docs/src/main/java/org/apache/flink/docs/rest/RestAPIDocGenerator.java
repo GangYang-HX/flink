@@ -28,9 +28,9 @@ import org.apache.flink.runtime.rest.messages.EmptyResponseBody;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
 import org.apache.flink.runtime.rest.messages.MessagePathParameter;
 import org.apache.flink.runtime.rest.messages.MessageQueryParameter;
-import org.apache.flink.runtime.rest.util.DocumentingDispatcherRestEndpoint;
 import org.apache.flink.runtime.rest.util.DocumentingRestEndpoint;
 import org.apache.flink.runtime.rest.versioning.RestAPIVersion;
+import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.SerializableString;
@@ -50,7 +50,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -67,17 +66,28 @@ import static org.apache.flink.docs.util.Utils.escapeCharacters;
  * contains a series of HTML tables, one for each REST call.
  *
  * <p>The generated table for each REST call looks like this:
- * ---------------------------------------------------------- | URL |
- * ---------------------------------------------------------- | Verb: verb (GET|POST|...) | Response
- * code: responseCode| ---------------------------------------------------------- | Path parameters
- * (if any are defined) | ---------------------------------------------------------- | -
- * parameterName: description | | ... | ---------------------------------------------------------- |
- * Query parameters (if any are defined) |
- * ---------------------------------------------------------- | - parameterName (requisiteness):
- * description | | ... | ---------------------------------------------------------- | Request json
- * schema (a collapsible "Request" button) |
- * ---------------------------------------------------------- | Response json schema (a collapsible
- * "Response" button) | ----------------------------------------------------------
+ *
+ * <pre>
+ * ----------------------------------------------------------
+ * | URL                                                    |
+ * ----------------------------------------------------------
+ * | Verb: verb (GET|POST|...) | Response code: responseCode|
+ * ----------------------------------------------------------
+ * | Path parameters (if any are defined)                   |
+ * ----------------------------------------------------------
+ * |   - parameterName: description                         |
+ * |   ...                                                  |
+ * ----------------------------------------------------------
+ * | Query parameters (if any are defined)                  |
+ * ----------------------------------------------------------
+ * |   - parameterName (requisiteness): description         |
+ * |   ...                                                  |
+ * ----------------------------------------------------------
+ * | Request json schema (a collapsible "Request" button)   |
+ * ----------------------------------------------------------
+ * | Response json schema (a collapsible "Response" button) |
+ * ----------------------------------------------------------
+ * </pre>
  */
 public class RestAPIDocGenerator {
 
@@ -87,33 +97,10 @@ public class RestAPIDocGenerator {
     private static final JsonSchemaGenerator schemaGen;
 
     static {
-        mapper = new ObjectMapper();
+        mapper = JacksonMapperFactory.createObjectMapper();
         mapper.getFactory().setCharacterEscapes(new HTMLCharacterEscapes());
         mapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
         schemaGen = new JsonSchemaGenerator(mapper);
-    }
-
-    /**
-     * Generates the REST API documentation.
-     *
-     * @param args args[0] contains the directory into which the generated files are placed
-     * @throws IOException if any file operation failed
-     */
-    public static void main(String[] args) throws IOException {
-        String outputDirectory = args[0];
-
-        for (final RestAPIVersion apiVersion : RestAPIVersion.values()) {
-            if (apiVersion == RestAPIVersion.V0) {
-                // this version exists only for testing purposes
-                continue;
-            }
-            createHtmlFile(
-                    new DocumentingDispatcherRestEndpoint(),
-                    apiVersion,
-                    Paths.get(
-                            outputDirectory,
-                            "rest_" + apiVersion.getURLVersionPrefix() + "_dispatcher.html"));
-        }
     }
 
     @VisibleForTesting

@@ -21,6 +21,7 @@ package org.apache.flink.runtime.resourcemanager.active;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ResourceManagerOptions;
+import org.apache.flink.runtime.blocklist.NoOpBlocklistHandler;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessSpec;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
@@ -46,6 +47,8 @@ import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.function.RunnableWithException;
 
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
+
 import org.junit.ClassRule;
 import org.junit.Test;
 
@@ -53,6 +56,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
@@ -65,6 +69,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
@@ -81,6 +86,8 @@ public class ActiveResourceManagerTest extends TestLogger {
     private static final long TESTING_START_WORKER_TIMEOUT_MS = 50;
 
     private static final WorkerResourceSpec WORKER_RESOURCE_SPEC = WorkerResourceSpec.ZERO;
+    private static final TaskExecutorMemoryConfiguration TESTING_CONFIG =
+            new TaskExecutorMemoryConfiguration(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 21L, 36L);
 
     /** Tests worker successfully requested, started and registered. */
     @Test
@@ -788,8 +795,8 @@ public class ActiveResourceManagerTest extends TestLogger {
                             runInMainThread(() -> requestResourceFuture.complete(tmResourceId));
 
                             // worker registered, verify not released due to timeout
-                            CompletableFuture<RegistrationResponse> registerTaskExecutorFuture =
-                                    registerTaskExecutor(tmResourceId);
+                            RegistrationResponse registrationResponse =
+                                    registerTaskExecutor(tmResourceId).join();
 
                             final long registrationTime = (System.nanoTime() - start) / 1_000_000;
 
@@ -797,7 +804,7 @@ public class ActiveResourceManagerTest extends TestLogger {
                                     "The registration must not take longer than the start worker timeout. If it does, then this indicates a very slow machine.",
                                     registrationTime < TESTING_START_WORKER_TIMEOUT_MS);
                             assertThat(
-                                    registerTaskExecutorFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS),
+                                    registrationResponse,
                                     instanceOf(RegistrationResponse.Success.class));
                             assertFalse(releaseResourceFuture.isDone());
                         });
@@ -832,6 +839,71 @@ public class ActiveResourceManagerTest extends TestLogger {
                             assertThat(
                                     releaseResourceFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS),
                                     is(tmResourceId));
+                        });
+            }
+        };
+    }
+
+    @Test
+    public void testResourceManagerRecoveredAfterAllTMRegistered() throws Exception {
+        new Context() {
+            {
+                final ResourceID tmResourceId1 = ResourceID.generate();
+                final ResourceID tmResourceId2 = ResourceID.generate();
+
+                runTest(
+                        () -> {
+                            // workers recovered
+                            runInMainThread(
+                                    () ->
+                                            getResourceManager()
+                                                    .onPreviousAttemptWorkersRecovered(
+                                                            ImmutableSet.of(
+                                                                    tmResourceId1, tmResourceId2)));
+
+                            runInMainThread(
+                                    () -> getResourceManager().onWorkerRegistered(tmResourceId1));
+                            runInMainThread(
+                                    () -> getResourceManager().onWorkerRegistered(tmResourceId2));
+                            runInMainThread(
+                                            () ->
+                                                    assertTrue(
+                                                            getResourceManager()
+                                                                    .getReadyToServeFuture()
+                                                                    .isDone()))
+                                    .get(TIMEOUT_SEC, TimeUnit.SECONDS);
+                        });
+            }
+        };
+    }
+
+    @Test
+    public void testResourceManagerRecoveredAfterReconcileTimeout() throws Exception {
+        new Context() {
+            {
+                final ResourceID tmResourceId1 = ResourceID.generate();
+                final ResourceID tmResourceId2 = ResourceID.generate();
+
+                flinkConfig.set(
+                        ResourceManagerOptions.RESOURCE_MANAGER_PREVIOUS_WORKER_RECOVERY_TIMEOUT,
+                        Duration.ofMillis(TESTING_START_WORKER_TIMEOUT_MS));
+
+                runTest(
+                        () -> {
+                            // workers recovered
+                            runInMainThread(
+                                    () -> {
+                                        getResourceManager()
+                                                .onPreviousAttemptWorkersRecovered(
+                                                        ImmutableSet.of(
+                                                                tmResourceId1, tmResourceId2));
+                                    });
+
+                            runInMainThread(
+                                    () -> getResourceManager().onWorkerRegistered(tmResourceId1));
+                            getResourceManager()
+                                    .getReadyToServeFuture()
+                                    .get(TIMEOUT_SEC, TimeUnit.SECONDS);
                         });
             }
         };
@@ -877,22 +949,28 @@ public class ActiveResourceManagerTest extends TestLogger {
                 throws Exception {
             final TestingRpcService rpcService = RPC_SERVICE_RESOURCE.getTestingRpcService();
             final MockResourceManagerRuntimeServices rmServices =
-                    new MockResourceManagerRuntimeServices(rpcService, TIMEOUT_TIME, slotManager);
+                    new MockResourceManagerRuntimeServices(rpcService, slotManager);
             final Duration retryInterval =
                     configuration.get(ResourceManagerOptions.START_WORKER_RETRY_INTERVAL);
             final Duration workerRegistrationTimeout =
                     configuration.get(ResourceManagerOptions.TASK_MANAGER_REGISTRATION_TIMEOUT);
+            final Duration previousWorkerRecoverTimeout =
+                    configuration.get(
+                            ResourceManagerOptions
+                                    .RESOURCE_MANAGER_PREVIOUS_WORKER_RECOVERY_TIMEOUT);
 
             final ActiveResourceManager<ResourceID> activeResourceManager =
                     new ActiveResourceManager<>(
                             driver,
                             configuration,
                             rpcService,
+                            UUID.randomUUID(),
                             ResourceID.generate(),
-                            rmServices.highAvailabilityServices,
                             rmServices.heartbeatServices,
+                            rmServices.delegationTokenManager,
                             rmServices.slotManager,
                             NoOpResourceManagerPartitionTracker::get,
+                            new NoOpBlocklistHandler.Factory(),
                             rmServices.jobLeaderIdService,
                             new ClusterInformation("localhost", 1234),
                             fatalErrorHandler,
@@ -901,16 +979,19 @@ public class ActiveResourceManagerTest extends TestLogger {
                                     configuration),
                             retryInterval,
                             workerRegistrationTimeout,
+                            previousWorkerRecoverTimeout,
                             ForkJoinPool.commonPool());
 
             activeResourceManager.start();
-            rmServices.grantLeadership();
+            activeResourceManager
+                    .getStartedFuture()
+                    .get(TIMEOUT_TIME.getSize(), TIMEOUT_TIME.getUnit());
 
             return activeResourceManager;
         }
 
-        void runInMainThread(Runnable runnable) {
-            resourceManager.runInMainThread(
+        CompletableFuture<Void> runInMainThread(Runnable runnable) {
+            return resourceManager.runInMainThread(
                     () -> {
                         runnable.run();
                         return null;
@@ -941,9 +1022,10 @@ public class ActiveResourceManagerTest extends TestLogger {
                             1234,
                             23456,
                             new HardwareDescription(1, 2L, 3L, 4L),
-                            TaskExecutorMemoryConfiguration.create(flinkConfig),
+                            TESTING_CONFIG,
                             ResourceProfile.ZERO,
-                            ResourceProfile.ZERO);
+                            ResourceProfile.ZERO,
+                            resourceID.toString());
 
             return resourceManager
                     .getSelfGateway(ResourceManagerGateway.class)

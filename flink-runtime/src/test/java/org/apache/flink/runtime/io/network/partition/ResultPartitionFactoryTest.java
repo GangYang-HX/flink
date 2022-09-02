@@ -17,12 +17,12 @@
 
 package org.apache.flink.runtime.io.network.partition;
 
-import org.apache.flink.runtime.concurrent.Executors;
 import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
 import org.apache.flink.runtime.io.disk.BatchShuffleReadBufferPool;
 import org.apache.flink.runtime.io.disk.FileChannelManager;
 import org.apache.flink.runtime.io.disk.FileChannelManagerImpl;
 import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
+import org.apache.flink.runtime.io.network.partition.hybrid.HsResultPartition;
 import org.apache.flink.runtime.shuffle.PartitionDescriptorBuilder;
 import org.apache.flink.runtime.util.EnvironmentInformation;
 import org.apache.flink.runtime.util.NettyShuffleDescriptorBuilder;
@@ -33,6 +33,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.concurrent.Executors;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -83,13 +84,16 @@ public class ResultPartitionFactoryTest extends TestLogger {
     }
 
     @Test
-    public void testReleaseOnConsumptionForPipelinedPartition() {
-        final ResultPartition resultPartition =
-                createResultPartition(ResultPartitionType.PIPELINED);
+    public void testHybridFullResultPartitionCreated() {
+        ResultPartition resultPartition = createResultPartition(ResultPartitionType.HYBRID_FULL);
+        assertTrue(resultPartition instanceof HsResultPartition);
+    }
 
-        resultPartition.onConsumedSubpartition(0);
-
-        assertTrue(resultPartition.isReleased());
+    @Test
+    public void testHybridSelectiveResultPartitionCreated() {
+        ResultPartition resultPartition =
+                createResultPartition(ResultPartitionType.HYBRID_SELECTIVE);
+        assertTrue(resultPartition instanceof HsResultPartition);
     }
 
     @Test
@@ -111,6 +115,26 @@ public class ResultPartitionFactoryTest extends TestLogger {
         assertFalse(resultPartition.isReleased());
     }
 
+    @Test
+    public void testNoReleaseOnConsumptionForHybridFullPartition() {
+        final ResultPartition resultPartition =
+                createResultPartition(ResultPartitionType.HYBRID_FULL);
+
+        resultPartition.onConsumedSubpartition(0);
+
+        assertFalse(resultPartition.isReleased());
+    }
+
+    @Test
+    public void testNoReleaseOnConsumptionForHybridSelectivePartition() {
+        final ResultPartition resultPartition =
+                createResultPartition(ResultPartitionType.HYBRID_SELECTIVE);
+
+        resultPartition.onConsumedSubpartition(0);
+
+        assertFalse(resultPartition.isReleased());
+    }
+
     private static ResultPartition createResultPartition(ResultPartitionType partitionType) {
         return createResultPartition(partitionType, Integer.MAX_VALUE);
     }
@@ -125,7 +149,7 @@ public class ResultPartitionFactoryTest extends TestLogger {
                         fileChannelManager,
                         new NetworkBufferPool(1, SEGMENT_SIZE),
                         new BatchShuffleReadBufferPool(10 * SEGMENT_SIZE, SEGMENT_SIZE),
-                        Executors.newDirectExecutorService(),
+                        Executors.newSingleThreadScheduledExecutor(),
                         BoundedBlockingSubpartitionType.AUTO,
                         1,
                         1,
@@ -135,7 +159,8 @@ public class ResultPartitionFactoryTest extends TestLogger {
                         Integer.MAX_VALUE,
                         10,
                         sortShuffleMinParallelism,
-                        false);
+                        false,
+                        0);
 
         final ResultPartitionDeploymentDescriptor descriptor =
                 new ResultPartitionDeploymentDescriptor(
@@ -143,8 +168,7 @@ public class ResultPartitionFactoryTest extends TestLogger {
                                 .setPartitionType(partitionType)
                                 .build(),
                         NettyShuffleDescriptorBuilder.newBuilder().buildLocal(),
-                        1,
-                        true);
+                        1);
 
         // guard our test assumptions
         assertEquals(1, descriptor.getNumberOfSubpartitions());

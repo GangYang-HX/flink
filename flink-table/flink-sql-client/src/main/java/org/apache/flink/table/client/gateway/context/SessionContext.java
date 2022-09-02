@@ -18,7 +18,7 @@
 
 package org.apache.flink.table.client.gateway.context;
 
-import org.apache.flink.client.ClientUtils;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
@@ -28,19 +28,20 @@ import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogManager;
 import org.apache.flink.table.catalog.FunctionCatalog;
 import org.apache.flink.table.catalog.GenericInMemoryCatalog;
-import org.apache.flink.table.client.config.YamlConfigUtils;
 import org.apache.flink.table.client.gateway.Executor;
 import org.apache.flink.table.client.gateway.SqlExecutionException;
+import org.apache.flink.table.client.resource.ClientResourceManager;
+import org.apache.flink.table.client.util.ClientClassloaderUtil;
+import org.apache.flink.table.client.util.ClientWrapperClassLoader;
 import org.apache.flink.table.module.ModuleManager;
 import org.apache.flink.util.TemporaryClassLoaderContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.URLClassLoader;
-import java.util.Collections;
+import java.net.URL;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Context describing a session, it's mainly used for user to open a new session in the backend. If
@@ -58,14 +59,14 @@ public class SessionContext {
     private final Configuration sessionConfiguration;
 
     private final SessionState sessionState;
-    private final URLClassLoader classLoader;
+    private final ClientWrapperClassLoader classLoader;
     private ExecutionContext executionContext;
 
     private SessionContext(
             DefaultContext defaultContext,
             String sessionId,
             Configuration sessionConfiguration,
-            URLClassLoader classLoader,
+            ClientWrapperClassLoader classLoader,
             SessionState sessionState,
             ExecutionContext executionContext) {
         this.defaultContext = defaultContext;
@@ -96,6 +97,11 @@ public class SessionContext {
         return sessionConfiguration.toMap();
     }
 
+    @VisibleForTesting
+    Set<URL> getDependencies() {
+        return sessionState.resourceManager.getLocalJarResources();
+    }
+
     // --------------------------------------------------------------------------------------------
     // Method to execute commands
     // --------------------------------------------------------------------------------------------
@@ -111,7 +117,7 @@ public class SessionContext {
         // If rebuild a new Configuration, it loses control of the SessionState if users wants to
         // modify the configuration
         resetSessionConfigurationToDefault(defaultContext.getFlinkConfig());
-        this.executionContext = new ExecutionContext(executionContext);
+        executionContext = new ExecutionContext(sessionConfiguration, classLoader, sessionState);
     }
 
     /**
@@ -129,16 +135,6 @@ public class SessionContext {
         } else {
             ConfigOption<String> keyToDelete = ConfigOptions.key(key).stringType().noDefaultValue();
             sessionConfiguration.removeConfig(keyToDelete);
-            // need to remove compatible key
-            if (YamlConfigUtils.isDeprecatedKey(key)) {
-                String optionKey = YamlConfigUtils.getOptionNameWithDeprecatedKey(key);
-                sessionConfiguration.removeConfig(
-                        ConfigOptions.key(optionKey).stringType().noDefaultValue());
-            } else if (YamlConfigUtils.isOptionHasDeprecatedKey(key)) {
-                String deprecatedKey = YamlConfigUtils.getDeprecatedNameWithOptionKey(key);
-                sessionConfiguration.removeConfig(
-                        ConfigOptions.key(deprecatedKey).stringType().noDefaultValue());
-            }
             // It's safe to build ExecutionContext directly because origin configuration is legal.
             this.executionContext = new ExecutionContext(executionContext);
         }
@@ -148,7 +144,7 @@ public class SessionContext {
     public void set(String key, String value) {
         Configuration originConfiguration = sessionConfiguration.clone();
 
-        YamlConfigUtils.setKeyToConfiguration(sessionConfiguration, key, value);
+        sessionConfiguration.setString(key, value);
         try {
             // Renew the ExecutionContext.
             // Book keep all the session states of current ExecutionContext then
@@ -171,11 +167,7 @@ public class SessionContext {
                 sessionState.catalogManager.getCatalog(name).ifPresent(Catalog::close);
             }
         }
-        try {
-            classLoader.close();
-        } catch (IOException e) {
-            LOG.debug("Error while closing class loader.", e);
-        }
+        classLoader.close();
     }
 
     // --------------------------------------------------------------------------------------------
@@ -193,24 +185,30 @@ public class SessionContext {
         // Init classloader
         // --------------------------------------------------------------------------------------------------------------
 
-        URLClassLoader classLoader =
-                ClientUtils.buildUserCodeClassLoader(
-                        defaultContext.getDependencies(),
-                        Collections.emptyList(),
-                        SessionContext.class.getClassLoader(),
+        // here use ClientMutableURLClassLoader to support remove jar
+        final ClientWrapperClassLoader userClassLoader =
+                new ClientWrapperClassLoader(
+                        ClientClassloaderUtil.buildUserClassLoader(
+                                defaultContext.getDependencies(),
+                                SessionContext.class.getClassLoader(),
+                                new Configuration(configuration)),
                         configuration);
 
         // --------------------------------------------------------------------------------------------------------------
         // Init session state
         // --------------------------------------------------------------------------------------------------------------
 
-        ModuleManager moduleManager = new ModuleManager();
+        final ClientResourceManager resourceManager =
+                new ClientResourceManager(configuration, userClassLoader);
 
-        final EnvironmentSettings settings = EnvironmentSettings.fromConfiguration(configuration);
+        final ModuleManager moduleManager = new ModuleManager();
 
-        CatalogManager catalogManager =
+        final EnvironmentSettings settings =
+                EnvironmentSettings.newInstance().withConfiguration(configuration).build();
+
+        final CatalogManager catalogManager =
                 CatalogManager.newBuilder()
-                        .classLoader(classLoader)
+                        .classLoader(userClassLoader)
                         .config(configuration)
                         .defaultCatalog(
                                 settings.getBuiltInCatalogName(),
@@ -219,29 +217,38 @@ public class SessionContext {
                                         settings.getBuiltInDatabaseName()))
                         .build();
 
-        FunctionCatalog functionCatalog =
-                new FunctionCatalog(configuration, catalogManager, moduleManager);
-        SessionState sessionState =
-                new SessionState(catalogManager, moduleManager, functionCatalog);
+        final FunctionCatalog functionCatalog =
+                new FunctionCatalog(configuration, resourceManager, catalogManager, moduleManager);
+        final SessionState sessionState =
+                new SessionState(catalogManager, moduleManager, resourceManager, functionCatalog);
 
         // --------------------------------------------------------------------------------------------------------------
         // Init ExecutionContext
         // --------------------------------------------------------------------------------------------------------------
 
         ExecutionContext executionContext =
-                new ExecutionContext(configuration, classLoader, sessionState);
-        LegacyTableEnvironmentInitializer.initializeSessionState(
-                executionContext.getTableEnvironment(),
-                defaultContext.getDefaultEnv(),
-                classLoader);
+                new ExecutionContext(configuration, userClassLoader, sessionState);
 
         return new SessionContext(
                 defaultContext,
                 sessionId,
                 configuration,
-                classLoader,
+                userClassLoader,
                 sessionState,
                 executionContext);
+    }
+
+    public void removeJar(String jarPath) {
+        URL jarURL = sessionState.resourceManager.unregisterJarResource(jarPath);
+        if (jarURL == null) {
+            LOG.warn(
+                    String.format(
+                            "Could not remove the specified jar because the jar path [%s] hadn't registered to classloader.",
+                            jarPath));
+            return;
+        }
+        // remove jar from classloader
+        classLoader.removeURL(jarURL);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -252,15 +259,18 @@ public class SessionContext {
     public static class SessionState {
 
         public final CatalogManager catalogManager;
-        public final FunctionCatalog functionCatalog;
         public final ModuleManager moduleManager;
+        public final ClientResourceManager resourceManager;
+        public final FunctionCatalog functionCatalog;
 
         public SessionState(
                 CatalogManager catalogManager,
                 ModuleManager moduleManager,
+                ClientResourceManager resourceManager,
                 FunctionCatalog functionCatalog) {
             this.catalogManager = catalogManager;
             this.moduleManager = moduleManager;
+            this.resourceManager = resourceManager;
             this.functionCatalog = functionCatalog;
         }
     }

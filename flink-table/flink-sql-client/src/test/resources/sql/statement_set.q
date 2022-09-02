@@ -15,11 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SET sql-client.execution.result-mode = tableau;
+SET 'sql-client.execution.result-mode' = 'tableau';
 [INFO] Session property has been set.
 !info
 
-SET table.dml-sync=true;
+SET 'table.dml-sync' = 'true';
 [INFO] Session property has been set.
 !info
 
@@ -36,7 +36,7 @@ create table src (
 # test statement set with streaming insert
 # ==========================================================================
 
-SET execution.runtime-mode = streaming;
+SET 'execution.runtime-mode' = 'streaming';
 [INFO] Session property has been set.
 !info
 
@@ -91,17 +91,17 @@ org.apache.flink.table.client.gateway.SqlExecutionException: No Statement Set to
 !error
 
 SELECT * FROM StreamingTable;
-+----+-------------+----------------------+
-| op |          id |                  str |
-+----+-------------+----------------------+
-| +I |           1 |          Hello World |
-| +I |           2 |                   Hi |
-| +I |           2 |                   Hi |
-| +I |           3 |                Hello |
-| +I |           3 |                World |
-| +I |           4 |                  ADD |
-| +I |           5 |                 LINE |
-+----+-------------+----------------------+
++----+-------------+--------------------------------+
+| op |          id |                            str |
++----+-------------+--------------------------------+
+| +I |           1 |                    Hello World |
+| +I |           2 |                             Hi |
+| +I |           2 |                             Hi |
+| +I |           3 |                          Hello |
+| +I |           3 |                          World |
+| +I |           4 |                            ADD |
+| +I |           5 |                           LINE |
++----+-------------+--------------------------------+
 Received a total of 7 rows
 !ok
 
@@ -109,7 +109,7 @@ Received a total of 7 rows
 # test statement set with batch inserts
 # ==========================================================================
 
-SET execution.runtime-mode = batch;
+SET 'execution.runtime-mode' = 'batch';
 [INFO] Session property has been set.
 !info
 
@@ -144,18 +144,18 @@ END;
 !info
 
 SELECT * FROM BatchTable;
-+-------------+----------------------+
-|          id |                  str |
-+-------------+----------------------+
-|           1 |          Hello World |
-|           2 |                   Hi |
-|           2 |                   Hi |
-|           3 |                Hello |
-|           3 |                World |
-|           4 |                  ADD |
-|           5 |                 LINE |
-+-------------+----------------------+
-Received a total of 7 rows
++----+-------------+
+| id |         str |
++----+-------------+
+|  1 | Hello World |
+|  2 |          Hi |
+|  2 |          Hi |
+|  3 |       Hello |
+|  3 |       World |
+|  4 |         ADD |
+|  5 |        LINE |
++----+-------------+
+7 rows in set
 !ok
 
 BEGIN STATEMENT SET;

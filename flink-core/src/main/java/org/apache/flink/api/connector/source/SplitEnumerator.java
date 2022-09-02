@@ -18,7 +18,7 @@
 
 package org.apache.flink.api.connector.source;
 
-import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.Public;
 import org.apache.flink.api.common.state.CheckpointListener;
 
 import javax.annotation.Nullable;
@@ -30,7 +30,7 @@ import java.util.List;
  * A interface of a split enumerator responsible for the followings: 1. discover the splits for the
  * {@link SourceReader} to read. 2. assign the splits to the source reader.
  */
-@PublicEvolving
+@Public
 public interface SplitEnumerator<SplitT extends SourceSplit, CheckpointT>
         extends AutoCloseable, CheckpointListener {
 
@@ -68,12 +68,26 @@ public interface SplitEnumerator<SplitT extends SourceSplit, CheckpointT>
     void addReader(int subtaskId);
 
     /**
-     * Checkpoints the state of this split enumerator.
+     * Creates a snapshot of the state of this split enumerator, to be stored in a checkpoint.
      *
+     * <p>The snapshot should contain the latest state of the enumerator: It should assume that all
+     * operations that happened before the snapshot have successfully completed. For example all
+     * splits assigned to readers via {@link SplitEnumeratorContext#assignSplit(SourceSplit, int)}
+     * and {@link SplitEnumeratorContext#assignSplits(SplitsAssignment)}) don't need to be included
+     * in the snapshot anymore.
+     *
+     * <p>This method takes the ID of the checkpoint for which the state is snapshotted. Most
+     * implementations should be able to ignore this parameter, because for the contents of the
+     * snapshot, it doesn't matter for which checkpoint it gets created. This parameter can be
+     * interesting for source connectors with external systems where those systems are themselves
+     * aware of checkpoints; for example in cases where the enumerator notifies that system about a
+     * specific checkpoint being triggered.
+     *
+     * @param checkpointId The ID of the checkpoint for which the snapshot is created.
      * @return an object containing the state of the split enumerator.
      * @throws Exception when the snapshot cannot be taken.
      */
-    CheckpointT snapshotState() throws Exception;
+    CheckpointT snapshotState(long checkpointId) throws Exception;
 
     /**
      * Called to close the enumerator, in case it holds on to any resources, like threads or network

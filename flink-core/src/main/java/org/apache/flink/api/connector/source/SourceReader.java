@@ -18,9 +18,12 @@
 
 package org.apache.flink.api.connector.source;
 
-import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.Public;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.core.io.InputStatus;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+import org.apache.flink.metrics.groups.SourceReaderMetricGroup;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -29,10 +32,20 @@ import java.util.concurrent.CompletableFuture;
  * The interface for a source reader which is responsible for reading the records from the source
  * splits assigned by {@link SplitEnumerator}.
  *
+ * <p>Implementations can provide the following metrics:
+ *
+ * <ul>
+ *   <li>{@link OperatorIOMetricGroup#getNumRecordsInCounter()} (highly recommended)
+ *   <li>{@link OperatorIOMetricGroup#getNumBytesInCounter()} (recommended)
+ *   <li>{@link SourceReaderMetricGroup#getNumRecordsInErrorsCounter()} (recommended)
+ *   <li>{@link SourceReaderMetricGroup#setPendingRecordsGauge(Gauge)}
+ *   <li>{@link SourceReaderMetricGroup#setPendingBytesGauge(Gauge)}
+ * </ul>
+ *
  * @param <T> The type of the record emitted by this source reader.
- * @param <SplitT> The type of the the source splits.
+ * @param <SplitT> The type of the source splits.
  */
-@PublicEvolving
+@Public
 public interface SourceReader<T, SplitT extends SourceSplit>
         extends AutoCloseable, CheckpointListener {
 
@@ -40,12 +53,12 @@ public interface SourceReader<T, SplitT extends SourceSplit>
     void start();
 
     /**
-     * Poll the next available record into the {@link SourceOutput}.
+     * Poll the next available record into the {@link ReaderOutput}.
      *
      * <p>The implementation must make sure this method is non-blocking.
      *
-     * <p>Although the implementation can emit multiple records into the given SourceOutput, it is
-     * recommended not doing so. Instead, emit one record into the SourceOutput and return a {@link
+     * <p>Although the implementation can emit multiple records into the given ReaderOutput, it is
+     * recommended not doing so. Instead, emit one record into the ReaderOutput and return a {@link
      * InputStatus#MORE_AVAILABLE} to let the caller thread know there are more records available.
      *
      * @return The InputStatus of the SourceReader after the method invocation.
@@ -63,10 +76,10 @@ public interface SourceReader<T, SplitT extends SourceSplit>
      * Returns a future that signals that data is available from the reader.
      *
      * <p>Once the future completes, the runtime will keep calling the {@link
-     * #pollNext(ReaderOutput)} method until that methods returns a status other than {@link
-     * InputStatus#MORE_AVAILABLE}. After that the, the runtime will again call this method to
-     * obtain the next future. Once that completes, it will again call {@link
-     * #pollNext(ReaderOutput)} and so on.
+     * #pollNext(ReaderOutput)} method until that method returns a status other than {@link
+     * InputStatus#MORE_AVAILABLE}. After that, the runtime will again call this method to obtain
+     * the next future. Once that completes, it will again call {@link #pollNext(ReaderOutput)} and
+     * so on.
      *
      * <p>The contract is the following: If the reader has data available, then all futures
      * previously returned by this method must eventually complete. Otherwise the source might stall

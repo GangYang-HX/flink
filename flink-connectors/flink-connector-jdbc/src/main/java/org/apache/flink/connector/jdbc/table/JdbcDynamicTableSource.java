@@ -20,22 +20,25 @@ package org.apache.flink.connector.jdbc.table;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.jdbc.dialect.JdbcDialect;
-import org.apache.flink.connector.jdbc.internal.options.JdbcLookupOptions;
-import org.apache.flink.connector.jdbc.internal.options.JdbcOptions;
+import org.apache.flink.connector.jdbc.internal.options.JdbcConnectorOptions;
 import org.apache.flink.connector.jdbc.internal.options.JdbcReadOptions;
 import org.apache.flink.connector.jdbc.split.JdbcNumericBetweenParametersProvider;
-import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.InputFormatProvider;
 import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
-import org.apache.flink.table.connector.source.TableFunctionProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
+import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
+import org.apache.flink.table.connector.source.lookup.PartialCachingLookupProvider;
+import org.apache.flink.table.connector.source.lookup.cache.LookupCache;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.utils.TableSchemaUtils;
 import org.apache.flink.util.Preconditions;
+
+import javax.annotation.Nullable;
 
 import java.util.Objects;
 
@@ -47,22 +50,25 @@ public class JdbcDynamicTableSource
                 SupportsProjectionPushDown,
                 SupportsLimitPushDown {
 
-    private final JdbcOptions options;
+    private final JdbcConnectorOptions options;
     private final JdbcReadOptions readOptions;
-    private final JdbcLookupOptions lookupOptions;
-    private TableSchema physicalSchema;
+    private final int lookupMaxRetryTimes;
+    @Nullable private final LookupCache cache;
+    private DataType physicalRowDataType;
     private final String dialectName;
     private long limit = -1;
 
     public JdbcDynamicTableSource(
-            JdbcOptions options,
+            JdbcConnectorOptions options,
             JdbcReadOptions readOptions,
-            JdbcLookupOptions lookupOptions,
-            TableSchema physicalSchema) {
+            int lookupMaxRetryTimes,
+            @Nullable LookupCache cache,
+            DataType physicalRowDataType) {
         this.options = options;
         this.readOptions = readOptions;
-        this.lookupOptions = lookupOptions;
-        this.physicalSchema = physicalSchema;
+        this.lookupMaxRetryTimes = lookupMaxRetryTimes;
+        this.cache = cache;
+        this.physicalRowDataType = physicalRowDataType;
         this.dialectName = options.getDialect().dialectName();
     }
 
@@ -74,18 +80,22 @@ public class JdbcDynamicTableSource
             int[] innerKeyArr = context.getKeys()[i];
             Preconditions.checkArgument(
                     innerKeyArr.length == 1, "JDBC only support non-nested look up keys");
-            keyNames[i] = physicalSchema.getFieldNames()[innerKeyArr[0]];
+            keyNames[i] = DataType.getFieldNames(physicalRowDataType).get(innerKeyArr[0]);
         }
-        final RowType rowType = (RowType) physicalSchema.toRowDataType().getLogicalType();
-
-        return TableFunctionProvider.of(
+        final RowType rowType = (RowType) physicalRowDataType.getLogicalType();
+        JdbcRowDataLookupFunction lookupFunction =
                 new JdbcRowDataLookupFunction(
                         options,
-                        lookupOptions,
-                        physicalSchema.getFieldNames(),
-                        physicalSchema.getFieldDataTypes(),
+                        lookupMaxRetryTimes,
+                        DataType.getFieldNames(physicalRowDataType).toArray(new String[0]),
+                        DataType.getFieldDataTypes(physicalRowDataType).toArray(new DataType[0]),
                         keyNames,
-                        rowType));
+                        rowType);
+        if (cache != null) {
+            return PartialCachingLookupProvider.of(lookupFunction, cache);
+        } else {
+            return LookupFunctionProvider.of(lookupFunction);
+        }
     }
 
     @Override
@@ -104,7 +114,9 @@ public class JdbcDynamicTableSource
         final JdbcDialect dialect = options.getDialect();
         String query =
                 dialect.getSelectFromStatement(
-                        options.getTableName(), physicalSchema.getFieldNames(), new String[0]);
+                        options.getTableName(),
+                        DataType.getFieldNames(physicalRowDataType).toArray(new String[0]),
+                        new String[0]);
         if (readOptions.getPartitionColumnName().isPresent()) {
             long lowerBound = readOptions.getPartitionLowerBound().get();
             long upperBound = readOptions.getPartitionUpperBound().get();
@@ -121,10 +133,10 @@ public class JdbcDynamicTableSource
             query = String.format("%s %s", query, dialect.getLimitClause(limit));
         }
         builder.setQuery(query);
-        final RowType rowType = (RowType) physicalSchema.toRowDataType().getLogicalType();
+        final RowType rowType = (RowType) physicalRowDataType.getLogicalType();
         builder.setRowConverter(dialect.getRowConverter(rowType));
         builder.setRowDataTypeInfo(
-                runtimeProviderContext.createTypeInformation(physicalSchema.toRowDataType()));
+                runtimeProviderContext.createTypeInformation(physicalRowDataType));
 
         return InputFormatProvider.of(builder.build());
     }
@@ -141,13 +153,14 @@ public class JdbcDynamicTableSource
     }
 
     @Override
-    public void applyProjection(int[][] projectedFields) {
-        this.physicalSchema = TableSchemaUtils.projectSchema(physicalSchema, projectedFields);
+    public void applyProjection(int[][] projectedFields, DataType producedDataType) {
+        this.physicalRowDataType = Projection.of(projectedFields).project(physicalRowDataType);
     }
 
     @Override
     public DynamicTableSource copy() {
-        return new JdbcDynamicTableSource(options, readOptions, lookupOptions, physicalSchema);
+        return new JdbcDynamicTableSource(
+                options, readOptions, lookupMaxRetryTimes, cache, physicalRowDataType);
     }
 
     @Override
@@ -166,8 +179,9 @@ public class JdbcDynamicTableSource
         JdbcDynamicTableSource that = (JdbcDynamicTableSource) o;
         return Objects.equals(options, that.options)
                 && Objects.equals(readOptions, that.readOptions)
-                && Objects.equals(lookupOptions, that.lookupOptions)
-                && Objects.equals(physicalSchema, that.physicalSchema)
+                && Objects.equals(lookupMaxRetryTimes, that.lookupMaxRetryTimes)
+                && Objects.equals(cache, that.cache)
+                && Objects.equals(physicalRowDataType, that.physicalRowDataType)
                 && Objects.equals(dialectName, that.dialectName)
                 && Objects.equals(limit, that.limit);
     }
@@ -175,7 +189,13 @@ public class JdbcDynamicTableSource
     @Override
     public int hashCode() {
         return Objects.hash(
-                options, readOptions, lookupOptions, physicalSchema, dialectName, limit);
+                options,
+                readOptions,
+                lookupMaxRetryTimes,
+                cache,
+                physicalRowDataType,
+                dialectName,
+                limit);
     }
 
     @Override
