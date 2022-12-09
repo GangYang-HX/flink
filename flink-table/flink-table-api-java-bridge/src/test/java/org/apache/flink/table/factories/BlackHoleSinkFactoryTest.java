@@ -26,7 +26,8 @@ import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -34,11 +35,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link BlackHoleTableSinkFactory}. */
-class BlackHoleSinkFactoryTest {
+public class BlackHoleSinkFactoryTest {
 
     private static final ResolvedSchema SCHEMA =
             ResolvedSchema.of(
@@ -47,19 +48,19 @@ class BlackHoleSinkFactoryTest {
                     Column.physical("f2", DataTypes.BIGINT()));
 
     @Test
-    void testBlackHole() {
+    public void testBlackHole() {
         Map<String, String> properties = new HashMap<>();
         properties.put("connector", "blackhole");
 
         List<String> partitionKeys = Arrays.asList("f0", "f1");
         DynamicTableSink sink = createTableSink(SCHEMA, partitionKeys, properties);
 
-        assertThat(sink.asSummaryString()).isEqualTo("BlackHole");
-        assertThat(sink).isInstanceOf(SupportsPartitioning.class);
+        assertEquals("BlackHole", sink.asSummaryString());
+        assertTrue(sink instanceof SupportsPartitioning);
     }
 
     @Test
-    void testWrongKey() {
+    public void testWrongKey() {
         try {
             Map<String, String> properties = new HashMap<>();
             properties.put("connector", "blackhole");
@@ -67,12 +68,12 @@ class BlackHoleSinkFactoryTest {
             createTableSink(SCHEMA, properties);
         } catch (ValidationException e) {
             Throwable cause = e.getCause();
-            assertThat(cause).as(cause.toString()).isInstanceOf(ValidationException.class);
-            assertThat(cause.getMessage())
-                    .as(cause.getMessage())
-                    .contains("Unsupported options:\n\nunknown-key");
+            Assert.assertTrue(cause.toString(), cause instanceof ValidationException);
+            Assert.assertTrue(
+                    cause.getMessage(),
+                    cause.getMessage().contains("Unsupported options:\n\nunknown-key"));
             return;
         }
-        fail("Should fail by ValidationException.");
+        Assert.fail("Should fail by ValidationException.");
     }
 }

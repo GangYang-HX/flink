@@ -235,31 +235,6 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
         return false;
     }
 
-    @Override
-    public void releaseFreeSlotsOnTaskManager(ResourceID taskManagerId, Exception cause) {
-        assertHasBeenStarted();
-        if (isTaskManagerRegistered(taskManagerId)) {
-
-            Collection<AllocationID> freeSlots =
-                    declarativeSlotPool.getFreeSlotsInformation().stream()
-                            .filter(
-                                    slotInfo ->
-                                            slotInfo.getTaskManagerLocation()
-                                                    .getResourceID()
-                                                    .equals(taskManagerId))
-                            .map(SlotInfoWithUtilization::getAllocationId)
-                            .collect(Collectors.toSet());
-
-            for (AllocationID allocationId : freeSlots) {
-                final ResourceCounter previouslyFulfilledRequirement =
-                        declarativeSlotPool.releaseSlot(allocationId, cause);
-                // release free slots, previously fulfilled requirement should be empty.
-                Preconditions.checkState(
-                        previouslyFulfilledRequirement.equals(ResourceCounter.empty()));
-            }
-        }
-    }
-
     private void releaseAllTaskManagers(Exception cause) {
         for (ResourceID registeredTaskManager : registeredTaskManagers) {
             internalReleaseTaskManager(registeredTaskManager, cause);
@@ -284,6 +259,31 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
      *     TaskManager
      */
     protected void onReleaseTaskManager(ResourceCounter previouslyFulfilledRequirement) {}
+
+    @Override
+    public void releaseFreeSlotOnTaskManager(ResourceID taskManagerId, Exception cause) {
+        assertHasBeenStarted();
+
+        if (isTaskManagerRegistered(taskManagerId)) {
+            Collection<AllocationID> freeSlots =
+                    declarativeSlotPool.getFreeSlotsInformation().stream()
+                            .filter(
+                                    slotInfo ->
+                                            slotInfo.getTaskManagerLocation()
+                                                    .getResourceID()
+                                                    .equals(taskManagerId))
+                            .map(SlotInfoWithUtilization::getAllocationId)
+                            .collect(Collectors.toSet());
+
+            for (AllocationID allocationId : freeSlots) {
+                final ResourceCounter previouslyFulfilledRequirement =
+                        declarativeSlotPool.releaseSlot(allocationId, cause);
+                // release free slots, previously fulfilled requirement should be empty.
+                Preconditions.checkState(
+                        previouslyFulfilledRequirement.equals(ResourceCounter.empty()));
+            }
+        }
+    }
 
     @Override
     public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {

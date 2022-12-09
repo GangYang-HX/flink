@@ -42,7 +42,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -94,14 +93,8 @@ public class CompletedCheckpoint implements Serializable, Checkpoint {
     /** States of the different operator groups belonging to this checkpoint. */
     private final Map<OperatorID, OperatorState> operatorStates;
 
-    /** Properties of this checkpoint. Might change during recovery. */
+    /** Properties for this checkpoint. */
     private final CheckpointProperties props;
-
-    /**
-     * Properties of this checkpoint as they were during checkpoint creation. Might be null for
-     * older versions.
-     */
-    @Nullable private final CheckpointProperties restoredProps;
 
     /** States that were created by a hook on the master (in the checkpoint coordinator). */
     private final Collection<MasterState> masterHookStates;
@@ -117,6 +110,8 @@ public class CompletedCheckpoint implements Serializable, Checkpoint {
 
     /** Completed statistic for managing discard marker. */
     @Nullable private final transient CompletedCheckpointStats completedCheckpointStats;
+
+    private final transient CheckpointCoordinator checkpointCoordinator;
 
     // ------------------------------------------------------------------------
 
@@ -153,7 +148,7 @@ public class CompletedCheckpoint implements Serializable, Checkpoint {
             CheckpointProperties props,
             CompletedCheckpointStorageLocation storageLocation,
             @Nullable CompletedCheckpointStats completedCheckpointStats,
-            @Nullable CheckpointProperties restoredProps) {
+            CheckpointCoordinator checkpointCoordinator) {
 
         checkArgument(checkpointID >= 0);
         checkArgument(timestamp >= 0);
@@ -177,7 +172,7 @@ public class CompletedCheckpoint implements Serializable, Checkpoint {
         this.metadataHandle = storageLocation.getMetadataHandle();
         this.externalPointer = storageLocation.getExternalPointer();
         this.completedCheckpointStats = completedCheckpointStats;
-        this.restoredProps = restoredProps;
+        this.checkpointCoordinator = checkpointCoordinator;
     }
 
     // ------------------------------------------------------------------------
@@ -205,10 +200,6 @@ public class CompletedCheckpoint implements Serializable, Checkpoint {
         return props;
     }
 
-    public Optional<CheckpointProperties> getRestoredProperties() {
-        return Optional.ofNullable(restoredProps);
-    }
-
     public Map<OperatorID, OperatorState> getOperatorStates() {
         return operatorStates;
     }
@@ -233,6 +224,10 @@ public class CompletedCheckpoint implements Serializable, Checkpoint {
         }
 
         return result;
+    }
+
+    public CompletedCheckpointStorageLocation getStorageLocation() {
+        return storageLocation;
     }
 
     // ------------------------------------------------------------------------
@@ -262,7 +257,9 @@ public class CompletedCheckpoint implements Serializable, Checkpoint {
         if (completedCheckpointStats != null) {
             completedCheckpointStats.discard();
         }
-
+        if (checkpointCoordinator != null) {
+            checkpointCoordinator.notifyCheckpointDiscarded(this);
+        }
         return new CompletedCheckpointDiscardObject();
     }
 

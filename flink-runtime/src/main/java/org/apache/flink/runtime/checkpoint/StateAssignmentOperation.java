@@ -143,12 +143,7 @@ public class StateAssignmentOperation {
 
         // actually assign the state
         for (TaskStateAssignment stateAssignment : vertexAssignments.values()) {
-            // If upstream has output states, even the empty task state should be assigned for the
-            // current task in order to notify this task that the old states will send to it which
-            // likely should be filtered.
-            if (stateAssignment.hasNonFinishedState
-                    || stateAssignment.isFullyFinished
-                    || stateAssignment.hasUpstreamOutputStates()) {
+            if (stateAssignment.hasNonFinishedState || stateAssignment.isFullyFinished) {
                 assignTaskStateToExecutionJobVertices(stateAssignment);
             }
         }

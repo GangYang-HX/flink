@@ -57,6 +57,8 @@ public abstract class WindowAssigner<W extends Window> implements Serializable {
      */
     public abstract Collection<W> assignWindows(RowData element, long timestamp) throws IOException;
 
+    public abstract Collection<W> matchWindows(long timestamp, boolean alignStart);
+
     /**
      * Returns a {@link TypeSerializer} for serializing windows that are assigned by this {@code
      * WindowAssigner}.

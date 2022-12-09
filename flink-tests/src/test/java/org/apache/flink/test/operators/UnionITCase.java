@@ -31,8 +31,6 @@ import org.junit.runners.Parameterized;
 
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /** Integration tests for {@link DataSet#union}. */
 @RunWith(Parameterized.class)
 public class UnionITCase extends MultipleProgramsTestBase {

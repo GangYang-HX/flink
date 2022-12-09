@@ -39,8 +39,6 @@ import java.io.BufferedReader;
 import java.util.Arrays;
 import java.util.Collection;
 
-import static org.apache.flink.test.util.TestBaseUtils.getResultReader;
-
 /**
  * Delta iteration test implementing the connected components algorithm with a cogroup and join on
  * the solution set.

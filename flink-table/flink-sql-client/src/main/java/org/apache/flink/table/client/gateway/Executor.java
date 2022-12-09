@@ -133,7 +133,8 @@ public interface Executor {
      * Returns the rows that are part of the current page or throws an exception if the snapshot has
      * been expired.
      */
-    List<RowData> retrieveResultPage(String resultId, int page) throws SqlExecutionException;
+    List<RowData> retrieveResultPage(String sessionId, String resultId, int page)
+            throws SqlExecutionException;
 
     /**
      * Cancels a table program and stops the result retrieval. Blocking until cancellation command
@@ -141,6 +142,12 @@ public interface Executor {
      */
     void cancelQuery(String sessionId, String resultId) throws SqlExecutionException;
 
+    /** Add the JAR resource into the classloader with specified session. */
+    void addJar(String sessionId, String jarPath);
+
     /** Remove the JAR resource from the classloader with specified session. */
     void removeJar(String sessionId, String jarPath);
+
+    /** List the JAR resources of the classloader with specified session. */
+    List<String> listJars(String sessionId);
 }

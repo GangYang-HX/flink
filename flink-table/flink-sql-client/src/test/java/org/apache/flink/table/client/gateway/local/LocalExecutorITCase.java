@@ -34,22 +34,25 @@ import org.apache.flink.table.client.gateway.Executor;
 import org.apache.flink.table.client.gateway.ResultDescriptor;
 import org.apache.flink.table.client.gateway.TypedResult;
 import org.apache.flink.table.client.gateway.context.DefaultContext;
+import org.apache.flink.table.client.gateway.utils.UserDefinedFunctions;
+import org.apache.flink.table.client.gateway.utils.UserDefinedFunctions.TableUDF;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.AggregateFunction;
 import org.apache.flink.table.functions.ScalarFunction;
 import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.operations.QueryOperation;
-import org.apache.flink.table.utils.UserDefinedFunctions;
+import org.apache.flink.table.utils.TestUserClassLoaderJar;
 import org.apache.flink.table.utils.print.RowDataToStringConverter;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.test.util.TestBaseUtils;
 import org.apache.flink.util.StringUtils;
 import org.apache.flink.util.TestLogger;
-import org.apache.flink.util.UserClassLoaderJarTestUtils;
 
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
@@ -70,10 +73,11 @@ import java.util.stream.Stream;
 import static org.apache.flink.configuration.ExecutionOptions.RUNTIME_MODE;
 import static org.apache.flink.table.client.config.SqlClientOptions.EXECUTION_MAX_TABLE_RESULT_ROWS;
 import static org.apache.flink.table.client.config.SqlClientOptions.EXECUTION_RESULT_MODE;
-import static org.apache.flink.table.utils.UserDefinedFunctions.GENERATED_LOWER_UDF_CLASS;
-import static org.apache.flink.table.utils.UserDefinedFunctions.GENERATED_LOWER_UDF_CODE;
+import static org.apache.flink.table.client.gateway.utils.UserDefinedFunctions.ScalarUDF;
 import static org.apache.flink.util.Preconditions.checkState;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** Contains basic tests for the {@link LocalExecutor}. */
 public class LocalExecutorITCase extends TestLogger {
@@ -101,11 +105,11 @@ public class LocalExecutorITCase extends TestLogger {
     public static void setup() throws IOException {
         clusterClient = MINI_CLUSTER_RESOURCE.getClusterClient();
         File udfJar =
-                UserClassLoaderJarTestUtils.createJarFile(
+                TestUserClassLoaderJar.createJarFile(
                         tempFolder.newFolder("test-jar"),
                         "test-classloader-udf.jar",
-                        GENERATED_LOWER_UDF_CLASS,
-                        String.format(GENERATED_LOWER_UDF_CODE, GENERATED_LOWER_UDF_CLASS));
+                        UserDefinedFunctions.GENERATED_UDF_CLASS,
+                        UserDefinedFunctions.GENERATED_UDF_CODE);
         udfDependency = udfJar.toURI().toURL();
     }
 
@@ -118,29 +122,31 @@ public class LocalExecutorITCase extends TestLogger {
         return config;
     }
 
+    @Rule public ExpectedException exception = ExpectedException.none();
+
     @Test
     public void testCompleteStatement() {
         final Executor executor = createLocalExecutor();
         String sessionId = executor.openSession("test-session");
-        assertThat(sessionId).isEqualTo("test-session");
+        assertEquals("test-session", sessionId);
         initSession(executor, sessionId, Collections.emptyMap());
 
         final List<String> expectedTableHints =
                 Arrays.asList(
                         "default_catalog.default_database.TableNumber1",
                         "default_catalog.default_database.TableSourceSink");
-        assertThat(executor.completeStatement(sessionId, "SELECT * FROM Ta", 16))
-                .isEqualTo(expectedTableHints);
+        assertEquals(
+                expectedTableHints, executor.completeStatement(sessionId, "SELECT * FROM Ta", 16));
 
         final List<String> expectedClause = Collections.singletonList("WHERE");
-        assertThat(executor.completeStatement(sessionId, "SELECT * FROM TableNumber1 WH", 29))
-                .isEqualTo(expectedClause);
+        assertEquals(
+                expectedClause,
+                executor.completeStatement(sessionId, "SELECT * FROM TableNumber1 WH", 29));
 
-        final List<String> expectedField = Collections.singletonList("IntegerField1");
-        assertThat(
-                        executor.completeStatement(
-                                sessionId, "SELECT * FROM TableNumber1 WHERE Inte", 37))
-                .isEqualTo(expectedField);
+        final List<String> expectedField = Arrays.asList("IntegerField1");
+        assertEquals(
+                expectedField,
+                executor.completeStatement(sessionId, "SELECT * FROM TableNumber1 WHERE Inte", 37));
         executor.closeSession(sessionId);
     }
 
@@ -156,7 +162,7 @@ public class LocalExecutorITCase extends TestLogger {
         final LocalExecutor executor =
                 createLocalExecutor(Collections.singletonList(udfDependency), configuration);
         String sessionId = executor.openSession("test-session");
-        assertThat(sessionId).isEqualTo("test-session");
+        assertEquals("test-session", sessionId);
 
         initSession(executor, sessionId, replaceVars);
         try {
@@ -167,7 +173,7 @@ public class LocalExecutorITCase extends TestLogger {
                             sessionId,
                             "SELECT scalarUDF(IntegerField1, 5), StringField1, 'ABC' FROM TableNumber1");
 
-            assertThat(desc.isMaterialized()).isFalse();
+            assertFalse(desc.isMaterialized());
 
             final List<String> actualResults =
                     retrieveChangelogResult(
@@ -203,7 +209,7 @@ public class LocalExecutorITCase extends TestLogger {
         final LocalExecutor executor =
                 createLocalExecutor(Collections.singletonList(udfDependency), configuration);
         String sessionId = executor.openSession("test-session");
-        assertThat(sessionId).isEqualTo("test-session");
+        assertEquals("test-session", sessionId);
 
         final List<String> expectedResults = new ArrayList<>();
         expectedResults.add("[47, Hello World]");
@@ -223,7 +229,7 @@ public class LocalExecutorITCase extends TestLogger {
                                 sessionId,
                                 "SELECT scalarUDF(IntegerField1, 5), StringField1 FROM TableNumber1");
 
-                assertThat(desc.isMaterialized()).isFalse();
+                assertFalse(desc.isMaterialized());
 
                 final List<String> actualResults =
                         retrieveChangelogResult(
@@ -327,14 +333,14 @@ public class LocalExecutorITCase extends TestLogger {
                 createLocalExecutor(
                         Collections.singletonList(udfDependency), Configuration.fromMap(configMap));
         String sessionId = executor.openSession("test-session");
-        assertThat(sessionId).isEqualTo("test-session");
+        assertEquals("test-session", sessionId);
 
         initSession(executor, sessionId, replaceVars);
         try {
             final ResultDescriptor desc =
                     executeQuery(executor, sessionId, "SELECT *, 'ABC' FROM TestView1");
 
-            assertThat(desc.isMaterialized()).isTrue();
+            assertTrue(desc.isMaterialized());
 
             final List<String> actualResults =
                     retrieveTableResult(
@@ -373,7 +379,7 @@ public class LocalExecutorITCase extends TestLogger {
                 createLocalExecutor(
                         Collections.singletonList(udfDependency), Configuration.fromMap(configMap));
         String sessionId = executor.openSession("test-session");
-        assertThat(sessionId).isEqualTo("test-session");
+        assertEquals("test-session", sessionId);
         initSession(executor, sessionId, replaceVars);
 
         final List<String> expectedResults = new ArrayList<>();
@@ -389,7 +395,7 @@ public class LocalExecutorITCase extends TestLogger {
                 final ResultDescriptor desc =
                         executeQuery(executor, sessionId, "SELECT * FROM TestView1");
 
-                assertThat(desc.isMaterialized()).isTrue();
+                assertTrue(desc.isMaterialized());
 
                 final List<String> actualResults =
                         retrieveTableResult(
@@ -450,7 +456,7 @@ public class LocalExecutorITCase extends TestLogger {
                         Collections.singletonList(udfDependency), Configuration.fromMap(configMap));
         String sessionId = executor.openSession("test-session");
 
-        assertThat(sessionId).isEqualTo("test-session");
+        assertEquals("test-session", sessionId);
 
         initSession(executor, sessionId, replaceVars);
 
@@ -458,7 +464,7 @@ public class LocalExecutorITCase extends TestLogger {
             // start job and retrieval
             final ResultDescriptor desc = executeQuery(executor, sessionId, query);
 
-            assertThat(desc.isMaterialized()).isTrue();
+            assertTrue(desc.isMaterialized());
 
             final List<String> actualResults =
                     retrieveTableResult(
@@ -491,7 +497,8 @@ public class LocalExecutorITCase extends TestLogger {
                         .forEach(
                                 (page) -> {
                                     for (RowData row :
-                                            executor.retrieveResultPage(resultID, page)) {
+                                            executor.retrieveResultPage(
+                                                    sessionId, resultID, page)) {
                                         actualResults.add(
                                                 StringUtils.arrayAwareToString(
                                                         rowDataToStringConverter.convert(row)));
@@ -565,14 +572,11 @@ public class LocalExecutorITCase extends TestLogger {
     private List<String> getInitSQL(final Map<String, String> replaceVars) {
         return Stream.of(
                         String.format(
-                                "CREATE FUNCTION scalarUDF AS '%s'",
-                                UserDefinedFunctions.ScalarUDF.class.getName()),
+                                "CREATE FUNCTION scalarUDF AS '%s'", ScalarUDF.class.getName()),
                         String.format(
                                 "CREATE FUNCTION aggregateUDF AS '%s'",
                                 AggregateFunction.class.getName()),
-                        String.format(
-                                "CREATE FUNCTION tableUDF AS '%s'",
-                                UserDefinedFunctions.TableUDF.class.getName()),
+                        String.format("CREATE FUNCTION tableUDF AS '%s'", TableUDF.class.getName()),
                         "CREATE TABLE TableNumber1 (\n"
                                 + "  IntegerField1 INT,\n"
                                 + "  StringField1 STRING,\n"

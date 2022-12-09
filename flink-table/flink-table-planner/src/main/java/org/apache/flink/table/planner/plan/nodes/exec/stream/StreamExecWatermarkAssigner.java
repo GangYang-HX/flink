@@ -115,10 +115,11 @@ public class StreamExecWatermarkAssigner extends ExecNodeBase<RowData>
         final Transformation<RowData> inputTransform =
                 (Transformation<RowData>) inputEdge.translateToPlan(planner);
 
+        planner.getExecEnv().getConfig().setUseWatermark(true);
+
         final GeneratedWatermarkGenerator watermarkGenerator =
                 WatermarkGeneratorCodeGenerator.generateWatermarkGenerator(
-                        config,
-                        planner.getFlinkContext().getClassLoader(),
+                        config.getTableConfig(),
                         (RowType) inputEdge.getOutputType(),
                         watermarkExpr,
                         JavaScalaConversionUtil.toScala(Optional.empty()));

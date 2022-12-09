@@ -18,12 +18,14 @@
 
 package org.apache.flink.formats.avro.glue.schema.registry;
 
+import org.apache.flink.util.TestLogger;
+
 import com.amazonaws.services.schemaregistry.common.configs.GlueSchemaRegistryConfiguration;
 import com.amazonaws.services.schemaregistry.serializers.GlueSchemaRegistrySerializationFacade;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import org.apache.avro.Schema;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 
@@ -36,7 +38,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link GlueSchemaRegistryOutputStreamSerializer}. */
-class GlueSchemaRegistryOutputStreamSerializerTest {
+public class GlueSchemaRegistryOutputStreamSerializerTest extends TestLogger {
     private static final String testTopic = "Test-Topic";
     private static final String AVRO_USER_SCHEMA_FILE = "src/test/java/resources/avro/user.avsc";
     private static final byte[] actualBytes =
@@ -54,8 +56,8 @@ class GlueSchemaRegistryOutputStreamSerializerTest {
             DefaultCredentialsProvider.builder().build();
     private static GlueSchemaRegistrySerializationFacade mockSerializationFacade;
 
-    @BeforeAll
-    static void setup() throws IOException {
+    @BeforeClass
+    public static void setup() throws IOException {
         metadata.put("test-key", "test-value");
         metadata.put(AWSSchemaRegistryConstants.TRANSPORT_METADATA_KEY, testTopic);
 
@@ -80,7 +82,7 @@ class GlueSchemaRegistryOutputStreamSerializerTest {
      * map.
      */
     @Test
-    void testConstructor_withConfigsAndCredential_succeeds() {
+    public void testConstructor_withConfigsAndCredential_succeeds() {
         GlueSchemaRegistryOutputStreamSerializer glueSchemaRegistryOutputStreamSerializer =
                 new GlueSchemaRegistryOutputStreamSerializer(testTopic, configs);
         assertThat(glueSchemaRegistryOutputStreamSerializer)
@@ -89,7 +91,7 @@ class GlueSchemaRegistryOutputStreamSerializerTest {
 
     /** Test whether constructor works with Glue Schema Registry SerializationFacade. */
     @Test
-    void testConstructor_withDeserializer_succeeds() {
+    public void testConstructor_withDeserializer_succeeds() {
         GlueSchemaRegistryOutputStreamSerializer glueSchemaRegistryOutputStreamSerializer =
                 new GlueSchemaRegistryOutputStreamSerializer(
                         testTopic, configs, mockSerializationFacade);
@@ -99,7 +101,7 @@ class GlueSchemaRegistryOutputStreamSerializerTest {
 
     /** Test whether registerSchemaAndSerializeStream method works. */
     @Test
-    void testRegisterSchemaAndSerializeStream_withValidParams_succeeds() throws IOException {
+    public void testRegisterSchemaAndSerializeStream_withValidParams_succeeds() throws IOException {
         GlueSchemaRegistryOutputStreamSerializer glueSchemaRegistryOutputStreamSerializer =
                 new GlueSchemaRegistryOutputStreamSerializer(
                         testTopic, configs, mockSerializationFacade);

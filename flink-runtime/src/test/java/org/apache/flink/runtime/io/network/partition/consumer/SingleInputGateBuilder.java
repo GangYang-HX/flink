@@ -190,7 +190,6 @@ public class SingleInputGateBuilder {
     private BufferDebloater maybeCreateBufferDebloater(int gateIndex) {
         if (bufferDebloatConfiguration.isEnabled()) {
             return new BufferDebloater(
-                    "Unknown task name in test",
                     gateIndex,
                     bufferDebloatConfiguration.getTargetTotalBufferSize().toMillis(),
                     bufferDebloatConfiguration.getMaxBufferSize(),

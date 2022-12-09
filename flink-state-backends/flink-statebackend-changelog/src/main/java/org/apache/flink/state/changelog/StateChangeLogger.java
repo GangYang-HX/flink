@@ -17,7 +17,6 @@
 
 package org.apache.flink.state.changelog;
 
-import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 import org.apache.flink.util.function.ThrowingConsumer;
@@ -43,8 +42,7 @@ import java.io.IOException;
  * @param <Value> type of state (value)
  * @param <Namespace> type of namespace
  */
-@Internal
-public interface StateChangeLogger<Value, Namespace> extends Closeable {
+interface StateChangeLogger<Value, Namespace> extends Closeable {
 
     /** State updated, such as by {@link ListState#update}. */
     void valueUpdated(Value newValue, Namespace ns) throws IOException;

@@ -27,7 +27,7 @@ import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServicePort;
 import io.fabric8.kubernetes.api.model.ServicePortBuilder;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -35,10 +35,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 
 /** General tests for the {@link ExternalServiceDecorator}. */
-class ExternalServiceDecoratorTest extends KubernetesJobManagerTestBase {
+public class ExternalServiceDecoratorTest extends KubernetesJobManagerTestBase {
 
     private ExternalServiceDecorator externalServiceDecorator;
 
@@ -61,23 +64,25 @@ class ExternalServiceDecoratorTest extends KubernetesJobManagerTestBase {
     }
 
     @Test
-    void testBuildAccompanyingKubernetesResources() throws IOException {
+    public void testBuildAccompanyingKubernetesResources() throws IOException {
         final List<HasMetadata> resources =
                 this.externalServiceDecorator.buildAccompanyingKubernetesResources();
-        assertThat(resources).hasSize(1);
+        assertEquals(1, resources.size());
 
         final Service restService = (Service) resources.get(0);
 
-        assertThat(restService.getApiVersion()).isEqualTo(Constants.API_VERSION);
+        assertEquals(Constants.API_VERSION, restService.getApiVersion());
 
-        assertThat(restService.getMetadata().getName())
-                .isEqualTo(ExternalServiceDecorator.getExternalServiceName(CLUSTER_ID));
+        assertEquals(
+                ExternalServiceDecorator.getExternalServiceName(CLUSTER_ID),
+                restService.getMetadata().getName());
 
         final Map<String, String> expectedLabels = getCommonLabels();
-        assertThat(restService.getMetadata().getLabels()).isEqualTo(expectedLabels);
+        assertEquals(expectedLabels, restService.getMetadata().getLabels());
 
-        assertThat(restService.getSpec().getType())
-                .isEqualTo(KubernetesConfigOptions.ServiceExposedType.ClusterIP.name());
+        assertEquals(
+                KubernetesConfigOptions.ServiceExposedType.ClusterIP.name(),
+                restService.getSpec().getType());
 
         final List<ServicePort> expectedServicePorts =
                 Collections.singletonList(
@@ -86,45 +91,49 @@ class ExternalServiceDecoratorTest extends KubernetesJobManagerTestBase {
                                 .withPort(REST_PORT)
                                 .withNewTargetPort(Integer.valueOf(REST_BIND_PORT))
                                 .build());
-        assertThat(restService.getSpec().getPorts()).isEqualTo(expectedServicePorts);
+        assertEquals(expectedServicePorts, restService.getSpec().getPorts());
 
         expectedLabels.put(Constants.LABEL_COMPONENT_KEY, Constants.LABEL_COMPONENT_JOB_MANAGER);
-        assertThat(restService.getSpec().getSelector()).isEqualTo(expectedLabels);
+        assertEquals(expectedLabels, restService.getSpec().getSelector());
 
         final Map<String, String> resultAnnotations = restService.getMetadata().getAnnotations();
-        assertThat(resultAnnotations).isEqualTo(customizedAnnotations);
+        assertThat(resultAnnotations, is(equalTo(customizedAnnotations)));
     }
 
     @Test
-    void testSetServiceExposedType() throws IOException {
+    public void testSetServiceExposedType() throws IOException {
         this.flinkConfig.set(
                 KubernetesConfigOptions.REST_SERVICE_EXPOSED_TYPE,
                 KubernetesConfigOptions.ServiceExposedType.NodePort);
         final List<HasMetadata> resources =
                 this.externalServiceDecorator.buildAccompanyingKubernetesResources();
-        assertThat(((Service) resources.get(0)).getSpec().getType())
-                .isEqualTo(KubernetesConfigOptions.ServiceExposedType.NodePort.name());
+        assertEquals(
+                KubernetesConfigOptions.ServiceExposedType.NodePort.name(),
+                ((Service) resources.get(0)).getSpec().getType());
 
         this.flinkConfig.set(
                 KubernetesConfigOptions.REST_SERVICE_EXPOSED_TYPE,
                 KubernetesConfigOptions.ServiceExposedType.ClusterIP);
         final List<HasMetadata> servicesWithClusterIP =
                 this.externalServiceDecorator.buildAccompanyingKubernetesResources();
-        assertThat(((Service) servicesWithClusterIP.get(0)).getSpec().getType())
-                .isEqualTo(KubernetesConfigOptions.ServiceExposedType.ClusterIP.name());
+        assertEquals(
+                KubernetesConfigOptions.ServiceExposedType.ClusterIP.name(),
+                ((Service) servicesWithClusterIP.get(0)).getSpec().getType());
     }
 
     @Test
-    void testSetServiceExposedTypeWithHeadless() throws IOException {
+    public void testSetServiceExposedTypeWithHeadless() throws IOException {
 
         this.flinkConfig.set(
                 KubernetesConfigOptions.REST_SERVICE_EXPOSED_TYPE,
                 KubernetesConfigOptions.ServiceExposedType.Headless_ClusterIP);
         final List<HasMetadata> servicesWithHeadlessClusterIP =
                 this.externalServiceDecorator.buildAccompanyingKubernetesResources();
-        assertThat(((Service) servicesWithHeadlessClusterIP.get(0)).getSpec().getType())
-                .isEqualTo(KubernetesConfigOptions.ServiceExposedType.ClusterIP.name());
-        assertThat(((Service) servicesWithHeadlessClusterIP.get(0)).getSpec().getClusterIP())
-                .isEqualTo(HeadlessClusterIPService.HEADLESS_CLUSTER_IP);
+        assertThat(
+                ((Service) servicesWithHeadlessClusterIP.get(0)).getSpec().getType(),
+                is(KubernetesConfigOptions.ServiceExposedType.ClusterIP.name()));
+        assertThat(
+                ((Service) servicesWithHeadlessClusterIP.get(0)).getSpec().getClusterIP(),
+                is(HeadlessClusterIPService.HEADLESS_CLUSTER_IP));
     }
 }

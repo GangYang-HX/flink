@@ -29,13 +29,13 @@ import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
 
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.BeforeClass;
 
 import java.io.Serializable;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
-class RowComparatorTest extends ComparatorTestBase<Row> {
+public class RowComparatorTest extends ComparatorTestBase<Row> {
 
     private static final RowTypeInfo typeInfo =
             new RowTypeInfo(
@@ -74,8 +74,8 @@ class RowComparatorTest extends ComparatorTestBase<Row> {
                 createRow(RowKind.DELETE, 1, 1.0, "b", new Tuple3<>(2, true, (short) 3), testPojo3)
             };
 
-    @BeforeAll
-    static void init() {
+    @BeforeClass
+    public static void init() {
         // TODO we cannot test null here as PojoComparator has no support for null keys
         testPojo1.name = "";
         testPojo2.name = "Test1";
@@ -85,11 +85,11 @@ class RowComparatorTest extends ComparatorTestBase<Row> {
     @Override
     protected void deepEquals(String message, Row should, Row is) {
         int arity = should.getArity();
-        assertThat(is.getArity()).as(message).isEqualTo(arity);
+        assertEquals(message, arity, is.getArity());
         for (int i = 0; i < arity; i++) {
             Object copiedValue = should.getField(i);
             Object element = is.getField(i);
-            assertThat(element).as(message).isEqualTo(copiedValue);
+            assertEquals(message, element, copiedValue);
         }
     }
 

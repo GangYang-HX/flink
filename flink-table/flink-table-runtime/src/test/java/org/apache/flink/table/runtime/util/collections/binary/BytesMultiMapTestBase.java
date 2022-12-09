@@ -37,12 +37,11 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.SmallIntType;
 import org.apache.flink.table.types.logical.VarCharType;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Iterator;
 import java.util.Random;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Base test class for {@link BytesMultiMap} and {@link WindowBytesMultiMap}. */
 public abstract class BytesMultiMapTestBase<K> extends BytesMapTestBase {
@@ -122,7 +121,7 @@ public abstract class BytesMultiMapTestBase<K> extends BytesMapTestBase {
             int i = 0;
             Iterator<RowData> valueIter = iter.getValue();
             while (valueIter.hasNext()) {
-                assertThat(values[i++]).isEqualTo(valueIter.next());
+                Assert.assertEquals(valueIter.next(), values[i++]);
             }
         }
     }

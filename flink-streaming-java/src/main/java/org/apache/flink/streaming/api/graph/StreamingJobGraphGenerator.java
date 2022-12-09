@@ -36,7 +36,6 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.InputOutputFormatContainer;
 import org.apache.flink.runtime.jobgraph.InputOutputFormatVertex;
-import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobEdge;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobGraphUtils;
@@ -55,7 +54,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.util.TaskConfig;
 import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.StateBackend;
-import org.apache.flink.runtime.util.Hardware;
 import org.apache.flink.runtime.util.config.memory.ManagedMemoryUtils;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.checkpoint.WithMasterCheckpointHook;
@@ -77,10 +75,7 @@ import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.streaming.runtime.tasks.StreamIterationHead;
 import org.apache.flink.streaming.runtime.tasks.StreamIterationTail;
 import org.apache.flink.util.FlinkRuntimeException;
-import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.SerializedValue;
-import org.apache.flink.util.concurrent.ExecutorThreadFactory;
-import org.apache.flink.util.concurrent.FutureUtils;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -90,24 +85,17 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -124,28 +112,12 @@ public class StreamingJobGraphGenerator {
 
     // ------------------------------------------------------------------------
 
-    @VisibleForTesting
     public static JobGraph createJobGraph(StreamGraph streamGraph) {
-        return new StreamingJobGraphGenerator(streamGraph, null, Runnable::run).createJobGraph();
+        return createJobGraph(streamGraph, null);
     }
 
     public static JobGraph createJobGraph(StreamGraph streamGraph, @Nullable JobID jobID) {
-        // TODO Currently, we construct a new thread pool for the compilation of each job. In the
-        // future, we may refactor the job submission framework and make it reusable across jobs.
-        final ExecutorService serializationExecutor =
-                Executors.newFixedThreadPool(
-                        Math.max(
-                                1,
-                                Math.min(
-                                        Hardware.getNumberCPUCores(),
-                                        streamGraph.getExecutionConfig().getParallelism())),
-                        new ExecutorThreadFactory("flink-operator-serialization-io"));
-        try {
-            return new StreamingJobGraphGenerator(streamGraph, jobID, serializationExecutor)
-                    .createJobGraph();
-        } finally {
-            serializationExecutor.shutdown();
-        }
+        return new StreamingJobGraphGenerator(streamGraph, jobID).createJobGraph();
     }
 
     // ------------------------------------------------------------------------
@@ -171,20 +143,16 @@ public class StreamingJobGraphGenerator {
     private final StreamGraphHasher defaultStreamGraphHasher;
     private final List<StreamGraphHasher> legacyStreamGraphHashers;
 
-    private boolean hasHybridResultPartition = false;
-
-    private final Executor serializationExecutor;
-
-    // Futures for the serialization of operator coordinators
-    private final List<CompletableFuture<Void>> coordinatorSerializationFutures = new ArrayList<>();
-
-    private final Map<Integer, Map<StreamEdge, NonChainedOutput>> opIntermediateOutputs;
-
-    private StreamingJobGraphGenerator(
-            StreamGraph streamGraph, @Nullable JobID jobID, Executor serializationExecutor) {
+    private StreamingJobGraphGenerator(StreamGraph streamGraph, @Nullable JobID jobID) {
         this.streamGraph = streamGraph;
-        this.defaultStreamGraphHasher = new StreamGraphHasherV2();
-        this.legacyStreamGraphHashers = Arrays.asList(new StreamGraphUserHashHasher());
+
+        if (streamGraph.getExecutionConfig().useStreamGraphHasherV3()) {
+            this.defaultStreamGraphHasher = new StreamGraphHasherV3();
+        } else {
+            this.defaultStreamGraphHasher = new StreamGraphHasherV2();
+        }
+
+        this.legacyStreamGraphHashers = Collections.singletonList(new StreamGraphUserHashHasher());
 
         this.jobVertices = new HashMap<>();
         this.builtVertices = new HashSet<>();
@@ -195,8 +163,6 @@ public class StreamingJobGraphGenerator {
         this.chainedPreferredResources = new HashMap<>();
         this.chainedInputOutputFormats = new HashMap<>();
         this.physicalEdgesInOrder = new ArrayList<>();
-        this.serializationExecutor = Preconditions.checkNotNull(serializationExecutor);
-        this.opIntermediateOutputs = new HashMap<>();
 
         jobGraph = new JobGraph(jobID, streamGraph.getJobName());
     }
@@ -221,9 +187,28 @@ public class StreamingJobGraphGenerator {
 
         setChaining(hashes, legacyHashes);
 
-        setPhysicalEdges();
+        try {
+            vertexConfigs
+                    .values()
+                    .forEach(
+                            streamConfig ->
+                                    LOG.info(
+                                            ("operator id & name line : {} : {}"),
+                                            streamConfig.getOperatorID(),
+                                            streamConfig
+                                                    .getOperatorName()
+                                                    .substring(
+                                                            0,
+                                                            Math.min(
+                                                                    300,
+                                                                    streamConfig
+                                                                            .getOperatorName()
+                                                                            .length()))));
+        } catch (Exception e) {
+            LOG.error("exception happen when log operator id", e);
+        }
 
-        markContainsSourcesOrSinks();
+        setPhysicalEdges();
 
         setSlotSharingAndCoLocation();
 
@@ -258,30 +243,9 @@ public class StreamingJobGraphGenerator {
                             + "This indicates that non-serializable types (like custom serializers) were registered");
         }
 
-        jobGraph.setChangelogStateBackendEnabled(streamGraph.isChangelogStateBackendEnabled());
-
         addVertexIndexPrefixInVertexName();
 
         setVertexDescription();
-
-        // Wait for the serialization of operator coordinators and stream config.
-        try {
-            FutureUtils.combineAll(
-                            vertexConfigs.values().stream()
-                                    .map(
-                                            config ->
-                                                    config.triggerSerializationAndReturnFuture(
-                                                            serializationExecutor))
-                                    .collect(Collectors.toList()))
-                    .get();
-            FutureUtils.combineAll(coordinatorSerializationFutures).get();
-        } catch (Exception e) {
-            throw new FlinkRuntimeException("Error in serialization.", e);
-        }
-
-        if (!streamGraph.getJobStatusHooks().isEmpty()) {
-            jobGraph.setJobStatusHooks(streamGraph.getJobStatusHooks());
-        }
 
         return jobGraph;
     }
@@ -535,6 +499,7 @@ public class StreamingJobGraphGenerator {
                     operatorConfig.setChainIndex(0); // sources are always first
                     operatorConfig.setOperatorID(opId);
                     operatorConfig.setOperatorName(sourceNode.getOperatorName());
+                    operatorConfig.setOperatorDescription(sourceNode.getOperatorDescription());
                     chainedSources.put(
                             sourceNodeId, new ChainedSourceInfo(operatorConfig, inputConfig));
 
@@ -681,16 +646,14 @@ public class StreamingJobGraphGenerator {
                 config.setChainStart();
                 config.setChainIndex(chainIndex);
                 config.setOperatorName(streamGraph.getStreamNode(currentNodeId).getOperatorName());
+                config.setOperatorDescription(
+                        streamGraph.getStreamNode(currentNodeId).getOperatorDescription());
 
-                LinkedHashSet<NonChainedOutput> transitiveOutputs = new LinkedHashSet<>();
                 for (StreamEdge edge : transitiveOutEdges) {
-                    NonChainedOutput output =
-                            opIntermediateOutputs.get(edge.getSourceId()).get(edge);
-                    transitiveOutputs.add(output);
-                    connect(startNodeId, edge, output);
+                    connect(startNodeId, edge);
                 }
 
-                config.setVertexNonChainedOutputs(new ArrayList<>(transitiveOutputs));
+                config.setOutEdgesInOrder(transitiveOutEdges);
                 config.setTransitiveChainedTaskConfigs(chainedConfigs.get(startNodeId));
 
             } else {
@@ -700,6 +663,7 @@ public class StreamingJobGraphGenerator {
                 config.setChainIndex(chainIndex);
                 StreamNode node = streamGraph.getStreamNode(currentNodeId);
                 config.setOperatorName(node.getOperatorName());
+                config.setOperatorDescription(node.getOperatorDescription());
                 chainedConfigs.get(startNodeId).put(currentNodeId, config);
             }
 
@@ -807,27 +771,17 @@ public class StreamingJobGraphGenerator {
             jobVertex = new JobVertex(chainedNames.get(streamNodeId), jobVertexId, operatorIDPairs);
         }
 
-        if (streamNode.getConsumeClusterDatasetId() != null) {
-            jobVertex.addIntermediateDataSetIdToConsume(streamNode.getConsumeClusterDatasetId());
-        }
-
         for (OperatorCoordinator.Provider coordinatorProvider :
                 chainInfo.getCoordinatorProviders()) {
-            coordinatorSerializationFutures.add(
-                    CompletableFuture.runAsync(
-                            () -> {
-                                try {
-                                    jobVertex.addOperatorCoordinator(
-                                            new SerializedValue<>(coordinatorProvider));
-                                } catch (IOException e) {
-                                    throw new FlinkRuntimeException(
-                                            String.format(
-                                                    "Coordinator Provider for node %s is not serializable.",
-                                                    chainedNames.get(streamNodeId)),
-                                            e);
-                                }
-                            },
-                            serializationExecutor));
+            try {
+                jobVertex.addOperatorCoordinator(new SerializedValue<>(coordinatorProvider));
+            } catch (IOException e) {
+                throw new FlinkRuntimeException(
+                        String.format(
+                                "Coordinator Provider for node %s is not serializable.",
+                                chainedNames.get(streamNodeId)),
+                        e);
+            }
         }
 
         jobVertex.setResources(
@@ -913,13 +867,6 @@ public class StreamingJobGraphGenerator {
                 }
             }
         }
-
-        // set the input config of the vertex if it consumes from cached intermediate dataset.
-        if (vertex.getConsumeClusterDatasetId() != null) {
-            config.setNumberOfNetworkInputs(1);
-            inputConfigs[0] = new StreamConfig.NetworkInputConfig(inputSerializers[0], 0);
-        }
-
         config.setInputs(inputConfigs);
 
         config.setTypeSerializerOut(vertex.getTypeSerializerOut());
@@ -946,10 +893,8 @@ public class StreamingJobGraphGenerator {
 
         config.setStreamOperatorFactory(vertex.getOperatorFactory());
 
-        List<NonChainedOutput> deduplicatedOutputs =
-                mayReuseNonChainedOutputs(vertexID, nonChainableOutputs);
-        config.setNumberOfOutputs(deduplicatedOutputs.size());
-        config.setOperatorNonChainedOutputs(deduplicatedOutputs);
+        config.setNumberOfOutputs(nonChainableOutputs.size());
+        config.setNonChainedOutputs(nonChainableOutputs);
         config.setChainedOutputs(chainableOutputs);
 
         config.setTimeCharacteristic(streamGraph.getTimeCharacteristic());
@@ -957,6 +902,7 @@ public class StreamingJobGraphGenerator {
         final CheckpointConfig checkpointCfg = streamGraph.getCheckpointConfig();
 
         config.setStateBackend(streamGraph.getStateBackend());
+        config.setChangelogStateBackendEnabled(streamGraph.isChangelogStateBackendEnabled());
         config.setCheckpointStorage(streamGraph.getCheckpointStorage());
         config.setSavepointDir(streamGraph.getSavepointDirectory());
         config.setGraphContainingLoops(streamGraph.isIterative());
@@ -984,75 +930,6 @@ public class StreamingJobGraphGenerator {
         }
 
         vertexConfigs.put(vertexID, config);
-    }
-
-    private List<NonChainedOutput> mayReuseNonChainedOutputs(
-            int vertexId, List<StreamEdge> consumerEdges) {
-        if (consumerEdges.isEmpty()) {
-            return new ArrayList<>();
-        }
-        List<NonChainedOutput> outputs = new ArrayList<>(consumerEdges.size());
-        Map<StreamEdge, NonChainedOutput> outputsConsumedByEdge =
-                opIntermediateOutputs.computeIfAbsent(vertexId, ignored -> new HashMap<>());
-        for (StreamEdge consumerEdge : consumerEdges) {
-            checkState(vertexId == consumerEdge.getSourceId(), "Vertex id must be the same.");
-            int consumerParallelism =
-                    streamGraph.getStreamNode(consumerEdge.getTargetId()).getParallelism();
-            int consumerMaxParallelism =
-                    streamGraph.getStreamNode(consumerEdge.getTargetId()).getMaxParallelism();
-            StreamPartitioner<?> partitioner = consumerEdge.getPartitioner();
-            ResultPartitionType partitionType = getResultPartitionType(consumerEdge);
-            IntermediateDataSetID dataSetId = new IntermediateDataSetID();
-
-            boolean isPersistentDataSet =
-                    isPersistentIntermediateDataset(partitionType, consumerEdge);
-            if (isPersistentDataSet) {
-                partitionType = ResultPartitionType.BLOCKING_PERSISTENT;
-                dataSetId = consumerEdge.getIntermediateDatasetIdToProduce();
-            }
-
-            NonChainedOutput output =
-                    new NonChainedOutput(
-                            consumerEdge.supportsUnalignedCheckpoints(),
-                            consumerEdge.getSourceId(),
-                            consumerParallelism,
-                            consumerMaxParallelism,
-                            consumerEdge.getBufferTimeout(),
-                            isPersistentDataSet,
-                            dataSetId,
-                            consumerEdge.getOutputTag(),
-                            partitioner,
-                            partitionType);
-            if (!partitionType.isReconsumable()) {
-                outputs.add(output);
-                outputsConsumedByEdge.put(consumerEdge, output);
-            } else {
-                NonChainedOutput reusableOutput = null;
-                for (NonChainedOutput outputCandidate : outputsConsumedByEdge.values()) {
-                    // the target output can be reused if they have the same partitioner and
-                    // consumer parallelism, reusing the same output can improve performance
-                    if (outputCandidate.getPartitionType().isReconsumable()
-                            && consumerParallelism == outputCandidate.getConsumerParallelism()
-                            && consumerMaxParallelism == outputCandidate.getConsumerMaxParallelism()
-                            && outputCandidate.getPartitionType() == partitionType
-                            && Objects.equals(
-                                    outputCandidate.getPersistentDataSetId(),
-                                    consumerEdge.getIntermediateDatasetIdToProduce())
-                            && Objects.equals(
-                                    outputCandidate.getOutputTag(), consumerEdge.getOutputTag())
-                            && Objects.equals(partitioner, outputCandidate.getPartitioner())) {
-                        reusableOutput = outputCandidate;
-                        outputsConsumedByEdge.put(consumerEdge, reusableOutput);
-                        break;
-                    }
-                }
-                if (reusableOutput == null) {
-                    outputs.add(output);
-                    outputsConsumedByEdge.put(consumerEdge, output);
-                }
-            }
-        }
-        return outputs;
     }
 
     private void tryConvertPartitionerForDynamicGraph(
@@ -1106,7 +983,7 @@ public class StreamingJobGraphGenerator {
         }
     }
 
-    private void connect(Integer headOfChain, StreamEdge edge, NonChainedOutput output) {
+    private void connect(Integer headOfChain, StreamEdge edge) {
 
         physicalEdgesInOrder.add(edge);
 
@@ -1119,12 +996,22 @@ public class StreamingJobGraphGenerator {
 
         downStreamConfig.setNumberOfNetworkInputs(downStreamConfig.getNumberOfNetworkInputs() + 1);
 
-        StreamPartitioner<?> partitioner = output.getPartitioner();
-        ResultPartitionType resultPartitionType = output.getPartitionType();
+        StreamPartitioner<?> partitioner = edge.getPartitioner();
 
-        if (resultPartitionType == ResultPartitionType.HYBRID_FULL
-                || resultPartitionType == ResultPartitionType.HYBRID_SELECTIVE) {
-            hasHybridResultPartition = true;
+        ResultPartitionType resultPartitionType;
+        switch (edge.getExchangeMode()) {
+            case PIPELINED:
+                resultPartitionType = ResultPartitionType.PIPELINED_BOUNDED;
+                break;
+            case BATCH:
+                resultPartitionType = ResultPartitionType.BLOCKING;
+                break;
+            case UNDEFINED:
+                resultPartitionType = determineResultPartitionType(partitioner);
+                break;
+            default:
+                throw new UnsupportedOperationException(
+                        "Data exchange mode " + edge.getExchangeMode() + " is not supported yet.");
         }
 
         checkBufferTimeout(resultPartitionType, edge);
@@ -1133,23 +1020,15 @@ public class StreamingJobGraphGenerator {
         if (partitioner.isPointwise()) {
             jobEdge =
                     downStreamVertex.connectNewDataSetAsInput(
-                            headVertex,
-                            DistributionPattern.POINTWISE,
-                            resultPartitionType,
-                            opIntermediateOutputs.get(edge.getSourceId()).get(edge).getDataSetId(),
-                            partitioner.isBroadcast());
+                            headVertex, DistributionPattern.POINTWISE, resultPartitionType);
         } else {
             jobEdge =
                     downStreamVertex.connectNewDataSetAsInput(
-                            headVertex,
-                            DistributionPattern.ALL_TO_ALL,
-                            resultPartitionType,
-                            opIntermediateOutputs.get(edge.getSourceId()).get(edge).getDataSetId(),
-                            partitioner.isBroadcast());
+                            headVertex, DistributionPattern.ALL_TO_ALL, resultPartitionType);
         }
-
         // set strategy name so that web interface can show it.
         jobEdge.setShipStrategyName(partitioner.toString());
+        jobEdge.setBroadcast(partitioner.isBroadcast());
         jobEdge.setForward(partitioner instanceof ForwardPartitioner);
         jobEdge.setDownstreamSubtaskStateMapper(partitioner.getDownstreamSubtaskStateMapper());
         jobEdge.setUpstreamSubtaskStateMapper(partitioner.getUpstreamSubtaskStateMapper());
@@ -1163,45 +1042,20 @@ public class StreamingJobGraphGenerator {
         }
     }
 
-    private boolean isPersistentIntermediateDataset(
-            ResultPartitionType resultPartitionType, StreamEdge edge) {
-        return resultPartitionType.isBlockingOrBlockingPersistentResultPartition()
-                && edge.getIntermediateDatasetIdToProduce() != null;
-    }
-
     private void checkBufferTimeout(ResultPartitionType type, StreamEdge edge) {
         long bufferTimeout = edge.getBufferTimeout();
-        if (!type.canBePipelinedConsumed()
+        if (type.isBlocking()
                 && bufferTimeout != ExecutionOptions.DISABLED_NETWORK_BUFFER_TIMEOUT) {
             throw new UnsupportedOperationException(
-                    "only canBePipelinedConsumed partition support buffer timeout "
+                    "Blocking partition does not support buffer timeout "
                             + bufferTimeout
                             + " for src operator in edge "
                             + edge
-                            + ". \nPlease either disable buffer timeout (via -1) or use the canBePipelinedConsumed partition.");
+                            + ". \nPlease either disable buffer timeout (via -1) or use the non-blocking partition.");
         }
     }
 
-    private ResultPartitionType getResultPartitionType(StreamEdge edge) {
-        switch (edge.getExchangeMode()) {
-            case PIPELINED:
-                return ResultPartitionType.PIPELINED_BOUNDED;
-            case BATCH:
-                return ResultPartitionType.BLOCKING;
-            case HYBRID_FULL:
-                return ResultPartitionType.HYBRID_FULL;
-            case HYBRID_SELECTIVE:
-                return ResultPartitionType.HYBRID_SELECTIVE;
-            case UNDEFINED:
-                return determineUndefinedResultPartitionType(edge.getPartitioner());
-            default:
-                throw new UnsupportedOperationException(
-                        "Data exchange mode " + edge.getExchangeMode() + " is not supported yet.");
-        }
-    }
-
-    private ResultPartitionType determineUndefinedResultPartitionType(
-            StreamPartitioner<?> partitioner) {
+    private ResultPartitionType determineResultPartitionType(StreamPartitioner<?> partitioner) {
         switch (streamGraph.getGlobalStreamExchangeMode()) {
             case ALL_EDGES_BLOCKING:
                 return ResultPartitionType.BLOCKING;
@@ -1221,10 +1075,6 @@ public class StreamingJobGraphGenerator {
                 return ResultPartitionType.PIPELINED_BOUNDED;
             case ALL_EDGES_PIPELINED_APPROXIMATE:
                 return ResultPartitionType.PIPELINED_APPROXIMATE;
-            case ALL_EDGES_HYBRID_FULL:
-                return ResultPartitionType.HYBRID_FULL;
-            case ALL_EDGES_HYBRID_SELECTIVE:
-                return ResultPartitionType.HYBRID_SELECTIVE;
             default:
                 throw new RuntimeException(
                         "Unrecognized global data exchange mode "
@@ -1330,7 +1180,7 @@ public class StreamingJobGraphGenerator {
                 break;
             default:
                 throw new RuntimeException(
-                        "Unknown chaining strategy: " + downStreamOperator.getChainingStrategy());
+                        "Unknown chaining strategy: " + upStreamOperator.getChainingStrategy());
         }
 
         return isChainable;
@@ -1345,27 +1195,6 @@ public class StreamingJobGraphGenerator {
                     streamGraph.getSourceVertex(upStreamVertex.getInEdges().get(0)), streamGraph);
         }
         return upStreamVertex.getOperatorFactory();
-    }
-
-    private void markContainsSourcesOrSinks() {
-        for (Map.Entry<Integer, JobVertex> entry : jobVertices.entrySet()) {
-            final JobVertex jobVertex = entry.getValue();
-            final Set<Integer> vertexOperators = new HashSet<>();
-            vertexOperators.add(entry.getKey());
-            if (chainedConfigs.containsKey(entry.getKey())) {
-                vertexOperators.addAll(chainedConfigs.get(entry.getKey()).keySet());
-            }
-
-            for (int nodeId : vertexOperators) {
-                if (streamGraph.getSourceIDs().contains(nodeId)) {
-                    jobVertex.markContainsSources();
-                }
-                if (streamGraph.getSinkIDs().contains(nodeId)
-                        || streamGraph.getExpandedSinkIds().contains(nodeId)) {
-                    jobVertex.markContainsSinks();
-                }
-            }
-        }
     }
 
     private void setSlotSharingAndCoLocation() {
@@ -1392,10 +1221,6 @@ public class StreamingJobGraphGenerator {
                 effectiveSlotSharingGroup =
                         checkNotNull(vertexRegionSlotSharingGroups.get(vertex.getID()));
             } else {
-                checkState(
-                        !hasHybridResultPartition,
-                        "hybrid shuffle mode currently does not support setting non-default slot sharing group.");
-
                 effectiveSlotSharingGroup =
                         specifiedSlotSharingGroups.computeIfAbsent(
                                 slotSharingGroupKey,
@@ -1709,6 +1534,12 @@ public class StreamingJobGraphGenerator {
         }
 
         //  --- done, put it all together ---
+        Map<OperatorID, String> operatorDescriptions =
+                vertexConfigs.values().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        StreamConfig::getOperatorID,
+                                        StreamConfig::getOriginalOperatorDescription));
 
         JobCheckpointingSettings settings =
                 new JobCheckpointingSettings(
@@ -1723,17 +1554,22 @@ public class StreamingJobGraphGenerator {
                                 .setTolerableCheckpointFailureNumber(
                                         cfg.getTolerableCheckpointFailureNumber())
                                 .setUnalignedCheckpointsEnabled(cfg.isUnalignedCheckpointsEnabled())
+                                .enableAutoAdjustMaxParallelism(
+                                        cfg.autoAdjustMaxParallelismEnable())
                                 .setCheckpointIdOfIgnoredInFlightData(
                                         cfg.getCheckpointIdOfIgnoredInFlightData())
                                 .setAlignedCheckpointTimeout(
                                         cfg.getAlignedCheckpointTimeout().toMillis())
+                                .setCheckpointInfoListenerEnabled(
+                                        cfg.isCheckpointInfoListenerEnabled())
                                 .setEnableCheckpointsAfterTasksFinish(
                                         streamGraph.isEnableCheckpointsAfterTasksFinish())
                                 .build(),
                         serializedStateBackend,
                         streamGraph.isChangelogStateBackendEnabled(),
                         serializedCheckpointStorage,
-                        serializedHooks);
+                        serializedHooks,
+                        operatorDescriptions);
 
         jobGraph.setSnapshotSettings(settings);
     }

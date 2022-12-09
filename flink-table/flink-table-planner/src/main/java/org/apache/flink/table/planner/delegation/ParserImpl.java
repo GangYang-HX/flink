@@ -19,7 +19,6 @@
 package org.apache.flink.table.planner.delegation;
 
 import org.apache.flink.table.api.TableException;
-import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.CatalogManager;
 import org.apache.flink.table.catalog.UnresolvedIdentifier;
 import org.apache.flink.table.delegation.Parser;
@@ -27,8 +26,8 @@ import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.planner.calcite.FlinkPlannerImpl;
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
-import org.apache.flink.table.planner.calcite.RexFactory;
-import org.apache.flink.table.planner.calcite.SqlToRexConverter;
+import org.apache.flink.table.planner.calcite.SqlExprToRexConverter;
+import org.apache.flink.table.planner.calcite.SqlExprToRexConverterFactory;
 import org.apache.flink.table.planner.expressions.RexNodeExpression;
 import org.apache.flink.table.planner.operations.SqlToOperationConverter;
 import org.apache.flink.table.planner.parse.CalciteParser;
@@ -65,18 +64,32 @@ public class ParserImpl implements Parser {
     // multiple statements parsing
     private final Supplier<FlinkPlannerImpl> validatorSupplier;
     private final Supplier<CalciteParser> calciteParserSupplier;
-    private final RexFactory rexFactory;
+    private final SqlExprToRexConverterFactory sqlExprToRexConverterFactory;
     private static final ExtendedParser EXTENDED_PARSER = ExtendedParser.INSTANCE;
 
     public ParserImpl(
             CatalogManager catalogManager,
             Supplier<FlinkPlannerImpl> validatorSupplier,
             Supplier<CalciteParser> calciteParserSupplier,
-            RexFactory rexFactory) {
+            SqlExprToRexConverterFactory sqlExprToRexConverterFactory) {
         this.catalogManager = catalogManager;
         this.validatorSupplier = validatorSupplier;
         this.calciteParserSupplier = calciteParserSupplier;
-        this.rexFactory = rexFactory;
+        this.sqlExprToRexConverterFactory = sqlExprToRexConverterFactory;
+    }
+
+    /** parse statement to sql node, for hudi-manager in batch mode now. */
+    public SqlNode parseSqlNode(String statement) {
+        Optional<Operation> command = EXTENDED_PARSER.parse(statement);
+        if (command.isPresent()) {
+            return null;
+        }
+
+        CalciteParser parser = calciteParserSupplier.get();
+        SqlNodeList sqlNodeList = parser.parseSqlList(statement);
+        List<SqlNode> parsed = sqlNodeList.getList();
+        Preconditions.checkArgument(parsed.size() == 1, "only single statement supported");
+        return parsed.get(0);
     }
 
     /**
@@ -117,22 +130,17 @@ public class ParserImpl implements Parser {
     @Override
     public ResolvedExpression parseSqlExpression(
             String sqlExpression, RowType inputRowType, @Nullable LogicalType outputType) {
-        try {
-            final SqlToRexConverter sqlToRexConverter =
-                    rexFactory.createSqlToRexConverter(inputRowType, outputType);
-            final RexNode rexNode = sqlToRexConverter.convertToRexNode(sqlExpression);
-            final LogicalType logicalType = FlinkTypeFactory.toLogicalType(rexNode.getType());
-            // expand expression for serializable expression strings similar to views
-            final String sqlExpressionExpanded = sqlToRexConverter.expand(sqlExpression);
-            return new RexNodeExpression(
-                    rexNode,
-                    TypeConversions.fromLogicalToDataType(logicalType),
-                    sqlExpression,
-                    sqlExpressionExpanded);
-        } catch (Throwable t) {
-            throw new ValidationException(
-                    String.format("Invalid SQL expression: %s", sqlExpression), t);
-        }
+        final SqlExprToRexConverter sqlExprToRexConverter =
+                sqlExprToRexConverterFactory.create(inputRowType, outputType);
+        final RexNode rexNode = sqlExprToRexConverter.convertToRexNode(sqlExpression);
+        final LogicalType logicalType = FlinkTypeFactory.toLogicalType(rexNode.getType());
+        // expand expression for serializable expression strings similar to views
+        final String sqlExpressionExpanded = sqlExprToRexConverter.expand(sqlExpression);
+        return new RexNodeExpression(
+                rexNode,
+                TypeConversions.fromLogicalToDataType(logicalType),
+                sqlExpression,
+                sqlExpressionExpanded);
     }
 
     public String[] getCompletionHints(String statement, int cursor) {
@@ -154,6 +162,10 @@ public class ParserImpl implements Parser {
         candidates.addAll(sqlHints);
 
         return candidates.toArray(new String[0]);
+    }
+
+    public Supplier<FlinkPlannerImpl> getValidatorSupplier() {
+        return validatorSupplier;
     }
 
     public CatalogManager getCatalogManager() {

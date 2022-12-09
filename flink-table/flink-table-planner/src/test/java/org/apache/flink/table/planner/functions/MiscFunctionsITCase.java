@@ -22,20 +22,23 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.ScalarFunction;
 
+import org.junit.runners.Parameterized;
+
 import java.math.BigDecimal;
-import java.util.stream.Stream;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.flink.table.api.Expressions.$;
 import static org.apache.flink.table.api.Expressions.call;
 import static org.apache.flink.table.api.Expressions.callSql;
 
 /** Tests for miscellaneous {@link BuiltInFunctionDefinitions}. */
-class MiscFunctionsITCase extends BuiltInFunctionTestBase {
+public class MiscFunctionsITCase extends BuiltInFunctionTestBase {
 
-    @Override
-    Stream<TestSetSpec> getTestSetSpecs() {
-        return Stream.of(
-                TestSetSpec.forFunction(BuiltInFunctionDefinitions.TYPE_OF)
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
+                TestSpec.forFunction(BuiltInFunctionDefinitions.TYPE_OF)
                         .onFieldsWithData(12, "Hello world", false)
                         .testResult(
                                 call("TYPEOF", $("f0")),
@@ -54,25 +57,26 @@ class MiscFunctionsITCase extends BuiltInFunctionTestBase {
                                 "CHAR(11) NOT NULL",
                                 DataTypes.STRING())
                         .testSqlResult("TYPEOF(NULL)", "NULL", DataTypes.STRING()),
-                TestSetSpec.forFunction(BuiltInFunctionDefinitions.IF_NULL)
+                TestSpec.forFunction(BuiltInFunctionDefinitions.IF_NULL)
                         .onFieldsWithData(null, new BigDecimal("123.45"))
                         .andDataTypes(DataTypes.INT().nullable(), DataTypes.DECIMAL(5, 2).notNull())
                         .withFunction(TakesNotNull.class)
                         .testResult(
-                                $("f0").ifNull($("f0")),
-                                "IFNULL(f0, f0)",
-                                null,
-                                DataTypes.INT().nullable())
-                        .testResult(
-                                $("f0").ifNull($("f1")),
-                                "IFNULL(f0, f1)",
-                                new BigDecimal("123.45"),
-                                DataTypes.DECIMAL(12, 2).notNull())
-                        .testResult(
-                                $("f1").ifNull($("f0")),
-                                "IFNULL(f1, f0)",
-                                new BigDecimal("123.45"),
-                                DataTypes.DECIMAL(12, 2).notNull())
+                                resultSpec(
+                                        $("f0").ifNull($("f0")),
+                                        "IFNULL(f0, f0)",
+                                        null,
+                                        DataTypes.INT().nullable()),
+                                resultSpec(
+                                        $("f0").ifNull($("f1")),
+                                        "IFNULL(f0, f1)",
+                                        new BigDecimal("123.45"),
+                                        DataTypes.DECIMAL(12, 2).notNull()),
+                                resultSpec(
+                                        $("f1").ifNull($("f0")),
+                                        "IFNULL(f1, f0)",
+                                        new BigDecimal("123.45"),
+                                        DataTypes.DECIMAL(12, 2).notNull()))
                         .testSqlValidationError(
                                 "IFNULL(SUBSTR(''), f0)",
                                 "Invalid number of arguments to function 'SUBSTR'.")
@@ -86,7 +90,7 @@ class MiscFunctionsITCase extends BuiltInFunctionTestBase {
                                 "TakesNotNull(IFNULL(f0, 12))",
                                 12,
                                 DataTypes.INT().notNull()),
-                TestSetSpec.forExpression("SQL call")
+                TestSpec.forExpression("SQL call")
                         .onFieldsWithData(null, 12, "Hello World")
                         .andDataTypes(
                                 DataTypes.INT().nullable(),

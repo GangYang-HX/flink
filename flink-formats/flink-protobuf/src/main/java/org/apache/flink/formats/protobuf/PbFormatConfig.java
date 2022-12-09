@@ -1,48 +1,36 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.apache.flink.formats.protobuf;
 
 import java.io.Serializable;
 import java.util.Objects;
 
+import static org.apache.flink.formats.protobuf.PbFormatOptions.ADD_DEFAULT_VALUE;
+import static org.apache.flink.formats.protobuf.PbFormatOptions.IGNORE_NULL_ROWS;
 import static org.apache.flink.formats.protobuf.PbFormatOptions.IGNORE_PARSE_ERRORS;
 import static org.apache.flink.formats.protobuf.PbFormatOptions.READ_DEFAULT_VALUES;
 import static org.apache.flink.formats.protobuf.PbFormatOptions.WRITE_NULL_STRING_LITERAL;
 
 /** Config of protobuf configs. */
 public class PbFormatConfig implements Serializable {
-    private static final long serialVersionUID = 1L;
-
-    private final String messageClassName;
-    private final boolean ignoreParseErrors;
-    private final boolean readDefaultValues;
-    private final String writeNullStringLiterals;
+    private String messageClassName;
+    private boolean ignoreParseErrors;
+    private boolean readDefaultValues;
+    private String writeNullStringLiterals;
+    private boolean ignoreNullRows;
+    private boolean addDefaultValue;
 
     public PbFormatConfig(
             String messageClassName,
             boolean ignoreParseErrors,
             boolean readDefaultValues,
-            String writeNullStringLiterals) {
+            String writeNullStringLiterals,
+            boolean ignoreNullRows,
+            boolean addDefaultValue) {
         this.messageClassName = messageClassName;
         this.ignoreParseErrors = ignoreParseErrors;
         this.readDefaultValues = readDefaultValues;
         this.writeNullStringLiterals = writeNullStringLiterals;
+        this.ignoreNullRows = ignoreNullRows;
+        this.addDefaultValue = addDefaultValue;
     }
 
     public String getMessageClassName() {
@@ -61,6 +49,14 @@ public class PbFormatConfig implements Serializable {
         return writeNullStringLiterals;
     }
 
+    public boolean isIgnoreNullRows() {
+        return ignoreNullRows;
+    }
+
+    public boolean isAddDefaultValue() {
+        return addDefaultValue;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -72,6 +68,8 @@ public class PbFormatConfig implements Serializable {
         PbFormatConfig that = (PbFormatConfig) o;
         return ignoreParseErrors == that.ignoreParseErrors
                 && readDefaultValues == that.readDefaultValues
+                && ignoreNullRows == that.ignoreNullRows
+                && addDefaultValue == that.addDefaultValue
                 && Objects.equals(messageClassName, that.messageClassName)
                 && Objects.equals(writeNullStringLiterals, that.writeNullStringLiterals);
     }
@@ -79,15 +77,28 @@ public class PbFormatConfig implements Serializable {
     @Override
     public int hashCode() {
         return Objects.hash(
-                messageClassName, ignoreParseErrors, readDefaultValues, writeNullStringLiterals);
+                messageClassName,
+                ignoreParseErrors,
+                readDefaultValues,
+                writeNullStringLiterals,
+                ignoreNullRows,
+                addDefaultValue);
     }
 
     /** Builder of PbFormatConfig. */
-    public static class PbFormatConfigBuilder {
+    public static final class PbFormatConfigBuilder {
         private String messageClassName;
         private boolean ignoreParseErrors = IGNORE_PARSE_ERRORS.defaultValue();
         private boolean readDefaultValues = READ_DEFAULT_VALUES.defaultValue();
         private String writeNullStringLiterals = WRITE_NULL_STRING_LITERAL.defaultValue();
+        private boolean ignoreNullRows = IGNORE_NULL_ROWS.defaultValue();
+        private boolean addDefaultValue = ADD_DEFAULT_VALUE.defaultValue();
+
+        public PbFormatConfigBuilder() {}
+
+        public static PbFormatConfigBuilder aPbFormatConfig() {
+            return new PbFormatConfigBuilder();
+        }
 
         public PbFormatConfigBuilder messageClassName(String messageClassName) {
             this.messageClassName = messageClassName;
@@ -109,12 +120,24 @@ public class PbFormatConfig implements Serializable {
             return this;
         }
 
+        public PbFormatConfigBuilder ignoreNullRows(boolean ignoreNullRows) {
+            this.ignoreNullRows = ignoreNullRows;
+            return this;
+        }
+
+        public PbFormatConfigBuilder addDefaultValue(boolean addDefaultValue) {
+            this.addDefaultValue = addDefaultValue;
+            return this;
+        }
+
         public PbFormatConfig build() {
             return new PbFormatConfig(
                     messageClassName,
                     ignoreParseErrors,
                     readDefaultValues,
-                    writeNullStringLiterals);
+                    writeNullStringLiterals,
+                    ignoreNullRows,
+                    addDefaultValue);
         }
     }
 }

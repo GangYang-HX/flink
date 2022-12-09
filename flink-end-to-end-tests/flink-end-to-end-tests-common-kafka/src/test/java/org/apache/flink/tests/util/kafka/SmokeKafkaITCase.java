@@ -21,12 +21,11 @@ package org.apache.flink.tests.util.kafka;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.connector.kafka.testutils.KafkaUtil;
-import org.apache.flink.connector.testframe.container.FlinkContainers;
-import org.apache.flink.connector.testframe.container.FlinkContainersSettings;
-import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
-import org.apache.flink.test.util.JobSubmission;
 import org.apache.flink.tests.util.TestUtils;
+import org.apache.flink.tests.util.flink.JobSubmission;
+import org.apache.flink.tests.util.flink.container.FlinkContainers;
+import org.apache.flink.testutils.junit.FailsOnJava11;
 import org.apache.flink.util.TestLoggerExtension;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.Lists;
@@ -42,6 +41,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.VoidDeserializer;
 import org.apache.kafka.common.serialization.VoidSerializer;
+import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -68,6 +68,7 @@ import static org.apache.flink.util.DockerImageVersions.KAFKA;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** smoke test for the kafka connectors. */
+@Category(value = {FailsOnJava11.class})
 @ExtendWith({TestLoggerExtension.class})
 @Testcontainers
 public class SmokeKafkaITCase {
@@ -84,15 +85,12 @@ public class SmokeKafkaITCase {
                     .withNetwork(NETWORK)
                     .withNetworkAliases(INTER_CONTAINER_KAFKA_ALIAS);
 
-    public static final TestcontainersSettings TESTCONTAINERS_SETTINGS =
-            TestcontainersSettings.builder().logger(LOG).dependsOn(KAFKA_CONTAINER).build();
-
     @RegisterExtension
     public static final FlinkContainers FLINK =
             FlinkContainers.builder()
-                    .withFlinkContainersSettings(
-                            FlinkContainersSettings.basedOn(getConfiguration()))
-                    .withTestcontainersSettings(TESTCONTAINERS_SETTINGS)
+                    .setConfiguration(getConfiguration())
+                    .setLogger(LOG)
+                    .dependsOn(KAFKA_CONTAINER)
                     .build();
 
     private static AdminClient admin;

@@ -19,13 +19,11 @@
 package org.apache.flink.table.catalog.hive.client;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.connectors.hive.FlinkHiveException;
 import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.catalog.hive.HiveCatalog;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -49,8 +47,6 @@ import org.apache.hadoop.hive.metastore.api.TxnAbortedException;
 import org.apache.hadoop.hive.metastore.api.TxnOpenException;
 import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.partition.spec.PartitionSpecProxy;
-import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +69,6 @@ public class HiveMetastoreClientWrapper implements AutoCloseable {
     private final IMetaStoreClient client;
     private final HiveConf hiveConf;
     private final HiveShim hiveShim;
-    private volatile Hive hive;
 
     public HiveMetastoreClientWrapper(HiveConf hiveConf, String hiveVersion) {
         this(hiveConf, HiveShimLoader.loadHiveShim(hiveVersion));
@@ -257,17 +252,17 @@ public class HiveMetastoreClientWrapper implements AutoCloseable {
 
     public List<Partition> listPartitions(
             String dbName, String tblName, List<String> partVals, short max) throws TException {
-        return client.listPartitions(dbName, tblName, partVals, max);
+        return client.listPartitions(dbName, tblName, partVals, max, true);
     }
 
     public List<Partition> listPartitions(String dbName, String tblName, short max)
             throws TException {
-        return client.listPartitions(dbName, tblName, max);
+        return client.listPartitions(dbName, tblName, max, true);
     }
 
     public PartitionSpecProxy listPartitionSpecsByFilter(
             String dbName, String tblName, String filter, short max) throws TException {
-        return client.listPartitionSpecsByFilter(dbName, tblName, filter, max);
+        return client.listPartitionSpecsByFilter(dbName, tblName, filter, max, true);
     }
 
     // -------- Start of shimmed methods ----------
@@ -340,37 +335,5 @@ public class HiveMetastoreClientWrapper implements AutoCloseable {
 
     public void unlock(long lockid) throws NoSuchLockException, TxnOpenException, TException {
         client.unlock(lockid);
-    }
-
-    public void loadTable(Path loadPath, String tableName, boolean replace, boolean isSrcLocal)
-            throws HiveException {
-        initHive();
-        hiveShim.loadTable(hive, loadPath, tableName, replace, isSrcLocal);
-    }
-
-    public void loadPartition(
-            Path loadPath,
-            String tableName,
-            Map<String, String> partSpec,
-            boolean isSkewedStoreAsSubdir,
-            boolean replace,
-            boolean isSrcLocal) {
-        initHive();
-        hiveShim.loadPartition(
-                hive, loadPath, tableName, partSpec, isSkewedStoreAsSubdir, replace, isSrcLocal);
-    }
-
-    private void initHive() {
-        if (this.hive == null) {
-            synchronized (this) {
-                if (this.hive == null) {
-                    try {
-                        this.hive = Hive.get(hiveConf);
-                    } catch (HiveException e) {
-                        throw new FlinkHiveException(e);
-                    }
-                }
-            }
-        }
     }
 }

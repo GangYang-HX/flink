@@ -17,8 +17,7 @@
  */
 package org.apache.flink.table.planner.plan.utils
 
-import org.apache.flink.configuration.ReadableConfig
-import org.apache.flink.table.api.TableException
+import org.apache.flink.table.api.{TableConfig, TableException}
 import org.apache.flink.table.data.RowData
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 import org.apache.flink.table.planner.codegen.{CodeGeneratorContext, ExprCodeGenerator, FunctionCodeGenerator}
@@ -119,26 +118,23 @@ object JoinUtil {
   }
 
   def generateConditionFunction(
-      tableConfig: ReadableConfig,
-      classLoader: ClassLoader,
+      tableConfig: TableConfig,
       joinSpec: JoinSpec,
       leftType: LogicalType,
       rightType: LogicalType): GeneratedJoinCondition = {
     generateConditionFunction(
       tableConfig,
-      classLoader,
       joinSpec.getNonEquiCondition.orElse(null),
       leftType,
       rightType)
   }
 
   def generateConditionFunction(
-      tableConfig: ReadableConfig,
-      classLoader: ClassLoader,
+      tableConfig: TableConfig,
       nonEquiCondition: RexNode,
       leftType: LogicalType,
       rightType: LogicalType): GeneratedJoinCondition = {
-    val ctx = new CodeGeneratorContext(tableConfig, classLoader)
+    val ctx = CodeGeneratorContext(tableConfig)
     // should consider null fields
     val exprGenerator = new ExprCodeGenerator(ctx, false)
       .bindInput(leftType)
@@ -159,7 +155,6 @@ object JoinUtil {
   }
 
   def analyzeJoinInput(
-      classLoader: ClassLoader,
       inputTypeInfo: InternalTypeInfo[RowData],
       joinKeys: Array[Int],
       uniqueKeys: util.List[Array[Int]]): JoinInputSideSpec = {
@@ -174,15 +169,13 @@ object JoinUtil {
 
       if (uniqueKeysContainedByJoinKey.isEmpty) {
         val smallestUniqueKey = getSmallestKey(uniqueKeys)
-        val uniqueKeySelector =
-          KeySelectorUtil.getRowDataSelector(classLoader, smallestUniqueKey, inputTypeInfo)
+        val uniqueKeySelector = KeySelectorUtil.getRowDataSelector(smallestUniqueKey, inputTypeInfo)
         val uniqueKeyTypeInfo = uniqueKeySelector.getProducedType
         JoinInputSideSpec.withUniqueKey(uniqueKeyTypeInfo, uniqueKeySelector)
       } else {
         // join key contains unique key
         val smallestUniqueKey = getSmallestKey(uniqueKeysContainedByJoinKey)
-        val uniqueKeySelector =
-          KeySelectorUtil.getRowDataSelector(classLoader, smallestUniqueKey, inputTypeInfo)
+        val uniqueKeySelector = KeySelectorUtil.getRowDataSelector(smallestUniqueKey, inputTypeInfo)
         val uniqueKeyTypeInfo = uniqueKeySelector.getProducedType
         JoinInputSideSpec.withUniqueKeyContainedByJoinKey(uniqueKeyTypeInfo, uniqueKeySelector)
       }

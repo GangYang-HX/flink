@@ -31,6 +31,8 @@ import org.apache.flink.runtime.util.EnvironmentInformation;
 import org.apache.flink.runtime.util.JvmShutdownSafeguard;
 import org.apache.flink.runtime.util.SignalHandler;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.yarn.print.LogPrintStreamErr;
+import org.apache.flink.yarn.print.LogPrintStreamOut;
 
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
@@ -51,6 +53,9 @@ public class YarnTaskExecutorRunner {
     /** The exit code returned if the initialization of the yarn task executor runner failed. */
     private static final int INIT_ERROR_EXIT_CODE = 31;
 
+    /** log type. */
+    private static final String LOG_PRINT_TYPE = "log";
+
     // ------------------------------------------------------------------------
     //  Program entry point
     // ------------------------------------------------------------------------
@@ -61,6 +66,7 @@ public class YarnTaskExecutorRunner {
      * @param args The command line arguments.
      */
     public static void main(String[] args) {
+        YarnEnvironmentUtils.overwriteProps(ENV, LOG);
         EnvironmentInformation.logEnvironmentInfo(LOG, "YARN TaskExecutor runner", args);
         SignalHandler.register(LOG);
         JvmShutdownSafeguard.installAsShutdownHook(LOG);
@@ -85,6 +91,18 @@ public class YarnTaskExecutorRunner {
             LOG.info("Current working Directory: {}", currDir);
 
             configuration = TaskManagerRunner.loadConfiguration(args);
+
+            // print stream type
+            if (LOG_PRINT_TYPE.equals(
+                    configuration.get(TaskManagerOptions.TASK_MANAGER_PRINT_STREAM_TYPE))) {
+                // redirect system out to log
+                LogPrintStreamOut.redirectPrintStream();
+                System.out.println("log out print is ok.");
+                // redirect system err to log
+                LogPrintStreamErr.redirectPrintStream();
+                System.err.println("log err print is ok.");
+            }
+
             setupAndModifyConfiguration(configuration, currDir, ENV);
         } catch (Throwable t) {
             LOG.error("YARN TaskManager initialization failed.", t);

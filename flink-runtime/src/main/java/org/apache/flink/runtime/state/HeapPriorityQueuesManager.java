@@ -52,21 +52,12 @@ public class HeapPriorityQueuesManager {
         this.numberOfKeyGroups = numberOfKeyGroups;
     }
 
-    @Nonnull
-    public <T extends HeapPriorityQueueElement & PriorityComparable<? super T> & Keyed<?>>
-            KeyGroupedInternalPriorityQueue<T> createOrUpdate(
-                    @Nonnull String stateName,
-                    @Nonnull TypeSerializer<T> byteOrderedElementSerializer) {
-        return createOrUpdate(stateName, byteOrderedElementSerializer, false);
-    }
-
     @SuppressWarnings("unchecked")
     @Nonnull
     public <T extends HeapPriorityQueueElement & PriorityComparable<? super T> & Keyed<?>>
             KeyGroupedInternalPriorityQueue<T> createOrUpdate(
                     @Nonnull String stateName,
-                    @Nonnull TypeSerializer<T> byteOrderedElementSerializer,
-                    boolean allowFutureMetadataUpdates) {
+                    @Nonnull TypeSerializer<T> byteOrderedElementSerializer) {
 
         final HeapPriorityQueueSnapshotRestoreWrapper<T> existingState =
                 (HeapPriorityQueueSnapshotRestoreWrapper<T>) registeredPQStates.get(stateName);
@@ -84,21 +75,14 @@ public class HeapPriorityQueuesManager {
             } else {
                 registeredPQStates.put(
                         stateName,
-                        existingState.forUpdatedSerializer(
-                                byteOrderedElementSerializer, allowFutureMetadataUpdates));
+                        existingState.forUpdatedSerializer(byteOrderedElementSerializer));
             }
 
             return existingState.getPriorityQueue();
         } else {
-            RegisteredPriorityQueueStateBackendMetaInfo<T> metaInfo =
+            final RegisteredPriorityQueueStateBackendMetaInfo<T> metaInfo =
                     new RegisteredPriorityQueueStateBackendMetaInfo<>(
                             stateName, byteOrderedElementSerializer);
-
-            metaInfo =
-                    allowFutureMetadataUpdates
-                            ? metaInfo.withSerializerUpgradesAllowed()
-                            : metaInfo;
-
             return createInternal(metaInfo);
         }
     }

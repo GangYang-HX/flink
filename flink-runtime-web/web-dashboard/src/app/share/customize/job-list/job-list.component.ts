@@ -16,24 +16,16 @@
  * limitations under the License.
  */
 
-import {
-  ChangeDetectionStrategy,
-  ChangeDetectorRef,
-  Component,
-  EventEmitter,
-  Input,
-  OnChanges,
-  OnDestroy,
-  OnInit,
-  Output,
-  SimpleChanges
-} from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
-import { mergeMap, takeUntil } from 'rxjs/operators';
+import { flatMap, takeUntil } from 'rxjs/operators';
 
-import { JobsItem } from '@flink-runtime-web/interfaces';
-import { JobService, StatusService } from '@flink-runtime-web/services';
 import { NzMessageService } from 'ng-zorro-antd/message';
+
+import { JobsItem } from 'interfaces';
+import { JobService, StatusService } from 'services';
+import { isNil } from 'utils';
 
 @Component({
   selector: 'flink-job-list',
@@ -41,14 +33,15 @@ import { NzMessageService } from 'ng-zorro-antd/message';
   styleUrls: ['./job-list.component.less'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class JobListComponent implements OnInit, OnDestroy, OnChanges {
+export class JobListComponent implements OnInit, OnDestroy {
   listOfJob: JobsItem[] = [];
   isLoading = true;
   destroy$ = new Subject();
+  sortName = 'start-time';
+  sortValue = 'descend';
   @Input() completed = false;
   @Input() title: string;
   @Input() jobData$: Observable<JobsItem[]>;
-  @Output() navigate = new EventEmitter<JobsItem>();
 
   sortStartTimeFn = (pre: JobsItem, next: JobsItem): number => pre['start-time'] - next['start-time'];
   sortDurationFn = (pre: JobsItem, next: JobsItem): number => pre.duration - next.duration;
@@ -63,7 +56,7 @@ export class JobListComponent implements OnInit, OnDestroy, OnChanges {
     if (job.state === 'INITIALIZING') {
       this.nzMessageService.info('Job detail page is not available while it is in state INITIALIZING.');
     } else {
-      this.navigate.emit(job);
+      this.router.navigate(['job', job.jid]).then();
     }
   }
 
@@ -71,15 +64,25 @@ export class JobListComponent implements OnInit, OnDestroy, OnChanges {
     private statusService: StatusService,
     private jobService: JobService,
     private nzMessageService: NzMessageService,
-    private cdr: ChangeDetectorRef
+    private activatedRoute: ActivatedRoute,
+    private cdr: ChangeDetectorRef,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
+    if (this.activatedRoute.snapshot.data) {
+      this.completed = isNil(this.activatedRoute.snapshot.data.completed)
+        ? this.completed
+        : this.activatedRoute.snapshot.data.completed;
+      this.title = isNil(this.activatedRoute.snapshot.data.title)
+        ? this.title
+        : this.activatedRoute.snapshot.data.title;
+    }
     this.jobData$ =
       this.jobData$ ||
       this.statusService.refresh$.pipe(
         takeUntil(this.destroy$),
-        mergeMap(() => this.jobService.loadJobs())
+        flatMap(() => this.jobService.loadJobs())
       );
     this.jobData$.subscribe(data => {
       this.isLoading = false;
@@ -91,13 +94,5 @@ export class JobListComponent implements OnInit, OnDestroy, OnChanges {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    const { completed } = changes;
-    if (completed) {
-      this.isLoading = true;
-      this.cdr.markForCheck();
-    }
   }
 }

@@ -18,34 +18,39 @@
 
 package org.apache.flink.runtime.rpc.akka;
 
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.testutils.FlinkAssertions;
+import org.apache.flink.core.testutils.FlinkMatchers;
 import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.exceptions.RecipientUnreachableException;
 import org.apache.flink.util.SerializedValue;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.fail;
 
 /** Tests for remote AkkaRpcActors. */
-class RemoteAkkaRpcActorTest {
+public class RemoteAkkaRpcActorTest extends TestLogger {
 
     private static AkkaRpcService rpcService;
     private static AkkaRpcService otherRpcService;
 
     private static final Configuration configuration = new Configuration();
 
-    @BeforeAll
-    static void setupClass() throws Exception {
+    @BeforeClass
+    public static void setupClass() throws Exception {
         rpcService =
                 AkkaRpcServiceUtils.createRemoteRpcService(
                         configuration, "localhost", "0", null, Optional.empty());
@@ -55,13 +60,14 @@ class RemoteAkkaRpcActorTest {
                         configuration, "localhost", "0", null, Optional.empty());
     }
 
-    @AfterAll
-    static void teardownClass() throws InterruptedException, ExecutionException, TimeoutException {
-        RpcUtils.terminateRpcService(rpcService, otherRpcService);
+    @AfterClass
+    public static void teardownClass()
+            throws InterruptedException, ExecutionException, TimeoutException {
+        RpcUtils.terminateRpcServices(Time.seconds(10), rpcService, otherRpcService);
     }
 
     @Test
-    void canRespondWithNullValueRemotely() throws Exception {
+    public void canRespondWithNullValueRemotely() throws Exception {
         try (final AkkaRpcActorTest.NullRespondingEndpoint nullRespondingEndpoint =
                 new AkkaRpcActorTest.NullRespondingEndpoint(rpcService)) {
             nullRespondingEndpoint.start();
@@ -75,12 +81,12 @@ class RemoteAkkaRpcActorTest {
 
             final CompletableFuture<Integer> nullValuedResponseFuture = rpcGateway.foobar();
 
-            assertThat(nullValuedResponseFuture.join()).isNull();
+            assertThat(nullValuedResponseFuture.join(), is(nullValue()));
         }
     }
 
     @Test
-    void canRespondWithSynchronousNullValueRemotely() throws Exception {
+    public void canRespondWithSynchronousNullValueRemotely() throws Exception {
         try (final AkkaRpcActorTest.NullRespondingEndpoint nullRespondingEndpoint =
                 new AkkaRpcActorTest.NullRespondingEndpoint(rpcService)) {
             nullRespondingEndpoint.start();
@@ -94,12 +100,12 @@ class RemoteAkkaRpcActorTest {
 
             final Integer value = rpcGateway.synchronousFoobar();
 
-            assertThat(value).isNull();
+            assertThat(value, is(nullValue()));
         }
     }
 
     @Test
-    void canRespondWithSerializedValueRemotely() throws Exception {
+    public void canRespondWithSerializedValueRemotely() throws Exception {
         try (final AkkaRpcActorTest.SerializedValueRespondingEndpoint endpoint =
                 new AkkaRpcActorTest.SerializedValueRespondingEndpoint(rpcService)) {
             endpoint.start();
@@ -111,19 +117,21 @@ class RemoteAkkaRpcActorTest {
                                     AkkaRpcActorTest.SerializedValueRespondingGateway.class)
                             .join();
 
-            assertThat(remoteGateway.getSerializedValueSynchronously())
-                    .isEqualTo(AkkaRpcActorTest.SerializedValueRespondingEndpoint.SERIALIZED_VALUE);
+            assertThat(
+                    remoteGateway.getSerializedValueSynchronously(),
+                    equalTo(AkkaRpcActorTest.SerializedValueRespondingEndpoint.SERIALIZED_VALUE));
 
             final CompletableFuture<SerializedValue<String>> responseFuture =
                     remoteGateway.getSerializedValue();
 
-            assertThat(responseFuture.get())
-                    .isEqualTo(AkkaRpcActorTest.SerializedValueRespondingEndpoint.SERIALIZED_VALUE);
+            assertThat(
+                    responseFuture.get(),
+                    equalTo(AkkaRpcActorTest.SerializedValueRespondingEndpoint.SERIALIZED_VALUE));
         }
     }
 
     @Test
-    void failsRpcResultImmediatelyIfEndpointIsStopped() throws Exception {
+    public void failsRpcResultImmediatelyIfEndpointIsStopped() throws Exception {
         try (final AkkaRpcActorTest.SerializedValueRespondingEndpoint endpoint =
                 new AkkaRpcActorTest.SerializedValueRespondingEndpoint(rpcService)) {
             endpoint.start();
@@ -137,15 +145,18 @@ class RemoteAkkaRpcActorTest {
 
             endpoint.close();
 
-            // the rpc result should not fail because of a TimeoutException
-            assertThatThrownBy(() -> gateway.getSerializedValue().join())
-                    .satisfies(
-                            FlinkAssertions.anyCauseMatches(RecipientUnreachableException.class));
+            try {
+                gateway.getSerializedValue().join();
+                fail("The endpoint should have been stopped.");
+            } catch (Exception e) {
+                // the rpc result should not fail because of a TimeoutException
+                assertThat(e, FlinkMatchers.containsCause(RecipientUnreachableException.class));
+            }
         }
     }
 
     @Test
-    void failsRpcResultImmediatelyIfRemoteRpcServiceIsNotAvailable() throws Exception {
+    public void failsRpcResultImmediatelyIfRemoteRpcServiceIsNotAvailable() throws Exception {
         final AkkaRpcService toBeClosedRpcService =
                 AkkaRpcServiceUtils.createRemoteRpcService(
                         configuration, "localhost", "0", null, Optional.empty());
@@ -162,12 +173,15 @@ class RemoteAkkaRpcActorTest {
 
             toBeClosedRpcService.stopService().join();
 
-            // the rpc result should not fail because of a TimeoutException
-            assertThatThrownBy(() -> gateway.getSerializedValue().join())
-                    .satisfies(
-                            FlinkAssertions.anyCauseMatches(RecipientUnreachableException.class));
+            try {
+                gateway.getSerializedValue().join();
+                fail("The endpoint should have been stopped.");
+            } catch (Exception e) {
+                // the rpc result should not fail because of a TimeoutException
+                assertThat(e, FlinkMatchers.containsCause(RecipientUnreachableException.class));
+            }
         } finally {
-            RpcUtils.terminateRpcService(toBeClosedRpcService);
+            RpcUtils.terminateRpcService(toBeClosedRpcService, Time.seconds(10L));
         }
     }
 }

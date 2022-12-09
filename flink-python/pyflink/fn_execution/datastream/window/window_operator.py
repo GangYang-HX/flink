@@ -16,13 +16,11 @@
 # limitations under the License.
 ################################################################################
 import typing
-from typing import TypeVar, Iterable, Collection, Optional
+from typing import TypeVar, Iterable, Collection
 
 from pyflink.common.constants import MAX_LONG_VALUE
-from pyflink.common.typeinfo import PickledBytesTypeInfo
 from pyflink.datastream import WindowAssigner, Trigger, MergingWindowAssigner, TriggerResult
 from pyflink.datastream.functions import KeyedStateStore, RuntimeContext, InternalWindowFunction
-from pyflink.datastream.output_tag import OutputTag
 from pyflink.datastream.state import StateDescriptor, ListStateDescriptor, \
     ReducingStateDescriptor, AggregatingStateDescriptor, ValueStateDescriptor, MapStateDescriptor, \
     State, AggregatingState, ReducingState, MapState, ListState, ValueState, AppendingState
@@ -275,8 +273,7 @@ class WindowOperator(object):
                  window_state_descriptor: StateDescriptor,
                  window_function: InternalWindowFunction,
                  trigger: Trigger,
-                 allowed_lateness: int,
-                 late_data_output_tag: Optional[OutputTag]):
+                 allowed_lateness: int):
         self.window_assigner = window_assigner
         self.keyed_state_backend = keyed_state_backend
         self.user_key_selector = user_key_selector
@@ -284,7 +281,6 @@ class WindowOperator(object):
         self.window_function = window_function
         self.trigger = trigger
         self.allowed_lateness = allowed_lateness
-        self.late_data_output_tag = late_data_output_tag
 
         self.num_late_records_dropped = None
         self.internal_timer_service = None  # type: InternalTimerService
@@ -323,16 +319,9 @@ class WindowOperator(object):
             if isinstance(self.window_state, InternalMergingState):
                 self.window_merging_state = self.window_state
 
-            if hasattr(self.keyed_state_backend, 'namespace_coder'):
-                window_coder = self.keyed_state_backend.namespace_coder
-                self.merging_sets_state = self.keyed_state_backend.get_map_state(
-                    "merging-window-set", window_coder, window_coder)
-            else:
-                state_descriptor = MapStateDescriptor(
-                    "merging-window-set",
-                    PickledBytesTypeInfo(),
-                    PickledBytesTypeInfo())
-                self.merging_sets_state = self.keyed_state_backend.get_map_state(state_descriptor)
+            window_coder = self.keyed_state_backend.namespace_coder
+            self.merging_sets_state = self.keyed_state_backend.get_map_state(
+                "merging-window-set", window_coder, window_coder)
 
         self.merge_function = WindowMergeFunction(self)
 
@@ -419,10 +408,7 @@ class WindowOperator(object):
                 self.register_cleanup_timer(window)
 
         if is_skipped_element and self.is_element_late(value, timestamp):
-            if self.late_data_output_tag is not None:
-                yield self.late_data_output_tag, value
-            else:
-                self.num_late_records_dropped.inc()
+            self.num_late_records_dropped.inc()
 
     def on_event_time(self, timestamp, key, namespace) -> None:
         self.trigger_context.user_key = self.user_key_selector(key)

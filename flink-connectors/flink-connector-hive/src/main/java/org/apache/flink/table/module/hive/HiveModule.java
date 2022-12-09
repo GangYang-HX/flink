@@ -22,14 +22,10 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.table.catalog.hive.client.HiveShim;
 import org.apache.flink.table.catalog.hive.client.HiveShimLoader;
 import org.apache.flink.table.catalog.hive.factories.HiveFunctionDefinitionFactory;
-import org.apache.flink.table.factories.FunctionDefinitionFactory;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.module.Module;
 import org.apache.flink.table.module.hive.udf.generic.GenericUDFLegacyGroupingID;
-import org.apache.flink.table.module.hive.udf.generic.HiveGenericUDFArrayAccessStructField;
 import org.apache.flink.table.module.hive.udf.generic.HiveGenericUDFGrouping;
-import org.apache.flink.table.module.hive.udf.generic.HiveGenericUDFInternalInterval;
-import org.apache.flink.table.module.hive.udf.generic.HiveGenericUDFToDecimal;
 import org.apache.flink.util.StringUtils;
 
 import org.apache.hadoop.hive.ql.exec.FunctionInfo;
@@ -55,7 +51,6 @@ public class HiveModule implements Module {
                                     "cume_dist",
                                     "current_date",
                                     "current_timestamp",
-                                    "current_database",
                                     "dense_rank",
                                     "first_value",
                                     "lag",
@@ -85,17 +80,12 @@ public class HiveModule implements Module {
     private final String hiveVersion;
     private final HiveShim hiveShim;
     private Set<String> functionNames;
-    private final ClassLoader classLoader;
 
     public HiveModule() {
-        this(HiveShimLoader.getHiveVersion(), Thread.currentThread().getContextClassLoader());
+        this(HiveShimLoader.getHiveVersion());
     }
 
     public HiveModule(String hiveVersion) {
-        this(hiveVersion, Thread.currentThread().getContextClassLoader());
-    }
-
-    public HiveModule(String hiveVersion, ClassLoader classLoader) {
         checkArgument(
                 !StringUtils.isNullOrWhitespaceOnly(hiveVersion), "hiveVersion cannot be null");
 
@@ -103,7 +93,6 @@ public class HiveModule implements Module {
         this.hiveShim = HiveShimLoader.loadHiveShim(hiveVersion);
         this.factory = new HiveFunctionDefinitionFactory(hiveShim);
         this.functionNames = new HashSet<>();
-        this.classLoader = classLoader;
     }
 
     @Override
@@ -114,8 +103,6 @@ public class HiveModule implements Module {
             functionNames.removeAll(BUILT_IN_FUNC_BLACKLIST);
             functionNames.add("grouping");
             functionNames.add(GenericUDFLegacyGroupingID.NAME);
-            functionNames.add(HiveGenericUDFArrayAccessStructField.NAME);
-            functionNames.add(HiveGenericUDFToDecimal.NAME);
         }
         return functionNames;
     }
@@ -125,40 +112,18 @@ public class HiveModule implements Module {
         if (BUILT_IN_FUNC_BLACKLIST.contains(name)) {
             return Optional.empty();
         }
-        FunctionDefinitionFactory.Context context = () -> classLoader;
         // We override Hive's grouping function. Refer to the implementation for more details.
         if (name.equalsIgnoreCase("grouping")) {
             return Optional.of(
                     factory.createFunctionDefinitionFromHiveFunction(
-                            name, HiveGenericUDFGrouping.class.getName(), context));
+                            name, HiveGenericUDFGrouping.class.getName()));
         }
 
         // this function is used to generate legacy GROUPING__ID value for old hive versions
         if (name.equalsIgnoreCase(GenericUDFLegacyGroupingID.NAME)) {
             return Optional.of(
                     factory.createFunctionDefinitionFromHiveFunction(
-                            name, GenericUDFLegacyGroupingID.class.getName(), context));
-        }
-
-        // We override Hive's internal_interval. Refer to the implementation for more details
-        if (name.equalsIgnoreCase("internal_interval")) {
-            return Optional.of(
-                    factory.createFunctionDefinitionFromHiveFunction(
-                            name, HiveGenericUDFInternalInterval.class.getName(), context));
-        }
-
-        // used to access the field of struct in array
-        if (name.equalsIgnoreCase(HiveGenericUDFArrayAccessStructField.NAME)) {
-            return Optional.of(
-                    factory.createFunctionDefinitionFromHiveFunction(
-                            name, HiveGenericUDFArrayAccessStructField.class.getName(), context));
-        }
-
-        // We add a custom to_decimal function. Refer to the implementation for more details.
-        if (name.equalsIgnoreCase(HiveGenericUDFToDecimal.NAME)) {
-            return Optional.of(
-                    factory.createFunctionDefinitionFromHiveFunction(
-                            name, HiveGenericUDFToDecimal.class.getName(), context));
+                            name, GenericUDFLegacyGroupingID.class.getName()));
         }
 
         Optional<FunctionInfo> info = hiveShim.getBuiltInFunctionInfo(name);
@@ -166,7 +131,7 @@ public class HiveModule implements Module {
         return info.map(
                 functionInfo ->
                         factory.createFunctionDefinitionFromHiveFunction(
-                                name, functionInfo.getFunctionClass().getName(), context));
+                                name, functionInfo.getFunctionClass().getName()));
     }
 
     public String getHiveVersion() {

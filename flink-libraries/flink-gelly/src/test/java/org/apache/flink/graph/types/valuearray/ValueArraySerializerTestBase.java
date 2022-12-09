@@ -28,7 +28,8 @@ import java.util.Objects;
  * {@link ValueArray}. It overrides default deepEquals of {@link Iterable}s with {@link
  * Objects#equals(Object, Object)}.
  */
-abstract class ValueArraySerializerTestBase<U extends ValueArray<?>> extends SerializerTestBase<U> {
+public abstract class ValueArraySerializerTestBase<U extends ValueArray<?>>
+        extends SerializerTestBase<U> {
     ValueArraySerializerTestBase() {
         super(
                 new DeeplyEqualsChecker()

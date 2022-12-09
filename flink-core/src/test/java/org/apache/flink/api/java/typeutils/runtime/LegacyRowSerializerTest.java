@@ -27,16 +27,17 @@ import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.types.Row;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Ignore;
+import org.junit.Test;
 
 import java.io.Serializable;
 import java.util.Objects;
 
 /** Tests for the old serialization format of {@link Row} before Flink 1.11. */
-class LegacyRowSerializerTest {
+public class LegacyRowSerializerTest {
 
     @Test
-    void testRowSerializer() {
+    public void testRowSerializer() {
         RowTypeInfo typeInfo =
                 new RowTypeInfo(BasicTypeInfo.INT_TYPE_INFO, BasicTypeInfo.STRING_TYPE_INFO);
         Row row1 = new Row(2);
@@ -53,7 +54,7 @@ class LegacyRowSerializerTest {
     }
 
     @Test
-    void testLargeRowSerializer() {
+    public void testLargeRowSerializer() {
         RowTypeInfo typeInfo =
                 new RowTypeInfo(
                         BasicTypeInfo.INT_TYPE_INFO,
@@ -90,7 +91,7 @@ class LegacyRowSerializerTest {
     }
 
     @Test
-    void testRowSerializerWithComplexTypes() {
+    public void testRowSerializerWithComplexTypes() {
         RowTypeInfo typeInfo =
                 new RowTypeInfo(
                         BasicTypeInfo.INT_TYPE_INFO,
@@ -144,6 +145,7 @@ class LegacyRowSerializerTest {
         return row;
     }
 
+    @Ignore("Prevents this class from being considered a test class by JUnit.")
     private class RowSerializerTestInstance extends SerializerTestInstance<Row> {
 
         RowSerializerTestInstance(TypeSerializer<Row> serializer, Row... testData) {

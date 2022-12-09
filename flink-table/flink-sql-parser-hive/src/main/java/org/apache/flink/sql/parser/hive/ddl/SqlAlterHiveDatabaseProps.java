@@ -18,7 +18,6 @@
 
 package org.apache.flink.sql.parser.hive.ddl;
 
-import org.apache.flink.sql.parser.SqlUnparseUtils;
 import org.apache.flink.sql.parser.hive.impl.ParseException;
 
 import org.apache.calcite.sql.SqlIdentifier;
@@ -48,7 +47,7 @@ public class SqlAlterHiveDatabaseProps extends SqlAlterHiveDatabase {
         writer.keyword("DBPROPERTIES");
         SqlWriter.Frame withFrame = writer.startList("(", ")");
         for (SqlNode property : originPropList) {
-            SqlUnparseUtils.printIndent(writer);
+            printIndent(writer);
             property.unparse(writer, leftPrec, rightPrec);
         }
         writer.newlineAndIndent();

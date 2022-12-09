@@ -79,8 +79,7 @@ public class OggJsonSerializationSchema implements SerializationSchema<RowData> 
     }
 
     @Override
-    public void open(InitializationContext context) throws Exception {
-        jsonSerializer.open(context);
+    public void open(InitializationContext context) {
         genericRowData = new GenericRowData(3);
     }
 

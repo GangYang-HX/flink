@@ -23,8 +23,8 @@ import org.apache.flink.runtime.rest.HttpMethodWrapper;
 import org.apache.flink.runtime.rest.messages.EmptyMessageParameters;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.EmptyResponseBody;
-import org.apache.flink.runtime.rest.messages.RuntimeMessageHeaders;
-import org.apache.flink.runtime.rest.versioning.RuntimeRestAPIVersion;
+import org.apache.flink.runtime.rest.messages.MessageHeaders;
+import org.apache.flink.runtime.rest.versioning.RestAPIVersion;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
@@ -37,8 +37,7 @@ import java.util.Collections;
  */
 @Documentation.ExcludeFromDocumentation()
 public class TestExcludeMessageHeaders
-        implements RuntimeMessageHeaders<
-                EmptyRequestBody, EmptyResponseBody, EmptyMessageParameters> {
+        implements MessageHeaders<EmptyRequestBody, EmptyResponseBody, EmptyMessageParameters> {
 
     private static final String URL = "/test/excluded";
     private static final String DESCRIPTION =
@@ -93,7 +92,7 @@ public class TestExcludeMessageHeaders
     }
 
     @Override
-    public Collection<RuntimeRestAPIVersion> getSupportedAPIVersions() {
-        return Collections.singleton(RuntimeRestAPIVersion.V0);
+    public Collection<RestAPIVersion> getSupportedAPIVersions() {
+        return Collections.singleton(RestAPIVersion.V0);
     }
 }

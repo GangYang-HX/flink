@@ -25,9 +25,10 @@ import org.apache.flink.runtime.security.SecurityConfiguration;
 import org.apache.flink.runtime.security.SecurityUtils;
 import org.apache.flink.runtime.security.modules.HadoopModule;
 import org.apache.flink.runtime.security.modules.SecurityModule;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.yarn.configuration.YarnConfigOptions;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -37,11 +38,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Tests for the {@link YarnTaskExecutorRunner}. */
-public class YarnTaskExecutorRunnerTest {
+public class YarnTaskExecutorRunnerTest extends TestLogger {
 
     @Test
     public void testDefaultKerberosKeytabConfiguration() throws Exception {
@@ -68,26 +71,28 @@ public class YarnTaskExecutorRunnerTest {
 
         if (moduleOpt.isPresent()) {
             HadoopModule hadoopModule = (HadoopModule) moduleOpt.get();
-            assertThat(hadoopModule.getSecurityConfig().getPrincipal())
-                    .isEqualTo("testuser1@domain");
-            assertThat(hadoopModule.getSecurityConfig().getKeytab())
-                    .isEqualTo(
+            assertThat(hadoopModule.getSecurityConfig().getPrincipal(), is("testuser1@domain"));
+            assertThat(
+                    hadoopModule.getSecurityConfig().getKeytab(),
+                    is(
                             new File(
                                             resourceDirPath,
                                             YarnConfigOptions.LOCALIZED_KEYTAB_PATH.defaultValue())
-                                    .getAbsolutePath());
+                                    .getAbsolutePath()));
         } else {
             fail("Can not find HadoopModule!");
         }
 
-        assertThat(configuration.getString(SecurityOptions.KERBEROS_LOGIN_KEYTAB))
-                .isEqualTo(
+        assertThat(
+                configuration.getString(SecurityOptions.KERBEROS_LOGIN_KEYTAB),
+                is(
                         new File(
                                         resourceDirPath,
                                         YarnConfigOptions.LOCALIZED_KEYTAB_PATH.defaultValue())
-                                .getAbsolutePath());
-        assertThat(configuration.getString(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL))
-                .isEqualTo("testuser1@domain");
+                                .getAbsolutePath()));
+        assertThat(
+                configuration.getString(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL),
+                is("testuser1@domain"));
     }
 
     @Test
@@ -112,24 +117,26 @@ public class YarnTaskExecutorRunnerTest {
 
         if (moduleOpt.isPresent()) {
             HadoopModule hadoopModule = (HadoopModule) moduleOpt.get();
-            assertThat(hadoopModule.getSecurityConfig().getPrincipal())
-                    .isEqualTo("testuser1@domain");
+            assertThat(hadoopModule.getSecurityConfig().getPrincipal(), is("testuser1@domain"));
             // Using containString verification as the absolute path varies depending on runtime
             // environment
-            assertThat(hadoopModule.getSecurityConfig().getKeytab())
-                    .containsSequence("src/test/resources/krb5.keytab");
+            assertThat(
+                    hadoopModule.getSecurityConfig().getKeytab(),
+                    containsString("src/test/resources/krb5.keytab"));
         } else {
             fail("Can not find HadoopModule!");
         }
 
-        assertThat(configuration.getString(SecurityOptions.KERBEROS_LOGIN_KEYTAB))
-                .containsSequence("src/test/resources/krb5.keytab");
-        assertThat(configuration.getString(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL))
-                .isEqualTo("testuser1@domain");
+        assertThat(
+                configuration.getString(SecurityOptions.KERBEROS_LOGIN_KEYTAB),
+                containsString("src/test/resources/krb5.keytab"));
+        assertThat(
+                configuration.getString(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL),
+                is("testuser1@domain"));
     }
 
     @Test
-    void testTaskManagerNodeIdConfiguration() throws Exception {
+    public void testTaskManagerNodeIdConfiguration() throws Exception {
         final String resourceDirPath =
                 Paths.get("src", "test", "resources").toAbsolutePath().toString();
         Configuration configuration = new Configuration();
@@ -137,7 +144,8 @@ public class YarnTaskExecutorRunnerTest {
                 configuration,
                 resourceDirPath,
                 Collections.singletonMap(YarnResourceManagerDriver.ENV_FLINK_NODE_ID, "test"));
-        assertThat(configuration.getString(TaskManagerOptionsInternal.TASK_MANAGER_NODE_ID))
-                .isEqualTo("test");
+        assertThat(
+                configuration.getString(TaskManagerOptionsInternal.TASK_MANAGER_NODE_ID),
+                is("test"));
     }
 }

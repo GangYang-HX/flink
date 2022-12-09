@@ -21,6 +21,7 @@ package org.apache.flink.runtime.metrics.groups;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 
 import javax.annotation.Nullable;
@@ -70,7 +71,12 @@ public class TaskManagerJobMetricGroup extends JobMetricGroup<TaskManagerMetricG
     // ------------------------------------------------------------------------
 
     public TaskMetricGroup addTask(
-            final ExecutionAttemptID executionAttemptID, final String taskName) {
+            final JobVertexID jobVertexId,
+            final ExecutionAttemptID executionAttemptID,
+            final String taskName,
+            final int subtaskIndex,
+            final int attemptNumber) {
+        checkNotNull(jobVertexId);
         checkNotNull(executionAttemptID);
         checkNotNull(taskName);
 
@@ -81,7 +87,14 @@ public class TaskManagerJobMetricGroup extends JobMetricGroup<TaskManagerMetricG
                     return prior;
                 } else {
                     TaskMetricGroup task =
-                            new TaskMetricGroup(registry, this, executionAttemptID, taskName);
+                            new TaskMetricGroup(
+                                    registry,
+                                    this,
+                                    jobVertexId,
+                                    executionAttemptID,
+                                    taskName,
+                                    subtaskIndex,
+                                    attemptNumber);
                     tasks.put(executionAttemptID, task);
                     return task;
                 }

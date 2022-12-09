@@ -25,7 +25,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-formats</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-orc-nohive</artifactId>
@@ -99,13 +100,6 @@ under the License.
 			<scope>test</scope>
 		</dependency>
 
-		<!-- ArchUit test dependencies -->
-
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-architecture-tests-test</artifactId>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 
 	<profiles>
@@ -117,7 +111,7 @@ under the License.
 				<dependency>
 					<groupId>org.apache.hadoop</groupId>
 					<artifactId>hadoop-hdfs-client</artifactId>
-					<version>${flink.hadoop.version}</version>
+					<version>${hadoop.version}</version>
 					<scope>test</scope>
 				</dependency>
 			</dependencies>

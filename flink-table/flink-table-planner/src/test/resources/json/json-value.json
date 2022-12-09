@@ -6,6 +6,5 @@
     "city": "Munich"
   },
   "roles": ["user", "viewer"],
-  "balance": 13.37,
-  "contains blank": "right"
+  "balance": 13.37
 }

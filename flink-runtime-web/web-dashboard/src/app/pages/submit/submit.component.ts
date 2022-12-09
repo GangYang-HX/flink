@@ -23,9 +23,10 @@ import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { mergeMap, takeUntil } from 'rxjs/operators';
 
-import { JarFilesItem } from '@flink-runtime-web/interfaces';
-import { JarService, StatusService } from '@flink-runtime-web/services';
-import { DagreComponent } from '@flink-runtime-web/share/common/dagre/dagre.component';
+import { DagreComponent } from 'share/common/dagre/dagre.component';
+
+import { JarFilesItem } from 'interfaces';
+import { JarService, StatusService } from 'services';
 
 @Component({
   selector: 'flink-submit',
@@ -165,7 +166,7 @@ export class SubmitComponent implements OnInit, OnDestroy {
         this.validateForm.get('allowNonRestoredState')!.value
       )
       .subscribe(data => {
-        this.router.navigate(['job', 'running', data.jobid]).then();
+        this.router.navigate(['job', data.jobid]).then();
       });
   }
 }

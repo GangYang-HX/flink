@@ -162,11 +162,7 @@ public class StreamExecWindowJoin extends ExecNodeBase<RowData>
 
         GeneratedJoinCondition generatedCondition =
                 JoinUtil.generateConditionFunction(
-                        config,
-                        planner.getFlinkContext().getClassLoader(),
-                        joinSpec,
-                        leftType,
-                        rightType);
+                        config.getTableConfig(), joinSpec, leftType, rightType);
 
         ZoneId shiftTimeZone =
                 TimeWindowUtil.getShiftTimeZone(
@@ -196,11 +192,9 @@ public class StreamExecWindowJoin extends ExecNodeBase<RowData>
 
         // set KeyType and Selector for state
         RowDataKeySelector leftSelect =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(), leftJoinKey, leftTypeInfo);
+                KeySelectorUtil.getRowDataSelector(leftJoinKey, leftTypeInfo);
         RowDataKeySelector rightSelect =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(), rightJoinKey, rightTypeInfo);
+                KeySelectorUtil.getRowDataSelector(rightJoinKey, rightTypeInfo);
         transform.setStateKeySelectors(leftSelect, rightSelect);
         transform.setStateKeyType(leftSelect.getProducedType());
         return transform;

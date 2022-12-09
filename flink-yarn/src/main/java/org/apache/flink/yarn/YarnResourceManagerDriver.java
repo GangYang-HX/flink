@@ -81,6 +81,12 @@ import java.util.stream.Collectors;
 public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<YarnWorkerNode> {
 
     /**
+     * Environment variable name of the final container id used by the YarnResourceManager.
+     * Container ID generation may vary across Hadoop versions.
+     */
+    static final String ENV_FLINK_CONTAINER_ID = "_FLINK_CONTAINER_ID";
+
+    /**
      * Environment variable name of the hostname given by YARN. In task executor we use the
      * hostnames given by YARN consistently throughout akka
      */
@@ -504,6 +510,10 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
                         YarnTaskExecutorRunner.class,
                         log);
 
+        // set a special environment variable to uniquely identify this container
+        taskExecutorLaunchContext
+                .getEnvironment()
+                .put(ENV_FLINK_CONTAINER_ID, containerId.toString());
         taskExecutorLaunchContext.getEnvironment().put(ENV_FLINK_NODE_ID, host);
         return taskExecutorLaunchContext;
     }
@@ -547,6 +557,8 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
             recoveredWorkers.add(worker);
         }
 
+        // Should not invoke resource event handler on the main thread executor.
+        // We are in the initializing thread. The main thread executor is not yet ready.
         getResourceEventHandler().onPreviousAttemptWorkersRecovered(recoveredWorkers);
     }
 

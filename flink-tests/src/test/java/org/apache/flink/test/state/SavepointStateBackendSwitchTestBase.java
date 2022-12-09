@@ -173,15 +173,13 @@ public abstract class SavepointStateBackendSwitchTestBase {
             throws Exception {
 
         InternalMapState<String, Integer, Long, Long> mapState =
-                keyedBackend.createOrUpdateInternalState(IntSerializer.INSTANCE, stateDescr);
+                keyedBackend.createInternalState(IntSerializer.INSTANCE, stateDescr);
 
         InternalValueState<String, Integer, Long> valueState =
-                keyedBackend.createOrUpdateInternalState(
-                        IntSerializer.INSTANCE, valueStateDescriptor);
+                keyedBackend.createInternalState(IntSerializer.INSTANCE, valueStateDescriptor);
 
         InternalListState<String, Integer, Long> listState =
-                keyedBackend.createOrUpdateInternalState(
-                        IntSerializer.INSTANCE, listStateDescriptor);
+                keyedBackend.createInternalState(IntSerializer.INSTANCE, listStateDescriptor);
 
         keyedBackend.setCurrentKey("abc");
         mapState.setCurrentNamespace(namespace1);
@@ -267,16 +265,13 @@ public abstract class SavepointStateBackendSwitchTestBase {
             CheckpointableKeyedStateBackend<String> keyedBackend)
             throws Exception {
         InternalMapState<String, Integer, Long, Long> mapState =
-                keyedBackend.createOrUpdateInternalState(
-                        IntSerializer.INSTANCE, mapStateDescriptor);
+                keyedBackend.createInternalState(IntSerializer.INSTANCE, mapStateDescriptor);
 
         InternalValueState<String, Integer, Long> valueState =
-                keyedBackend.createOrUpdateInternalState(
-                        IntSerializer.INSTANCE, valueStateDescriptor);
+                keyedBackend.createInternalState(IntSerializer.INSTANCE, valueStateDescriptor);
 
         InternalListState<String, Integer, Long> listState =
-                keyedBackend.createOrUpdateInternalState(
-                        IntSerializer.INSTANCE, listStateDescriptor);
+                keyedBackend.createInternalState(IntSerializer.INSTANCE, listStateDescriptor);
 
         keyedBackend.setCurrentKey("abc");
         mapState.setCurrentNamespace(namespace1);

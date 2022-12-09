@@ -46,12 +46,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.connector.file.table.DefaultPartTimeExtractor.toMills;
 import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.PARTITION_TIME_EXTRACTOR_CLASS;
 import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.PARTITION_TIME_EXTRACTOR_KIND;
 import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.PARTITION_TIME_EXTRACTOR_TIMESTAMP_FORMATTER;
 import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.PARTITION_TIME_EXTRACTOR_TIMESTAMP_PATTERN;
+import static org.apache.flink.connectors.hive.HiveOptions.BATCH_LOOKUP_SOURCE_FETCH_LATEST_PARTITION;
 import static org.apache.flink.connectors.hive.HiveOptions.STREAMING_SOURCE_PARTITION_ORDER;
 
 /** Base class for table partition fetcher context. */
@@ -74,6 +76,8 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
     protected transient Path tableLocation;
     private transient PartitionTimeExtractor extractor;
     private transient Table table;
+    // remember the map from partition to its create time
+    private transient Map<List<String>, Long> partValuesToCreateTime;
 
     public HivePartitionFetcherContextBase(
             ObjectPath tablePath,
@@ -116,6 +120,7 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
                         extractorPattern,
                         formatterPattern);
         tableLocation = new Path(table.getSd().getLocation());
+        partValuesToCreateTime = new HashMap<>();
     }
 
     @Override
@@ -133,18 +138,22 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
                 }
                 break;
             case CREATE_TIME:
-                Map<List<String>, Long> partValuesToCreateTime = new HashMap<>();
                 partitionNames =
                         metaStoreClient.listPartitionNames(
                                 tablePath.getDatabaseName(),
                                 tablePath.getObjectName(),
                                 Short.MAX_VALUE);
-                List<Partition> partitions =
+                List<String> newNames =
+                        partitionNames.stream()
+                                .filter(
+                                        n ->
+                                                !partValuesToCreateTime.containsKey(
+                                                        extractPartitionValues(n)))
+                                .collect(Collectors.toList());
+                List<Partition> newPartitions =
                         metaStoreClient.getPartitionsByNames(
-                                tablePath.getDatabaseName(),
-                                tablePath.getObjectName(),
-                                partitionNames);
-                for (Partition partition : partitions) {
+                                tablePath.getDatabaseName(), tablePath.getObjectName(), newNames);
+                for (Partition partition : newPartitions) {
                     partValuesToCreateTime.put(
                             partition.getValues(), getPartitionCreateTime(partition));
                 }
@@ -171,6 +180,10 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
                         "Unsupported partition order: " + partitionOrder);
         }
         return partitionValueList;
+    }
+
+    public boolean getBatchLookupSourceFetchLatestPartition() {
+        return configuration.get(BATCH_LOOKUP_SOURCE_FETCH_LATEST_PARTITION);
     }
 
     private long getPartitionCreateTime(Partition partition) throws IOException {
@@ -225,6 +238,9 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
 
     @Override
     public void close() throws Exception {
+        if (partValuesToCreateTime != null) {
+            partValuesToCreateTime.clear();
+        }
         if (this.metaStoreClient != null) {
             this.metaStoreClient.close();
         }

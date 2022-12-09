@@ -21,15 +21,16 @@ package org.apache.flink.kubernetes.kubeclient.resources;
 import org.apache.flink.kubernetes.KubernetesTestBase;
 import org.apache.flink.kubernetes.kubeclient.TestingFlinkKubeClient;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.UUID;
 
 import static org.apache.flink.kubernetes.kubeclient.resources.KubernetesLeaderElector.LEADER_ANNOTATION_KEY;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 
 /** Tests for {@link KubernetesLeaderElector}. */
-class KubernetesLeaderElectorTest extends KubernetesTestBase {
+public class KubernetesLeaderElectorTest extends KubernetesTestBase {
 
     private String lockIdentity;
     private KubernetesConfigMap leaderConfigMap;
@@ -42,21 +43,21 @@ class KubernetesLeaderElectorTest extends KubernetesTestBase {
     }
 
     @Test
-    void testNoAnnotation() {
-        assertThat(KubernetesLeaderElector.hasLeadership(leaderConfigMap, lockIdentity)).isFalse();
+    public void testNoAnnotation() {
+        assertThat(KubernetesLeaderElector.hasLeadership(leaderConfigMap, lockIdentity), is(false));
     }
 
     @Test
-    void testAnnotationNotMatch() {
+    public void testAnnotationNotMatch() {
         leaderConfigMap.getAnnotations().put(LEADER_ANNOTATION_KEY, "wrong lock");
-        assertThat(KubernetesLeaderElector.hasLeadership(leaderConfigMap, lockIdentity)).isFalse();
+        assertThat(KubernetesLeaderElector.hasLeadership(leaderConfigMap, lockIdentity), is(false));
     }
 
     @Test
-    void testAnnotationMatched() {
+    public void testAnnotationMatched() {
         leaderConfigMap
                 .getAnnotations()
                 .put(LEADER_ANNOTATION_KEY, "other information " + lockIdentity);
-        assertThat(KubernetesLeaderElector.hasLeadership(leaderConfigMap, lockIdentity)).isTrue();
+        assertThat(KubernetesLeaderElector.hasLeadership(leaderConfigMap, lockIdentity), is(true));
     }
 }

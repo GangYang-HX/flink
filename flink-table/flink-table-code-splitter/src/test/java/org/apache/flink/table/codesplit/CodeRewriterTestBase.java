@@ -19,13 +19,13 @@ package org.apache.flink.table.codesplit;
 
 import org.apache.flink.util.FileUtils;
 
+import org.junit.Assert;
+
 import java.io.File;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /** Base test class for {@link CodeRewriter}. */
-abstract class CodeRewriterTestBase<R extends CodeRewriter> {
+public abstract class CodeRewriterTestBase<R extends CodeRewriter> {
 
     private final String resourceDir;
     private final Function<String, R> rewriterProvider;
@@ -55,7 +55,7 @@ abstract class CodeRewriterTestBase<R extends CodeRewriter> {
                                             .toURI()));
             R rewriter = rewriterProvider.apply(code);
             String actual = rewriter.rewrite();
-            assertThat(actual == null ? "" : actual).isEqualTo(expected);
+            Assert.assertEquals(expected, actual == null ? "" : actual);
             return rewriter;
         } catch (Exception e) {
             throw new RuntimeException(e);

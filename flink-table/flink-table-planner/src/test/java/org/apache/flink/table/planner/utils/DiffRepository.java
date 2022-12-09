@@ -185,7 +185,7 @@ public class DiffRepository {
      * share the same diff-repository: if the repository gets loaded once per test case, then only
      * one diff is recorded.
      */
-    private static final Map<Class<?>, DiffRepository> MAP_CLASS_TO_REPOSITORY = new HashMap<>();
+    private static final Map<Class, DiffRepository> MAP_CLASS_TO_REPOSITORY = new HashMap<>();
 
     // ~ Instance fields --------------------------------------------------------
 
@@ -599,6 +599,9 @@ public class DiffRepository {
                     Node child = childNodes.item(i);
                     writeNode(child, out);
                 }
+
+                //            writeNode(((Document) node).getDocumentElement(),
+                // out);
                 break;
 
             case Node.ELEMENT_NODE:
@@ -675,7 +678,7 @@ public class DiffRepository {
      * @param clazz Test case class
      * @return The diff repository shared between test cases in this class.
      */
-    public static DiffRepository lookup(Class<?> clazz) {
+    public static DiffRepository lookup(Class clazz) {
         return lookup(clazz, null);
     }
 
@@ -686,7 +689,7 @@ public class DiffRepository {
      * @param baseRepository Base class of test class
      * @return The diff repository shared between test cases in this class.
      */
-    public static DiffRepository lookup(Class<?> clazz, DiffRepository baseRepository) {
+    public static DiffRepository lookup(Class clazz, DiffRepository baseRepository) {
         return lookup(clazz, baseRepository, null);
     }
 
@@ -713,7 +716,7 @@ public class DiffRepository {
      * @return The diff repository shared between test cases in this class.
      */
     public static synchronized DiffRepository lookup(
-            Class<?> clazz, DiffRepository baseRepository, Filter filter) {
+            Class clazz, DiffRepository baseRepository, Filter filter) {
         DiffRepository diffRepository = MAP_CLASS_TO_REPOSITORY.get(clazz);
         if (diffRepository == null) {
             final URL refFile = findFile(clazz, ".xml");

@@ -30,7 +30,7 @@ import org.apache.flink.table.types.logical.TypeInformationRawType;
 import org.apache.flink.table.types.utils.DataTypeUtils;
 import org.apache.flink.table.types.utils.TypeConversions;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.sql.Date;
 import java.sql.Time;
@@ -41,13 +41,13 @@ import static org.apache.flink.table.types.inference.TypeTransformations.TO_INTE
 import static org.apache.flink.table.types.inference.TypeTransformations.legacyRawToTypeInfoRaw;
 import static org.apache.flink.table.types.inference.TypeTransformations.timeToSqlTypes;
 import static org.apache.flink.table.types.inference.TypeTransformations.toNullable;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for built-in {@link TypeTransformations}. */
-class TypeTransformationsTest {
+public class TypeTransformationsTest {
 
     @Test
-    void testToInternal() {
+    public void testToInternal() {
         DataType dataType =
                 DataTypes.STRUCTURED(
                         SimplePojo.class,
@@ -64,11 +64,11 @@ class TypeTransformationsTest {
                                         DataTypes.INT().notNull().bridgedTo(Integer.class)))
                         .bridgedTo(RowData.class);
 
-        assertThat(DataTypeUtils.transform(dataType, TO_INTERNAL_CLASS)).isEqualTo(expected);
+        assertEquals(expected, DataTypeUtils.transform(dataType, TO_INTERNAL_CLASS));
     }
 
     @Test
-    void testTimeToSqlTypes() {
+    public void testTimeToSqlTypes() {
         DataType dataType =
                 DataTypes.ROW(
                         DataTypes.FIELD("a", DataTypes.STRING()),
@@ -95,11 +95,11 @@ class TypeTransformationsTest {
                                         DataTypes.TIME(9).bridgedTo(Time.class))),
                         DataTypes.FIELD("f", DataTypes.TIMESTAMP_WITH_TIME_ZONE()));
 
-        assertThat(DataTypeUtils.transform(dataType, timeToSqlTypes())).isEqualTo(expected);
+        assertEquals(expected, DataTypeUtils.transform(dataType, timeToSqlTypes()));
     }
 
     @Test
-    void testLegacyRawToTypeInfoRaw() {
+    public void testLegacyRawToTypeInfoRaw() {
         DataType dataType =
                 DataTypes.ROW(
                         DataTypes.FIELD("a", DataTypes.STRING()),
@@ -117,11 +117,11 @@ class TypeTransformationsTest {
                         DataTypes.FIELD("c", rawDataType),
                         DataTypes.FIELD("d", DataTypes.ARRAY(rawDataType)));
 
-        assertThat(DataTypeUtils.transform(dataType, legacyRawToTypeInfoRaw())).isEqualTo(expected);
+        assertEquals(expected, DataTypeUtils.transform(dataType, legacyRawToTypeInfoRaw()));
     }
 
     @Test
-    void testToNullable() {
+    public void testToNullable() {
         DataType dataType =
                 DataTypes.ROW(
                         DataTypes.FIELD("a", DataTypes.STRING().notNull()),
@@ -143,7 +143,7 @@ class TypeTransformationsTest {
                         DataTypes.FIELD("e", DataTypes.MAP(DataTypes.DATE(), DataTypes.TIME(9))),
                         DataTypes.FIELD("f", DataTypes.TIMESTAMP_WITH_TIME_ZONE()));
 
-        assertThat(DataTypeUtils.transform(dataType, toNullable())).isEqualTo(expected);
+        assertEquals(expected, DataTypeUtils.transform(dataType, toNullable()));
     }
 
     // --------------------------------------------------------------------------------------------

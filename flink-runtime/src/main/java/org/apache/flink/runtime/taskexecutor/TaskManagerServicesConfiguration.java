@@ -27,13 +27,12 @@ import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.configuration.NettyShuffleEnvironmentOptions;
 import org.apache.flink.configuration.TaskManagerOptions;
-import org.apache.flink.configuration.TaskManagerOptionsInternal;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterEntrypointUtils;
 import org.apache.flink.runtime.entrypoint.WorkingDirectory;
+import org.apache.flink.runtime.execution.librarycache.FlinkUserCodeClassLoaders;
 import org.apache.flink.runtime.registration.RetryingRegistrationConfiguration;
 import org.apache.flink.runtime.util.ConfigurationParserUtils;
-import org.apache.flink.util.FlinkUserCodeClassLoaders;
 import org.apache.flink.util.NetUtils;
 import org.apache.flink.util.Reference;
 
@@ -43,6 +42,7 @@ import java.io.File;
 import java.net.InetAddress;
 import java.util.Optional;
 
+import static org.apache.flink.configuration.TaskManagerOptionsInternal.TASK_MANAGER_NODE_ID;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -124,9 +124,9 @@ public class TaskManagerServicesConfiguration {
         this.localCommunicationOnly = localCommunicationOnly;
         this.tmpDirPaths = checkNotNull(tmpDirPaths);
         this.localRecoveryStateDirectories = checkNotNull(localRecoveryStateDirectories);
-        this.localRecoveryEnabled = localRecoveryEnabled;
+        this.localRecoveryEnabled = checkNotNull(localRecoveryEnabled);
         this.queryableStateConfig = queryableStateConfig;
-        this.numberOfSlots = numberOfSlots;
+        this.numberOfSlots = checkNotNull(numberOfSlots);
 
         this.pageSize = pageSize;
 
@@ -237,7 +237,7 @@ public class TaskManagerServicesConfiguration {
     }
 
     public String getNodeId() {
-        return nodeId;
+        return this.nodeId;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -315,9 +315,7 @@ public class TaskManagerServicesConfiguration {
         // If TaskManagerOptionsInternal.TASK_MANAGER_NODE_ID is not set, use the external address
         // as the node id.
         final String nodeId =
-                configuration
-                        .getOptional(TaskManagerOptionsInternal.TASK_MANAGER_NODE_ID)
-                        .orElse(externalAddress);
+                configuration.getOptional(TASK_MANAGER_NODE_ID).orElse(externalAddress);
 
         return new TaskManagerServicesConfiguration(
                 configuration,

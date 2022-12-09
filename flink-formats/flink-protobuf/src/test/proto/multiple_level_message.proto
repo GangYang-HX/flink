@@ -1,0 +1,24 @@
+syntax = "proto3";
+package org.apache.flink.formats.protobuf.proto;
+option java_package = "org.apache.flink.formats.protobuf.testproto";
+option java_multiple_files = true;
+
+message MultipleLevelMessageTest {
+    int32 a = 1;
+    int64 b = 2;
+    bool c = 3;
+    InnerMessageTest1 d = 4;
+
+    message InnerMessageTest1{
+          InnerMessageTest2 a = 1;
+          bool c = 2;
+          message InnerMessageTest2{
+             int32 a =1;
+             int64 b =2;
+          }
+    }
+}
+
+
+
+

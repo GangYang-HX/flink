@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.Assertions.not;
 
-/** Assertions for {@link LogicalType}. */
+/** Aseertions for {@link LogicalType}. */
 @Experimental
 public class LogicalTypeAssert extends AbstractAssert<LogicalTypeAssert, LogicalType> {
 

@@ -136,13 +136,8 @@ public class FileSystemTableSink extends AbstractFileSystemTable
 
     @Override
     public SinkRuntimeProvider getSinkRuntimeProvider(Context sinkContext) {
-        return new DataStreamSinkProvider() {
-            @Override
-            public DataStreamSink<?> consumeDataStream(
-                    ProviderContext providerContext, DataStream<RowData> dataStream) {
-                return consume(providerContext, dataStream, sinkContext);
-            }
-        };
+        return (DataStreamSinkProvider)
+                (providerContext, dataStream) -> consume(providerContext, dataStream, sinkContext);
     }
 
     private DataStreamSink<?> consume(
@@ -181,7 +176,9 @@ public class FileSystemTableSink extends AbstractFileSystemTable
         builder.setStaticPartitions(staticPartitions);
         builder.setTempPath(toStagingPath());
         builder.setOutputFileConfig(
-                OutputFileConfig.builder().withPartPrefix("part-" + UUID.randomUUID()).build());
+                OutputFileConfig.builder()
+                        .withPartPrefix("part-" + UUID.randomUUID().toString())
+                        .build());
         return inputStream
                 .writeUsingOutputFormat(builder.build())
                 .setParallelism(parallelism)

@@ -55,8 +55,8 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.flink.test.util.TestUtils.tryExecute;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 /** Abstract test base for all Kafka producer tests. */
 @SuppressWarnings("serial")
@@ -317,7 +317,7 @@ public abstract class KafkaProducerTestBase extends KafkaTestBaseWithFlink {
                 byte[] serializedValue,
                 String topic,
                 int[] partitions) {
-            assertThat(partitions).hasSize(expectedTopicsToNumPartitions.get(topic).intValue());
+            assertEquals(expectedTopicsToNumPartitions.get(topic).intValue(), partitions.length);
 
             return (int) (next.f0 % partitions.length);
         }
@@ -366,7 +366,7 @@ public abstract class KafkaProducerTestBase extends KafkaTestBaseWithFlink {
         public Integer map(Tuple2<Long, String> value) throws Exception {
             int partition = value.f0.intValue() % numPartitions;
             if (ourPartition != -1) {
-                assertThat(partition).as("inconsistent partitioning").isEqualTo(ourPartition);
+                assertEquals("inconsistent partitioning", ourPartition, partition);
             } else {
                 ourPartition = partition;
             }

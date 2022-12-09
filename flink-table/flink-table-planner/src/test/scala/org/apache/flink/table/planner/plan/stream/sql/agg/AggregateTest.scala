@@ -390,9 +390,4 @@ class AggregateTest extends TableTestBase {
         |""".stripMargin,
       ExplainDetail.CHANGELOG_MODE)
   }
-
-  @Test(expected = classOf[TableException])
-  def testApproximateCountDistinct(): Unit = {
-    util.verifyExecPlan("SELECT APPROX_COUNT_DISTINCT(b) FROM MyTable")
-  }
 }

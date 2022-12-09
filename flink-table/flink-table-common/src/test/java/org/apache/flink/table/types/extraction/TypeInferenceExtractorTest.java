@@ -18,7 +18,6 @@
 
 package org.apache.flink.table.types.extraction;
 
-import org.apache.flink.core.testutils.FlinkAssertions;
 import org.apache.flink.table.annotation.DataTypeHint;
 import org.apache.flink.table.annotation.FunctionHint;
 import org.apache.flink.table.annotation.InputGroup;
@@ -39,8 +38,14 @@ import org.apache.flink.table.types.inference.TypeStrategy;
 import org.apache.flink.table.types.utils.DataTypeFactoryMock;
 import org.apache.flink.types.Row;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.hamcrest.Matcher;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import javax.annotation.Nullable;
 
@@ -50,17 +55,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
+import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link TypeInferenceExtractor}. */
+@RunWith(Parameterized.class)
 @SuppressWarnings("unused")
-class TypeInferenceExtractorTest {
+public class TypeInferenceExtractorTest {
 
-    private static Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
                 // function hint defines everything
                 TestSpec.forScalarFunction(FullFunctionHint.class)
                         .expectNamedArguments("i", "s")
@@ -432,9 +438,12 @@ class TypeInferenceExtractorTest {
                                                 .bridgedTo(RowData.class))));
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testArgumentNames(TestSpec testSpec) {
+    @Parameter public TestSpec testSpec;
+
+    @Rule public ExpectedException thrown = ExpectedException.none();
+
+    @Test
+    public void testArgumentNames() {
         if (testSpec.expectedArgumentNames != null) {
             assertThat(testSpec.typeInferenceExtraction.get().getNamedArguments())
                     .isEqualTo(Optional.of(testSpec.expectedArgumentNames));
@@ -444,9 +453,8 @@ class TypeInferenceExtractorTest {
         }
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testArgumentTypes(TestSpec testSpec) {
+    @Test
+    public void testArgumentTypes() {
         if (testSpec.expectedArgumentTypes != null) {
             assertThat(testSpec.typeInferenceExtraction.get().getTypedArguments())
                     .isEqualTo(Optional.of(testSpec.expectedArgumentTypes));
@@ -456,9 +464,8 @@ class TypeInferenceExtractorTest {
         }
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testInputTypeStrategy(TestSpec testSpec) {
+    @Test
+    public void testInputTypeStrategy() {
         if (!testSpec.expectedOutputStrategies.isEmpty()) {
             assertThat(testSpec.typeInferenceExtraction.get().getInputTypeStrategy())
                     .isEqualTo(
@@ -468,9 +475,8 @@ class TypeInferenceExtractorTest {
         }
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testAccumulatorTypeStrategy(TestSpec testSpec) {
+    @Test
+    public void testAccumulatorTypeStrategy() {
         if (!testSpec.expectedAccumulatorStrategies.isEmpty()) {
             assertThat(
                             testSpec.typeInferenceExtraction
@@ -483,25 +489,19 @@ class TypeInferenceExtractorTest {
         }
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testOutputTypeStrategy(TestSpec testSpec) {
+    @Test
+    public void testOutputTypeStrategy() {
         if (!testSpec.expectedOutputStrategies.isEmpty()) {
             assertThat(testSpec.typeInferenceExtraction.get().getOutputTypeStrategy())
                     .isEqualTo(TypeStrategies.mapping(testSpec.expectedOutputStrategies));
         }
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testErrorMessage(TestSpec testSpec) {
+    @Test
+    public void testErrorMessage() {
         if (testSpec.expectedErrorMessage != null) {
-            assertThatThrownBy(testSpec.typeInferenceExtraction::get)
-                    .isInstanceOf(ValidationException.class)
-                    .satisfies(
-                            FlinkAssertions.anyCauseMatches(
-                                    ValidationException.class, testSpec.expectedErrorMessage));
-        } else {
+            thrown.expect(ValidationException.class);
+            thrown.expectCause(errorMatcher(testSpec));
             testSpec.typeInferenceExtraction.get();
         }
     }
@@ -548,8 +548,13 @@ class TypeInferenceExtractorTest {
         }
 
         static TestSpec forAggregateFunction(Class<? extends AggregateFunction<?, ?>> function) {
+            return forAggregateFunction(null, function);
+        }
+
+        static TestSpec forAggregateFunction(
+                String description, Class<? extends AggregateFunction<?, ?>> function) {
             return new TestSpec(
-                    function.getSimpleName(),
+                    description == null ? function.getSimpleName() : description,
                     () ->
                             TypeInferenceExtractor.forAggregateFunction(
                                     new DataTypeFactoryMock(), function));
@@ -570,8 +575,13 @@ class TypeInferenceExtractorTest {
 
         static TestSpec forTableAggregateFunction(
                 Class<? extends TableAggregateFunction<?, ?>> function) {
+            return forTableAggregateFunction(null, function);
+        }
+
+        static TestSpec forTableAggregateFunction(
+                String description, Class<? extends TableAggregateFunction<?, ?>> function) {
             return new TestSpec(
-                    function.getSimpleName(),
+                    description == null ? function.getSimpleName() : description,
                     () ->
                             TypeInferenceExtractor.forTableAggregateFunction(
                                     new DataTypeFactoryMock(), function));
@@ -607,6 +617,10 @@ class TypeInferenceExtractorTest {
         public String toString() {
             return description;
         }
+    }
+
+    static Matcher<Throwable> errorMatcher(TestSpec testSpec) {
+        return containsCause(new ValidationException(testSpec.expectedErrorMessage));
     }
 
     // --------------------------------------------------------------------------------------------

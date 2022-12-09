@@ -178,7 +178,7 @@ public class DispatcherTest extends AbstractDispatcherTest {
     @After
     public void tearDown() throws Exception {
         if (dispatcher != null) {
-            RpcUtils.terminateRpcEndpoint(dispatcher);
+            RpcUtils.terminateRpcEndpoint(dispatcher, TIMEOUT);
         }
         super.tearDown();
     }
@@ -557,7 +557,7 @@ public class DispatcherTest extends AbstractDispatcherTest {
                         .deserializeError(ClassLoader.getSystemClassLoader());
 
         // ensure correct exception type
-        assertThat(throwable.getMessage(), equalTo(testFailure.getMessage()));
+        assertThat(throwable, is(testFailure));
     }
 
     /** Test that {@link JobResult} is cached when the job finishes. */
@@ -590,10 +590,9 @@ public class DispatcherTest extends AbstractDispatcherTest {
         assertThat(
                 dispatcherGateway.requestJobStatus(failedJobId, TIMEOUT).get(),
                 equalTo(expectedState));
-        final CompletableFuture<ExecutionGraphInfo> completableFutureCompletableFuture =
-                dispatcher.callAsyncInMainThread(
-                        () -> dispatcher.requestExecutionGraphInfo(failedJobId, TIMEOUT));
-        assertThat(completableFutureCompletableFuture.get(), is(failedExecutionGraphInfo));
+        assertThat(
+                dispatcherGateway.requestExecutionGraphInfo(failedJobId, TIMEOUT).get(),
+                equalTo(failedExecutionGraphInfo));
     }
 
     @Test

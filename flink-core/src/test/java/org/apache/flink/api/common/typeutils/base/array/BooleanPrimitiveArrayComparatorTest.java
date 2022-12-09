@@ -19,7 +19,7 @@ package org.apache.flink.api.common.typeutils.base.array;
 
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.Assert;
 
 public class BooleanPrimitiveArrayComparatorTest
         extends PrimitiveArrayComparatorTestBase<boolean[]> {
@@ -29,7 +29,10 @@ public class BooleanPrimitiveArrayComparatorTest
 
     @Override
     protected void deepEquals(String message, boolean[] should, boolean[] is) {
-        assertThat(is).as(message).containsExactly(should);
+        Assert.assertTrue(should.length == is.length);
+        for (int x = 0; x < should.length; x++) {
+            Assert.assertEquals(should[x], is[x]);
+        }
     }
 
     @Override

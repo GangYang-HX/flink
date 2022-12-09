@@ -25,7 +25,7 @@ import org.apache.flink.table.expressions._
 import org.apache.flink.table.expressions.ExpressionUtils.extractValue
 import org.apache.flink.table.functions._
 import org.apache.flink.table.planner.JLong
-import org.apache.flink.table.planner.calcite.FlinkTypeFactory
+import org.apache.flink.table.planner.calcite.{FlinkTypeFactory, FlinkTypeSystem}
 import org.apache.flink.table.planner.delegation.PlannerBase
 import org.apache.flink.table.planner.functions.aggfunctions.{AvgAggFunction, CountAggFunction, DeclarativeAggregateFunction, Sum0AggFunction}
 import org.apache.flink.table.planner.functions.aggfunctions.AvgAggFunction._
@@ -42,7 +42,6 @@ import org.apache.flink.table.planner.plan.nodes.physical.stream.StreamPhysicalR
 import org.apache.flink.table.planner.typeutils.DataViewUtils
 import org.apache.flink.table.planner.typeutils.LegacyDataViewUtils.useNullSerializerForStateViewFieldsFromAccType
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil.toScala
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTypeFactory
 import org.apache.flink.table.runtime.dataview.DataViewSpec
 import org.apache.flink.table.runtime.functions.aggregate.BuiltInAggregateFunction
 import org.apache.flink.table.runtime.groupwindow._
@@ -58,7 +57,7 @@ import org.apache.flink.table.types.utils.DataTypeUtils
 import org.apache.calcite.rel.`type`._
 import org.apache.calcite.rel.core.{Aggregate, AggregateCall}
 import org.apache.calcite.rel.core.Aggregate.AggCallBinding
-import org.apache.calcite.sql.`type`.{SqlTypeName, SqlTypeUtil}
+import org.apache.calcite.sql.`type`.SqlTypeUtil
 import org.apache.calcite.sql.{SqlAggFunction, SqlKind, SqlRankFunction}
 import org.apache.calcite.sql.fun._
 import org.apache.calcite.sql.validate.SqlMonotonicity
@@ -162,13 +161,11 @@ object AggregateUtil extends Enumeration {
   }
 
   def getOutputIndexToAggCallIndexMap(
-      typeFactory: FlinkTypeFactory,
       aggregateCalls: Seq[AggregateCall],
       inputType: RelDataType,
       isBounded: Boolean,
       orderKeyIndexes: Array[Int] = null): util.Map[Integer, Integer] = {
     val aggInfos = transformToAggregateInfoList(
-      typeFactory,
       FlinkTypeFactory.toLogicalRowType(inputType),
       aggregateCalls,
       Array.fill(aggregateCalls.size)(false),
@@ -195,37 +192,31 @@ object AggregateUtil extends Enumeration {
   }
 
   def createPartialAggInfoList(
-      typeFactory: FlinkTypeFactory,
       partialLocalAggInputRowType: RowType,
       partialOriginalAggCalls: Seq[AggregateCall],
       partialAggCallNeedRetractions: Array[Boolean],
       partialAggNeedRetraction: Boolean,
       isGlobal: Boolean): AggregateInfoList = {
     transformToStreamAggregateInfoList(
-      typeFactory,
       partialLocalAggInputRowType,
       partialOriginalAggCalls,
       partialAggCallNeedRetractions,
       partialAggNeedRetraction,
-      isStateBackendDataViews = isGlobal
-    )
+      isStateBackendDataViews = isGlobal)
   }
 
   def createIncrementalAggInfoList(
-      typeFactory: FlinkTypeFactory,
       partialLocalAggInputRowType: RowType,
       partialOriginalAggCalls: Seq[AggregateCall],
       partialAggCallNeedRetractions: Array[Boolean],
       partialAggNeedRetraction: Boolean): AggregateInfoList = {
     val partialLocalAggInfoList = createPartialAggInfoList(
-      typeFactory,
       partialLocalAggInputRowType,
       partialOriginalAggCalls,
       partialAggCallNeedRetractions,
       partialAggNeedRetraction,
       isGlobal = false)
     val partialGlobalAggInfoList = createPartialAggInfoList(
-      typeFactory,
       partialLocalAggInputRowType,
       partialOriginalAggCalls,
       partialAggCallNeedRetractions,
@@ -266,17 +257,14 @@ object AggregateUtil extends Enumeration {
     val aggCallNeedRetractions = deriveAggCallNeedRetractions(agg, groupCount, aggCalls)
     val needInputCount = needRetraction(agg)
     transformToStreamAggregateInfoList(
-      unwrapTypeFactory(agg),
       FlinkTypeFactory.toLogicalRowType(input.getRowType),
       aggCalls,
       aggCallNeedRetractions,
       needInputCount,
-      isStateBackendDataViews = true
-    )
+      isStateBackendDataViews = true)
   }
 
   def deriveStreamWindowAggregateInfoList(
-      typeFactory: FlinkTypeFactory,
       inputRowType: RowType,
       aggCalls: Seq[AggregateCall],
       windowSpec: WindowSpec,
@@ -293,7 +281,6 @@ object AggregateUtil extends Enumeration {
     // TODO: derive retraction flags from ChangelogMode trait when we support retraction for window
     val aggCallNeedRetractions = new Array[Boolean](aggSize)
     transformToAggregateInfoList(
-      typeFactory,
       inputRowType,
       aggCalls,
       aggCallNeedRetractions,
@@ -323,14 +310,12 @@ object AggregateUtil extends Enumeration {
   }
 
   def transformToBatchAggregateFunctions(
-      typeFactory: FlinkTypeFactory,
       inputRowType: RowType,
       aggregateCalls: Seq[AggregateCall],
       orderKeyIndexes: Array[Int] = null)
       : (Array[Array[Int]], Array[Array[DataType]], Array[UserDefinedFunction]) = {
 
     val aggInfos = transformToAggregateInfoList(
-      typeFactory,
       inputRowType,
       aggregateCalls,
       Array.fill(aggregateCalls.size)(false),
@@ -350,7 +335,6 @@ object AggregateUtil extends Enumeration {
   }
 
   def transformToBatchAggregateInfoList(
-      typeFactory: FlinkTypeFactory,
       inputRowType: RowType,
       aggCalls: Seq[AggregateCall],
       aggCallNeedRetractions: Array[Boolean] = null,
@@ -363,7 +347,6 @@ object AggregateUtil extends Enumeration {
     }
 
     transformToAggregateInfoList(
-      typeFactory,
       inputRowType,
       aggCalls,
       finalAggCallNeedRetractions,
@@ -377,7 +360,6 @@ object AggregateUtil extends Enumeration {
   }
 
   def transformToStreamAggregateInfoList(
-      typeFactory: FlinkTypeFactory,
       inputRowType: RowType,
       aggregateCalls: Seq[AggregateCall],
       aggCallNeedRetractions: Array[Boolean],
@@ -385,7 +367,6 @@ object AggregateUtil extends Enumeration {
       isStateBackendDataViews: Boolean,
       needDistinctInfo: Boolean = true): AggregateInfoList = {
     transformToStreamAggregateInfoList(
-      typeFactory,
       inputRowType,
       aggregateCalls,
       aggCallNeedRetractions,
@@ -396,7 +377,6 @@ object AggregateUtil extends Enumeration {
   }
 
   def transformToStreamAggregateInfoList(
-      typeFactory: FlinkTypeFactory,
       inputRowType: RowType,
       aggregateCalls: Seq[AggregateCall],
       aggCallNeedRetractions: Array[Boolean],
@@ -405,7 +385,6 @@ object AggregateUtil extends Enumeration {
       isStateBackendDataViews: Boolean,
       needDistinctInfo: Boolean): AggregateInfoList = {
     transformToAggregateInfoList(
-      typeFactory,
       inputRowType,
       aggregateCalls,
       aggCallNeedRetractions ++ Array(needInputCount), // for additional count(*)
@@ -440,7 +419,6 @@ object AggregateUtil extends Enumeration {
    *   whether need to extract distinct information
    */
   private def transformToAggregateInfoList(
-      typeFactory: FlinkTypeFactory,
       inputRowType: RowType,
       aggregateCalls: Seq[AggregateCall],
       aggCallNeedRetractions: Array[Boolean],
@@ -455,7 +433,7 @@ object AggregateUtil extends Enumeration {
     // if need inputCount, find count1 in the existed aggregate calls first,
     // if not exist, insert a new count1 and remember the index
     val (indexOfCountStar, countStarInserted, aggCalls) =
-      insertCountStarAggCall(typeFactory, needInputCount, indexOfExistingCountStar, aggregateCalls)
+      insertCountStarAggCall(needInputCount, indexOfExistingCountStar, aggregateCalls)
 
     // Step-2:
     // extract distinct information from aggregate calls
@@ -551,7 +529,7 @@ object AggregateUtil extends Enumeration {
         function.getTypeFactory,
         function,
         SqlTypeUtil.projectTypes(
-          function.getTypeFactory.buildRelNodeRowType(inputRowType),
+          FlinkTypeFactory.INSTANCE.buildRelNodeRowType(inputRowType),
           argIndexes.map(Int.box).toList),
         0,
         false),
@@ -563,10 +541,8 @@ object AggregateUtil extends Enumeration {
       definition,
       callContext,
       classOf[PlannerBase].getClassLoader,
-      // currently, aggregate functions have no access to FlinkContext
-      null,
       null
-    )
+    ) // currently, aggregate functions have no access to configuration
     val inference = udf.getTypeInference(dataTypeFactory)
 
     // enrich argument types with conversion class
@@ -723,7 +699,6 @@ object AggregateUtil extends Enumeration {
    *   (indexOfCountStar, countStarInserted, newAggCalls)
    */
   private def insertCountStarAggCall(
-      typeFactory: FlinkTypeFactory,
       needInputCount: Boolean,
       indexOfExistingCountStar: Option[Int],
       aggregateCalls: Seq[AggregateCall]): (Option[Int], Boolean, Seq[AggregateCall]) = {
@@ -756,14 +731,16 @@ object AggregateUtil extends Enumeration {
     }
 
     // count(*) not exist in aggregateCalls, insert a count(*) in it.
+    val typeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
     if (indexOfCountStar.isEmpty) {
+
       val count1 = AggregateCall.create(
         SqlStdOperatorTable.COUNT,
         false,
         false,
         new util.ArrayList[Integer](),
         -1,
-        typeFactory.createSqlType(SqlTypeName.BIGINT),
+        typeFactory.createFieldTypeFromLogicalType(new BigIntType()),
         "_$count1$_")
 
       indexOfCountStar = Some(aggregateCalls.length)
@@ -885,7 +862,7 @@ object AggregateUtil extends Enumeration {
         // ordered by type root definition
         case CHAR | VARCHAR | BOOLEAN | DECIMAL | TINYINT | SMALLINT | INTEGER | BIGINT | FLOAT |
             DOUBLE | DATE | TIME_WITHOUT_TIME_ZONE | TIMESTAMP_WITHOUT_TIME_ZONE |
-            TIMESTAMP_WITH_LOCAL_TIME_ZONE | INTERVAL_YEAR_MONTH | INTERVAL_DAY_TIME | ARRAY =>
+            TIMESTAMP_WITH_LOCAL_TIME_ZONE | INTERVAL_YEAR_MONTH | INTERVAL_DAY_TIME =>
           argTypes(0)
         case t =>
           throw new TableException(

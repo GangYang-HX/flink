@@ -64,7 +64,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -86,7 +85,7 @@ public class PendingCheckpointTest {
 
     private static final List<Execution> ACK_TASKS = new ArrayList<>();
     private static final List<ExecutionVertex> TASKS_TO_COMMIT = new ArrayList<>();
-    private static final ExecutionAttemptID ATTEMPT_ID = createExecutionAttemptId();
+    private static final ExecutionAttemptID ATTEMPT_ID = new ExecutionAttemptID();
 
     public static final OperatorID OPERATOR_ID = new OperatorID();
 
@@ -218,7 +217,12 @@ public class PendingCheckpointTest {
         assertFalse(future.isDone());
         pending.acknowledgeTask(ATTEMPT_ID, null, new CheckpointMetrics());
         assertTrue(pending.areTasksFullyAcknowledged());
-        pending.finalizeCheckpoint(new CheckpointsCleaner(), () -> {}, Executors.directExecutor());
+        pending.finalizeCheckpoint(
+                new CheckpointsCleaner(),
+                () -> {},
+                Executors.directExecutor(),
+                Collections.emptyMap(),
+                null);
         assertTrue(future.isDone());
 
         // Finalize (missing ACKs)
@@ -228,7 +232,11 @@ public class PendingCheckpointTest {
         assertFalse(future.isDone());
         try {
             pending.finalizeCheckpoint(
-                    new CheckpointsCleaner(), () -> {}, Executors.directExecutor());
+                    new CheckpointsCleaner(),
+                    () -> {},
+                    Executors.directExecutor(),
+                    Collections.emptyMap(),
+                    null);
             fail("Did not throw expected Exception");
         } catch (IllegalStateException ignored) {
             // Expected
@@ -645,8 +653,7 @@ public class PendingCheckpointTest {
                         masterStateIdentifiers,
                         props,
                         new CompletableFuture<>(),
-                        null,
-                        new CompletableFuture<>());
+                        null);
         pendingCheckpoint.setCheckpointTargetLocation(location);
         return pendingCheckpoint;
     }
@@ -720,7 +727,7 @@ public class PendingCheckpointTest {
         }
     }
 
-    private static class RecordCheckpointPlan extends DefaultCheckpointPlan {
+    public static class RecordCheckpointPlan extends DefaultCheckpointPlan {
 
         private List<ExecutionVertex> reportedFinishedOnRestoreTasks = new ArrayList<>();
 

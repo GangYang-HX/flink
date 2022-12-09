@@ -21,7 +21,7 @@ import org.apache.flink.api.common.functions.Function
 import org.apache.flink.cep.functions.PatternProcessFunction
 import org.apache.flink.cep.pattern.conditions.{IterativeCondition, RichIterativeCondition}
 import org.apache.flink.configuration.Configuration
-import org.apache.flink.table.api.TableException
+import org.apache.flink.table.api.{TableConfig, TableException}
 import org.apache.flink.table.data.{GenericRowData, RowData}
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 import org.apache.flink.table.planner.codegen.CodeGenUtils._
@@ -33,7 +33,6 @@ import org.apache.flink.table.planner.codegen.agg.AggsHandlerCodeGenerator
 import org.apache.flink.table.planner.functions.sql.FlinkSqlOperatorTable._
 import org.apache.flink.table.planner.plan.utils.AggregateUtil
 import org.apache.flink.table.planner.plan.utils.MatchUtil.AggregationPatternVariableFinder
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTypeFactory
 import org.apache.flink.table.runtime.dataview.PerKeyStateDataViewStore
 import org.apache.flink.table.runtime.generated.GeneratedFunction
 import org.apache.flink.table.runtime.operators.`match`.{IterativeConditionRunner, PatternProcessFunctionRunner}
@@ -296,7 +295,11 @@ class MatchCodeGenerator(
         }
       """.stripMargin
 
-    new GeneratedFunction[F](funcName, funcCode, ctx.references.toArray, ctx.tableConfig)
+    new GeneratedFunction[F](
+      funcName,
+      funcCode,
+      ctx.references.toArray,
+      ctx.tableConfig.getConfiguration)
   }
 
   private def generateOneRowPerMatchExpression(
@@ -371,7 +374,9 @@ class MatchCodeGenerator(
       case MATCH_PROCTIME =>
         // attribute is proctime indicator.
         // We use a null literal and generate a timestamp when we need it.
-        generateNullLiteral(new LocalZonedTimestampType(true, TimestampKind.PROCTIME, 3))
+        generateNullLiteral(
+          new LocalZonedTimestampType(true, TimestampKind.PROCTIME, 3),
+          ctx.nullCheck)
 
       case MATCH_ROWTIME =>
         generateRowtimeAccess(
@@ -645,7 +650,7 @@ class MatchCodeGenerator(
       ctx.addReusablePerRecordStatement(codeForAgg)
 
       val defaultValue = primitiveDefaultValue(singleAggResultType)
-      val codeForSingleAgg =
+      val codeForSingleAgg = if (ctx.nullCheck) {
         j"""
            |boolean $singleAggNullTerm;
            |$primitiveSingleAggResultTypeTerm $singleAggResultTerm;
@@ -658,6 +663,12 @@ class MatchCodeGenerator(
            |  $singleAggResultTerm = $defaultValue;
            |}
            |""".stripMargin
+      } else {
+        j"""
+           |$primitiveSingleAggResultTypeTerm $singleAggResultTerm =
+           |    ($boxedSingleAggResultTypeTerm) $allAggRowTerm.getField(${aggregates.size});
+           |""".stripMargin
+      }
 
       ctx.addReusablePerRecordStatement(codeForSingleAgg)
 
@@ -686,20 +697,18 @@ class MatchCodeGenerator(
         matchAgg.inputExprs.indices.map(i => s"TMP$i"))
 
       val aggInfoList = AggregateUtil.transformToStreamAggregateInfoList(
-        unwrapTypeFactory(relBuilder),
         FlinkTypeFactory.toLogicalRowType(inputRelType),
         aggCalls,
         needRetraction,
         needInputCount = false,
         isStateBackendDataViews = false,
-        needDistinctInfo = false
-      )
+        needDistinctInfo = false)
 
       val inputFieldTypes = matchAgg.inputExprs
         .map(expr => FlinkTypeFactory.toLogicalType(expr.getType))
 
       val aggsHandlerCodeGenerator = new AggsHandlerCodeGenerator(
-        new CodeGeneratorContext(new Configuration, ctx.classLoader),
+        CodeGeneratorContext(new TableConfig),
         relBuilder,
         inputFieldTypes,
         copyInputField = false).needAccumulate()

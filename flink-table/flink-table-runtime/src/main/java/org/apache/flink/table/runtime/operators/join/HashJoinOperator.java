@@ -32,9 +32,7 @@ import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.generated.GeneratedJoinCondition;
 import org.apache.flink.table.runtime.generated.GeneratedProjection;
 import org.apache.flink.table.runtime.generated.JoinCondition;
-import org.apache.flink.table.runtime.hashtable.BinaryHashPartition;
 import org.apache.flink.table.runtime.hashtable.BinaryHashTable;
-import org.apache.flink.table.runtime.hashtable.ProbeIterator;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
 import org.apache.flink.table.runtime.util.RowIterator;
@@ -56,13 +54,6 @@ import static org.apache.flink.util.Preconditions.checkState;
  * <p>The join operator implements the logic of a join operator at runtime. It uses a
  * hybrid-hash-join internally to match the records with equal key. The build side of the hash is
  * the first input of the match. It support all join type in {@link HashJoinType}.
- *
- * <p>Note: In order to solve the problem of data skew, or too much data in the hash table, the
- * fallback to sort merge join mechanism is introduced here. If some partitions are spilled to disk
- * more than three times in the process of hash join, it will fallback to sort merge join by default
- * to improve stability. In the future, we will support more flexible adaptive hash join strategy,
- * for example, in the process of building a hash table, if the size of data written to disk reaches
- * a certain threshold, fallback to sort merge join in advance.
  */
 public abstract class HashJoinOperator extends TableStreamOperator<RowData>
         implements TwoInputStreamOperator<RowData, RowData, RowData>,
@@ -74,8 +65,6 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
     private final HashJoinParameter parameter;
     private final boolean reverseJoinFunction;
     private final HashJoinType type;
-    private final boolean leftIsBuild;
-    private final SortMergeJoinFunction sortMergeJoinFunction;
 
     private transient BinaryHashTable table;
     transient Collector<RowData> collector;
@@ -86,15 +75,10 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
     private transient boolean buildEnd;
     private transient JoinCondition condition;
 
-    // Flag indicates whether fallback to sort merge join in probe phase
-    private transient boolean fallbackSMJ;
-
     HashJoinOperator(HashJoinParameter parameter) {
         this.parameter = parameter;
         this.type = parameter.type;
-        this.leftIsBuild = parameter.leftIsBuild;
         this.reverseJoinFunction = parameter.reverseJoinFunction;
-        this.sortMergeJoinFunction = parameter.sortMergeJoinFunction;
     }
 
     @Override
@@ -148,7 +132,6 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
         this.probeSideNullRow = new GenericRowData(probeSerializer.getArity());
         this.joinedRow = new JoinedRowData();
         this.buildEnd = false;
-        this.fallbackSMJ = false;
 
         getMetricGroup().gauge("memoryUsedSizeInBytes", table::getUsedMemoryInBytes);
         getMetricGroup().gauge("numSpillFiles", table::getNumSpillFiles);
@@ -194,10 +177,6 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
                     joinWithNextKey();
                 }
                 LOG.info("Finish rebuild phase.");
-
-                // switch to sort merge join process the remaining partition which recursive
-                // level > 3
-                fallbackSMJProcessPartition();
                 break;
         }
     }
@@ -235,93 +214,16 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
     @Override
     public void close() throws Exception {
         super.close();
-        closeHashTable();
-        condition.close();
-
-        // If fallback to sort merge join during hash join, also need to close the operator
-        if (fallbackSMJ) {
-            sortMergeJoinFunction.close();
-        }
-    }
-
-    private void closeHashTable() {
         if (this.table != null) {
             this.table.close();
             this.table.free();
             this.table = null;
         }
-    }
-
-    /**
-     * If here also exists partitions which spilled to disk more than three time when hash join end,
-     * means that the key in these partitions is very skewed, so fallback to sort merge join
-     * algorithm to process it.
-     */
-    private void fallbackSMJProcessPartition() throws Exception {
-        if (!table.getPartitionsPendingForSMJ().isEmpty()) {
-            // release memory to MemoryManager first that is used to sort merge join operator
-            table.releaseMemoryCacheForSMJ();
-            // initialize sort merge join operator
-            LOG.info("Fallback to sort merge join to process spilled partitions.");
-            initialSortMergeJoinFunction();
-            fallbackSMJ = true;
-
-            for (BinaryHashPartition p : table.getPartitionsPendingForSMJ()) {
-                // process build side
-                RowIterator<BinaryRowData> buildSideIter =
-                        table.getSpilledPartitionBuildSideIter(p);
-                while (buildSideIter.advanceNext()) {
-                    processSortMergeJoinElement1(buildSideIter.getRow());
-                }
-
-                // process probe side
-                ProbeIterator probeIter = table.getSpilledPartitionProbeSideIter(p);
-                BinaryRowData probeNext;
-                while ((probeNext = probeIter.next()) != null) {
-                    processSortMergeJoinElement2(probeNext);
-                }
-            }
-
-            // close the HashTable
-            closeHashTable();
-
-            // finish build and probe
-            sortMergeJoinFunction.endInput(1);
-            sortMergeJoinFunction.endInput(2);
-            LOG.info("Finish sort merge join for spilled partitions.");
-        }
-    }
-
-    private void initialSortMergeJoinFunction() throws Exception {
-        sortMergeJoinFunction.open(
-                true,
-                this.getContainingTask(),
-                this.getOperatorConfig(),
-                (StreamRecordCollector) this.collector,
-                this.computeMemorySize(),
-                this.getRuntimeContext(),
-                this.getMetricGroup());
-    }
-
-    private void processSortMergeJoinElement1(RowData rowData) throws Exception {
-        if (leftIsBuild) {
-            sortMergeJoinFunction.processElement1(rowData);
-        } else {
-            sortMergeJoinFunction.processElement2(rowData);
-        }
-    }
-
-    private void processSortMergeJoinElement2(RowData rowData) throws Exception {
-        if (leftIsBuild) {
-            sortMergeJoinFunction.processElement2(rowData);
-        } else {
-            sortMergeJoinFunction.processElement1(rowData);
-        }
+        condition.close();
     }
 
     public static HashJoinOperator newHashJoinOperator(
             HashJoinType type,
-            boolean leftIsBuild,
             GeneratedJoinCondition condFuncCode,
             boolean reverseJoinFunction,
             boolean[] filterNullKeys,
@@ -331,12 +233,10 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
             int buildRowSize,
             long buildRowCount,
             long probeRowCount,
-            RowType keyType,
-            SortMergeJoinFunction sortMergeJoinFunction) {
+            RowType keyType) {
         HashJoinParameter parameter =
                 new HashJoinParameter(
                         type,
-                        leftIsBuild,
                         condFuncCode,
                         reverseJoinFunction,
                         filterNullKeys,
@@ -346,8 +246,7 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
                         buildRowSize,
                         buildRowCount,
                         probeRowCount,
-                        keyType,
-                        sortMergeJoinFunction);
+                        keyType);
         switch (type) {
             case INNER:
                 return new InnerHashJoinOperator(parameter);
@@ -371,7 +270,6 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
 
     static class HashJoinParameter implements Serializable {
         HashJoinType type;
-        boolean leftIsBuild;
         GeneratedJoinCondition condFuncCode;
         boolean reverseJoinFunction;
         boolean[] filterNullKeys;
@@ -382,11 +280,9 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
         long buildRowCount;
         long probeRowCount;
         RowType keyType;
-        SortMergeJoinFunction sortMergeJoinFunction;
 
         HashJoinParameter(
                 HashJoinType type,
-                boolean leftIsBuild,
                 GeneratedJoinCondition condFuncCode,
                 boolean reverseJoinFunction,
                 boolean[] filterNullKeys,
@@ -396,10 +292,8 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
                 int buildRowSize,
                 long buildRowCount,
                 long probeRowCount,
-                RowType keyType,
-                SortMergeJoinFunction sortMergeJoinFunction) {
+                RowType keyType) {
             this.type = type;
-            this.leftIsBuild = leftIsBuild;
             this.condFuncCode = condFuncCode;
             this.reverseJoinFunction = reverseJoinFunction;
             this.filterNullKeys = filterNullKeys;
@@ -410,7 +304,6 @@ public abstract class HashJoinOperator extends TableStreamOperator<RowData>
             this.buildRowCount = buildRowCount;
             this.probeRowCount = probeRowCount;
             this.keyType = keyType;
-            this.sortMergeJoinFunction = sortMergeJoinFunction;
         }
     }
 

@@ -19,9 +19,9 @@ package org.apache.flink.streaming.connectors.kinesis.util;
 
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.streaming.runtime.operators.windowing.TimestampedValue;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 
-import org.junit.ClassRule;
+import org.hamcrest.Matchers;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -31,14 +31,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /** Test for {@link RecordEmitter}. */
 public class RecordEmitterTest {
-
-    @ClassRule
-    public static final TestExecutorResource<ExecutorService> EXECUTOR_RESOURCE =
-            new TestExecutorResource<>(() -> Executors.newSingleThreadExecutor());
 
     private class TestRecordEmitter extends RecordEmitter<TimestampedValue> {
 
@@ -73,15 +67,17 @@ public class RecordEmitterTest {
 
         queue1.put(two);
 
-        EXECUTOR_RESOURCE.getExecutor().submit(emitter);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(emitter);
 
         Deadline dl = Deadline.fromNow(Duration.ofSeconds(10));
         while (emitter.results.size() != 4 && dl.hasTimeLeft()) {
             Thread.sleep(10);
         }
         emitter.stop();
+        executor.shutdownNow();
 
-        assertThat(emitter.results).contains(one, five, two, ten);
+        Assert.assertThat(emitter.results, Matchers.contains(one, five, two, ten));
     }
 
     @Test
@@ -113,14 +109,15 @@ public class RecordEmitterTest {
         emitter.setMaxLookaheadMillis(1);
         emitter.setCurrentWatermark(5);
 
-        EXECUTOR_RESOURCE.getExecutor().submit(emitter);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(emitter);
         try {
             // emits one record past the limit
             Deadline dl = Deadline.fromNow(Duration.ofSeconds(10));
             while (emitter.results.size() != 4 && dl.hasTimeLeft()) {
                 Thread.sleep(10);
             }
-            assertThat(emitter.results).contains(one, two, three, ten);
+            Assert.assertThat(emitter.results, Matchers.contains(one, two, three, ten));
 
             // advance watermark, emits remaining record from queue0
             emitter.setCurrentWatermark(10);
@@ -128,9 +125,10 @@ public class RecordEmitterTest {
             while (emitter.results.size() != 5 && dl.hasTimeLeft()) {
                 Thread.sleep(10);
             }
-            assertThat(emitter.results).contains(one, two, three, ten, eleven);
+            Assert.assertThat(emitter.results, Matchers.contains(one, two, three, ten, eleven));
         } finally {
             emitter.stop();
+            executor.shutdownNow();
         }
     }
 }

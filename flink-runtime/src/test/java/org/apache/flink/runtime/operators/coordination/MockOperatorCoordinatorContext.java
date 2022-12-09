@@ -78,11 +78,6 @@ public class MockOperatorCoordinatorContext implements OperatorCoordinator.Conte
         return coordinatorStore;
     }
 
-    @Override
-    public boolean isConcurrentExecutionAttemptsSupported() {
-        return false;
-    }
-
     // -------------------------------
 
     public boolean isJobFailed() {

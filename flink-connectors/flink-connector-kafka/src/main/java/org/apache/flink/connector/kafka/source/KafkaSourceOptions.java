@@ -38,10 +38,25 @@ public class KafkaSourceOptions {
     public static final ConfigOption<Long> PARTITION_DISCOVERY_INTERVAL_MS =
             ConfigOptions.key("partition.discovery.interval.ms")
                     .longType()
-                    .noDefaultValue()
+                    .defaultValue(120000L)
                     .withDescription(
                             "The interval in milliseconds for the Kafka source to discover "
                                     + "the new partitions. A non-positive value disables the partition discovery.");
+
+    public static final ConfigOption<Long> PARTITION_DISCOVERY_TIMEOUT_MS =
+            ConfigOptions.key("partition.discovery.timeout.ms")
+                    .longType()
+                    .defaultValue(30000L)
+                    .withDescription(
+                            "The timeout in milliseconds for the Kafka source to discover "
+                                    + "the new partitions.");
+
+    public static final ConfigOption<Integer> PARTITION_DISCOVERY_RETRIES =
+            ConfigOptions.key("partition.discovery.retries")
+                    .intType()
+                    .defaultValue(15)
+                    .withDescription(
+                            "The retry times to discover new partition when encounter exception.");
 
     public static final ConfigOption<Boolean> REGISTER_KAFKA_CONSUMER_METRICS =
             ConfigOptions.key("register.consumer.metrics")

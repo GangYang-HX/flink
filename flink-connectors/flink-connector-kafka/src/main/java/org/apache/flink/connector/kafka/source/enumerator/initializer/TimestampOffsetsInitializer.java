@@ -20,10 +20,13 @@ package org.apache.flink.connector.kafka.source.enumerator.initializer;
 
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * An implementation of {@link OffsetsInitializer} to initialize the offsets based on a timestamp.
@@ -31,6 +34,7 @@ import java.util.Map;
  * <p>Package private and should be instantiated via {@link OffsetsInitializer}.
  */
 class TimestampOffsetsInitializer implements OffsetsInitializer {
+    public static final Logger LOG = LoggerFactory.getLogger(TimestampOffsetsInitializer.class);
     private static final long serialVersionUID = 2932230571773627233L;
     private final long startingTimestamp;
 
@@ -57,7 +61,14 @@ class TimestampOffsetsInitializer implements OffsetsInitializer {
                 .offsetsForTimes(startingTimestamps)
                 .forEach(
                         (tp, offsetMetadata) -> {
-                            if (offsetMetadata != null) {
+                            LOG.info(
+                                    "tp info {} time:{}, offsetMetadata {}",
+                                    tp,
+                                    startingTimestamp,
+                                    offsetMetadata);
+                            if (offsetMetadata != null
+                                    && offsetMetadata.timestamp() != 0
+                                    && Objects.nonNull(offsetMetadata.leaderEpoch())) {
                                 initialOffsets.put(tp, offsetMetadata.offset());
                             } else {
                                 // The timestamp does not exist in the partition yet, we will just

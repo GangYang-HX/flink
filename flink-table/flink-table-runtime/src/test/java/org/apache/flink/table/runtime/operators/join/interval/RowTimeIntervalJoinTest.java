@@ -35,7 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.apache.flink.table.runtime.util.StreamRecordUtils.insertRecord;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test for {@link RowTimeIntervalJoin}. */
 public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
@@ -64,19 +64,19 @@ public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
         // Test late data.
         testHarness.processElement1(insertRecord(1L, "k1"));
         // Though (1L, "k1") is actually late, it will also be cached.
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(1);
+        assertEquals(1, testHarness.numEventTimeTimers());
 
         testHarness.processElement1(insertRecord(2L, "k1"));
         testHarness.processElement2(insertRecord(2L, "k1"));
 
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(2);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(4);
+        assertEquals(2, testHarness.numEventTimeTimers());
+        assertEquals(4, testHarness.numKeyedStateEntries());
 
         testHarness.processElement1(insertRecord(5L, "k1"));
         testHarness.processElement2(insertRecord(15L, "k1"));
         testHarness.processWatermark1(new Watermark(20));
         testHarness.processWatermark2(new Watermark(20));
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(4);
+        assertEquals(4, testHarness.numKeyedStateEntries());
 
         testHarness.processElement1(insertRecord(35L, "k1"));
 
@@ -87,12 +87,12 @@ public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
 
         testHarness.processElement1(insertRecord(40L, "k2"));
         testHarness.processElement2(insertRecord(39L, "k2"));
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(6);
+        assertEquals(6, testHarness.numKeyedStateEntries());
 
         // The right row with timestamp = 35 will be removed here.
         testHarness.processWatermark1(new Watermark(61));
         testHarness.processWatermark2(new Watermark(61));
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(4);
+        assertEquals(4, testHarness.numKeyedStateEntries());
 
         List<Object> expectedOutput = new ArrayList<>();
         expectedOutput.add(new Watermark(-19));
@@ -128,7 +128,7 @@ public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
 
         // This row will not be cached.
         testHarness.processElement2(insertRecord(2L, "k1"));
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
+        assertEquals(0, testHarness.numKeyedStateEntries());
 
         testHarness.processWatermark1(new Watermark(2));
         testHarness.processWatermark2(new Watermark(2));
@@ -142,18 +142,18 @@ public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
 
         // Test for -7 boundary (13 - 7 = 6).
         testHarness.processElement1(insertRecord(6L, "k1"));
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(4);
+        assertEquals(4, testHarness.numKeyedStateEntries());
 
         // Trigger the left timer with timestamp  8.
         // The row with timestamp = 13 will be removed here (13 < 10 + 7).
         testHarness.processWatermark1(new Watermark(10));
         testHarness.processWatermark2(new Watermark(10));
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(2);
+        assertEquals(2, testHarness.numKeyedStateEntries());
 
         // Clear the states.
         testHarness.processWatermark1(new Watermark(18));
         testHarness.processWatermark2(new Watermark(18));
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
+        assertEquals(0, testHarness.numKeyedStateEntries());
 
         List<Object> expectedOutput = new ArrayList<>();
         expectedOutput.add(new Watermark(-9));
@@ -180,28 +180,28 @@ public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
 
         testHarness.processElement1(insertRecord(1L, "k1"));
         testHarness.processElement2(insertRecord(1L, "k2"));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(2);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(4);
+        assertEquals(2, testHarness.numEventTimeTimers());
+        assertEquals(4, testHarness.numKeyedStateEntries());
 
         // The left row with timestamp = 1 will be padded and removed (14=1+5+1+((5+9)/2)).
         testHarness.processWatermark1(new Watermark(14));
         testHarness.processWatermark2(new Watermark(14));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(1);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(2);
+        assertEquals(1, testHarness.numEventTimeTimers());
+        assertEquals(2, testHarness.numKeyedStateEntries());
 
         // The right row with timestamp = 1 will be removed (18=1+9+1+((5+9)/2)).
         testHarness.processWatermark1(new Watermark(18));
         testHarness.processWatermark2(new Watermark(18));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(0);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
+        assertEquals(0, testHarness.numEventTimeTimers());
+        assertEquals(0, testHarness.numKeyedStateEntries());
 
         testHarness.processElement1(insertRecord(2L, "k1"));
         testHarness.processElement2(insertRecord(2L, "k2"));
         // The late rows with timestamp = 2 will not be cached, but a null padding result for the
         // left
         // row will be emitted.
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(0);
+        assertEquals(0, testHarness.numKeyedStateEntries());
+        assertEquals(0, testHarness.numEventTimeTimers());
 
         // Make sure the common (inner) join can be performed.
         testHarness.processElement1(insertRecord(19L, "k1"));
@@ -250,28 +250,28 @@ public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
 
         testHarness.processElement1(insertRecord(1L, "k1"));
         testHarness.processElement2(insertRecord(1L, "k2"));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(2);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(4);
+        assertEquals(2, testHarness.numEventTimeTimers());
+        assertEquals(4, testHarness.numKeyedStateEntries());
 
         // The left row with timestamp = 1 will be removed (14=1+5+1+((5+9)/2)).
         testHarness.processWatermark1(new Watermark(14));
         testHarness.processWatermark2(new Watermark(14));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(1);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(2);
+        assertEquals(1, testHarness.numEventTimeTimers());
+        assertEquals(2, testHarness.numKeyedStateEntries());
 
         // The right row with timestamp = 1 will be padded and removed (18=1+9+1+((5+9)/2)).
         testHarness.processWatermark1(new Watermark(18));
         testHarness.processWatermark2(new Watermark(18));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(0);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
+        assertEquals(0, testHarness.numEventTimeTimers());
+        assertEquals(0, testHarness.numKeyedStateEntries());
 
         testHarness.processElement1(insertRecord(2L, "k1"));
         testHarness.processElement2(insertRecord(2L, "k2"));
         // The late rows with timestamp = 2 will not be cached, but a null padding result for the
         // right
         // row will be emitted.
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(0);
+        assertEquals(0, testHarness.numKeyedStateEntries());
+        assertEquals(0, testHarness.numEventTimeTimers());
 
         // Make sure the common (inner) join can be performed.
         testHarness.processElement1(insertRecord(19L, "k1"));
@@ -321,28 +321,28 @@ public class RowTimeIntervalJoinTest extends TimeIntervalStreamJoinTestBase {
 
         testHarness.processElement1(insertRecord(1L, "k1"));
         testHarness.processElement2(insertRecord(1L, "k2"));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(2);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(4);
+        assertEquals(2, testHarness.numEventTimeTimers());
+        assertEquals(4, testHarness.numKeyedStateEntries());
 
         // The left row with timestamp = 1 will be padded and removed (14=1+5+1+((5+9)/2)).
         testHarness.processWatermark1(new Watermark(14));
         testHarness.processWatermark2(new Watermark(14));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(1);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(2);
+        assertEquals(1, testHarness.numEventTimeTimers());
+        assertEquals(2, testHarness.numKeyedStateEntries());
 
         // The right row with timestamp = 1 will be padded and removed (18=1+9+1+((5+9)/2)).
         testHarness.processWatermark1(new Watermark(18));
         testHarness.processWatermark2(new Watermark(18));
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(0);
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
+        assertEquals(0, testHarness.numEventTimeTimers());
+        assertEquals(0, testHarness.numKeyedStateEntries());
 
         testHarness.processElement1(insertRecord(2L, "k1"));
         testHarness.processElement2(insertRecord(2L, "k2"));
         // The late rows with timestamp = 2 will not be cached, but a null padding result for the
         // right
         // row will be emitted.
-        assertThat(testHarness.numKeyedStateEntries()).isEqualTo(0);
-        assertThat(testHarness.numEventTimeTimers()).isEqualTo(0);
+        assertEquals(0, testHarness.numKeyedStateEntries());
+        assertEquals(0, testHarness.numEventTimeTimers());
 
         // Make sure the common (inner) join can be performed.
         testHarness.processElement1(insertRecord(19L, "k1"));

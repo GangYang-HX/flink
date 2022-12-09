@@ -1,0 +1,85 @@
+jobmanager.memory.process.size: 4096m
+taskmanager.memory.process.size: 8192m
+taskmanager.memory.managed.fraction: 0.3
+taskmanager.numberOfTaskSlots: 2
+parallelism.default: 4
+
+
+# optimize
+pipeline.use-stream-graph-hasher-v3: true
+execution.load-based-channel-selector.enabled: true
+execution.checkpointing.auto-adjust-max-parallelism: true
+table.optimizer.distinct-agg.split.enabled: true
+pipeline.object-reuse: true
+state.backend.rocksdb.memory.partitioned-index-filters: true
+state.backend.rocksdb.compression.type: lz4
+
+restart-strategy: none
+
+state.backend: filesystem
+execution.checkpointing.interval: 5min
+execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+execution.checkpointing.max-concurrent-checkpoints: 1
+execution.checkpointing.min-pause: 30s
+execution.checkpointing.mode: AT_LEAST_ONCE
+execution.checkpointing.timeout: 5min
+execution.checkpointing.tolerable-failed-checkpoints: 102400
+
+taskmanager.memory.network.fraction: 0.1
+taskmanager.memory.network.min: 128mb
+taskmanager.memory.network.max: 1gb
+akka.ask.timeout: 5min
+akka.framesize: 1205725860
+
+security.kerberos.login.use-ticket-cache: true
+security.kerberos.krb5-conf.path: /etc/krb5.conf
+security.kerberos.login.keytab: /etc/security/keytabs/flink.keytab
+security.kerberos.login.principal: flink@BILIBILI.CO
+
+# K8s Configuration
+#==============================================================================
+kubernetes.container.image: hub.bilibili.co/public/flink-1.15:$CI_COMMIT_TAG
+kubernetes.container.image.pull-policy: IfNotPresent
+kubernetes.rest-service.exposed.type: NodePort
+kubernetes.hostnetwork.enabled: true
+kubernetes.service-account: flink-cluster-sa
+kubernetes.config.file: /data/app/excalibur-server/config/native-k8s/k8s-config.yaml
+kubernetes.hadoop.conf.config-map.name: flink-hadoop-conf
+kubernetes.namespace: flink-cluster
+kubernetes.dns.policy: Default
+kubernetes.host.aliases: apiserver.bilibili.co:10.154.200.6
+env.hadoop.conf.dir: /opt/hadoop/conf
+
+env.java.opts: -XX:+UseG1GC -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8
+
+containerized.master.env.KUBERNETES_SERVICE_HOST: apiserver.bilibili.co
+containerized.master.env.KUBERNETES_SERVICE_PORT: 8443
+containerized.taskmanager.env.KUBERNETES_SERVICE_HOST: apiserver.bilibili.co
+containerized.taskmanager.env.KUBERNETES_SERVICE_PORT: 8443
+
+containerized.master.env.LogCollectorConf: /opt/flink/flink-logagent-app.conf
+containerized.taskmanager.env.LogCollectorConf: /opt/flink/flink-logagent-app.conf
+
+
+metrics.reporters: kafkaReporter,prom
+metrics.reporter.kafkaReporter.factory.class: org.apache.flink.metrics.kafka.KafkaReporterFactory
+metrics.reporter.kafkaReporter.interval: 30 SECONDS
+metrics.reporter.kafkaReporter.labels: saber_job_name=test;job_owner=test;queue_name=test
+metrics.reporter.kafkaReporter.bootstrapServersConfig: 10.70.141.20:9092,10.70.141.21:9092,10.70.141.22:9092
+metrics.reporter.kafkaReporter.topicName: r_ods.ods_flink_metrics_kafka
+metrics.reporter.kafkaReporter.retries: 5
+metrics.reporter.kafkaReporter.acks: 1
+metrics.reporter.kafkaReporter.maxInFlightRequestsPerConnection: 5
+metrics.reporter.kafkaReporter.batchSize: 16384
+metrics.reporter.kafkaReporter.linerMs: 500
+metrics.reporter.kafkaReporter.bufferMemory: 33554432
+metrics.reporter.kafkaReporter.maxLabelValueLen: 500
+metrics.reporter.kafkaReporter.requestTimeoutMs: 30000
+metrics.reporter.kafkaReporter.retryBackoffMs: 1000
+metrics.reporter.prom.class: org.apache.flink.metrics.prometheus.PrometheusReporter
+metrics.reporter.prom.port: 9250-9280
+
+
+kubernetes.network.proxy.enable: false
+kubernetes.jobmanager.node-selector: app:flink-streaming
+kubernetes.taskmanager.node-selector: app:flink-streaming

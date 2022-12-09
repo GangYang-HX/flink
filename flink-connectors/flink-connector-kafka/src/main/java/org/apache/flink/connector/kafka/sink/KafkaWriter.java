@@ -71,7 +71,7 @@ import static org.apache.flink.util.Preconditions.checkState;
  *
  * @param <IN> The type of the input elements.
  */
-class KafkaWriter<IN>
+public class KafkaWriter<IN>
         implements StatefulSink.StatefulSinkWriter<IN, KafkaWriterState>,
                 TwoPhaseCommittingSink.PrecommittingSinkWriter<IN, KafkaCommittable> {
 
@@ -83,28 +83,28 @@ class KafkaWriter<IN>
     private static final String KEY_REGISTER_METRICS = "register.producer.metrics";
     private static final String KAFKA_PRODUCER_METRICS = "producer-metrics";
 
-    private final DeliveryGuarantee deliveryGuarantee;
-    private final Properties kafkaProducerConfig;
-    private final String transactionalIdPrefix;
-    private final KafkaRecordSerializationSchema<IN> recordSerializer;
-    private final Callback deliveryCallback;
-    private final KafkaRecordSerializationSchema.KafkaSinkContext kafkaSinkContext;
+    protected final DeliveryGuarantee deliveryGuarantee;
+    protected final Properties kafkaProducerConfig;
+    protected final String transactionalIdPrefix;
+    protected final KafkaRecordSerializationSchema<IN> recordSerializer;
+    protected final Callback deliveryCallback;
+    protected final KafkaRecordSerializationSchema.KafkaSinkContext kafkaSinkContext;
 
     private final Map<String, KafkaMetricMutableWrapper> previouslyCreatedMetrics = new HashMap<>();
-    private final SinkWriterMetricGroup metricGroup;
-    private final boolean disabledMetrics;
-    private final Counter numRecordsSendCounter;
-    private final Counter numBytesSendCounter;
+    protected final SinkWriterMetricGroup metricGroup;
+    protected final boolean disabledMetrics;
+    public final Counter numRecordsSendCounter;
+    protected final Counter numBytesSendCounter;
     // deprecated, use numRecordsSendErrorsCounter instead.
-    @Deprecated private final Counter numRecordsOutErrorsCounter;
-    private final Counter numRecordsSendErrorsCounter;
-    private final ProcessingTimeService timeService;
+    @Deprecated protected final Counter numRecordsOutErrorsCounter;
+    protected final Counter numRecordsSendErrorsCounter;
+    protected final ProcessingTimeService timeService;
 
     // Number of outgoing bytes at the latest metric sync
     private long latestOutgoingByteTotal;
     private Metric byteOutMetric;
-    private FlinkKafkaInternalProducer<byte[], byte[]> currentProducer;
-    private final KafkaWriterState kafkaWriterState;
+    public FlinkKafkaInternalProducer<byte[], byte[]> currentProducer;
+    protected final KafkaWriterState kafkaWriterState;
     // producer pool only used for exactly once
     private final Deque<FlinkKafkaInternalProducer<byte[], byte[]>> producerPool =
             new ArrayDeque<>();
@@ -129,7 +129,7 @@ class KafkaWriter<IN>
      * @param schemaContext context used to initialize the {@link KafkaRecordSerializationSchema}
      * @param recoveredStates state from an previous execution which was covered
      */
-    KafkaWriter(
+    protected KafkaWriter(
             DeliveryGuarantee deliveryGuarantee,
             Properties kafkaProducerConfig,
             String transactionalIdPrefix,
@@ -175,6 +175,17 @@ class KafkaWriter<IN>
                 sinkInitContext
                         .getRestoredCheckpointId()
                         .orElse(CheckpointIDCounter.INITIAL_CHECKPOINT_ID - 1);
+
+        // TODO 可以不侵入这个逻辑吗？
+        if (!Boolean.parseBoolean(
+                kafkaProducerConfig.getOrDefault("isDiversion", "false").toString())) {
+            initProducerByDeliveryGuarantee(deliveryGuarantee, recoveredStates);
+            initFlinkMetrics();
+        }
+    }
+
+    private void initProducerByDeliveryGuarantee(
+            DeliveryGuarantee deliveryGuarantee, Collection<KafkaWriterState> recoveredStates) {
         if (deliveryGuarantee == DeliveryGuarantee.EXACTLY_ONCE) {
             abortLingeringTransactions(
                     checkNotNull(recoveredStates, "recoveredStates"), lastCheckpointId + 1);
@@ -189,12 +200,10 @@ class KafkaWriter<IN>
             throw new UnsupportedOperationException(
                     "Unsupported Kafka writer semantic " + this.deliveryGuarantee);
         }
-
-        initFlinkMetrics();
     }
 
     @Override
-    public void write(IN element, Context context) throws IOException {
+    public void write(IN element, Context context) throws IOException, InterruptedException {
         final ProducerRecord<byte[], byte[]> record =
                 recordSerializer.serialize(element, kafkaSinkContext, context.timestamp());
         currentProducer.send(record, deliveryCallback);
@@ -265,7 +274,7 @@ class KafkaWriter<IN>
         return currentProducer;
     }
 
-    void abortLingeringTransactions(
+    protected void abortLingeringTransactions(
             Collection<KafkaWriterState> recoveredStates, long startCheckpointId) {
         List<String> prefixesToAbort = Lists.newArrayList(transactionalIdPrefix);
 
@@ -299,7 +308,8 @@ class KafkaWriter<IN>
      * <p>Ensures that all transaction ids in between lastCheckpointId and checkpointId are
      * initialized.
      */
-    private FlinkKafkaInternalProducer<byte[], byte[]> getTransactionalProducer(long checkpointId) {
+    protected FlinkKafkaInternalProducer<byte[], byte[]> getTransactionalProducer(
+            long checkpointId) {
         checkState(
                 checkpointId > lastCheckpointId,
                 "Expected %s > %s",

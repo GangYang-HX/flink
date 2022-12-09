@@ -63,7 +63,7 @@ public class SerializedThrowable extends Exception implements Serializable {
     }
 
     private SerializedThrowable(Throwable exception, Set<Throwable> alreadySeen) {
-        super(getClassNameAndMessageOrError(exception));
+        super(getMessageOrError(exception));
 
         if (!(exception instanceof SerializedThrowable)) {
             // serialize and memoize the original message
@@ -189,14 +189,9 @@ public class SerializedThrowable extends Exception implements Serializable {
         }
     }
 
-    private static String getClassNameAndMessageOrError(Throwable error) {
+    private static String getMessageOrError(Throwable error) {
         try {
-            String className = error.getClass().getName();
-            String message = error.getMessage();
-            if (message != null) {
-                return String.format("%s: %s", className, message);
-            }
-            return className;
+            return error.getMessage();
         } catch (Throwable t) {
             return "(failed to get message)";
         }

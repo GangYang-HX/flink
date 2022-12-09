@@ -32,6 +32,7 @@ import org.apache.flink.streaming.connectors.kinesis.testutils.TestUtils.TestCon
 import com.amazonaws.http.timers.client.SdkInterruptedException;
 import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
 import io.netty.handler.timeout.ReadTimeoutException;
+import org.hamcrest.Matchers;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -63,7 +64,10 @@ import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequen
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.emptyShard;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.singletonShard;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.TestUtils.createDummyStreamShardHandle;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -105,10 +109,9 @@ public class FanOutRecordPublisherTest {
                         kinesis, StartingPosition.continueFromSequenceNumber(SEQUENCE_NUMBER));
         publisher.run(new TestConsumer());
 
-        assertThat(kinesis.getStartingPositionForSubscription(0).sequenceNumber())
-                .isEqualTo(DUMMY_SEQUENCE);
-        assertThat(kinesis.getStartingPositionForSubscription(0).type())
-                .isEqualTo(AFTER_SEQUENCE_NUMBER);
+        assertEquals(
+                DUMMY_SEQUENCE, kinesis.getStartingPositionForSubscription(0).sequenceNumber());
+        assertEquals(AFTER_SEQUENCE_NUMBER, kinesis.getStartingPositionForSubscription(0).type());
     }
 
     @Test
@@ -121,10 +124,9 @@ public class FanOutRecordPublisherTest {
                         StartingPosition.restartFromSequenceNumber(AGGREGATED_SEQUENCE_NUMBER));
         publisher.run(new TestConsumer());
 
-        assertThat(kinesis.getStartingPositionForSubscription(0).sequenceNumber())
-                .isEqualTo(DUMMY_SEQUENCE);
-        assertThat(kinesis.getStartingPositionForSubscription(0).type())
-                .isEqualTo(AT_SEQUENCE_NUMBER);
+        assertEquals(
+                DUMMY_SEQUENCE, kinesis.getStartingPositionForSubscription(0).sequenceNumber());
+        assertEquals(AT_SEQUENCE_NUMBER, kinesis.getStartingPositionForSubscription(0).type());
     }
 
     @Test
@@ -134,8 +136,8 @@ public class FanOutRecordPublisherTest {
         RecordPublisher publisher = createRecordPublisher(kinesis, latest());
         publisher.run(new TestConsumer());
 
-        assertThat(kinesis.getStartingPositionForSubscription(0).sequenceNumber()).isNull();
-        assertThat(kinesis.getStartingPositionForSubscription(0).type()).isEqualTo(LATEST);
+        assertNull(kinesis.getStartingPositionForSubscription(0).sequenceNumber());
+        assertEquals(LATEST, kinesis.getStartingPositionForSubscription(0).type());
     }
 
     @Test
@@ -149,8 +151,8 @@ public class FanOutRecordPublisherTest {
                                 SENTINEL_EARLIEST_SEQUENCE_NUM.get()));
         publisher.run(new TestConsumer());
 
-        assertThat(kinesis.getStartingPositionForSubscription(0).sequenceNumber()).isNull();
-        assertThat(kinesis.getStartingPositionForSubscription(0).type()).isEqualTo(TRIM_HORIZON);
+        assertNull(kinesis.getStartingPositionForSubscription(0).sequenceNumber());
+        assertEquals(TRIM_HORIZON, kinesis.getStartingPositionForSubscription(0).type());
     }
 
     @Test
@@ -162,9 +164,8 @@ public class FanOutRecordPublisherTest {
                 createRecordPublisher(kinesis, StartingPosition.fromTimestamp(now));
         publisher.run(new TestConsumer());
 
-        assertThat(kinesis.getStartingPositionForSubscription(0).timestamp())
-                .isEqualTo(now.toInstant());
-        assertThat(kinesis.getStartingPositionForSubscription(0).type()).isEqualTo(AT_TIMESTAMP);
+        assertEquals(now.toInstant(), kinesis.getStartingPositionForSubscription(0).timestamp());
+        assertEquals(AT_TIMESTAMP, kinesis.getStartingPositionForSubscription(0).type());
     }
 
     @Test
@@ -187,11 +188,11 @@ public class FanOutRecordPublisherTest {
         publisher.run(consumer);
 
         UserRecord actual = consumer.getRecordBatches().get(0).getDeaggregatedRecords().get(0);
-        assertThat(actual.isAggregated()).isFalse();
-        assertThat(actual.getApproximateArrivalTimestamp()).isEqualTo(now);
-        assertThat(actual.getSequenceNumber()).isEqualTo("sn");
-        assertThat(actual.getPartitionKey()).isEqualTo("pk");
-        assertThat(toByteArray(actual.getData())).isEqualTo(data);
+        assertFalse(actual.isAggregated());
+        assertEquals(now, actual.getApproximateArrivalTimestamp());
+        assertEquals("sn", actual.getSequenceNumber());
+        assertEquals("pk", actual.getPartitionKey());
+        assertThat(toByteArray(actual.getData()), Matchers.equalTo(data));
     }
 
     @Test
@@ -230,10 +231,10 @@ public class FanOutRecordPublisherTest {
         RecordPublisher recordPublisher = createRecordPublisher(kinesis);
         TestConsumer consumer = new TestConsumer();
 
-        assertThat(recordPublisher.run(consumer)).isEqualTo(COMPLETE);
+        assertEquals(COMPLETE, recordPublisher.run(consumer));
 
         // Will exit on the first subscription
-        assertThat(kinesis.getNumberOfSubscribeToShardInvocations()).isEqualTo(1);
+        assertEquals(1, kinesis.getNumberOfSubscribeToShardInvocations());
     }
 
     @Test
@@ -249,11 +250,11 @@ public class FanOutRecordPublisherTest {
 
         // An exception is thrown after the 5th record in each subscription, therefore we expect to
         // receive 5 records
-        assertThat(consumer.getRecordBatches()).hasSize(5);
-        assertThat(kinesis.getNumberOfSubscribeToShardInvocations()).isEqualTo(1);
+        assertEquals(5, consumer.getRecordBatches().size());
+        assertEquals(1, kinesis.getNumberOfSubscribeToShardInvocations());
 
         // INCOMPLETE is returned to indicate the shard is not complete
-        assertThat(result).isEqualTo(INCOMPLETE);
+        assertEquals(INCOMPLETE, result);
     }
 
     @Test
@@ -442,12 +443,11 @@ public class FanOutRecordPublisherTest {
         List<UserRecord> userRecords = flattenToUserRecords(consumer.getRecordBatches());
 
         // Should have received 10 * 12 = 120 records
-        assertThat(userRecords).hasSize(120);
+        assertEquals(120, userRecords.size());
 
         int expectedSequenceNumber = 1;
         for (UserRecord record : userRecords) {
-            assertThat(record.getSequenceNumber())
-                    .isEqualTo(String.valueOf(expectedSequenceNumber++));
+            assertEquals(String.valueOf(expectedSequenceNumber++), record.getSequenceNumber());
         }
     }
 
@@ -473,13 +473,13 @@ public class FanOutRecordPublisherTest {
         List<UserRecord> userRecords = flattenToUserRecords(consumer.getRecordBatches());
 
         // Should have received 10 * 12 * 5 = 600 records
-        assertThat(userRecords).hasSize(600);
+        assertEquals(600, userRecords.size());
 
         int sequence = 1;
         long subsequence = 0;
         for (UserRecord userRecord : userRecords) {
-            assertThat(userRecord.getSequenceNumber()).isEqualTo(String.valueOf(sequence));
-            assertThat(userRecord.getSubSequenceNumber()).isEqualTo(subsequence++);
+            assertEquals(String.valueOf(sequence), userRecord.getSequenceNumber());
+            assertEquals(subsequence++, userRecord.getSubSequenceNumber());
 
             if (subsequence == 5) {
                 sequence++;
@@ -499,7 +499,7 @@ public class FanOutRecordPublisherTest {
                         kinesis, StartingPosition.continueFromSequenceNumber(SEQUENCE_NUMBER));
         RecordPublisherRunResult actual = publisher.run(new TestConsumer());
 
-        assertThat(actual).isEqualTo(CANCELLED);
+        assertEquals(CANCELLED, actual);
     }
 
     private List<UserRecord> flattenToUserRecords(final List<RecordBatch> recordBatch) {

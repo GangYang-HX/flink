@@ -65,6 +65,11 @@ public class CountTumblingWindowAssigner extends WindowAssigner<CountWindow> {
     }
 
     @Override
+    public Collection<CountWindow> matchWindows(long timestamp, boolean alignStart) {
+        return null;
+    }
+
+    @Override
     public TypeSerializer<CountWindow> getWindowSerializer(ExecutionConfig executionConfig) {
         return new CountWindow.Serializer();
     }

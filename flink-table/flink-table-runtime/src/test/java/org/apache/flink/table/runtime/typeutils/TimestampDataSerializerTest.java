@@ -22,17 +22,36 @@ import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.table.data.TimestampData;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+
+import java.util.Arrays;
+import java.util.Collection;
+
 /** Test for {@link TimestampDataSerializer}. */
-abstract class TimestampDataSerializerTest extends SerializerTestBase<TimestampData> {
+@RunWith(Parameterized.class)
+public class TimestampDataSerializerTest extends SerializerTestBase<TimestampData> {
+
+    @Parameterized.Parameters
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {{0}, {3}, {6}, {9}});
+    }
+
+    private int precision;
+
+    public TimestampDataSerializerTest(int precision) {
+        super();
+        this.precision = precision;
+    }
 
     @Override
     protected TypeSerializer<TimestampData> createSerializer() {
-        return new TimestampDataSerializer(getPrecision());
+        return new TimestampDataSerializer(precision);
     }
 
     @Override
     protected int getLength() {
-        return (getPrecision() <= 3) ? 8 : 12;
+        return (precision <= 3) ? 8 : 12;
     }
 
     @Override
@@ -48,35 +67,5 @@ abstract class TimestampDataSerializerTest extends SerializerTestBase<TimestampD
             TimestampData.fromEpochMillis(3),
             TimestampData.fromEpochMillis(4)
         };
-    }
-
-    protected abstract int getPrecision();
-
-    static final class TimestampSerializer0Test extends TimestampDataSerializerTest {
-        @Override
-        protected int getPrecision() {
-            return 0;
-        }
-    }
-
-    static final class TimestampSerializer3Test extends TimestampDataSerializerTest {
-        @Override
-        protected int getPrecision() {
-            return 3;
-        }
-    }
-
-    static final class TimestampSerializer6Test extends TimestampDataSerializerTest {
-        @Override
-        protected int getPrecision() {
-            return 6;
-        }
-    }
-
-    static final class TimestampSerializer8Test extends TimestampDataSerializerTest {
-        @Override
-        protected int getPrecision() {
-            return 8;
-        }
     }
 }

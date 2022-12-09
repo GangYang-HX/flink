@@ -25,7 +25,9 @@ import org.apache.flink.client.program.DefaultPackagedProgramRetriever;
 import org.apache.flink.client.program.PackagedProgram;
 import org.apache.flink.client.program.PackagedProgramRetriever;
 import org.apache.flink.client.program.PackagedProgramUtils;
+import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.kubernetes.utils.KubernetesUtils;
 import org.apache.flink.runtime.entrypoint.ClusterEntrypoint;
 import org.apache.flink.runtime.entrypoint.ClusterEntrypointUtils;
@@ -39,6 +41,8 @@ import org.apache.flink.util.Preconditions;
 import javax.annotation.Nullable;
 
 import java.io.File;
+import java.io.FileFilter;
+import java.net.URI;
 import java.util.List;
 
 /** An {@link ApplicationClusterEntryPoint} for Kubernetes. */
@@ -111,14 +115,43 @@ public final class KubernetesApplicationClusterEntrypoint extends ApplicationClu
         // No need to do pipelineJars validation if it is a PyFlink job.
         if (!(PackagedProgramUtils.isPython(jobClassName)
                 || PackagedProgramUtils.isPython(programArguments))) {
-            final List<File> pipelineJars =
+            final List<URI> pipelineJars =
                     KubernetesUtils.checkJarFileForApplicationMode(configuration);
             Preconditions.checkArgument(pipelineJars.size() == 1, "Should only have one jar");
             return DefaultPackagedProgramRetriever.create(
-                    userLibDir, pipelineJars.get(0), jobClassName, programArguments, configuration);
+                    userLibDir,
+                    getCustomJar(pipelineJars.get(0)),
+                    jobClassName,
+                    programArguments,
+                    configuration);
         }
 
         return DefaultPackagedProgramRetriever.create(
                 userLibDir, jobClassName, programArguments, configuration);
+    }
+
+    // custom Jar
+    private static File getCustomJar(URI jarURI) {
+        String scheme = jarURI.getScheme();
+        if (scheme.equals("local")) {
+            return new File(jarURI.getPath());
+        }
+
+        String flinkHomeDirectory =
+                System.getenv().getOrDefault(ConfigConstants.ENV_FLINK_HOME_DIR, ".");
+        final File customLibDirectory = new File(flinkHomeDirectory, Constants.CUSTOM_LIB_SUFFIX);
+        File[] customJars =
+                customLibDirectory.listFiles(
+                        new FileFilter() {
+                            @Override
+                            public boolean accept(File file) {
+                                return file.getName().endsWith(".jar");
+                            }
+                        });
+
+        if (customJars == null) {
+            throw new RuntimeException("Custom user jar " + jarURI.toString() + " is not exist.");
+        }
+        return customJars[0];
     }
 }

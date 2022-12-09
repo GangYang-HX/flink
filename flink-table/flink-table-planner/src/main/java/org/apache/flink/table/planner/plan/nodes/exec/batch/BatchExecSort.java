@@ -73,8 +73,7 @@ public class BatchExecSort extends ExecNodeBase<RowData> implements BatchExecNod
 
         RowType inputType = (RowType) inputEdge.getOutputType();
         SortCodeGenerator codeGen =
-                new SortCodeGenerator(
-                        config, planner.getFlinkContext().getClassLoader(), inputType, sortSpec);
+                new SortCodeGenerator(config.getTableConfig(), inputType, sortSpec);
 
         SortOperator operator =
                 new SortOperator(

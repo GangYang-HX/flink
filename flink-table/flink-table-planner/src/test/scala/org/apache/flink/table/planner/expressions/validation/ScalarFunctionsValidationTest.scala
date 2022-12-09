@@ -77,13 +77,13 @@ class ScalarFunctionsValidationTest extends ScalarTypesTestBase {
   @Test(expected = classOf[ValidationException])
   def testInvalidSubstring1(): Unit = {
     // Must fail. Parameter of substring must be an Integer not a Double.
-    testTableApi("test".substring(2.0.toExpr), "FAIL")
+    testTableApi("test".substring(2.0.toExpr), "FAIL", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])
   def testInvalidSubstring2(): Unit = {
     // Must fail. Parameter of substring must be an Integer not a String.
-    testTableApi("test".substring("test".toExpr), "FAIL")
+    testTableApi("test".substring("test".toExpr), "FAIL", "FAIL")
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -111,23 +111,109 @@ class ScalarFunctionsValidationTest extends ScalarTypesTestBase {
 
   @Test(expected = classOf[ValidationException])
   def testInValidationExceptionMoreThanOneTypes(): Unit = {
-    testTableApi('f2.in('f3, 'f8), "TRUE")
-    testTableApi('f2.in('f3, 'f4, 4), "FALSE")
+    testTableApi(
+      'f2.in('f3, 'f8),
+      "f2.in(f3, f8)",
+      "TRUE"
+    )
+    testTableApi(
+      'f2.in('f3, 'f4, 4),
+      "f2.in(f3, f4, 4)",
+      "FALSE" // OK if all numeric
+    )
   }
 
   @Test(expected = classOf[ValidationException])
   def scalaInValidationExceptionDifferentOperandsTest(): Unit = {
-    testTableApi('f1.in("Hi", "Hello world", "Comment#1"), "TRUE")
+    testTableApi(
+      'f1.in("Hi", "Hello world", "Comment#1"),
+      "true",
+      "TRUE"
+    )
+  }
+
+  @Test(expected = classOf[ValidationException])
+  def javaInValidationExceptionDifferentOperandsTest(): Unit = {
+    testTableApi(
+      true,
+      "f1.in('Hi','Hello world','Comment#1')",
+      "TRUE"
+    )
   }
 
   @Test(expected = classOf[ValidationException])
   def testTimestampDiffWithWrongTime(): Unit = {
-    testTableApi(timestampDiff(TimePointUnit.DAY, "2016-02-24", "2016-02-27"), "FAIL")
+    testTableApi(timestampDiff(TimePointUnit.DAY, "2016-02-24", "2016-02-27"), "FAIL", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])
   def testTimestampDiffWithWrongTimeAndUnit(): Unit = {
-    testTableApi(timestampDiff(TimePointUnit.MINUTE, "2016-02-24", "2016-02-27"), "FAIL")
+    testTableApi(timestampDiff(TimePointUnit.MINUTE, "2016-02-24", "2016-02-27"), "FAIL", "FAIL")
+  }
+
+  @Test
+  def testDOWWithTimeWhichIsUnsupported(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testSqlApi("EXTRACT(DOW FROM TIME '12:42:25')", "0")
+  }
+
+  @Test
+  def testDOYWithTimeWhichIsUnsupported(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testSqlApi("EXTRACT(DOY FROM TIME '12:42:25')", "0")
+  }
+
+  @Test
+  def testISODOWWithTimeWhichIsUnsupported(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testSqlApi("EXTRACT(ISODOW FROM TIME '12:42:25')", "0")
+  }
+
+  @Test
+  def testISOYEARWithTimeWhichIsUnsupported(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testSqlApi("EXTRACT(ISOYEAR FROM TIME '12:42:25')", "0")
+  }
+
+  private def testExtractFromTimeZeroResult(unit: TimeUnit): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testSqlApi("EXTRACT(" + unit + " FROM TIME '00:00:00')", "0")
+  }
+
+  @Test
+  def testMillenniumWithTime(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testExtractFromTimeZeroResult(TimeUnit.MILLENNIUM)
+  }
+
+  @Test
+  def testCenturyWithTime(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testExtractFromTimeZeroResult(TimeUnit.CENTURY)
+  }
+
+  @Test
+  def testDecadeWithTime(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testExtractFromTimeZeroResult(TimeUnit.DECADE)
+  }
+
+  @Test
+  def testYearWithTime(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testExtractFromTimeZeroResult(TimeUnit.YEAR)
+  }
+
+  @Test
+  def testMonthWithTime(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testExtractFromTimeZeroResult(TimeUnit.MONTH)
+  }
+
+  @Test
+  def testDayWithTime(): Unit = {
+    thrown.expect(classOf[ValidationException])
+    testExtractFromTimeZeroResult(TimeUnit.DAY)
   }
 
   // ----------------------------------------------------------------------------------------------

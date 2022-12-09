@@ -63,10 +63,6 @@ public final class PartitionPushDownSpec extends SourceAbilitySpecBase {
         }
     }
 
-    public List<Map<String, String>> getPartitions() {
-        return partitions;
-    }
-
     @Override
     public String getDigests(SourceAbilityContext context) {
         return "partitions=["

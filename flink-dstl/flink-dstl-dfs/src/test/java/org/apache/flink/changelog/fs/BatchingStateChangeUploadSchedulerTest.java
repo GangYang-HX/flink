@@ -27,7 +27,7 @@ import org.apache.flink.runtime.state.testutils.EmptyStreamStateHandle;
 import org.apache.flink.runtime.testutils.DirectScheduledExecutorService;
 import org.apache.flink.util.function.BiConsumerWithException;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -56,18 +56,19 @@ import static java.util.stream.Collectors.toMap;
 import static org.apache.flink.changelog.fs.UnregisteredChangelogStorageMetricGroup.createUnregisteredChangelogStorageMetricGroup;
 import static org.apache.flink.util.ExceptionUtils.findThrowable;
 import static org.apache.flink.util.ExceptionUtils.rethrow;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** {@link BatchingStateChangeUploadScheduler} test. */
-class BatchingStateChangeUploadSchedulerTest {
+public class BatchingStateChangeUploadSchedulerTest {
 
     private static final int MAX_BYTES_IN_FLIGHT = 10_000;
     private final Random random = new Random();
 
     @Test
-    void testNoDelayAndThreshold() throws Exception {
+    public void testNoDelayAndThreshold() throws Exception {
         withStore(
                 0,
                 0,
@@ -88,7 +89,7 @@ class BatchingStateChangeUploadSchedulerTest {
     }
 
     @Test
-    void testSizeThreshold() throws Exception {
+    public void testSizeThreshold() throws Exception {
         int numChanges = 7;
         int changeSize = 11;
         int threshold = changeSize * numChanges;
@@ -107,14 +108,14 @@ class BatchingStateChangeUploadSchedulerTest {
                         if (runningSize >= threshold) {
                             assertSaved(probe, expected);
                         } else {
-                            assertThat(probe.getUploaded()).isEmpty();
+                            assertTrue(probe.getUploaded().isEmpty());
                         }
                     }
                 });
     }
 
     @Test
-    void testDelay() throws Exception {
+    public void testDelay() throws Exception {
         int delayMs = 50;
         ManuallyTriggeredScheduledExecutorService scheduler =
                 new ManuallyTriggeredScheduledExecutorService();
@@ -127,19 +128,21 @@ class BatchingStateChangeUploadSchedulerTest {
                     scheduler.triggerAll();
                     List<StateChangeSet> changeSets = getChanges(4);
                     upload(store, changeSets);
-                    assertThat(probe.getUploaded()).isEmpty();
-                    assertThat(scheduler.getAllNonPeriodicScheduledTask())
-                            .anyMatch(scheduled -> scheduled.getDelay(MILLISECONDS) == delayMs);
+                    assertTrue(probe.getUploaded().isEmpty());
+                    assertTrue(
+                            scheduler.getAllNonPeriodicScheduledTask().stream()
+                                    .anyMatch(
+                                            scheduled ->
+                                                    scheduled.getDelay(MILLISECONDS) == delayMs));
                     scheduler.triggerAllNonPeriodicTasks();
-                    assertThat(probe.getUploaded()).isEqualTo(changeSets);
+                    assertEquals(changeSets, probe.getUploaded());
                 });
     }
 
     /** Test integration with {@link RetryingExecutor}. */
     @Test
-    void testRetry() throws Exception {
+    public void testRetry() throws Exception {
         final int maxAttempts = 5;
-        ChangelogStorageMetricGroup metrics = createUnregisteredChangelogStorageMetricGroup();
 
         try (BatchingStateChangeUploadScheduler store =
                 new BatchingStateChangeUploadScheduler(
@@ -166,9 +169,9 @@ class BatchingStateChangeUploadSchedulerTest {
                         new DirectScheduledExecutorService(),
                         new RetryingExecutor(
                                 new DirectScheduledExecutorService(),
-                                metrics.getAttemptsPerUpload(),
-                                metrics.getTotalAttemptsPerUpload()),
-                        metrics)) {
+                                createUnregisteredChangelogStorageMetricGroup()
+                                        .getAttemptsPerUpload()),
+                        createUnregisteredChangelogStorageMetricGroup())) {
             CompletableFuture<List<UploadResult>> completionFuture = new CompletableFuture<>();
             store.upload(
                     new UploadTask(
@@ -181,7 +184,7 @@ class BatchingStateChangeUploadSchedulerTest {
     }
 
     @Test
-    void testUploadTimeout() throws Exception {
+    public void testUploadTimeout() throws Exception {
         AtomicReference<List<SequenceNumber>> failed = new AtomicReference<>();
         UploadTask upload =
                 new UploadTask(getChanges(4), unused -> {}, (sqn, error) -> failed.set(sqn));
@@ -198,12 +201,12 @@ class BatchingStateChangeUploadSchedulerTest {
             }
         }
 
-        assertThat(upload.finished.get()).isTrue();
-        assertThat(
-                        upload.changeSets.stream()
-                                .map(StateChangeSet::getSequenceNumber)
-                                .collect(Collectors.toSet()))
-                .isEqualTo(new HashSet<>(failed.get()));
+        assertTrue(upload.finished.get());
+        assertEquals(
+                upload.changeSets.stream()
+                        .map(StateChangeSet::getSequenceNumber)
+                        .collect(Collectors.toSet()),
+                new HashSet<>(failed.get()));
     }
 
     @Test
@@ -233,23 +236,21 @@ class BatchingStateChangeUploadSchedulerTest {
             }
         }
 
-        assertThat(upload.finished.get()).isTrue();
-        assertThat(
-                        upload.changeSets.stream()
-                                .map(StateChangeSet::getSequenceNumber)
-                                .collect(Collectors.toSet()))
-                .isEqualTo(
-                        succeeded.get().stream()
-                                .map(UploadResult::getSequenceNumber)
-                                .collect(Collectors.toSet()));
-        assertThat(failed.get()).isEmpty();
+        assertTrue(upload.finished.get());
+        assertEquals(
+                upload.changeSets.stream()
+                        .map(StateChangeSet::getSequenceNumber)
+                        .collect(Collectors.toSet()),
+                succeeded.get().stream()
+                        .map(UploadResult::getSequenceNumber)
+                        .collect(Collectors.toSet()));
+        assertTrue(failed.get().isEmpty());
     }
 
-    @Test
-    void testErrorHandling() throws Exception {
+    @Test(expected = RejectedExecutionException.class)
+    public void testErrorHandling() throws Exception {
         TestingStateChangeUploader probe = new TestingStateChangeUploader();
         DirectScheduledExecutorService scheduler = new DirectScheduledExecutorService();
-        ChangelogStorageMetricGroup metrics = createUnregisteredChangelogStorageMetricGroup();
         try (BatchingStateChangeUploadScheduler store =
                 new BatchingStateChangeUploadScheduler(
                         Integer.MAX_VALUE,
@@ -260,21 +261,19 @@ class BatchingStateChangeUploadSchedulerTest {
                         scheduler,
                         new RetryingExecutor(
                                 5,
-                                metrics.getAttemptsPerUpload(),
-                                metrics.getTotalAttemptsPerUpload()),
-                        metrics)) {
+                                createUnregisteredChangelogStorageMetricGroup()
+                                        .getAttemptsPerUpload()),
+                        createUnregisteredChangelogStorageMetricGroup())) {
             scheduler.shutdown();
-            assertThatThrownBy(() -> upload(store, getChanges(4)))
-                    .isInstanceOf(RejectedExecutionException.class);
+            upload(store, getChanges(4));
         }
     }
 
     @Test
-    void testClose() throws Exception {
+    public void testClose() throws Exception {
         TestingStateChangeUploader probe = new TestingStateChangeUploader();
         DirectScheduledExecutorService scheduler = new DirectScheduledExecutorService();
         DirectScheduledExecutorService retryScheduler = new DirectScheduledExecutorService();
-        ChangelogStorageMetricGroup metrics = createUnregisteredChangelogStorageMetricGroup();
         new BatchingStateChangeUploadScheduler(
                         0,
                         0,
@@ -284,17 +283,17 @@ class BatchingStateChangeUploadSchedulerTest {
                         scheduler,
                         new RetryingExecutor(
                                 retryScheduler,
-                                metrics.getAttemptsPerUpload(),
-                                metrics.getTotalAttemptsPerUpload()),
-                        metrics)
+                                createUnregisteredChangelogStorageMetricGroup()
+                                        .getAttemptsPerUpload()),
+                        createUnregisteredChangelogStorageMetricGroup())
                 .close();
-        assertThat(probe.isClosed()).isTrue();
-        assertThat(scheduler.isShutdown()).isTrue();
-        assertThat(retryScheduler.isShutdown()).isTrue();
+        assertTrue(probe.isClosed());
+        assertTrue(scheduler.isShutdown());
+        assertTrue(retryScheduler.isShutdown());
     }
 
     @Test
-    void testBackPressure() throws Exception {
+    public void testBackPressure() throws Exception {
         int sizeLimit = MAX_BYTES_IN_FLIGHT;
         CompletableFuture<TestingStateChangeUploader> thresholdExceededFuture =
                 new CompletableFuture<>();
@@ -307,14 +306,13 @@ class BatchingStateChangeUploadSchedulerTest {
                                             getChanges(sizeLimit / 2).stream(),
                                             getChanges(sizeLimit / 2).stream())
                                     .collect(Collectors.toList());
-                    assertThat(uploader.getAvailabilityProvider().isAvailable()).isTrue();
-                    assertThat(uploader.getAvailabilityProvider().isApproximatelyAvailable())
-                            .isTrue();
+                    assertTrue(uploader.getAvailabilityProvider().isAvailable());
+                    assertTrue(uploader.getAvailabilityProvider().isApproximatelyAvailable());
                     upload(uploader, changes1);
                     assertSaved(probe, changes1); // sent to upload, not finished yet
                     thresholdExceededFuture.complete(probe);
                     List<StateChangeSet> changes2 = getChanges(1);
-                    assertThat(uploader.getAvailabilityProvider().isAvailable()).isFalse();
+                    assertFalse(uploader.getAvailabilityProvider().isAvailable());
                     upload(uploader, changes2); // should block until capacity released
                     assertSaved(probe, changes1, changes2);
                 };
@@ -324,14 +322,14 @@ class BatchingStateChangeUploadSchedulerTest {
         TestingStateChangeUploader probe = thresholdExceededFuture.get();
         int uploadedInTheBeginning = probe.getUploaded().size();
         Thread.sleep(500); // allow failing, i.e. to proceed with upload
-        assertThat(probe.getUploaded().size()).isEqualTo(uploadedInTheBeginning);
+        assertEquals(uploadedInTheBeginning, probe.getUploaded().size());
         probe.completeUpload(); // release capacity
         uploadFuture.join();
-        assertThat(probe.getUploaded().size()).isGreaterThan(uploadedInTheBeginning);
+        assertTrue(uploadedInTheBeginning < probe.getUploaded().size());
     }
 
     @Test
-    void testInterruptedWhenBackPressured() throws Exception {
+    public void testInterruptedWhenBackPressured() throws Exception {
         int limit = MAX_BYTES_IN_FLIGHT;
         TestScenario test =
                 (uploader, probe) -> {
@@ -344,7 +342,7 @@ class BatchingStateChangeUploadSchedulerTest {
                         fail("upload shouldn't succeed after exceeding the limit");
                     } catch (IOException e) {
                         if (findThrowable(e, InterruptedException.class).isPresent()) {
-                            assertThat(probe.getUploaded()).isEmpty();
+                            assertTrue(probe.getUploaded().isEmpty());
                         } else {
                             rethrow(e);
                         }
@@ -386,7 +384,6 @@ class BatchingStateChangeUploadSchedulerTest {
             TestScenario test)
             throws Exception {
         TestingStateChangeUploader probe = new TestingStateChangeUploader();
-        ChangelogStorageMetricGroup metrics = createUnregisteredChangelogStorageMetricGroup();
         try (BatchingStateChangeUploadScheduler store =
                 new BatchingStateChangeUploadScheduler(
                         delayMs,
@@ -397,9 +394,9 @@ class BatchingStateChangeUploadSchedulerTest {
                         scheduler,
                         new RetryingExecutor(
                                 new DirectScheduledExecutorService(),
-                                metrics.getAttemptsPerUpload(),
-                                metrics.getTotalAttemptsPerUpload()),
-                        metrics)) {
+                                createUnregisteredChangelogStorageMetricGroup()
+                                        .getAttemptsPerUpload()),
+                        createUnregisteredChangelogStorageMetricGroup())) {
             test.accept(store, probe);
         }
     }
@@ -407,11 +404,9 @@ class BatchingStateChangeUploadSchedulerTest {
     @SafeVarargs
     private final void assertSaved(
             TestingStateChangeUploader probe, List<StateChangeSet>... expected) {
-        assertThat(new ArrayList<>(probe.getUploaded()))
-                .isEqualTo(
-                        Arrays.stream(expected)
-                                .flatMap(Collection::stream)
-                                .collect(Collectors.toList()));
+        assertEquals(
+                Arrays.stream(expected).flatMap(Collection::stream).collect(Collectors.toList()),
+                new ArrayList<>(probe.getUploaded()));
     }
 
     private interface TestScenario
@@ -462,13 +457,13 @@ class BatchingStateChangeUploadSchedulerTest {
             return uploadsCounter.get();
         }
 
-        private Map<UploadTask, Map<StateChangeSet, Tuple2<Long, Long>>> withOffsets(
+        private Map<UploadTask, Map<StateChangeSet, Long>> withOffsets(
                 Collection<UploadTask> tasks) {
             return tasks.stream().collect(toMap(identity(), this::withOffsets));
         }
 
-        private Map<StateChangeSet, Tuple2<Long, Long>> withOffsets(UploadTask task) {
-            return task.changeSets.stream().collect(toMap(identity(), ign -> Tuple2.of(0L, 0L)));
+        private Map<StateChangeSet, Long> withOffsets(UploadTask task) {
+            return task.changeSets.stream().collect(toMap(identity(), ign -> 0L));
         }
     }
 
@@ -477,7 +472,6 @@ class BatchingStateChangeUploadSchedulerTest {
             ManuallyTriggeredScheduledExecutorService scheduler,
             StateChangeUploader uploader,
             int timeout) {
-        ChangelogStorageMetricGroup metrics = createUnregisteredChangelogStorageMetricGroup();
         return new BatchingStateChangeUploadScheduler(
                 0,
                 0,
@@ -487,8 +481,7 @@ class BatchingStateChangeUploadSchedulerTest {
                 scheduler,
                 new RetryingExecutor(
                         numAttempts,
-                        metrics.getAttemptsPerUpload(),
-                        metrics.getTotalAttemptsPerUpload()),
-                metrics);
+                        createUnregisteredChangelogStorageMetricGroup().getAttemptsPerUpload()),
+                createUnregisteredChangelogStorageMetricGroup());
     }
 }

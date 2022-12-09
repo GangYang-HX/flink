@@ -19,21 +19,18 @@
 package org.apache.flink.connector.kinesis.table.test;
 
 import org.apache.flink.api.common.time.Deadline;
-import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
-import org.apache.flink.connector.testframe.container.FlinkContainers;
-import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
-import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.tests.util.TestUtils;
+import org.apache.flink.tests.util.flink.SQLJobSubmission;
+import org.apache.flink.tests.util.flink.container.FlinkContainers;
 import org.apache.flink.util.DockerImageVersions;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -49,8 +46,8 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.core.SdkSystemSetting;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -79,10 +76,8 @@ public class KinesisStreamsTableApiIT {
     private static final String ORDERS_STREAM = "orders";
     private static final String INTER_CONTAINER_KINESALITE_ALIAS = "kinesalite";
     private static final String DEFAULT_FIRST_SHARD_NAME = "shardId-000000000000";
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
-
-    private SdkHttpClient httpClient;
-    private KinesisClient kinesisClient;
+    private SdkAsyncHttpClient httpClient;
+    private KinesisAsyncClient kinesisClient;
 
     private final Path sqlConnectorKinesisJar = TestUtils.getResource(".*kinesis-streams.jar");
     private static final Network network = Network.newNetwork();
@@ -95,19 +90,16 @@ public class KinesisStreamsTableApiIT {
                     .withNetwork(network)
                     .withNetworkAliases(INTER_CONTAINER_KINESALITE_ALIAS);
 
-    public static final TestcontainersSettings TESTCONTAINERS_SETTINGS =
-            TestcontainersSettings.builder()
-                    .environmentVariable("AWS_CBOR_DISABLE", "1")
-                    .environmentVariable(
+    public static final FlinkContainers FLINK =
+            FlinkContainers.builder()
+                    .setEnvironmentVariable("AWS_CBOR_DISABLE", "1")
+                    .setEnvironmentVariable(
                             "FLINK_ENV_JAVA_OPTS",
                             "-Dorg.apache.flink.kinesis-streams.shaded.com.amazonaws.sdk.disableCertChecking -Daws.cborEnabled=false")
-                    .network(network)
-                    .logger(LOGGER)
+                    .setNetwork(network)
+                    .setLogger(LOGGER)
                     .dependsOn(KINESALITE)
                     .build();
-
-    public static final FlinkContainers FLINK =
-            FlinkContainers.builder().withTestcontainersSettings(TESTCONTAINERS_SETTINGS).build();
 
     @BeforeClass
     public static void setupFlink() throws Exception {
@@ -122,7 +114,7 @@ public class KinesisStreamsTableApiIT {
     @Before
     public void setUp() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
-        httpClient = AWSServicesTestUtils.createHttpClient();
+        httpClient = KINESALITE.buildSdkAsyncHttpClient();
         kinesisClient = KINESALITE.createHostClient(httpClient);
         prepareStream(ORDERS_STREAM);
     }
@@ -155,8 +147,10 @@ public class KinesisStreamsTableApiIT {
                         .withConstantThroughput()
                         .build();
 
-        kinesisClient.createStream(
-                CreateStreamRequest.builder().streamName(streamName).shardCount(1).build());
+        kinesisClient
+                .createStream(
+                        CreateStreamRequest.builder().streamName(streamName).shardCount(1).build())
+                .get();
 
         Deadline deadline = Deadline.fromNow(Duration.ofMinutes(1));
         while (!rateLimiter.getWhenReady(() -> streamExists(streamName))) {
@@ -171,6 +165,7 @@ public class KinesisStreamsTableApiIT {
             return kinesisClient
                             .describeStream(
                                     DescribeStreamRequest.builder().streamName(streamName).build())
+                            .get()
                             .streamDescription()
                             .streamStatus()
                     == StreamStatus.ACTIVE;
@@ -205,7 +200,7 @@ public class KinesisStreamsTableApiIT {
 
     private <T> T fromJson(final String json, final Class<T> type) {
         try {
-            return OBJECT_MAPPER.readValue(json, type);
+            return new ObjectMapper().readValue(json, type);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Test Failure.", e);
         }
@@ -220,12 +215,14 @@ public class KinesisStreamsTableApiIT {
                                         .shardIteratorType(ShardIteratorType.TRIM_HORIZON)
                                         .streamName(KinesisStreamsTableApiIT.ORDERS_STREAM)
                                         .build())
+                        .get()
                         .shardIterator();
 
         List<Record> records =
                 kinesisClient
                         .getRecords(
                                 GetRecordsRequest.builder().shardIterator(shardIterator).build())
+                        .get()
                         .records();
         List<T> messages = new ArrayList<>();
         records.forEach(record -> messages.add(deserialiser.apply(record.data().asByteArray())));

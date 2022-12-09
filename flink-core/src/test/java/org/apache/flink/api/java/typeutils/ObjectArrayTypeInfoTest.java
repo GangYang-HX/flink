@@ -23,7 +23,7 @@ import org.apache.flink.api.common.typeutils.TypeInformationTestBase;
 import java.util.ArrayList;
 
 /** Test for {@link ObjectArrayTypeInfo}. */
-class ObjectArrayTypeInfoTest extends TypeInformationTestBase<ObjectArrayTypeInfo<?, ?>> {
+public class ObjectArrayTypeInfoTest extends TypeInformationTestBase<ObjectArrayTypeInfo<?, ?>> {
 
     @Override
     protected ObjectArrayTypeInfo<?, ?>[] getTestData() {

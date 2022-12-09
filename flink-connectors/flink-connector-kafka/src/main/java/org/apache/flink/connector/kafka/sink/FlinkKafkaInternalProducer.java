@@ -39,7 +39,7 @@ import static org.apache.flink.util.Preconditions.checkState;
 /**
  * A {@link KafkaProducer} that exposes private fields to allow resume producing from a given state.
  */
-class FlinkKafkaInternalProducer<K, V> extends KafkaProducer<K, V> {
+public class FlinkKafkaInternalProducer<K, V> extends KafkaProducer<K, V> {
 
     private static final Logger LOG = LoggerFactory.getLogger(FlinkKafkaInternalProducer.class);
     private static final String TRANSACTION_MANAGER_FIELD_NAME = "transactionManager";

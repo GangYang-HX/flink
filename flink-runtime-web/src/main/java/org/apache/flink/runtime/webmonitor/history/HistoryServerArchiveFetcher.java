@@ -30,7 +30,6 @@ import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.messages.webmonitor.MultipleJobsDetails;
 import org.apache.flink.runtime.rest.messages.JobsOverviewHeaders;
 import org.apache.flink.util.FileUtils;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonFactory;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonGenerator;
@@ -105,7 +104,7 @@ class HistoryServerArchiveFetcher {
     private static final Logger LOG = LoggerFactory.getLogger(HistoryServerArchiveFetcher.class);
 
     private static final JsonFactory jacksonFactory = new JsonFactory();
-    private static final ObjectMapper mapper = JacksonMapperFactory.createObjectMapper();
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     private static final String JSON_FILE_ENDING = ".json";
 
@@ -426,8 +425,7 @@ class HistoryServerArchiveFetcher {
                         state,
                         lastMod,
                         tasksPerState,
-                        numTasks,
-                        new HashMap<>());
+                        numTasks);
         MultipleJobsDetails multipleJobsDetails =
                 new MultipleJobsDetails(Collections.singleton(jobDetails));
 

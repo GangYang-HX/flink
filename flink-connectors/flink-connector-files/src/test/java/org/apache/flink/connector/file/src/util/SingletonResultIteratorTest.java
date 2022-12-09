@@ -18,23 +18,26 @@
 
 package org.apache.flink.connector.file.src.util;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /** Unit tests for the {@link SingletonResultIterator}. */
-class SingletonResultIteratorTest {
+public class SingletonResultIteratorTest {
 
     @Test
-    void testEmptyConstruction() {
+    public void testEmptyConstruction() {
         final SingletonResultIterator<Object> iter = new SingletonResultIterator<>();
-        assertThat(iter.next()).isNull();
+        assertNull(iter.next());
     }
 
     @Test
-    void testGetElement() {
+    public void testGetElement() {
         final Object element = new Object();
         final long pos = 1422;
         final long skipCount = 17;
@@ -43,35 +46,35 @@ class SingletonResultIteratorTest {
         iter.set(element, pos, skipCount);
 
         final RecordAndPosition<Object> record = iter.next();
-        assertThat(record).isNotNull();
-        assertThat(record.getRecord()).isNotNull();
-        assertThat(record.getOffset()).isEqualTo(pos);
-        assertThat(record.getRecordSkipCount()).isEqualTo(skipCount);
+        assertNotNull(record);
+        assertEquals(element, record.getRecord());
+        assertEquals(pos, record.getOffset());
+        assertEquals(skipCount, record.getRecordSkipCount());
     }
 
     @Test
-    void testExhausted() {
+    public void testExhausted() {
         final SingletonResultIterator<Object> iter = new SingletonResultIterator<>();
         iter.set(new Object(), 1, 2);
         iter.next();
 
-        assertThat(iter.next()).isNull();
+        assertNull(iter.next());
     }
 
     @Test
-    void testNoRecycler() {
+    public void testNoRecycler() {
         final SingletonResultIterator<Object> iter = new SingletonResultIterator<>();
         iter.releaseBatch();
     }
 
     @Test
-    void testRecycler() {
+    public void testRecycler() {
         final AtomicBoolean recycled = new AtomicBoolean();
         final SingletonResultIterator<Object> iter =
                 new SingletonResultIterator<>(() -> recycled.set(true));
 
         iter.releaseBatch();
 
-        assertThat(recycled.get()).isTrue();
+        assertTrue(recycled.get());
     }
 }

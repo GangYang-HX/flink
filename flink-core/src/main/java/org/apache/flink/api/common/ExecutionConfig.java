@@ -40,6 +40,7 @@ import com.esotericsoftware.kryo.Serializer;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -130,6 +131,12 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
     private boolean forceAvro = false;
     private long autoWatermarkInterval = 200;
 
+    /**
+     * Decide whether to use the watermarkGenerator of the WatermarkAssignerOperator to generate the
+     * watermark or use the watermark sent by the upstream.
+     */
+    private boolean deliverUpstreamWatermarkEnabled = false;
+
     // ---------- statebackend related configurations ------------------------------
     /**
      * Interval in milliseconds for sending latency tracking marks from the sources to the sinks.
@@ -169,6 +176,8 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
      */
     private boolean useSnapshotCompression = false;
 
+    private boolean useStreamGraphHasherV3 = true;
+
     // ------------------------------- User code values --------------------------------------------
 
     private GlobalJobParameters globalJobParameters = new GlobalJobParameters();
@@ -193,7 +202,75 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
 
     private LinkedHashSet<Class<?>> registeredPojoTypes = new LinkedHashSet<>();
 
+    private boolean useSourcePartitionAsParallelism = true;
+
+    private boolean forceRebalance = false;
+
+    private boolean forceRescale = false;
+
+    private boolean forceForward = false;
+
+    private final Map<Integer, NodePartitionInfo> streamNodeIdToPartitionInfo = new HashMap<>();
+
+    private boolean useWatermark = false;
+
     // --------------------------------------------------------------------------------------------
+
+    private int timeCharacteristicEnum = -1;
+
+    @Internal
+    public ExecutionConfig setTimeCharacteristicEnum(int timeCharacteristicEnum) {
+        this.timeCharacteristicEnum = timeCharacteristicEnum;
+        return this;
+    }
+
+    public int getTimeCharacteristicEnum() {
+        return timeCharacteristicEnum;
+    }
+
+    public Map<Integer, NodePartitionInfo> getStreamNodeIdToPartitionInfo() {
+        return streamNodeIdToPartitionInfo;
+    }
+
+    public boolean isUseWatermark() {
+        return useWatermark;
+    }
+
+    public void setUseWatermark(boolean useWatermark) {
+        this.useWatermark = useWatermark;
+    }
+
+    public boolean isUseSourcePartitionAsParallelism() {
+        return useSourcePartitionAsParallelism;
+    }
+
+    public void setUseSourcePartitionAsParallelism(boolean useSourcePartitionAsParallelism) {
+        this.useSourcePartitionAsParallelism = useSourcePartitionAsParallelism;
+    }
+
+    public boolean isForceRebalance() {
+        return forceRebalance;
+    }
+
+    public void setForceRebalance(boolean forceRebalance) {
+        this.forceRebalance = forceRebalance;
+    }
+
+    public boolean isForceRescale() {
+        return forceRescale;
+    }
+
+    public void setForceRescale(boolean forceRescale) {
+        this.forceRescale = forceRescale;
+    }
+
+    public boolean isForceForward() {
+        return forceForward;
+    }
+
+    public void setForceForward(boolean forceForward) {
+        this.forceForward = forceForward;
+    }
 
     /**
      * Enables the ClosureCleaner. This analyzes user code functions and sets fields to null that
@@ -263,6 +340,21 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
     @PublicEvolving
     public long getAutoWatermarkInterval() {
         return this.autoWatermarkInterval;
+    }
+
+    /**
+     * Enables source watermark method. If isEventWatermarkEnable is set to true, watermarkGenerator
+     * will not be used.
+     */
+    @PublicEvolving
+    public ExecutionConfig setDeliverUpstreamWatermarkEnabled(
+            boolean deliverUpstreamWatermarkEnabled) {
+        this.deliverUpstreamWatermarkEnabled = deliverUpstreamWatermarkEnabled;
+        return this;
+    }
+
+    public boolean isDeliverUpstreamWatermarkEnabled() {
+        return this.deliverUpstreamWatermarkEnabled;
     }
 
     /**
@@ -750,6 +842,14 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
         this.globalJobParameters = globalJobParameters;
     }
 
+    public boolean useStreamGraphHasherV3() {
+        return this.useStreamGraphHasherV3;
+    }
+
+    public void setUseStreamGraphHasherV3(boolean useStreamGraphHasherV3) {
+        this.useStreamGraphHasherV3 = useStreamGraphHasherV3;
+    }
+
     // --------------------------------------------------------------------------------------------
     //  Registry for types and serializers
     // --------------------------------------------------------------------------------------------
@@ -951,7 +1051,10 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                     && registeredPojoTypes.equals(other.registeredPojoTypes)
                     && taskCancellationIntervalMillis == other.taskCancellationIntervalMillis
                     && useSnapshotCompression == other.useSnapshotCompression
-                    && isDynamicGraph == other.isDynamicGraph;
+                    && isDynamicGraph == other.isDynamicGraph
+                    && useStreamGraphHasherV3 == other.useStreamGraphHasherV3
+                    && deliverUpstreamWatermarkEnabled == other.deliverUpstreamWatermarkEnabled
+                    && timeCharacteristicEnum == other.timeCharacteristicEnum;
 
         } else {
             return false;
@@ -978,7 +1081,10 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                 registeredPojoTypes,
                 taskCancellationIntervalMillis,
                 useSnapshotCompression,
-                isDynamicGraph);
+                isDynamicGraph,
+                useStreamGraphHasherV3,
+                deliverUpstreamWatermarkEnabled,
+                timeCharacteristicEnum);
     }
 
     @Override
@@ -1038,6 +1144,12 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                 + registeredPojoTypes
                 + ", isDynamicGraph="
                 + isDynamicGraph
+                + ", useStreamGraphHasherV3="
+                + useStreamGraphHasherV3
+                + ", timeCharacteristicEnum="
+                + timeCharacteristicEnum
+                + ", deliverUpstreamWatermarkEnabled="
+                + deliverUpstreamWatermarkEnabled
                 + '}';
     }
 
@@ -1143,6 +1255,9 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                 .getOptional(PipelineOptions.AUTO_WATERMARK_INTERVAL)
                 .ifPresent(i -> this.setAutoWatermarkInterval(i.toMillis()));
         configuration
+                .getOptional(PipelineOptions.DELIVER_UPSTREAM_WATERMARK_ENABLED)
+                .ifPresent(this::setDeliverUpstreamWatermarkEnabled);
+        configuration
                 .getOptional(PipelineOptions.CLOSURE_CLEANER_LEVEL)
                 .ifPresent(this::setClosureCleanerLevel);
         configuration.getOptional(PipelineOptions.FORCE_AVRO).ifPresent(b -> this.forceAvro = b);
@@ -1189,6 +1304,18 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                 .ifPresent(s -> this.defaultKryoSerializerClasses = s);
 
         configuration
+                .getOptional(PipelineOptions.USE_SOURCE_PARTITION_AS_PARALLELISM)
+                .ifPresent(this::setUseSourcePartitionAsParallelism);
+
+        configuration
+                .getOptional(PipelineOptions.FORCE_REBALANCE)
+                .ifPresent(this::setForceRebalance);
+
+        configuration.getOptional(PipelineOptions.FORCE_RESCALE).ifPresent(this::setForceRescale);
+
+        configuration.getOptional(PipelineOptions.FORCE_FORWARD).ifPresent(this::setForceForward);
+
+        configuration
                 .getOptional(PipelineOptions.POJO_REGISTERED_CLASSES)
                 .map(c -> loadClasses(c, classLoader, "Could not load pojo type to be registered."))
                 .ifPresent(c -> this.registeredPojoTypes = c);
@@ -1205,6 +1332,14 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                                 this.setDynamicGraph(
                                         schedulerType
                                                 == JobManagerOptions.SchedulerType.AdaptiveBatch));
+
+        configuration
+                .getOptional(PipelineOptions.USE_STREAM_GRAPH_HASHER_V3)
+                .ifPresent(this::setUseStreamGraphHasherV3);
+
+        configuration
+                .getOptional(PipelineOptions.FORCE_TIME_CHARACTERISTIC_ENUM)
+                .ifPresent(this::setTimeCharacteristicEnum);
     }
 
     private LinkedHashSet<Class<?>> loadClasses(

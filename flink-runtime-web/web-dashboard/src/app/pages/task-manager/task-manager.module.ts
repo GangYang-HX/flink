@@ -20,11 +20,9 @@ import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { ShareModule } from '@flink-runtime-web/share/share.module';
 import { NzBreadCrumbModule } from 'ng-zorro-antd/breadcrumb';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzCodeEditorModule } from 'ng-zorro-antd/code-editor';
-import { NzDescriptionsModule } from 'ng-zorro-antd/descriptions';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzGridModule } from 'ng-zorro-antd/grid';
 import { NzIconModule } from 'ng-zorro-antd/icon';
@@ -32,6 +30,7 @@ import { NzProgressModule } from 'ng-zorro-antd/progress';
 import { NzSkeletonModule } from 'ng-zorro-antd/skeleton';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
+import { ShareModule } from 'share/share.module';
 
 import { TaskManagerListComponent } from './list/task-manager-list.component';
 import { TaskManagerLogDetailComponent } from './log-detail/task-manager-log-detail.component';
@@ -59,8 +58,7 @@ import { TaskManagerThreadDumpComponent } from './thread-dump/task-manager-threa
     NzDividerModule,
     NzSkeletonModule,
     NzCodeEditorModule,
-    FormsModule,
-    NzDescriptionsModule
+    FormsModule
   ],
   declarations: [
     TaskManagerListComponent,

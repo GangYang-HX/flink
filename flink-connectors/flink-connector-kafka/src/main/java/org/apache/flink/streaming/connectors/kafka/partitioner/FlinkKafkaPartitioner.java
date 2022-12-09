@@ -53,4 +53,8 @@ public abstract class FlinkKafkaPartitioner<T> implements Serializable {
      */
     public abstract int partition(
             T record, byte[] key, byte[] value, String targetTopic, int[] partitions);
+
+    public String partitionerIdentifier() {
+        return null;
+    }
 }

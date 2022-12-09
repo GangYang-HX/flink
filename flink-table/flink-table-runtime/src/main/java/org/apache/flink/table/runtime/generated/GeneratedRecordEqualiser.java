@@ -20,7 +20,6 @@ package org.apache.flink.table.runtime.generated;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ReadableConfig;
 
 /** Describes a generated {@link RecordEqualiser}. */
 public class GeneratedRecordEqualiser extends GeneratedClass<RecordEqualiser> {
@@ -41,7 +40,7 @@ public class GeneratedRecordEqualiser extends GeneratedClass<RecordEqualiser> {
      * @param conf configuration when generating the generated class.
      */
     public GeneratedRecordEqualiser(
-            String className, String code, Object[] references, ReadableConfig conf) {
+            String className, String code, Object[] references, Configuration conf) {
         super(className, code, references, conf);
     }
 }

@@ -21,6 +21,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.api.common.NodePartitionInfo;
 import org.apache.flink.api.common.cache.DistributedCache;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.io.OutputFormat;
@@ -36,8 +37,6 @@ import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
-import org.apache.flink.runtime.executiongraph.JobStatusHook;
-import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
@@ -51,9 +50,9 @@ import org.apache.flink.streaming.api.operators.OutputFormatOperatorFactory;
 import org.apache.flink.streaming.api.operators.SourceOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 import org.apache.flink.streaming.api.transformations.StreamExchangeMode;
-import org.apache.flink.streaming.runtime.partitioner.ForwardForUnspecifiedPartitioner;
 import org.apache.flink.streaming.runtime.partitioner.ForwardPartitioner;
 import org.apache.flink.streaming.runtime.partitioner.RebalancePartitioner;
+import org.apache.flink.streaming.runtime.partitioner.RescalePartitioner;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.streaming.runtime.tasks.MultipleInputStreamTask;
 import org.apache.flink.streaming.runtime.tasks.OneInputStreamTask;
@@ -80,6 +79,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.flink.api.common.NodePartitionInfo.UNKNOWN_NUMBER_OF_PARTITIONS;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -118,7 +118,6 @@ public class StreamGraph implements Pipeline {
     private Map<Integer, StreamNode> streamNodes;
     private Set<Integer> sources;
     private Set<Integer> sinks;
-    private Set<Integer> expandedSinks;
     private Map<Integer, Tuple2<Integer, OutputTag>> virtualSideOutputNodes;
     private Map<Integer, Tuple3<Integer, StreamPartitioner<?>, StreamExchangeMode>>
             virtualPartitionNodes;
@@ -137,7 +136,9 @@ public class StreamGraph implements Pipeline {
             PipelineOptions.VertexDescriptionMode.TREE;
     private boolean vertexNameIncludeIndexPrefix = false;
 
-    private final List<JobStatusHook> jobStatusHooks = new ArrayList<>();
+    private final Map<Integer, NodePartitionInfo> streamNodeIdToPartitionInfo;
+
+    private final StreamPartitionerFactory streamPartitionFactory;
 
     public StreamGraph(
             ExecutionConfig executionConfig,
@@ -146,6 +147,8 @@ public class StreamGraph implements Pipeline {
         this.executionConfig = checkNotNull(executionConfig);
         this.checkpointConfig = checkNotNull(checkpointConfig);
         this.savepointRestoreSettings = checkNotNull(savepointRestoreSettings);
+        this.streamNodeIdToPartitionInfo = this.executionConfig.getStreamNodeIdToPartitionInfo();
+        this.streamPartitionFactory = new StreamPartitionerFactory();
 
         // create an empty new stream graph.
         clear();
@@ -161,7 +164,6 @@ public class StreamGraph implements Pipeline {
         iterationSourceSinkPairs = new HashSet<>();
         sources = new HashSet<>();
         sinks = new HashSet<>();
-        expandedSinks = new HashSet<>();
         slotSharingGroupResources = new HashMap<>();
     }
 
@@ -371,16 +373,6 @@ public class StreamGraph implements Pipeline {
                     vertexID, ((OutputFormatOperatorFactory) operatorFactory).getOutputFormat());
         }
         sinks.add(vertexID);
-    }
-
-    /**
-     * Register expanded sink nodes. These nodes should also be treated as sinks. But we do not add
-     * them into {@link #sinks} to avoid messing up the json plan.
-     *
-     * @param nodeIds sink nodes to register
-     */
-    public void registerExpandedSinks(Collection<Integer> nodeIds) {
-        expandedSinks.addAll(nodeIds);
     }
 
     public <IN, OUT> void addOperator(
@@ -612,14 +604,6 @@ public class StreamGraph implements Pipeline {
     }
 
     public void addEdge(Integer upStreamVertexID, Integer downStreamVertexID, int typeNumber) {
-        addEdge(upStreamVertexID, downStreamVertexID, typeNumber, null);
-    }
-
-    public void addEdge(
-            Integer upStreamVertexID,
-            Integer downStreamVertexID,
-            int typeNumber,
-            IntermediateDataSetID intermediateDataSetId) {
         addEdgeInternal(
                 upStreamVertexID,
                 downStreamVertexID,
@@ -627,8 +611,7 @@ public class StreamGraph implements Pipeline {
                 null,
                 new ArrayList<String>(),
                 null,
-                null,
-                intermediateDataSetId);
+                null);
     }
 
     private void addEdgeInternal(
@@ -638,8 +621,7 @@ public class StreamGraph implements Pipeline {
             StreamPartitioner<?> partitioner,
             List<String> outputNames,
             OutputTag outputTag,
-            StreamExchangeMode exchangeMode,
-            IntermediateDataSetID intermediateDataSetId) {
+            StreamExchangeMode exchangeMode) {
 
         if (virtualSideOutputNodes.containsKey(upStreamVertexID)) {
             int virtualId = upStreamVertexID;
@@ -654,8 +636,7 @@ public class StreamGraph implements Pipeline {
                     partitioner,
                     null,
                     outputTag,
-                    exchangeMode,
-                    intermediateDataSetId);
+                    exchangeMode);
         } else if (virtualPartitionNodes.containsKey(upStreamVertexID)) {
             int virtualId = upStreamVertexID;
             upStreamVertexID = virtualPartitionNodes.get(virtualId).f0;
@@ -670,8 +651,7 @@ public class StreamGraph implements Pipeline {
                     partitioner,
                     outputNames,
                     outputTag,
-                    exchangeMode,
-                    intermediateDataSetId);
+                    exchangeMode);
         } else {
             createActualEdge(
                     upStreamVertexID,
@@ -679,8 +659,7 @@ public class StreamGraph implements Pipeline {
                     typeNumber,
                     partitioner,
                     outputTag,
-                    exchangeMode,
-                    intermediateDataSetId);
+                    exchangeMode);
         }
     }
 
@@ -690,22 +669,18 @@ public class StreamGraph implements Pipeline {
             int typeNumber,
             StreamPartitioner<?> partitioner,
             OutputTag outputTag,
-            StreamExchangeMode exchangeMode,
-            IntermediateDataSetID intermediateDataSetId) {
+            StreamExchangeMode exchangeMode) {
         StreamNode upstreamNode = getStreamNode(upStreamVertexID);
         StreamNode downstreamNode = getStreamNode(downStreamVertexID);
 
-        // If no partitioner was specified and the parallelism of upstream and downstream
-        // operator matches use forward partitioning, use rebalance otherwise.
-        if (partitioner == null
-                && upstreamNode.getParallelism() == downstreamNode.getParallelism()) {
-            partitioner =
-                    executionConfig.isDynamicGraph()
-                            ? new ForwardForUnspecifiedPartitioner<>()
-                            : new ForwardPartitioner<>();
-        } else if (partitioner == null) {
-            partitioner = new RebalancePartitioner<Object>();
+        generatePartitionInfo(upstreamNode, downstreamNode);
+
+        if (executionConfig.isUseSourcePartitionAsParallelism()) {
+            overrideParallelismIfNecessary(upstreamNode);
+            overrideParallelismIfNecessary(downstreamNode);
         }
+
+        partitioner = streamPartitionFactory.create(partitioner, upstreamNode, downstreamNode);
 
         if (partitioner instanceof ForwardPartitioner) {
             if (upstreamNode.getParallelism() != downstreamNode.getParallelism()) {
@@ -743,11 +718,89 @@ public class StreamGraph implements Pipeline {
                         partitioner,
                         outputTag,
                         exchangeMode,
-                        uniqueId,
-                        intermediateDataSetId);
+                        uniqueId);
 
         getStreamNode(edge.getSourceId()).addOutEdge(edge);
         getStreamNode(edge.getTargetId()).addInEdge(edge);
+    }
+
+    private void overrideParallelismIfNecessary(StreamNode streamNode) {
+        int nodeId = streamNode.getId();
+        NodePartitionInfo nodePartitionInfo = streamNodeIdToPartitionInfo.get(nodeId);
+        if (nodePartitionInfo == null) {
+            return;
+        }
+
+        boolean shouldOverride =
+                isSourceRelatedNode(streamNode)
+                        && nodePartitionInfo.numberOfPartitions != UNKNOWN_NUMBER_OF_PARTITIONS
+                        && streamNode.getParallelism() > nodePartitionInfo.numberOfPartitions;
+        if (shouldOverride) {
+            // If source related node parallelism greater than the number of kafka partitions,
+            // modify source parallelism to the number of kafka partitions
+            streamNode.setParallelism(nodePartitionInfo.numberOfPartitions);
+            LOG.info(
+                    "Override source related operator {} parallelism to {}",
+                    streamNode.getOperatorName(),
+                    nodePartitionInfo.numberOfPartitions);
+        }
+    }
+
+    private void generatePartitionInfo(StreamNode upstreamNode, StreamNode downstreamNode) {
+
+        NodePartitionInfo upstreamPartitionInfo =
+                streamNodeIdToPartitionInfo.get(upstreamNode.getId());
+        LOG.info(
+                "Generate source state with downstream, upstream node: {}, downstream node: {}",
+                upstreamNode,
+                downstreamNode);
+        boolean needToKeepPrevNumberOfPartitions = false;
+        // This is not necessary. Just initialize `numberOfPartitions` to make the compiler happy.
+        int numberOfPartitions = UNKNOWN_NUMBER_OF_PARTITIONS;
+        boolean shouldRememberPartitionInfo = false;
+        if (isSourceOperator(upstreamNode) && isCalcOperator(downstreamNode)) {
+            shouldRememberPartitionInfo = true;
+            /*
+             * If a watermark assigner is present in the graph, like source -> calc -> watermark
+             * assigner, we should make sure no data distribution (use forward partitioner)
+             * happens so that watermarks are correctly generated. So we need to set
+             * `needToKeepPrevNumberOfPartitions` to true for the calc node.
+             *
+             * If a watermark assigner is absent, the partitioner will be determined by the
+             * number of kafka topic partitions and the global parallelism later.
+             */
+            if (!executionConfig.isUseWatermark()) {
+                numberOfPartitions = UNKNOWN_NUMBER_OF_PARTITIONS;
+            } else {
+                needToKeepPrevNumberOfPartitions = true;
+                numberOfPartitions =
+                        upstreamPartitionInfo != null
+                                ? upstreamPartitionInfo.numberOfPartitions
+                                : UNKNOWN_NUMBER_OF_PARTITIONS;
+            }
+        } else if (isWatermarkAssigner(downstreamNode)) {
+            /*
+             * To make sure watermarks are generated correctly, a watermark assigner' prev node
+             * has to be connected with the watermark assigner with the forward partitioner.
+             */
+            shouldRememberPartitionInfo = true;
+            needToKeepPrevNumberOfPartitions = true;
+            numberOfPartitions =
+                    upstreamPartitionInfo != null
+                            ? upstreamPartitionInfo.numberOfPartitions
+                            : UNKNOWN_NUMBER_OF_PARTITIONS;
+        } else {
+            if (upstreamPartitionInfo != null) {
+                shouldRememberPartitionInfo = true;
+                numberOfPartitions = upstreamPartitionInfo.numberOfPartitions;
+            }
+        }
+
+        if (shouldRememberPartitionInfo) {
+            streamNodeIdToPartitionInfo.put(
+                    downstreamNode.getId(),
+                    new NodePartitionInfo(needToKeepPrevNumberOfPartitions, numberOfPartitions));
+        }
     }
 
     public void setParallelism(Integer vertexID, int parallelism) {
@@ -830,6 +883,18 @@ public class StreamGraph implements Pipeline {
         vertex.setSerializerOut(out);
     }
 
+    public void setSerializersFrom(Integer from, Integer to) {
+        StreamNode fromVertex = getStreamNode(from);
+        StreamNode toVertex = getStreamNode(to);
+
+        toVertex.setSerializersIn(fromVertex.getTypeSerializerOut());
+        toVertex.setSerializerOut(fromVertex.getTypeSerializerIn(0));
+    }
+
+    public <OUT> void setOutType(Integer vertexID, TypeInformation<OUT> outType) {
+        getStreamNode(vertexID).setSerializerOut(outType.createSerializer(executionConfig));
+    }
+
     public void setInputFormat(Integer vertexID, InputFormat<?, ?> inputFormat) {
         getStreamNode(vertexID).setInputFormat(inputFormat);
     }
@@ -893,10 +958,6 @@ public class StreamGraph implements Pipeline {
 
     public Collection<Integer> getSinkIDs() {
         return sinks;
-    }
-
-    public Collection<Integer> getExpandedSinkIds() {
-        return expandedSinks;
     }
 
     public Collection<StreamNode> getStreamNodes() {
@@ -1054,15 +1115,222 @@ public class StreamGraph implements Pipeline {
         return this.vertexNameIncludeIndexPrefix;
     }
 
-    /** Registers the JobStatusHook. */
-    public void registerJobStatusHook(JobStatusHook hook) {
-        checkNotNull(hook, "Registering a null JobStatusHook is not allowed. ");
-        if (!jobStatusHooks.contains(hook)) {
-            this.jobStatusHooks.add(hook);
+    private String truncateOperatorNameIfNecessary(String operatorName) {
+        if (operatorName == null || operatorName.length() <= 300) {
+            return operatorName;
         }
+        return operatorName.substring(0, 300);
     }
 
-    public List<JobStatusHook> getJobStatusHooks() {
-        return this.jobStatusHooks;
+    private boolean isSourceOperator(StreamNode node) {
+        return node.getOperatorName().startsWith("Source");
+    }
+
+    private boolean isCalcOperator(StreamNode node) {
+        return node.getOperatorName().startsWith("Calc");
+    }
+
+    private boolean isWatermarkAssigner(StreamNode node) {
+        return node.getOperatorName().startsWith("WatermarkAssigner");
+    }
+
+    public boolean isSourceRelatedNode(StreamNode node) {
+        return streamNodeIdToPartitionInfo.get(node.getId()).needToKeepPrevNumberOfPartitions
+                || sources.contains(node.getId());
+    }
+
+    /** A factory to create {@link StreamPartitioner}. */
+    class StreamPartitionerFactory {
+
+        /**
+         * User configured partitioner (in the API case) or the partitioner set by the table planner
+         * (in the SQL case) has higher priority. In all other cases, we use a set of rules to
+         * determine which kind of partitioner to be use.
+         */
+        public StreamPartitioner<?> create(
+                StreamPartitioner<?> partitioner,
+                StreamNode upstreamNode,
+                StreamNode downstreamNode) {
+            if (partitioner != null) {
+                return partitioner;
+            }
+
+            int upstreamVertexID = upstreamNode.getId();
+            int downstreamVertexID = downstreamNode.getId();
+
+            if (needToApplyForceRebalance(upstreamNode, downstreamNode)) {
+                partitioner = new RebalancePartitioner<>();
+            } else if (needRescale(upstreamNode, downstreamNode)) {
+                partitioner = new RescalePartitioner<>();
+            } else if (needForward(upstreamNode, downstreamNode)) {
+                partitioner = new ForwardPartitioner<>();
+            } else if (upstreamNode.getParallelism() == downstreamNode.getParallelism()) {
+                // When the parallelisms of upstream and downstream operator equal, forward
+                // partitioner is
+                // preferred. But the user may configure to use rebalance.
+                partitioner =
+                        needRebalance(upstreamVertexID, downstreamVertexID)
+                                ? new RebalancePartitioner<>()
+                                : new ForwardPartitioner<>();
+            } else {
+                partitioner = new RebalancePartitioner<>();
+            }
+            return partitioner;
+        }
+
+        /**
+         * Force forward only works this case, that the parallelism between the upstream and
+         * downstream is equal, and the bottleneck of the job comes from the downstream operator
+         * after the HASH connection (e.g. global window operator).
+         */
+        private boolean needForward(StreamNode upstreamNode, StreamNode downstreamNode) {
+            if (upstreamNode.getParallelism() != downstreamNode.getParallelism()) {
+                return false;
+            }
+            boolean forceForward = executionConfig.isForceForward();
+            if (forceForward) {
+                LOG.info(
+                        "Up stream operator {} has parallelism {}, "
+                                + "down stream operator {} has parallelism {}, config force forward {}.",
+                        truncateOperatorNameIfNecessary(upstreamNode.getOperatorName()),
+                        upstreamNode.getParallelism(),
+                        truncateOperatorNameIfNecessary(downstreamNode.getOperatorName()),
+                        downstreamNode.getParallelism(),
+                        forceForward);
+            }
+            return forceForward;
+        }
+
+        /**
+         * Force Rebalance only works between the last source related operator and calc operator,
+         * relationship between source related operators must be forward rather than rebalance.
+         */
+        private boolean needToApplyForceRebalance(
+                StreamNode upstreamNode, StreamNode downstreamNode) {
+            if (!executionConfig.isForceRebalance()) {
+                return false;
+            }
+
+            NodePartitionInfo upStreamNodePartitionInfo =
+                    streamNodeIdToPartitionInfo.get(upstreamNode.getId());
+            NodePartitionInfo downStreamNodePartitionInfo =
+                    streamNodeIdToPartitionInfo.get(downstreamNode.getId());
+
+            // The upStreamNodePartitionInfo may be null when the up stream node is not kafka source
+            // related node.
+            if (upStreamNodePartitionInfo == null) {
+                if (downStreamNodePartitionInfo != null
+                        && downStreamNodePartitionInfo.needToKeepPrevNumberOfPartitions) {
+                    LOG.info(
+                            "ForceRebalance doesn't work on this source related operator because of "
+                                    + "downStreamNodePartitionInfo.needToKeepPrevNumberOfPartitions = {},"
+                                    + " up stream operator: {}, down stream, operator: {}",
+                            downStreamNodePartitionInfo.needToKeepPrevNumberOfPartitions,
+                            truncateOperatorNameIfNecessary(upstreamNode.getOperatorName()),
+                            truncateOperatorNameIfNecessary(downstreamNode.getOperatorName()));
+                    return false;
+                } else {
+                    return sources.contains(upstreamNode.getId());
+                }
+            }
+
+            // Source related node need to use forward partitioner
+            if (!isSourceRelatedNode(upstreamNode)) {
+                LOG.info(
+                        "ForceRebalance doesn't work on not source related operator, up stream"
+                                + " operator: {}, down stream operator: {}",
+                        truncateOperatorNameIfNecessary(upstreamNode.getOperatorName()),
+                        truncateOperatorNameIfNecessary(downstreamNode.getOperatorName()));
+                return false;
+            }
+            return downStreamNodePartitionInfo == null
+                    || !downStreamNodePartitionInfo.needToKeepPrevNumberOfPartitions;
+        }
+
+        private boolean needRescale(StreamNode upstreamNode, StreamNode downstreamNode) {
+            int upstreamNodeId = upstreamNode.getId();
+            NodePartitionInfo upNodePartitionInfo = streamNodeIdToPartitionInfo.get(upstreamNodeId);
+            if (upNodePartitionInfo == null) {
+                return false;
+            }
+
+            // Source related node need to use forward partitioner
+            if (!isSourceRelatedNode(upstreamNode)) {
+                return false;
+            }
+
+            if (downstreamNode.getParallelism() == upstreamNode.getParallelism()) {
+                return false;
+            }
+
+            boolean needRescale =
+                    downstreamNode.getParallelism() % upstreamNode.getParallelism() == 0
+                            || upstreamNode.getParallelism() % downstreamNode.getParallelism() == 0;
+            if (needRescale) {
+                String upstreamOperatorName = upstreamNode.getOperatorName();
+                String downstreamOperatorName = downstreamNode.getOperatorName();
+                LOG.info(
+                        "Up stream operator {} has parallelism {}, "
+                                + "down stream operator {} has parallelism {}, need rescale.",
+                        truncateOperatorNameIfNecessary(upstreamOperatorName),
+                        upstreamNode.getParallelism(),
+                        truncateOperatorNameIfNecessary(downstreamOperatorName),
+                        downstreamNode.getParallelism());
+                return true;
+            }
+
+            boolean needForceRescale = executionConfig.isForceRescale();
+            if (needForceRescale) {
+                String upstreamOperatorName = upstreamNode.getOperatorName();
+                String downstreamOperatorName = downstreamNode.getOperatorName();
+                LOG.info(
+                        "Up stream operator {} has parallelism {}, "
+                                + "down stream operator {} has parallelism {}, config force rescale {}.",
+                        truncateOperatorNameIfNecessary(upstreamOperatorName),
+                        upstreamNode.getParallelism(),
+                        truncateOperatorNameIfNecessary(downstreamOperatorName),
+                        downstreamNode.getParallelism(),
+                        executionConfig.isForceRescale());
+            }
+            return needForceRescale;
+        }
+
+        private boolean needRebalance(Integer upStreamVertexID, Integer downStreamVertexID) {
+            NodePartitionInfo upStreamNodePartitionInfo =
+                    streamNodeIdToPartitionInfo.get(upStreamVertexID);
+            NodePartitionInfo downStreamNodePartitionInfo =
+                    streamNodeIdToPartitionInfo.get(downStreamVertexID);
+            if (upStreamNodePartitionInfo == null || downStreamNodePartitionInfo == null) {
+                return false;
+            }
+            // We need to use rebalance partitioner when both of the following conditions are met:
+            // 1. the partition info of the up stream node and down stream node differs
+            //    (otherwise we should use forward partitioner)
+            // 2. upStream's number of partitions % downStream's parallelism != 0
+            //    (otherwise we should use rescale or forward partitioner)
+            if (upStreamNodePartitionInfo.needToKeepPrevNumberOfPartitions
+                    && !downStreamNodePartitionInfo.needToKeepPrevNumberOfPartitions) {
+                StreamNode downstreamNode = getStreamNode(downStreamVertexID);
+                boolean needRebalance =
+                        (upStreamNodePartitionInfo.numberOfPartitions
+                                                % downstreamNode.getParallelism())
+                                        != 0
+                                && upStreamNodePartitionInfo.numberOfPartitions
+                                        != UNKNOWN_NUMBER_OF_PARTITIONS;
+                if (needRebalance) {
+                    StreamNode upstreamNode = getStreamNode(upStreamVertexID);
+                    LOG.info(
+                            "source related operator {} has shard number {}"
+                                    + ", down stream operator {} has parallel {}, need rebalance",
+                            truncateOperatorNameIfNecessary(upstreamNode.getOperatorName()),
+                            upStreamNodePartitionInfo.numberOfPartitions,
+                            truncateOperatorNameIfNecessary(downstreamNode.getOperatorName()),
+                            downstreamNode.getParallelism());
+                }
+                return needRebalance;
+            } else {
+                return false;
+            }
+        }
     }
 }

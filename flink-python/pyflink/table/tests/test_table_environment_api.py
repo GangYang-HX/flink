@@ -23,7 +23,7 @@ import unittest
 from py4j.protocol import Py4JJavaError
 from typing import Iterable
 
-from pyflink.common import RowKind, WatermarkStrategy, Configuration
+from pyflink.common import RowKind, WatermarkStrategy
 from pyflink.common.serializer import TypeSerializer
 from pyflink.common.typeinfo import Types
 from pyflink.common.watermark_strategy import TimestampAssigner
@@ -89,11 +89,10 @@ class TableEnvironmentTest(object):
             "python_scalar_func", udf(lambda i: i, result_type=DataTypes.INT()))
 
         t_env.register_java_function("scalar_func",
-                                     "org.apache.flink.table.utils.TestingFunctions$RichFunc0")
+                                     "org.apache.flink.table.legacyutils.RichFunc0")
         t_env.register_java_function(
-            "agg_func", "org.apache.flink.table.utils.TestingFunctions$ByteMaxAggFunction")
-        t_env.register_java_function("table_func",
-                                     "org.apache.flink.table.utils.TestingFunctions$TableFunc1")
+            "agg_func", "org.apache.flink.table.legacyutils.ByteMaxAggFunction")
+        t_env.register_java_function("table_func", "org.apache.flink.table.legacyutils.TableFunc1")
 
         actual = t_env.list_user_defined_functions()
         expected = ['python_scalar_func', 'scalar_func', 'agg_func', 'table_func']
@@ -158,11 +157,11 @@ class TableEnvironmentTest(object):
         t_env = self.t_env
 
         t_env.create_java_temporary_system_function(
-            "scalar_func", "org.apache.flink.table.utils.TestingFunctions$RichFunc0")
+            "scalar_func", "org.apache.flink.table.legacyutils.RichFunc0")
         t_env.create_java_function(
-            "agg_func", "org.apache.flink.table.utils.TestingFunctions$ByteMaxAggFunction")
+            "agg_func", "org.apache.flink.table.legacyutils.ByteMaxAggFunction")
         t_env.create_java_temporary_function(
-            "table_func", "org.apache.flink.table.utils.TestingFunctions$TableFunc1")
+            "table_func", "org.apache.flink.table.legacyutils.TableFunc1")
         self.assert_equals(t_env.list_user_defined_functions(),
                            ['scalar_func', 'agg_func', 'table_func'])
 
@@ -238,12 +237,12 @@ class DataStreamConversionTestCases(PyFlinkTestCase):
         from pyflink.datastream import StreamExecutionEnvironment
 
         super(DataStreamConversionTestCases, self).setUp()
-        config = Configuration()
-        config.set_string("akka.ask.timeout", "20 s")
-        self.env = StreamExecutionEnvironment.get_execution_environment(config)
+        self.env = StreamExecutionEnvironment.get_execution_environment()
         self.t_env = StreamTableEnvironment.create(self.env)
 
         self.env.set_parallelism(2)
+        config = get_j_env_configuration(self.env._j_stream_execution_environment)
+        config.setString("akka.ask.timeout", "20 s")
         self.t_env.get_config().set(
             "python.fn-execution.bundle.size", "1")
         self.test_sink = DataStreamTestSinkFunction()
@@ -281,14 +280,10 @@ class DataStreamConversionTestCases(PyFlinkTestCase):
                                                            Types.STRING()]))
         t_env = self.t_env
         table = t_env.from_data_stream(ds)
-        sink_table_ddl = """
-        CREATE TABLE Sink(a INT, b STRING, c STRING) WITH ('connector'='test-sink')
-        """
-        t_env.execute_sql(sink_table_ddl)
-        expr_sink_ddl = """
-        CREATE TABLE ExprSink(a INT, b STRING, c STRING) WITH ('connector'='test-sink')
-        """
-        t_env.execute_sql(expr_sink_ddl)
+        field_names = ['a', 'b', 'c']
+        field_types = [DataTypes.INT(), DataTypes.STRING(), DataTypes.STRING()]
+        t_env.register_table_sink("Sink",
+                                  source_sink_utils.TestAppendSink(field_names, field_types))
         table.execute_insert("Sink").wait()
         result = source_sink_utils.results()
         expected = ['+I[1, Hi, Hello]', '+I[2, Hello, Hi]']
@@ -297,6 +292,8 @@ class DataStreamConversionTestCases(PyFlinkTestCase):
         ds = ds.map(lambda x: x, Types.ROW([Types.INT(), Types.STRING(), Types.STRING()])) \
                .map(lambda x: x, Types.ROW([Types.INT(), Types.STRING(), Types.STRING()]))
         table = t_env.from_data_stream(ds, col('a'), col('b'), col('c'))
+        t_env.register_table_sink("ExprSink",
+                                  source_sink_utils.TestAppendSink(field_names, field_types))
         table.execute_insert("ExprSink").wait()
         result = source_sink_utils.results()
         self.assert_equals(result, expected)
@@ -436,7 +433,7 @@ class DataStreamConversionTestCases(PyFlinkTestCase):
             self.env,
             environment_settings=EnvironmentSettings.in_streaming_mode())
         table = t_env.from_elements([(1, "Hi", "Hello"), (2, "Hello", "Hi")], ["a", "b", "c"])
-        new_table = table.select(table.a + 1, table.b + 'flink', table.c)
+        new_table = table.select("a + 1, b + 'flink', c")
         ds = t_env.to_append_stream(table=new_table, type_info=Types.ROW([Types.LONG(),
                                                                           Types.STRING(),
                                                                           Types.STRING()]))
@@ -453,7 +450,7 @@ class DataStreamConversionTestCases(PyFlinkTestCase):
             self.env,
             environment_settings=EnvironmentSettings.in_streaming_mode())
         table = t_env.from_elements([(1, "Hi", "Hello"), (1, "Hi", "Hello")], ["a", "b", "c"])
-        new_table = table.group_by(table.c).select(table.a.sum, table.c.alias("b"))
+        new_table = table.group_by("c").select("a.sum, c as b")
         ds = t_env.to_retract_stream(table=new_table, type_info=Types.ROW([Types.LONG(),
                                                                            Types.STRING()]))
         test_sink = DataStreamTestSinkFunction()
@@ -558,7 +555,7 @@ class VectorUDT(UserDefinedType):
             values = [float(v) for v in obj._values]
             return 1, None, None, values
         else:
-            raise TypeError("Cannot serialize {!r} of type {!r}".format(obj, type(obj)))
+            raise TypeError("Cannot serialize %r of type %r".format(obj, type(obj)))
 
     def deserialize(self, datum):
         pass
@@ -634,13 +631,13 @@ class BatchTableEnvironmentTests(PyFlinkBatchTableTestCase):
         t_env = self.t_env
 
         t_env.register_java_function(
-            "scalar_func", "org.apache.flink.table.utils.TestingFunctions$RichFunc0")
+            "scalar_func", "org.apache.flink.table.legacyutils.RichFunc0")
 
         t_env.register_java_function(
-            "agg_func", "org.apache.flink.table.utils.TestingFunctions$ByteMaxAggFunction")
+            "agg_func", "org.apache.flink.table.legacyutils.ByteMaxAggFunction")
 
         t_env.register_java_function(
-            "table_func", "org.apache.flink.table.utils.TestingFunctions$TableFunc1")
+            "table_func", "org.apache.flink.table.legacyutils.TableFunc1")
 
         actual = t_env.list_user_defined_functions()
         expected = ['scalar_func', 'agg_func', 'table_func']
@@ -712,11 +709,11 @@ class BatchTableEnvironmentTests(PyFlinkBatchTableTestCase):
         t_env = self.t_env
 
         t_env.create_java_temporary_system_function(
-            "scalar_func", "org.apache.flink.table.utils.TestingFunctions$RichFunc0")
+            "scalar_func", "org.apache.flink.table.legacyutils.RichFunc0")
         t_env.create_java_function(
-            "agg_func", "org.apache.flink.table.utils.TestingFunctions$ByteMaxAggFunction")
+            "agg_func", "org.apache.flink.table.legacyutils.ByteMaxAggFunction")
         t_env.create_java_temporary_function(
-            "table_func", "org.apache.flink.table.utils.TestingFunctions$TableFunc1")
+            "table_func", "org.apache.flink.table.legacyutils.TableFunc1")
         self.assert_equals(t_env.list_user_defined_functions(),
                            ['scalar_func', 'agg_func', 'table_func'])
 

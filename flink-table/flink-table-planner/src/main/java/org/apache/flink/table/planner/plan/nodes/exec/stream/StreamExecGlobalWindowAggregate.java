@@ -163,7 +163,6 @@ public class StreamExecGlobalWindowAggregate extends StreamExecWindowAggregateBa
 
         final AggregateInfoList localAggInfoList =
                 AggregateUtil.deriveStreamWindowAggregateInfoList(
-                        planner.getTypeFactory(),
                         localAggInputRowType, // should use original input here
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         windowing.getWindow(),
@@ -171,7 +170,6 @@ public class StreamExecGlobalWindowAggregate extends StreamExecWindowAggregateBa
 
         final AggregateInfoList globalAggInfoList =
                 AggregateUtil.deriveStreamWindowAggregateInfoList(
-                        planner.getTypeFactory(),
                         localAggInputRowType, // should use original input here
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         windowing.getWindow(),
@@ -188,8 +186,7 @@ public class StreamExecGlobalWindowAggregate extends StreamExecWindowAggregateBa
                         true,
                         localAggInfoList.getAccTypes(),
                         config,
-                        planner.getFlinkContext().getClassLoader(),
-                        planner.createRelBuilder(),
+                        planner.getRelBuilder(),
                         shiftTimeZone);
 
         // handler used to merge the single local accumulator (on memory) into state accumulator
@@ -202,8 +199,7 @@ public class StreamExecGlobalWindowAggregate extends StreamExecWindowAggregateBa
                         true,
                         localAggInfoList.getAccTypes(),
                         config,
-                        planner.getFlinkContext().getClassLoader(),
-                        planner.createRelBuilder(),
+                        planner.getRelBuilder(),
                         shiftTimeZone);
 
         // handler used to merge state accumulators for merging slices into window,
@@ -217,15 +213,11 @@ public class StreamExecGlobalWindowAggregate extends StreamExecWindowAggregateBa
                         false,
                         globalAggInfoList.getAccTypes(),
                         config,
-                        planner.getFlinkContext().getClassLoader(),
-                        planner.createRelBuilder(),
+                        planner.getRelBuilder(),
                         shiftTimeZone);
 
         final RowDataKeySelector selector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        grouping,
-                        InternalTypeInfo.of(inputRowType));
+                KeySelectorUtil.getRowDataSelector(grouping, InternalTypeInfo.of(inputRowType));
         final LogicalType[] accTypes = convertToLogicalTypes(globalAggInfoList.getAccTypes());
 
         final OneInputStreamOperator<RowData, RowData> windowOperator =
@@ -267,12 +259,11 @@ public class StreamExecGlobalWindowAggregate extends StreamExecWindowAggregateBa
             boolean mergedAccIsOnHeap,
             DataType[] mergedAccExternalTypes,
             ExecNodeConfig config,
-            ClassLoader classLoader,
             RelBuilder relBuilder,
             ZoneId shifTimeZone) {
         final AggsHandlerCodeGenerator generator =
                 new AggsHandlerCodeGenerator(
-                                new CodeGeneratorContext(config, classLoader),
+                                new CodeGeneratorContext(config.getTableConfig()),
                                 relBuilder,
                                 JavaScalaConversionUtil.toScala(localAggInputRowType.getChildren()),
                                 true) // copyInputField

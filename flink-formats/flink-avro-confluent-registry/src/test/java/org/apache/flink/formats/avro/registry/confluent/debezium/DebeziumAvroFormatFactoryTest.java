@@ -31,18 +31,25 @@ import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
 import org.apache.flink.table.runtime.connector.source.ScanRuntimeProviderContext;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.HashMap;
 import java.util.Map;
 
+import static junit.framework.TestCase.assertEquals;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSource;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.junit.Assert.assertThat;
 
 /** Tests for {@link DebeziumAvroFormatFactory}. */
-class DebeziumAvroFormatFactoryTest {
+public class DebeziumAvroFormatFactoryTest extends TestLogger {
+    @Rule public ExpectedException thrown = ExpectedException.none();
 
     private static final ResolvedSchema SCHEMA =
             ResolvedSchema.of(
@@ -57,7 +64,7 @@ class DebeziumAvroFormatFactoryTest {
     private static final String REGISTRY_URL = "http://localhost:8081";
 
     @Test
-    void testSeDeSchema() {
+    public void testSeDeSchema() {
         final Map<String, String> options = getAllOptions();
 
         final Map<String, String> registryConfigs = new HashMap<>();
@@ -68,13 +75,13 @@ class DebeziumAvroFormatFactoryTest {
                 new DebeziumAvroDeserializationSchema(
                         ROW_TYPE, InternalTypeInfo.of(ROW_TYPE), REGISTRY_URL, registryConfigs);
         DeserializationSchema<RowData> actualDeser = createDeserializationSchema(options);
-        assertThat(actualDeser).isEqualTo(expectedDeser);
+        assertEquals(expectedDeser, actualDeser);
 
         DebeziumAvroSerializationSchema expectedSer =
                 new DebeziumAvroSerializationSchema(
                         ROW_TYPE, REGISTRY_URL, SUBJECT, registryConfigs);
         SerializationSchema<RowData> actualSer = createSerializationSchema(options);
-        assertThat(actualSer).isEqualTo(expectedSer);
+        Assert.assertEquals(expectedSer, actualSer);
     }
 
     private Map<String, String> getAllOptions() {
@@ -94,7 +101,7 @@ class DebeziumAvroFormatFactoryTest {
     private static DeserializationSchema<RowData> createDeserializationSchema(
             Map<String, String> options) {
         final DynamicTableSource actualSource = createTableSource(SCHEMA, options);
-        assertThat(actualSource).isInstanceOf(TestDynamicTableFactory.DynamicTableSourceMock.class);
+        assertThat(actualSource, instanceOf(TestDynamicTableFactory.DynamicTableSourceMock.class));
         TestDynamicTableFactory.DynamicTableSourceMock scanSourceMock =
                 (TestDynamicTableFactory.DynamicTableSourceMock) actualSource;
 
@@ -105,7 +112,7 @@ class DebeziumAvroFormatFactoryTest {
     private static SerializationSchema<RowData> createSerializationSchema(
             Map<String, String> options) {
         final DynamicTableSink actualSink = createTableSink(SCHEMA, options);
-        assertThat(actualSink).isInstanceOf(TestDynamicTableFactory.DynamicTableSinkMock.class);
+        assertThat(actualSink, instanceOf(TestDynamicTableFactory.DynamicTableSinkMock.class));
         TestDynamicTableFactory.DynamicTableSinkMock sinkMock =
                 (TestDynamicTableFactory.DynamicTableSinkMock) actualSink;
 

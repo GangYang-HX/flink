@@ -28,10 +28,9 @@ import {
 import { Subject } from 'rxjs';
 import { distinctUntilChanged, filter, mergeMap, takeUntil } from 'rxjs/operators';
 
-import { MetricsService } from '@flink-runtime-web/services';
-import { JobChartComponent } from '@flink-runtime-web/share/customize/job-chart/job-chart.component';
+import { JobChartComponent } from 'share/customize/job-chart/job-chart.component';
 
-import { JobLocalService } from '../../job-local.service';
+import { JobService, MetricsService } from 'services';
 
 @Component({
   selector: 'flink-job-overview-drawer-chart',
@@ -52,26 +51,24 @@ export class JobOverviewDrawerChartComponent implements OnInit, OnDestroy {
 
   constructor(
     private readonly metricsService: MetricsService,
-    private readonly jobLocalService: JobLocalService,
+    private readonly jobService: JobService,
     private readonly cdr: ChangeDetectorRef
   ) {}
 
   public ngOnInit(): void {
-    this.jobLocalService
-      .jobWithVertexChanges()
+    this.jobService.jobWithVertex$
       .pipe(
-        distinctUntilChanged((x, y) => x.vertex!.id === y.vertex!.id),
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
+        distinctUntilChanged((x, y) => x.vertex!.id === y.vertex!.id)
       )
       .subscribe(data => {
         this.loadMetricList(data.job.jid, data.vertex!.id);
       });
-    this.jobLocalService
-      .jobWithVertexChanges()
+    this.jobService.jobWithVertex$
       .pipe(
+        takeUntil(this.destroy$),
         filter(() => this.listOfSelectedMetric.length > 0),
-        mergeMap(data => this.metricsService.loadMetrics(data.job.jid, data.vertex!.id, this.listOfSelectedMetric)),
-        takeUntil(this.destroy$)
+        mergeMap(data => this.metricsService.getMetrics(data.job.jid, data.vertex!.id, this.listOfSelectedMetric))
       )
       .subscribe(res => {
         if (this.listOfJobChartComponent && this.listOfJobChartComponent.length) {
@@ -90,9 +87,9 @@ export class JobOverviewDrawerChartComponent implements OnInit, OnDestroy {
 
   public loadMetricList(jobId: string, vertexId: string): void {
     this.cacheMetricKey = `${jobId}/${vertexId}`;
-    this.metricsService.loadAllAvailableMetrics(jobId, vertexId).subscribe(data => {
+    this.metricsService.getAllAvailableMetrics(jobId, vertexId).subscribe(data => {
       this.listOfMetricName = data.map(item => item.id);
-      this.listOfSelectedMetric = this.jobLocalService.metricsCacheMap.get(this.cacheMetricKey) || [];
+      this.listOfSelectedMetric = this.jobService.metricsCacheMap.get(this.cacheMetricKey) || [];
       this.updateUnselectedMetricList();
       this.cdr.markForCheck();
     });
@@ -100,13 +97,13 @@ export class JobOverviewDrawerChartComponent implements OnInit, OnDestroy {
 
   public updateMetric(metric: string): void {
     this.listOfSelectedMetric = [...this.listOfSelectedMetric, metric];
-    this.jobLocalService.metricsCacheMap.set(this.cacheMetricKey, this.listOfSelectedMetric);
+    this.jobService.metricsCacheMap.set(this.cacheMetricKey, this.listOfSelectedMetric);
     this.updateUnselectedMetricList();
   }
 
   public closeMetric(metric: string): void {
     this.listOfSelectedMetric = this.listOfSelectedMetric.filter(item => item !== metric);
-    this.jobLocalService.metricsCacheMap.set(this.cacheMetricKey, this.listOfSelectedMetric);
+    this.jobService.metricsCacheMap.set(this.cacheMetricKey, this.listOfSelectedMetric);
     this.updateUnselectedMetricList();
   }
 

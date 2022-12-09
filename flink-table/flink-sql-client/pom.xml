@@ -23,7 +23,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-table</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-sql-client</artifactId>
@@ -32,6 +33,10 @@ under the License.
 		This module contains the SQL Client for exploring and
 		submitting SQL programs to Flink.
 	</description>
+
+	<properties>
+		<kafka.version>2.8.1</kafka.version>
+	</properties>
 
 	<packaging>jar</packaging>
 
@@ -51,24 +56,17 @@ under the License.
 			<version>${project.version}</version>
 		</dependency>
 
-		<!-- SQL Gateway -->
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-sql-gateway-api</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-
 		<!-- CLI for SQL CLI client -->
 		<dependency>
 			<groupId>org.jline</groupId>
 			<artifactId>jline-terminal</artifactId>
-			<version>3.21.0</version>
+			<version>3.9.0</version>
 		</dependency>
 
 		<dependency>
 			<groupId>org.jline</groupId>
 			<artifactId>jline-reader</artifactId>
-			<version>3.21.0</version>
+			<version>3.9.0</version>
 		</dependency>
 
 		<!-- configuration -->
@@ -111,6 +109,14 @@ under the License.
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-clients</artifactId>
+			<version>${project.version}</version>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-connector-hive_${scala.binary.version}</artifactId>
 			<version>${project.version}</version>
 			<scope>test</scope>
@@ -124,7 +130,7 @@ under the License.
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-python</artifactId>
+			<artifactId>flink-python_${scala.binary.version}</artifactId>
 			<version>${project.version}</version>
 			<scope>test</scope>
 		</dependency>
@@ -140,15 +146,7 @@ under the License.
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-table-planner_${scala.binary.version}</artifactId>
 			<version>${project.version}</version>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-table-api-java</artifactId>
-			<version>${project.version}</version>
-			<type>test-jar</type>
-			<scope>test</scope>
+			<scope>provided</scope>
 		</dependency>
 
 		<dependency>
@@ -179,7 +177,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.hive</groupId>
 			<artifactId>hive-metastore</artifactId>
-			<version>${hive.version}</version>
+			<version>${hive.metastore.version}</version>
 			<scope>test</scope>
 			<exclusions>
 				<exclusion>
@@ -441,6 +439,10 @@ under the License.
 			<scope>test</scope>
 			<exclusions>
 				<exclusion>
+					<groupId>com.google.guava</groupId>
+					<artifactId>guava</artifactId>
+				</exclusion>
+				<exclusion>
 					<groupId>org.apache.curator</groupId>
 					<artifactId>curator-client</artifactId>
 				</exclusion>
@@ -511,6 +513,11 @@ under the License.
 			<scope>provided</scope>
 		</dependency>
 
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka-clients</artifactId>
+			<version>${kafka.version}</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -532,11 +539,36 @@ under the License.
 							<artifactSet>
 								<includes combine.children="append">
 									<include>org.jline:*</include>
+									<include>org.apache.kafka:*</include>
 								</includes>
 							</artifactSet>
 						</configuration>
 					</execution>
 				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>forbid-direct-table-planner-dependencies</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<skip>true</skip>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<skipTests>true</skipTests>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

@@ -38,7 +38,6 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.ql.exec.FileSinkOperator;
 import org.apache.hadoop.hive.ql.exec.FunctionInfo;
 import org.apache.hadoop.hive.ql.io.HiveOutputFormat;
-import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.udf.generic.SimpleGenericUDAFParameterInfo;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector;
@@ -53,7 +52,6 @@ import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -122,18 +120,12 @@ public interface HiveShim extends Serializable {
      */
     Class<?> getDateDataTypeClass();
 
-    /** Gets writable class for Date type. */
-    Class<?> getDateWritableClass();
-
     /**
      * Hive Timestamp data type class was changed in Hive 3.1.0.
      *
      * @return Hive's Timestamp class
      */
     Class<?> getTimestampDataTypeClass();
-
-    /** Gets writable class for Timestamp type. */
-    Class<?> getTimestampWritableClass();
 
     /**
      * Generate Hive ColumnStatisticsData from Flink CatalogColumnStatisticsDataDate for DATE
@@ -243,15 +235,4 @@ public interface HiveShim extends Serializable {
     }
 
     void registerTemporaryFunction(String funcName, Class funcClass);
-
-    void loadPartition(
-            Hive hive,
-            Path loadPath,
-            String tableName,
-            Map<String, String> partSpec,
-            boolean isSkewedStoreAsSubdir,
-            boolean replace,
-            boolean isSrcLocal);
-
-    void loadTable(Hive hive, Path loadPath, String tableName, boolean replace, boolean isSrcLocal);
 }

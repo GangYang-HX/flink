@@ -37,7 +37,7 @@ import java.util.concurrent.Executor;
 /** Builder for {@link DeclarativeSlotManager}. */
 public class DeclarativeSlotManagerBuilder {
     private SlotMatchingStrategy slotMatchingStrategy;
-    private final ScheduledExecutor scheduledExecutor;
+    private ScheduledExecutor scheduledExecutor;
     private Time taskManagerRequestTimeout;
     private Time slotRequestTimeout;
     private Time taskManagerTimeout;
@@ -51,9 +51,9 @@ public class DeclarativeSlotManagerBuilder {
     private SlotTracker slotTracker;
     private Duration requirementCheckDelay;
 
-    private DeclarativeSlotManagerBuilder(ScheduledExecutor scheduledExecutor) {
+    private DeclarativeSlotManagerBuilder() {
         this.slotMatchingStrategy = AnyMatchingSlotMatchingStrategy.INSTANCE;
-        this.scheduledExecutor = scheduledExecutor;
+        this.scheduledExecutor = TestingUtils.defaultScheduledExecutor();
         this.taskManagerRequestTimeout = TestingUtils.infiniteTime();
         this.slotRequestTimeout = TestingUtils.infiniteTime();
         this.taskManagerTimeout = TestingUtils.infiniteTime();
@@ -70,8 +70,13 @@ public class DeclarativeSlotManagerBuilder {
         this.requirementCheckDelay = Duration.ZERO;
     }
 
-    public static DeclarativeSlotManagerBuilder newBuilder(ScheduledExecutor scheduledExecutor) {
-        return new DeclarativeSlotManagerBuilder(scheduledExecutor);
+    public static DeclarativeSlotManagerBuilder newBuilder() {
+        return new DeclarativeSlotManagerBuilder();
+    }
+
+    public DeclarativeSlotManagerBuilder setScheduledExecutor(ScheduledExecutor scheduledExecutor) {
+        this.scheduledExecutor = scheduledExecutor;
+        return this;
     }
 
     public DeclarativeSlotManagerBuilder setTaskManagerRequestTimeout(

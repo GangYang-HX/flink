@@ -148,7 +148,7 @@ public class TestingSlotPoolService implements SlotPoolService {
     }
 
     @Override
-    public void releaseFreeSlotsOnTaskManager(ResourceID taskManagerId, Exception cause) {
+    public void releaseFreeSlotOnTaskManager(ResourceID taskManagerId, Exception cause) {
         throw new UnsupportedOperationException(
                 "TestingSlotPoolService does not support this operation.");
     }

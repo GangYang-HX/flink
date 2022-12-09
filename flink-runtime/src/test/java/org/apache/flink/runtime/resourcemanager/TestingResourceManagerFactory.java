@@ -33,7 +33,6 @@ import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
-import org.apache.flink.runtime.security.token.DelegationTokenManager;
 import org.apache.flink.util.ConfigurationException;
 import org.apache.flink.util.function.TriConsumer;
 
@@ -77,7 +76,6 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
             RpcService rpcService,
             UUID leaderSessionId,
             HeartbeatServices heartbeatServices,
-            DelegationTokenManager delegationTokenManager,
             FatalErrorHandler fatalErrorHandler,
             ClusterInformation clusterInformation,
             @Nullable String webInterfaceUrl,
@@ -90,7 +88,6 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
                 leaderSessionId,
                 resourceId,
                 heartbeatServices,
-                delegationTokenManager,
                 resourceManagerRuntimeServices.getSlotManager(),
                 ResourceManagerPartitionTrackerImpl::new,
                 BlocklistUtils.loadBlocklistHandlerFactory(configuration),
@@ -173,7 +170,6 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
                 UUID leaderSessionId,
                 ResourceID resourceId,
                 HeartbeatServices heartbeatServices,
-                DelegationTokenManager delegationTokenManager,
                 SlotManager slotManager,
                 ResourceManagerPartitionTrackerFactory clusterPartitionTrackerFactory,
                 BlocklistHandler.Factory blocklistHandlerFactory,
@@ -188,7 +184,6 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
                     leaderSessionId,
                     resourceId,
                     heartbeatServices,
-                    delegationTokenManager,
                     slotManager,
                     clusterPartitionTrackerFactory,
                     blocklistHandlerFactory,
@@ -237,11 +232,6 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
         public CompletableFuture<Void> getTerminationFuture() {
             return getTerminationFutureFunction.apply(
                     MockResourceManager.this, super.getTerminationFuture());
-        }
-
-        @Override
-        public CompletableFuture<Void> getReadyToServeFuture() {
-            return CompletableFuture.completedFuture(null);
         }
     }
 }

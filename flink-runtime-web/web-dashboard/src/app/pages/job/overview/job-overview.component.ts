@@ -27,13 +27,12 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin, Observable, of, Subject } from 'rxjs';
-import { catchError, filter, map, mergeMap, takeUntil } from 'rxjs/operators';
+import { catchError, filter, map, takeUntil } from 'rxjs/operators';
 
-import { NodesItemCorrect, NodesItemLink } from '@flink-runtime-web/interfaces';
-import { MetricsService } from '@flink-runtime-web/services';
-import { DagreComponent } from '@flink-runtime-web/share/common/dagre/dagre.component';
+import { DagreComponent } from 'share/common/dagre/dagre.component';
 
-import { JobLocalService } from '../job-local.service';
+import { NodesItemCorrect, NodesItemLink } from 'interfaces';
+import { JobService, MetricsService } from 'services';
 
 @Component({
   selector: 'flink-job-overview',
@@ -54,17 +53,16 @@ export class JobOverviewComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
 
   constructor(
+    private readonly jobService: JobService,
     private readonly router: Router,
     private readonly activatedRoute: ActivatedRoute,
     public readonly elementRef: ElementRef,
     private readonly metricService: MetricsService,
-    private readonly jobLocalService: JobLocalService,
     private readonly cdr: ChangeDetectorRef
   ) {}
 
   public ngOnInit(): void {
-    this.jobLocalService
-      .jobDetailChanges()
+    this.jobService.jobDetail$
       .pipe(
         filter(job => job.jid === this.activatedRoute.parent!.parent!.snapshot.params.jid),
         takeUntil(this.destroy$)
@@ -83,18 +81,14 @@ export class JobOverviewComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       });
 
-    this.jobLocalService
-      .selectedVertexChanges()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(data => {
-        if (data) {
-          this.dagreComponent.focusNode(data);
-        } else if (this.selectedNode) {
-          this.timeoutId = setTimeout(() => this.dagreComponent.redrawGraph());
-        }
-        this.selectedNode = data;
-        this.cdr.markForCheck();
-      });
+    this.jobService.selectedVertex$.pipe(takeUntil(this.destroy$)).subscribe(data => {
+      if (data) {
+        this.dagreComponent.focusNode(data);
+      } else if (this.selectedNode) {
+        this.timeoutId = setTimeout(() => this.dagreComponent.redrawGraph());
+      }
+      this.selectedNode = data;
+    });
   }
 
   public ngOnDestroy(): void {
@@ -115,28 +109,13 @@ export class JobOverviewComponent implements OnInit, OnDestroy {
     } else {
       this.dagreComponent.focusNode(this.selectedNode, true);
     }
-    this.cdr.markForCheck();
   }
 
-  public refreshNodesWithMetrics(): void {
-    this.mergeWithBackPressure(this.nodes)
-      .pipe(
-        mergeMap(nodes => this.mergeWithWatermarks(nodes)),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(nodes => {
-        nodes.forEach(node => {
-          this.dagreComponent.updateNode(node.id, node);
-          this.cdr.markForCheck();
-        });
-      });
-  }
-
-  private mergeWithBackPressure(nodes: NodesItemCorrect[]): Observable<NodesItemCorrect[]> {
+  public mergeWithBackPressure(nodes: NodesItemCorrect[]): Observable<NodesItemCorrect[]> {
     return forkJoin(
       nodes.map(node => {
         return this.metricService
-          .loadAggregatedMetrics(this.jobId, node.id, ['backPressuredTimeMsPerSecond', 'busyTimeMsPerSecond'])
+          .getAggregatedMetrics(this.jobId, node.id, ['backPressuredTimeMsPerSecond', 'busyTimeMsPerSecond'])
           .pipe(
             map(result => {
               return {
@@ -150,15 +129,25 @@ export class JobOverviewComponent implements OnInit, OnDestroy {
     ).pipe(catchError(() => of(nodes)));
   }
 
-  private mergeWithWatermarks(nodes: NodesItemCorrect[]): Observable<NodesItemCorrect[]> {
+  public mergeWithWatermarks(nodes: NodesItemCorrect[]): Observable<NodesItemCorrect[]> {
     return forkJoin(
       nodes.map(node => {
-        return this.metricService.loadWatermarks(this.jobId, node.id).pipe(
+        return this.metricService.getWatermarks(this.jobId, node.id).pipe(
           map(result => {
             return { ...node, lowWatermark: result.lowWatermark };
           })
         );
       })
     ).pipe(catchError(() => of(nodes)));
+  }
+
+  public refreshNodesWithMetrics(): void {
+    this.mergeWithBackPressure(this.nodes).subscribe(nodes => {
+      this.mergeWithWatermarks(nodes).subscribe(nodes2 => {
+        nodes2.forEach(node => {
+          this.dagreComponent.updateNode(node.id, node);
+        });
+      });
+    });
   }
 }

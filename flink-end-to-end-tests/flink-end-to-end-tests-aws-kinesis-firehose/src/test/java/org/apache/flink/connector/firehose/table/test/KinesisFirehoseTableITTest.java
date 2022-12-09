@@ -20,19 +20,15 @@ package org.apache.flink.connector.firehose.table.test;
 
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.connector.aws.testutils.LocalstackContainer;
-import org.apache.flink.connector.testframe.container.FlinkContainers;
-import org.apache.flink.connector.testframe.container.TestcontainersSettings;
-import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.tests.util.TestUtils;
+import org.apache.flink.tests.util.flink.SQLJobSubmission;
+import org.apache.flink.tests.util.flink.container.FlinkContainers;
 import org.apache.flink.util.DockerImageVersions;
 import org.apache.flink.util.TestLogger;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -46,10 +42,10 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.core.SdkSystemSetting;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.services.firehose.FirehoseClient;
-import software.amazon.awssdk.services.iam.IamClient;
-import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.services.firehose.FirehoseAsyncClient;
+import software.amazon.awssdk.services.iam.IamAsyncClient;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.nio.file.Files;
@@ -82,14 +78,12 @@ public class KinesisFirehoseTableITTest extends TestLogger {
     private static final String BUCKET_NAME = "s3-firehose";
     private static final String STREAM_NAME = "s3-stream";
 
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
-
     private final Path sqlConnectorFirehoseJar = TestUtils.getResource(".*firehose.jar");
 
-    private SdkHttpClient httpClient;
-    private S3Client s3Client;
-    private FirehoseClient firehoseClient;
-    private IamClient iamClient;
+    private SdkAsyncHttpClient httpClient;
+    private S3AsyncClient s3AsyncClient;
+    private FirehoseAsyncClient firehoseAsyncClient;
+    private IamAsyncClient iamAsyncClient;
 
     private static final int NUM_ELEMENTS = 5;
     private static final Network network = Network.newNetwork();
@@ -102,38 +96,35 @@ public class KinesisFirehoseTableITTest extends TestLogger {
                     .withNetwork(network)
                     .withNetworkAliases("localstack");
 
-    public static final TestcontainersSettings TESTCONTAINERS_SETTINGS =
-            TestcontainersSettings.builder()
-                    .environmentVariable("AWS_CBOR_DISABLE", "1")
-                    .environmentVariable(
+    public static final FlinkContainers FLINK =
+            FlinkContainers.builder()
+                    .setEnvironmentVariable("AWS_CBOR_DISABLE", "1")
+                    .setEnvironmentVariable(
                             "FLINK_ENV_JAVA_OPTS",
                             "-Dorg.apache.flink.kinesis-firehose.shaded.com.amazonaws.sdk.disableCertChecking -Daws.cborEnabled=false")
-                    .network(network)
-                    .logger(LOG)
+                    .setNetwork(network)
+                    .setLogger(LOG)
                     .dependsOn(mockFirehoseContainer)
                     .build();
-
-    public static final FlinkContainers FLINK =
-            FlinkContainers.builder().withTestcontainersSettings(TESTCONTAINERS_SETTINGS).build();
 
     @Before
     public void setup() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
 
-        httpClient = createHttpClient();
+        httpClient = createHttpClient(mockFirehoseContainer.getEndpoint());
 
-        s3Client = createS3Client(mockFirehoseContainer.getEndpoint(), httpClient);
-        firehoseClient = createFirehoseClient(mockFirehoseContainer.getEndpoint(), httpClient);
-        iamClient = createIamClient(mockFirehoseContainer.getEndpoint(), httpClient);
+        s3AsyncClient = createS3Client(mockFirehoseContainer.getEndpoint(), httpClient);
+        firehoseAsyncClient = createFirehoseClient(mockFirehoseContainer.getEndpoint(), httpClient);
+        iamAsyncClient = createIamClient(mockFirehoseContainer.getEndpoint(), httpClient);
 
         LOG.info("1 - Creating the bucket for Firehose to deliver into...");
-        createBucket(s3Client, BUCKET_NAME);
+        createBucket(s3AsyncClient, BUCKET_NAME);
 
         LOG.info("2 - Creating the IAM Role for Firehose to write into the s3 bucket...");
-        createIAMRole(iamClient, ROLE_NAME);
+        createIAMRole(iamAsyncClient, ROLE_NAME);
 
         LOG.info("3 - Creating the Firehose delivery stream...");
-        createDeliveryStream(STREAM_NAME, BUCKET_NAME, ROLE_ARN, firehoseClient);
+        createDeliveryStream(STREAM_NAME, BUCKET_NAME, ROLE_ARN, firehoseAsyncClient);
 
         LOG.info("Done setting up the localstack.");
     }
@@ -152,9 +143,9 @@ public class KinesisFirehoseTableITTest extends TestLogger {
     public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
 
-        s3Client.close();
-        firehoseClient.close();
-        iamClient.close();
+        s3AsyncClient.close();
+        firehoseAsyncClient.close();
+        iamAsyncClient.close();
         httpClient.close();
     }
 
@@ -195,10 +186,10 @@ public class KinesisFirehoseTableITTest extends TestLogger {
         List<Order> orders;
         do {
             Thread.sleep(1000);
-            ordersObjects = listBucketObjects(s3Client, BUCKET_NAME);
+            ordersObjects = listBucketObjects(s3AsyncClient, BUCKET_NAME);
             orders =
                     readObjectsFromS3Bucket(
-                            s3Client,
+                            s3AsyncClient,
                             ordersObjects,
                             BUCKET_NAME,
                             responseBytes ->
@@ -212,7 +203,7 @@ public class KinesisFirehoseTableITTest extends TestLogger {
 
     private <T> T fromJson(final String json, final Class<T> type) {
         try {
-            return OBJECT_MAPPER.readValue(json, type);
+            return new ObjectMapper().readValue(json, type);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(String.format("Failed to deserialize json: %s", json), e);
         }
@@ -223,7 +214,6 @@ public class KinesisFirehoseTableITTest extends TestLogger {
         private final String code;
         private final int quantity;
 
-        @JsonCreator
         public Order(
                 @JsonProperty("code") final String code, @JsonProperty("quantity") int quantity) {
             this.code = code;

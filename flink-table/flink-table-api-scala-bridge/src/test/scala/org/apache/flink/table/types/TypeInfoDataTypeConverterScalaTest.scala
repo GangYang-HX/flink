@@ -23,26 +23,28 @@ import org.apache.flink.table.types.TypeInfoDataTypeConverterTest.TestSpec
 import org.apache.flink.table.types.utils.DataTypeFactoryMock.dummyRaw
 import org.apache.flink.table.types.utils.TypeInfoDataTypeConverter
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
-
-import java.util.stream
+import org.hamcrest.CoreMatchers.equalTo
+import org.junit.Assert.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
 
 /** Scala tests for [[TypeInfoDataTypeConverter]]. */
-class TypeInfoDataTypeConverterScalaTest {
+@RunWith(classOf[Parameterized])
+class TypeInfoDataTypeConverterScalaTest(testSpec: TypeInfoDataTypeConverterTest.TestSpec) {
 
-  @ParameterizedTest
-  @MethodSource(Array("testData"))
-  def testScalaConversion(testSpec: TestSpec): Unit = {
+  @Test
+  def testScalaConversion(): Unit = {
     val dataType = TypeInfoDataTypeConverter.toDataType(testSpec.typeFactory, testSpec.typeInfo)
-    assertThat(dataType).isEqualTo(testSpec.expectedDataType)
+    assertThat(dataType, equalTo(testSpec.expectedDataType))
   }
-
 }
 
 object TypeInfoDataTypeConverterScalaTest {
-  def testData(): stream.Stream[TestSpec] = java.util.stream.Stream.of(
+
+  @Parameters
+  def testData: Array[TestSpec] = Array(
     TestSpec
       .forType(createTypeInformation[ScalaCaseClass])
       .expectDataType(

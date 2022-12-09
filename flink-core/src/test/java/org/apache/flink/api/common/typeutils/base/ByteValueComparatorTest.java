@@ -25,7 +25,7 @@ import org.apache.flink.types.ByteValue;
 
 import java.util.Random;
 
-class ByteValueComparatorTest extends ComparatorTestBase<ByteValue> {
+public class ByteValueComparatorTest extends ComparatorTestBase<ByteValue> {
 
     @Override
     protected TypeComparator<ByteValue> createComparator(boolean ascending) {

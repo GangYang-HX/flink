@@ -18,11 +18,14 @@
 
 package org.apache.flink.runtime.dispatcher;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.runtime.dispatcher.cleanup.CheckpointResourcesCleanupRunnerFactory;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmaster.JobResult;
 import org.apache.flink.runtime.rpc.RpcService;
 
+import java.lang.reflect.Constructor;
 import java.util.Collection;
 
 /** {@link DispatcherFactory} which creates a {@link StandaloneDispatcher}. */
@@ -39,8 +42,22 @@ public enum SessionDispatcherFactory implements DispatcherFactory {
             PartialDispatcherServicesWithJobPersistenceComponents
                     partialDispatcherServicesWithJobPersistenceComponents)
             throws Exception {
+        Configuration configuration =
+                partialDispatcherServicesWithJobPersistenceComponents.getConfiguration();
+        Class<? extends StandaloneDispatcher> dispatcherClass =
+                Class.forName(configuration.getString(CoreOptions.EXTEND_DISPATCHER_CLASSNAME))
+                        .asSubclass(StandaloneDispatcher.class);
+        Constructor<? extends StandaloneDispatcher> constructor =
+                dispatcherClass.getConstructor(
+                        RpcService.class,
+                        DispatcherId.class,
+                        Collection.class,
+                        Collection.class,
+                        DispatcherBootstrapFactory.class,
+                        DispatcherServices.class);
+
         // create the default dispatcher
-        return new StandaloneDispatcher(
+        return constructor.newInstance(
                 rpcService,
                 fencingToken,
                 recoveredJobs,

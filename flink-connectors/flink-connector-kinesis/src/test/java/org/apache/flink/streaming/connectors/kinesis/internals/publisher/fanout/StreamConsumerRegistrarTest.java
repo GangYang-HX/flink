@@ -49,7 +49,7 @@ import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfi
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.STREAM_CONSUMER_ARN_EXISTING;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.STREAM_CONSUMER_ARN_NEW;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.StreamConsumerFakeKinesis.NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -96,7 +96,7 @@ public class StreamConsumerRegistrarTest {
 
         String result = registrar.registerStreamConsumer(STREAM, "name");
 
-        assertThat(result).isEqualTo(STREAM_CONSUMER_ARN_NEW);
+        assertEquals(STREAM_CONSUMER_ARN_NEW, result);
     }
 
     @Test
@@ -110,7 +110,7 @@ public class StreamConsumerRegistrarTest {
         String result = registrar.registerStreamConsumer(STREAM, "name");
 
         verify(backoff, never()).sleep(anyLong());
-        assertThat(result).isEqualTo(STREAM_CONSUMER_ARN_EXISTING);
+        assertEquals(STREAM_CONSUMER_ARN_EXISTING, result);
     }
 
     @Test
@@ -125,11 +125,12 @@ public class StreamConsumerRegistrarTest {
 
         // we backoff on each retry
         verify(backoff, times(NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE - 1)).sleep(anyLong());
-        assertThat(result).isEqualTo(STREAM_CONSUMER_ARN_EXISTING);
+        assertEquals(STREAM_CONSUMER_ARN_EXISTING, result);
 
         // We will invoke describe stream until the stream consumer is activated
-        assertThat(kinesis.getNumberOfDescribeStreamConsumerInvocations())
-                .isEqualTo(NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE);
+        assertEquals(
+                NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE,
+                kinesis.getNumberOfDescribeStreamConsumerInvocations());
 
         for (int i = 1; i < NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE; i++) {
             verify(backoff).calculateFullJitterBackoff(anyLong(), anyLong(), anyDouble(), eq(i));
@@ -175,7 +176,7 @@ public class StreamConsumerRegistrarTest {
         String result = registrar.registerStreamConsumer(STREAM, "name");
 
         verify(backoff).sleep(anyLong());
-        assertThat(result).isEqualTo(STREAM_CONSUMER_ARN_EXISTING);
+        assertEquals(STREAM_CONSUMER_ARN_EXISTING, result);
     }
 
     @Test
@@ -189,7 +190,7 @@ public class StreamConsumerRegistrarTest {
         registrar.deregisterStreamConsumer(STREAM);
 
         // We will invoke describe stream until the stream consumer is in the DELETING state
-        assertThat(kinesis.getNumberOfDescribeStreamConsumerInvocations()).isEqualTo(2);
+        assertEquals(2, kinesis.getNumberOfDescribeStreamConsumerInvocations());
 
         for (int i = 1; i < 2; i++) {
             verify(backoff).calculateFullJitterBackoff(anyLong(), anyLong(), anyDouble(), eq(i));
@@ -227,7 +228,7 @@ public class StreamConsumerRegistrarTest {
 
         registrar.deregisterStreamConsumer(STREAM);
 
-        assertThat(kinesis.getNumberOfDescribeStreamConsumerInvocations()).isEqualTo(1);
+        assertEquals(1, kinesis.getNumberOfDescribeStreamConsumerInvocations());
     }
 
     @Test

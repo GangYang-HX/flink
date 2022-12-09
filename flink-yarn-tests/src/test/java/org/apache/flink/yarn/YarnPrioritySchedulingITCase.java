@@ -18,26 +18,33 @@
 
 package org.apache.flink.yarn;
 
+import org.apache.hadoop.util.VersionInfo;
 import org.apache.hadoop.yarn.api.records.ApplicationReport;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.lang.reflect.Method;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.apache.flink.yarn.YarnTestUtils.isHadoopVersionGreaterThanOrEquals;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assume.assumeTrue;
 
 /** Tests to Yarn's priority scheduling. */
-class YarnPrioritySchedulingITCase extends YarnTestBase {
+public class YarnPrioritySchedulingITCase extends YarnTestBase {
 
-    @BeforeAll
+    @BeforeClass
     public static void setup() {
+        assumeTrue(
+                "Priority scheduling is not supported by Hadoop: " + VersionInfo.getVersion(),
+                isHadoopVersionGreaterThanOrEquals(2, 8));
 
         YARN_CONFIGURATION.setStrings("yarn.cluster.max-application-priority", "10");
         startYARNWithConfig(YARN_CONFIGURATION);
     }
 
     @Test
-    void yarnApplication_submissionWithPriority_shouldRespectPriority() throws Exception {
+    public void yarnApplication_submissionWithPriority_shouldRespectPriority() throws Exception {
         runTest(
                 () -> {
                     final int priority = 5;
@@ -80,6 +87,6 @@ class YarnPrioritySchedulingITCase extends YarnTestBase {
         final Class<?> priorityClass = priorityResult.getClass();
         final Method getPriorityPriorityMethod = priorityClass.getMethod(getPriorityMethodName);
 
-        assertThat(getPriorityPriorityMethod.invoke(priorityResult)).isEqualTo(priority);
+        assertThat(getPriorityPriorityMethod.invoke(priorityResult), is(priority));
     }
 }

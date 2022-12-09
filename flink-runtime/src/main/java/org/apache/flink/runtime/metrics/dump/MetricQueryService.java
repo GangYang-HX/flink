@@ -31,7 +31,6 @@ import org.apache.flink.runtime.metrics.groups.AbstractMetricGroup;
 import org.apache.flink.runtime.rpc.RpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.webmonitor.retriever.MetricQueryServiceGateway;
-import org.apache.flink.util.TimeUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,7 +129,7 @@ public class MetricQueryService extends RpcEndpoint implements MetricQueryServic
             Time timeout) {
         return callAsync(
                 () -> enforceSizeLimit(serializer.serialize(counters, gauges, histograms, meters)),
-                TimeUtils.toDuration(timeout));
+                timeout);
     }
 
     private MetricDumpSerialization.MetricSerializationResult enforceSizeLimit(

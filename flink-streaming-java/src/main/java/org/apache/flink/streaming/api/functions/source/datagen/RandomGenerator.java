@@ -24,6 +24,7 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 
 import org.apache.commons.math3.random.RandomDataGenerator;
 
+import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -95,6 +96,15 @@ public abstract class RandomGenerator<T> implements DataGenerator<T> {
             @Override
             public Double next() {
                 return random.nextUniform(min, max);
+            }
+        };
+    }
+
+    public static RandomGenerator<Timestamp> timestampLTZGenerator() {
+        return new RandomGenerator<Timestamp>() {
+            @Override
+            public Timestamp next() {
+                return new Timestamp(System.currentTimeMillis());
             }
         };
     }

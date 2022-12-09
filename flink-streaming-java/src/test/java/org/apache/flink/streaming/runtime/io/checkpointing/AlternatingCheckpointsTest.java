@@ -38,7 +38,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGate;
 import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGateBuilder;
 import org.apache.flink.runtime.io.network.partition.consumer.TestInputChannel;
 import org.apache.flink.runtime.mailbox.SyncMailboxExecutor;
-import org.apache.flink.streaming.runtime.io.checkpointing.BarrierAlignmentUtil.Cancellable;
+import org.apache.flink.streaming.runtime.io.checkpointing.CheckpointBarrierHandler.Cancellable;
 import org.apache.flink.streaming.util.TestCheckpointedInputGateBuilder;
 import org.apache.flink.util.clock.Clock;
 import org.apache.flink.util.clock.ManualClock;
@@ -57,6 +57,7 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 
 import static java.util.Collections.singletonList;
 import static junit.framework.TestCase.assertTrue;
@@ -683,8 +684,8 @@ public class AlternatingCheckpointsTest {
         ClockWithDelayedActions clockWithDelayedActions =
                 new ClockWithDelayedActions() {
                     @Override
-                    public Cancellable registerTask(Callable<?> callable, Duration delay) {
-                        super.registerTask(callable, delay);
+                    public Cancellable apply(Callable<?> callable, Duration delay) {
+                        super.apply(callable, delay);
                         // do not unregister timers on cancel
                         return () -> {};
                     }
@@ -1464,7 +1465,7 @@ public class AlternatingCheckpointsTest {
     }
 
     private static class ClockWithDelayedActions extends Clock
-            implements BarrierAlignmentUtil.DelayableTimer {
+            implements BiFunction<Callable<?>, Duration, Cancellable> {
 
         // must start at least at 100 ms, because ValidatingCheckpointHandler
         // expects barriers to have positive timestamps
@@ -1473,7 +1474,7 @@ public class AlternatingCheckpointsTest {
                 new PriorityQueue<>(Comparator.comparingLong(CallableWithTimestamp::getTimestamp));
 
         @Override
-        public Cancellable registerTask(Callable<?> callable, Duration delay) {
+        public Cancellable apply(Callable<?> callable, Duration delay) {
             CallableWithTimestamp callableWithTimestamp =
                     new CallableWithTimestamp(
                             clock.relativeTimeNanos() + delay.toNanos(), callable);

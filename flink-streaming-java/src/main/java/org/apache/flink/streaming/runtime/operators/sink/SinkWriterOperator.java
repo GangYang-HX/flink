@@ -71,7 +71,8 @@ import static org.apache.flink.util.Preconditions.checkState;
  * @param <InputT> the type of the committable
  * @param <CommT> the type of the committable (to send to downstream operators)
  */
-class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<CommittableMessage<CommT>>
+public class SinkWriterOperator<InputT, CommT>
+        extends AbstractStreamOperator<CommittableMessage<CommT>>
         implements OneInputStreamOperator<InputT, CommittableMessage<CommT>>, BoundedOneInput {
 
     /**
@@ -266,7 +267,8 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
         }
     }
 
-    private static class InitContextImpl implements Sink.InitContext {
+    /** InitContextImpl. */
+    public static class InitContextImpl implements Sink.InitContext {
 
         private final ProcessingTimeService processingTimeService;
 
@@ -306,6 +308,10 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
                             releaseHookName, releaseHook);
                 }
             };
+        }
+
+        public StreamingRuntimeContext getRuntimeContext() {
+            return runtimeContext;
         }
 
         @Override

@@ -361,7 +361,8 @@ public class FanOutShardSubscriber {
                 }
             } else if (subscriptionEvent.isSubscriptionComplete()) {
                 // The subscription is complete, but the shard might not be, so we return incomplete
-                return false;
+                result = false;
+                break;
             } else {
                 handleError(subscriptionEvent.getThrowable());
                 result = false;

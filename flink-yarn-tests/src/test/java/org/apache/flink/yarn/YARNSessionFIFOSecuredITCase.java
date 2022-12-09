@@ -35,10 +35,11 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.ResourceScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.fifo.FifoScheduler;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import org.hamcrest.Matchers;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,20 +47,19 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import java.util.concurrent.Callable;
 
 /**
  * An extension of the {@link YARNSessionFIFOITCase} that runs the tests in a secured YARN cluster.
  */
-class YARNSessionFIFOSecuredITCase extends YARNSessionFIFOITCase {
+public class YARNSessionFIFOSecuredITCase extends YARNSessionFIFOITCase {
 
-    private static final Logger log = LoggerFactory.getLogger(YARNSessionFIFOSecuredITCase.class);
+    protected static final Logger LOG = LoggerFactory.getLogger(YARNSessionFIFOSecuredITCase.class);
 
-    @BeforeAll
+    @BeforeClass
     public static void setup() {
 
-        log.info("starting secure cluster environment for testing");
+        LOG.info("starting secure cluster environment for testing");
 
         YARN_CONFIGURATION.setClass(
                 YarnConfiguration.RM_SCHEDULER, FifoScheduler.class, ResourceScheduler.class);
@@ -100,16 +100,20 @@ class YARNSessionFIFOSecuredITCase extends YARNSessionFIFOITCase {
             // This is needed to ensure that SecurityUtils are run within a ugi.doAs section
             // Since we already logged in here in @BeforeClass, even a no-op security context will
             // still work.
-            assertThat(SecurityUtils.getInstalledContext())
-                    .isInstanceOf(HadoopSecurityContext.class);
+            Assert.assertTrue(
+                    "HadoopSecurityContext must be installed",
+                    SecurityUtils.getInstalledContext() instanceof HadoopSecurityContext);
             SecurityUtils.getInstalledContext()
                     .runSecured(
-                            () -> {
-                                startYARNSecureMode(
-                                        YARN_CONFIGURATION,
-                                        SecureTestEnvironment.getHadoopServicePrincipal(),
-                                        SecureTestEnvironment.getTestKeytab());
-                                return null;
+                            new Callable<Object>() {
+                                @Override
+                                public Integer call() {
+                                    startYARNSecureMode(
+                                            YARN_CONFIGURATION,
+                                            SecureTestEnvironment.getHadoopServicePrincipal(),
+                                            SecureTestEnvironment.getTestKeytab());
+                                    return null;
+                                }
                             });
 
         } catch (Exception e) {
@@ -118,15 +122,14 @@ class YARNSessionFIFOSecuredITCase extends YARNSessionFIFOITCase {
         }
     }
 
-    @AfterAll
-    static void teardownSecureCluster() {
-        log.info("tearing down secure cluster environment");
+    @AfterClass
+    public static void teardownSecureCluster() {
+        LOG.info("tearing down secure cluster environment");
         SecureTestEnvironment.cleanup();
     }
 
-    @Timeout(value = 60)
-    @Test
-    void testDetachedModeSecureWithPreInstallKeytab() throws Exception {
+    @Test(timeout = 60000) // timeout after a minute.
+    public void testDetachedModeSecureWithPreInstallKeytab() throws Exception {
         runTest(
                 () -> {
                     Map<String, String> securityProperties = new HashMap<>();
@@ -153,10 +156,9 @@ class YARNSessionFIFOSecuredITCase extends YARNSessionFIFOITCase {
                 });
     }
 
-    @Timeout(value = 60)
-    @Test
+    @Test(timeout = 60000) // timeout after a minute.
     @Override
-    void testDetachedMode() throws Exception {
+    public void testDetachedMode() throws Exception {
         runTest(
                 () -> {
                     Map<String, String> securityProperties = new HashMap<>();
@@ -183,7 +185,10 @@ class YARNSessionFIFOSecuredITCase extends YARNSessionFIFOITCase {
         final boolean taskManagerRunsWithKerberos =
                 verifyStringsInNamedLogFiles(mustHave, applicationId, "taskmanager.log");
 
-        assertThat(jobManagerRunsWithKerberos && taskManagerRunsWithKerberos).isTrue();
+        Assert.assertThat(
+                "The JobManager and the TaskManager should both run with Kerberos.",
+                jobManagerRunsWithKerberos && taskManagerRunsWithKerberos,
+                Matchers.is(true));
 
         final List<String> amRMTokens =
                 Lists.newArrayList(AMRMTokenIdentifier.KIND_NAME.toString());
@@ -194,8 +199,14 @@ class YARNSessionFIFOSecuredITCase extends YARNSessionFIFOITCase {
         final boolean taskmanagerWithAmRmToken =
                 verifyTokenKindInContainerCredentials(amRMTokens, taskmanagerContainerId);
 
-        assertThat(jobmanagerWithAmRmToken).isTrue();
-        assertThat(taskmanagerWithAmRmToken).isFalse();
+        Assert.assertThat(
+                "The JobManager should have AMRMToken.",
+                jobmanagerWithAmRmToken,
+                Matchers.is(true));
+        Assert.assertThat(
+                "The TaskManager should not have AMRMToken.",
+                taskmanagerWithAmRmToken,
+                Matchers.is(false));
     }
 
     /* For secure cluster testing, it is enough to run only one test and override below test methods

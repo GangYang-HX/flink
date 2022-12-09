@@ -65,7 +65,7 @@ public class RowDataToCsvConverters implements Serializable {
          * Converter context for passing the {@code CsvMapper} and the {@code container} that can be
          * reused between transformations of the individual elements for performance reasons.
          */
-        class RowDataToCsvFormatConverterContext {
+        class RowDataToCsvFormatConverterContext implements Serializable {
             CsvMapper csvMapper;
             ContainerNode<?> container;
 

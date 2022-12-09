@@ -98,6 +98,11 @@ public class MockCheckpointStorage implements CheckpointStorage {
                     public CheckpointStorageLocationReference getLocationReference() {
                         return null;
                     }
+
+                    @Override
+                    public String getMetadataFileFullPath() {
+                        return null;
+                    }
                 };
             }
 

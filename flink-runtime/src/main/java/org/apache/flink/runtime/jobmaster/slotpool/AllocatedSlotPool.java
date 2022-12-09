@@ -108,7 +108,7 @@ public interface AllocatedSlotPool {
      * @return the slot information if there was a slot with the given allocationId; otherwise
      *     {@link Optional#empty()}
      */
-    Optional<SlotInfo> getSlotInformation(AllocationID allocationID);
+    Optional<SlotInfo> getSlotInformation(AllocationID allocationId);
 
     /**
      * Returns information about all currently free slots.

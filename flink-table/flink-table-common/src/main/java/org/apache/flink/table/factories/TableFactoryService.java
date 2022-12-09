@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.descriptors.Descriptor;
+import org.apache.flink.table.descriptors.Schema;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -388,10 +389,12 @@ public class TableFactoryService {
                     plainGivenKeys.stream()
                             .filter(p -> !requiredContextKeys.contains(p))
                             .collect(Collectors.toList());
+            List<String> givenFilteredKeys =
+                    filterSupportedPropertiesFactorySpecific(factory, givenContextFreeKeys);
 
             boolean allTrue = true;
             List<String> unsupportedKeys = new ArrayList<>();
-            for (String k : givenContextFreeKeys) {
+            for (String k : givenFilteredKeys) {
                 if (!(tuple2.f0.contains(k) || tuple2.f1.stream().anyMatch(k::startsWith))) {
                     allTrue = false;
                     unsupportedKeys.add(k);
@@ -459,6 +462,22 @@ public class TableFactoryService {
      */
     private static List<String> filterSupportedPropertiesFactorySpecific(
             TableFactory factory, List<String> keys) {
-        return keys;
+
+        if (factory instanceof TableFormatFactory) {
+            boolean includeSchema = ((TableFormatFactory) factory).supportsSchemaDerivation();
+            return keys.stream()
+                    .filter(
+                            k -> {
+                                if (includeSchema) {
+                                    return k.startsWith(Schema.SCHEMA + ".")
+                                            || k.startsWith(FORMAT + ".");
+                                } else {
+                                    return k.startsWith(FORMAT + ".");
+                                }
+                            })
+                    .collect(Collectors.toList());
+        } else {
+            return keys;
+        }
     }
 }

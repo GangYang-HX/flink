@@ -77,6 +77,7 @@ public class ContinuousHiveSplitEnumerator<T extends Comparable<T>>
             Collection<List<String>> seenPartitionsSinceOffset,
             FileSplitAssigner splitAssigner,
             long discoveryInterval,
+            int threadNum,
             JobConf jobConf,
             ObjectPath tablePath,
             ContinuousPartitionFetcher<Partition, T> fetcher,
@@ -93,10 +94,10 @@ public class ContinuousHiveSplitEnumerator<T extends Comparable<T>>
                         currentReadOffset,
                         seenPartitionsSinceOffset,
                         tablePath,
+                        threadNum,
                         jobConf,
                         fetcher,
-                        fetcherContext,
-                        enumeratorContext.currentParallelism());
+                        fetcherContext);
     }
 
     @Override
@@ -186,26 +187,26 @@ public class ContinuousHiveSplitEnumerator<T extends Comparable<T>>
         private final Set<List<String>> seenPartitionsSinceOffset;
 
         private final ObjectPath tablePath;
+        private final int threadNum;
         private final JobConf jobConf;
         private final ContinuousPartitionFetcher<Partition, T> fetcher;
         private final HiveContinuousPartitionContext<Partition, T> fetcherContext;
-        private final int currentParallelism;
 
         PartitionMonitor(
                 T currentReadOffset,
                 Collection<List<String>> seenPartitionsSinceOffset,
                 ObjectPath tablePath,
+                int threadNum,
                 JobConf jobConf,
                 ContinuousPartitionFetcher<Partition, T> fetcher,
-                HiveContinuousPartitionContext<Partition, T> fetcherContext,
-                int currentParallelism) {
+                HiveContinuousPartitionContext<Partition, T> fetcherContext) {
             this.currentReadOffset = currentReadOffset;
             this.seenPartitionsSinceOffset = new HashSet<>(seenPartitionsSinceOffset);
             this.tablePath = tablePath;
+            this.threadNum = threadNum;
             this.jobConf = jobConf;
             this.fetcher = fetcher;
             this.fetcherContext = fetcherContext;
-            this.currentParallelism = currentParallelism;
         }
 
         @Override
@@ -239,11 +240,11 @@ public class ContinuousHiveSplitEnumerator<T extends Comparable<T>>
                             tablePath.getFullName());
                     newSplits.addAll(
                             HiveSourceFileEnumerator.createInputSplits(
-                                    currentParallelism,
+                                    0,
                                     Collections.singletonList(
                                             fetcherContext.toHiveTablePartition(partition)),
-                                    jobConf,
-                                    false));
+                                    threadNum,
+                                    jobConf));
                 }
             }
             currentReadOffset = maxOffset;

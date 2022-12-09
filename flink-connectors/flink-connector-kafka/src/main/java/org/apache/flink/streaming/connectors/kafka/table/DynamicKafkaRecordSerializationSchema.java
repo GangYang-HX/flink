@@ -33,19 +33,20 @@ import javax.annotation.Nullable;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** SerializationSchema used by {@link KafkaDynamicSink} to configure a {@link KafkaSink}. */
-class DynamicKafkaRecordSerializationSchema implements KafkaRecordSerializationSchema<RowData> {
+public class DynamicKafkaRecordSerializationSchema
+        implements KafkaRecordSerializationSchema<RowData> {
 
-    private final String topic;
-    private final FlinkKafkaPartitioner<RowData> partitioner;
-    @Nullable private final SerializationSchema<RowData> keySerialization;
-    private final SerializationSchema<RowData> valueSerialization;
-    private final RowData.FieldGetter[] keyFieldGetters;
-    private final RowData.FieldGetter[] valueFieldGetters;
-    private final boolean hasMetadata;
-    private final int[] metadataPositions;
-    private final boolean upsertMode;
+    protected final String topic;
+    protected final FlinkKafkaPartitioner<RowData> partitioner;
+    @Nullable protected final SerializationSchema<RowData> keySerialization;
+    protected final SerializationSchema<RowData> valueSerialization;
+    protected final RowData.FieldGetter[] keyFieldGetters;
+    protected final RowData.FieldGetter[] valueFieldGetters;
+    protected final boolean hasMetadata;
+    protected final int[] metadataPositions;
+    protected final boolean upsertMode;
 
-    DynamicKafkaRecordSerializationSchema(
+    public DynamicKafkaRecordSerializationSchema(
             String topic,
             @Nullable FlinkKafkaPartitioner<RowData> partitioner,
             @Nullable SerializationSchema<RowData> keySerialization,
@@ -79,7 +80,9 @@ class DynamicKafkaRecordSerializationSchema implements KafkaRecordSerializationS
             final byte[] valueSerialized = valueSerialization.serialize(consumedRow);
             return new ProducerRecord<>(
                     topic,
+                    // TODO:: 适配多集群
                     extractPartition(
+                            topic,
                             consumedRow,
                             null,
                             valueSerialized,
@@ -119,6 +122,7 @@ class DynamicKafkaRecordSerializationSchema implements KafkaRecordSerializationS
         return new ProducerRecord<>(
                 topic,
                 extractPartition(
+                        topic,
                         consumedRow,
                         keySerialized,
                         valueSerialized,
@@ -144,19 +148,20 @@ class DynamicKafkaRecordSerializationSchema implements KafkaRecordSerializationS
         valueSerialization.open(context);
     }
 
-    private Integer extractPartition(
+    protected Integer extractPartition(
+            String targetTopic,
             RowData consumedRow,
             @Nullable byte[] keySerialized,
             byte[] valueSerialized,
             int[] partitions) {
         if (partitioner != null) {
             return partitioner.partition(
-                    consumedRow, keySerialized, valueSerialized, topic, partitions);
+                    consumedRow, keySerialized, valueSerialized, targetTopic, partitions);
         }
         return null;
     }
 
-    static RowData createProjectedRow(
+    public static RowData createProjectedRow(
             RowData consumedRow, RowKind kind, RowData.FieldGetter[] fieldGetters) {
         final int arity = fieldGetters.length;
         final GenericRowData genericRowData = new GenericRowData(kind, arity);
@@ -167,7 +172,7 @@ class DynamicKafkaRecordSerializationSchema implements KafkaRecordSerializationS
     }
 
     @SuppressWarnings("unchecked")
-    private <T> T readMetadata(RowData consumedRow, KafkaDynamicSink.WritableMetadata metadata) {
+    protected <T> T readMetadata(RowData consumedRow, KafkaDynamicSink.WritableMetadata metadata) {
         final int pos = metadataPositions[metadata.ordinal()];
         if (pos < 0) {
             return null;

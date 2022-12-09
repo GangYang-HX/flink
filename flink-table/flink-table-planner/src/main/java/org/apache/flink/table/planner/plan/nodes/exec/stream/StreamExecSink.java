@@ -167,7 +167,6 @@ public class StreamExecSink extends CommonExecSink implements StreamExecNode<Obj
         return createSinkTransformation(
                 planner.getExecEnv(),
                 config,
-                planner.getFlinkContext().getClassLoader(),
                 inputTransform,
                 tableSink,
                 rowtimeFieldIndex,

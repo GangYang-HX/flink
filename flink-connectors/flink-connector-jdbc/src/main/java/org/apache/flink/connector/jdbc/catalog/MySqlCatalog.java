@@ -152,7 +152,7 @@ public class MySqlCatalog extends AbstractJdbcCatalog {
 
     @Override
     protected String getSchemaName(ObjectPath tablePath) {
-        return tablePath.getDatabaseName();
+        return null;
     }
 
     @Override

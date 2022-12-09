@@ -45,16 +45,15 @@ public class KubernetesTaskManagerTestBase extends KubernetesPodTestBase {
     protected static final double TASK_MANAGER_CPU = 2.0;
     protected static final double TASK_MANAGER_CPU_LIMIT_FACTOR = 1.5;
     protected static final double TASK_MANAGER_MEMORY_LIMIT_FACTOR = 2.0;
-    protected static final String ENTRYPOINT_ARGS = "entrypoint args";
+
+    protected static final Set<String> BLOCKED_NODES =
+            new HashSet<>(Arrays.asList("blockedNode1", "blockedNode2"));
 
     protected TaskExecutorProcessSpec taskExecutorProcessSpec;
 
     protected ContaineredTaskManagerParameters containeredTaskManagerParameters;
 
     protected KubernetesTaskManagerParameters kubernetesTaskManagerParameters;
-
-    protected static final Set<String> BLOCKED_NODES =
-            new HashSet<>(Arrays.asList("blockedNode1", "blockedNode2"));
 
     @Override
     protected void setupFlinkConfig() {
@@ -78,8 +77,6 @@ public class KubernetesTaskManagerTestBase extends KubernetesPodTestBase {
         flinkConfig.set(
                 KubernetesConfigOptions.TASK_MANAGER_MEMORY_LIMIT_FACTOR,
                 TASK_MANAGER_MEMORY_LIMIT_FACTOR);
-        this.flinkConfig.set(
-                KubernetesConfigOptions.KUBERNETES_TASKMANAGER_ENTRYPOINT_ARGS, ENTRYPOINT_ARGS);
     }
 
     @Override

@@ -55,10 +55,7 @@ public class ExternalServiceDecorator extends AbstractKubernetesStepDecorator {
         return clusterId + Constants.FLINK_REST_SERVICE_SUFFIX;
     }
 
-    /**
-     * Generate namespaced name of the external rest Service by cluster Id, This is used by other
-     * project, so do not delete it.
-     */
+    /** Generate namespaced name of the external rest Service. */
     public static String getNamespacedExternalServiceName(String clusterId, String namespace) {
         return getExternalServiceName(clusterId) + "." + namespace;
     }

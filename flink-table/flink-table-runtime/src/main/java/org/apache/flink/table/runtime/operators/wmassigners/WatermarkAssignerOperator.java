@@ -58,6 +58,8 @@ public class WatermarkAssignerOperator extends AbstractStreamOperator<RowData>
 
     private transient WatermarkStatus currentStatus = WatermarkStatus.ACTIVE;
 
+    private transient boolean deliverUpstreamWatermarkEnabled;
+
     /**
      * Create a watermark assigner operator.
      *
@@ -88,6 +90,8 @@ public class WatermarkAssignerOperator extends AbstractStreamOperator<RowData>
         this.currentWatermark = 0;
         this.watermarkInterval = getExecutionConfig().getAutoWatermarkInterval();
         this.lastRecordTime = getProcessingTimeService().getCurrentProcessingTime();
+        this.deliverUpstreamWatermarkEnabled =
+                getExecutionConfig().isDeliverUpstreamWatermarkEnabled();
 
         if (watermarkInterval > 0) {
             long now = getProcessingTimeService().getCurrentProcessingTime();
@@ -111,9 +115,11 @@ public class WatermarkAssignerOperator extends AbstractStreamOperator<RowData>
                     "RowTime field should not be null,"
                             + " please convert it to a non-null long value.");
         }
-        Long watermark = watermarkGenerator.currentWatermark(row);
-        if (watermark != null) {
-            currentWatermark = Math.max(currentWatermark, watermark);
+        if (!deliverUpstreamWatermarkEnabled) {
+            Long watermark = watermarkGenerator.currentWatermark(row);
+            if (watermark != null) {
+                currentWatermark = Math.max(currentWatermark, watermark);
+            }
         }
         // forward element
         output.collect(element);
@@ -157,9 +163,13 @@ public class WatermarkAssignerOperator extends AbstractStreamOperator<RowData>
      */
     @Override
     public void processWatermark(Watermark mark) throws Exception {
-        // if we receive a Long.MAX_VALUE watermark we forward it since it is used
+        // If we receive a Long.MAX_VALUE watermark or using watermark from up stream, we will
+        // forward it.
         // to signal the end of input and to not block watermark progress downstream
-        if (mark.getTimestamp() == Long.MAX_VALUE && currentWatermark != Long.MAX_VALUE) {
+        if (deliverUpstreamWatermarkEnabled) {
+            currentWatermark = Math.max(currentWatermark, mark.getTimestamp());
+            output.emitWatermark(mark);
+        } else if (mark.getTimestamp() == Long.MAX_VALUE && currentWatermark != Long.MAX_VALUE) {
             if (idleTimeout > 0 && currentStatus.equals(WatermarkStatus.IDLE)) {
                 // mark the channel active
                 emitWatermarkStatus(WatermarkStatus.ACTIVE);

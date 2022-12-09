@@ -18,10 +18,13 @@
 
 package org.apache.flink.yarn;
 
+import org.apache.flink.util.TestLogger;
+
+import org.apache.hadoop.util.VersionInfo;
 import org.apache.hadoop.yarn.api.protocolrecords.RegisterApplicationMasterResponse;
 import org.apache.hadoop.yarn.api.records.Container;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.slf4j.Logger;
@@ -33,23 +36,30 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.apache.flink.yarn.YarnTestUtils.isHadoopVersionGreaterThanOrEquals;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasSize;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /** Tests for {@link RegisterApplicationMasterResponseReflector}. */
-class RegisterApplicationMasterResponseReflectorTest {
+public class RegisterApplicationMasterResponseReflectorTest extends TestLogger {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RegisterApplicationMasterResponseReflectorTest.class);
 
     @Mock private Container mockContainer;
 
-    @BeforeEach
-    void setUp() {
+    @Before
+    public void setUp() {
         MockitoAnnotations.initMocks(this);
     }
 
     @Test
-    void testCallsGetContainersFromPreviousAttemptsMethodIfPresent() {
+    public void testCallsGetContainersFromPreviousAttemptsMethodIfPresent() {
         final RegisterApplicationMasterResponseReflector
                 registerApplicationMasterResponseReflector =
                         new RegisterApplicationMasterResponseReflector(LOG, HasMethod.class);
@@ -58,11 +68,11 @@ class RegisterApplicationMasterResponseReflectorTest {
                 registerApplicationMasterResponseReflector.getContainersFromPreviousAttemptsUnsafe(
                         new HasMethod());
 
-        assertThat(containersFromPreviousAttemptsUnsafe).hasSize(1);
+        assertThat(containersFromPreviousAttemptsUnsafe, hasSize(1));
     }
 
     @Test
-    void testDoesntCallGetContainersFromPreviousAttemptsMethodIfAbsent() {
+    public void testDoesntCallGetContainersFromPreviousAttemptsMethodIfAbsent() {
         final RegisterApplicationMasterResponseReflector
                 registerApplicationMasterResponseReflector =
                         new RegisterApplicationMasterResponseReflector(LOG, HasMethod.class);
@@ -71,24 +81,28 @@ class RegisterApplicationMasterResponseReflectorTest {
                 registerApplicationMasterResponseReflector.getContainersFromPreviousAttemptsUnsafe(
                         new Object());
 
-        assertThat(containersFromPreviousAttemptsUnsafe).isEmpty();
+        assertThat(containersFromPreviousAttemptsUnsafe, empty());
     }
 
     @Test
-    void testGetContainersFromPreviousAttemptsMethodReflectiveHadoop22() {
+    public void testGetContainersFromPreviousAttemptsMethodReflectiveHadoop22() {
+        assumeTrue(
+                "Method getContainersFromPreviousAttempts is not supported by Hadoop: "
+                        + VersionInfo.getVersion(),
+                isHadoopVersionGreaterThanOrEquals(2, 2));
 
         final RegisterApplicationMasterResponseReflector
                 registerApplicationMasterResponseReflector =
                         new RegisterApplicationMasterResponseReflector(LOG);
 
-        assertThat(
-                        registerApplicationMasterResponseReflector
-                                .getGetContainersFromPreviousAttemptsMethod())
-                .isPresent();
+        assertTrue(
+                registerApplicationMasterResponseReflector
+                        .getGetContainersFromPreviousAttemptsMethod()
+                        .isPresent());
     }
 
     @Test
-    void testCallsGetSchedulerResourceTypesMethodIfPresent() {
+    public void testCallsGetSchedulerResourceTypesMethodIfPresent() {
         final RegisterApplicationMasterResponseReflector
                 registerApplicationMasterResponseReflector =
                         new RegisterApplicationMasterResponseReflector(LOG, HasMethod.class);
@@ -97,12 +111,12 @@ class RegisterApplicationMasterResponseReflectorTest {
                 registerApplicationMasterResponseReflector.getSchedulerResourceTypeNamesUnsafe(
                         new HasMethod());
 
-        assertThat(schedulerResourceTypeNames).isPresent();
-        assertThat(schedulerResourceTypeNames.get()).contains("MEMORY", "CPU");
+        assertTrue(schedulerResourceTypeNames.isPresent());
+        assertThat(schedulerResourceTypeNames.get(), containsInAnyOrder("MEMORY", "CPU"));
     }
 
     @Test
-    void testDoesntCallGetSchedulerResourceTypesMethodIfAbsent() {
+    public void testDoesntCallGetSchedulerResourceTypesMethodIfAbsent() {
         final RegisterApplicationMasterResponseReflector
                 registerApplicationMasterResponseReflector =
                         new RegisterApplicationMasterResponseReflector(LOG, HasMethod.class);
@@ -111,18 +125,24 @@ class RegisterApplicationMasterResponseReflectorTest {
                 registerApplicationMasterResponseReflector.getSchedulerResourceTypeNamesUnsafe(
                         new Object());
 
-        assertThat(schedulerResourceTypeNames).isNotPresent();
+        assertFalse(schedulerResourceTypeNames.isPresent());
     }
 
     @Test
-    void testGetSchedulerResourceTypesMethodReflectiveHadoop26() {
+    public void testGetSchedulerResourceTypesMethodReflectiveHadoop26() {
+        assumeTrue(
+                "Method getSchedulerResourceTypes is not supported by Hadoop: "
+                        + VersionInfo.getVersion(),
+                isHadoopVersionGreaterThanOrEquals(2, 6));
 
         final RegisterApplicationMasterResponseReflector
                 registerApplicationMasterResponseReflector =
                         new RegisterApplicationMasterResponseReflector(LOG);
 
-        assertThat(registerApplicationMasterResponseReflector.getGetSchedulerResourceTypesMethod())
-                .isPresent();
+        assertTrue(
+                registerApplicationMasterResponseReflector
+                        .getGetSchedulerResourceTypesMethod()
+                        .isPresent());
     }
 
     /**

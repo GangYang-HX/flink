@@ -46,7 +46,9 @@ import java.util.List;
 
 import static org.apache.flink.formats.hadoop.bulk.HadoopPathBasedPartFileWriter.HadoopPathBasedPendingFileRecoverable;
 import static org.apache.flink.formats.hadoop.bulk.HadoopPathBasedPartFileWriter.HadoopPathBasedPendingFileRecoverableSerializer;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /** Base class for testing writing data to the hadoop file system with different configurations. */
 public class HadoopPathBasedPartFileWriterTest extends AbstractTestBase {
@@ -64,8 +66,8 @@ public class HadoopPathBasedPartFileWriterTest extends AbstractTestBase {
         HadoopPathBasedPendingFileRecoverable deSerialized =
                 serializer.deserialize(serializer.getVersion(), serializedBytes);
 
-        assertThat(deSerialized.getTargetFilePath()).isEqualTo(recoverable.getTargetFilePath());
-        assertThat(deSerialized.getTempFilePath()).isEqualTo(recoverable.getTempFilePath());
+        assertEquals(recoverable.getTargetFilePath(), deSerialized.getTargetFilePath());
+        assertEquals(recoverable.getTempFilePath(), deSerialized.getTempFilePath());
     }
 
     @Test
@@ -103,18 +105,18 @@ public class HadoopPathBasedPartFileWriterTest extends AbstractTestBase {
             throws IOException {
         FileSystem fileSystem = FileSystem.get(basePath.toUri(), config);
         FileStatus[] buckets = fileSystem.listStatus(basePath);
-        assertThat(buckets).isNotNull();
-        assertThat(buckets).hasSize(1);
+        assertNotNull(buckets);
+        assertEquals(1, buckets.length);
 
         FileStatus[] partFiles = fileSystem.listStatus(buckets[0].getPath());
-        assertThat(partFiles).isNotNull();
-        assertThat(partFiles).hasSize(2);
+        assertNotNull(partFiles);
+        assertEquals(2, partFiles.length);
 
         for (FileStatus partFile : partFiles) {
-            assertThat(partFile.getLen()).isGreaterThan(0);
+            assertTrue(partFile.getLen() > 0);
 
             List<String> fileContent = readHadoopPath(fileSystem, partFile.getPath());
-            assertThat(fileContent).isEqualTo(expected);
+            assertEquals(expected, fileContent);
         }
     }
 

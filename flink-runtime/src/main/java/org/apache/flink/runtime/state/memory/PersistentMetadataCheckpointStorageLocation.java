@@ -80,4 +80,9 @@ public class PersistentMetadataCheckpointStorageLocation extends MemCheckpointSt
     public CheckpointStorageLocationReference getLocationReference() {
         return CheckpointStorageLocationReference.getDefault();
     }
+
+    @Override
+    public String getMetadataFileFullPath() {
+        return metadataFilePath.getPath();
+    }
 }

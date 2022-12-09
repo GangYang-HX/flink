@@ -21,49 +21,50 @@ package org.apache.flink.connector.file.src.impl;
 import org.apache.flink.connector.file.src.util.RecordAndPosition;
 import org.apache.flink.connector.file.src.util.SingletonResultIterator;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /** Unit tests for the {@link FileRecords} class. */
-class FileRecordsTest {
+public class FileRecordsTest {
 
     @Test
-    void testEmptySplits() {
+    public void testEmptySplits() {
         final String split = "empty";
         final FileRecords<Object> records = FileRecords.finishedSplit(split);
 
-        assertThat(records.finishedSplits()).isEqualTo(Collections.singleton(split));
+        assertEquals(Collections.singleton(split), records.finishedSplits());
     }
 
     @Test
-    void testMoveToFirstSplit() {
+    public void testMoveToFirstSplit() {
         final String splitId = "splitId";
         final FileRecords<Object> records =
                 FileRecords.forRecords(splitId, new SingletonResultIterator<>());
 
         final String firstSplitId = records.nextSplit();
 
-        assertThat(splitId).isEqualTo(firstSplitId);
+        assertEquals(splitId, firstSplitId);
     }
 
     @Test
-    void testMoveToSecondSplit() {
+    public void testMoveToSecondSplit() {
         final FileRecords<Object> records =
                 FileRecords.forRecords("splitId", new SingletonResultIterator<>());
         records.nextSplit();
 
         final String secondSplitId = records.nextSplit();
 
-        assertThat(secondSplitId).isNull();
+        assertNull(secondSplitId);
     }
 
     @Test
-    void testRecordsFromFirstSplit() {
+    public void testRecordsFromFirstSplit() {
         final SingletonResultIterator<String> iter = new SingletonResultIterator<>();
         iter.set("test", 18, 99);
         final FileRecords<String> records = FileRecords.forRecords("splitId", iter);
@@ -71,31 +72,31 @@ class FileRecordsTest {
 
         final RecordAndPosition<String> recAndPos = records.nextRecordFromSplit();
 
-        assertThat(recAndPos.getRecord()).isEqualTo("test");
-        assertThat(recAndPos.getOffset()).isEqualTo(18);
-        assertThat(recAndPos.getRecordSkipCount()).isEqualTo(99);
+        assertEquals("test", recAndPos.getRecord());
+        assertEquals(18, recAndPos.getOffset());
+        assertEquals(99, recAndPos.getRecordSkipCount());
     }
 
-    @Test
-    void testRecordsInitiallyIllegal() {
+    @Test(expected = IllegalStateException.class)
+    public void testRecordsInitiallyIllegal() {
         final FileRecords<Object> records =
                 FileRecords.forRecords("splitId", new SingletonResultIterator<>());
 
-        assertThatThrownBy(records::nextRecordFromSplit).isInstanceOf(IllegalStateException.class);
+        records.nextRecordFromSplit();
     }
 
-    @Test
-    void testRecordsOnSecondSplitIllegal() {
+    @Test(expected = IllegalStateException.class)
+    public void testRecordsOnSecondSplitIllegal() {
         final FileRecords<Object> records =
                 FileRecords.forRecords("splitId", new SingletonResultIterator<>());
         records.nextSplit();
         records.nextSplit();
 
-        assertThatThrownBy(records::nextRecordFromSplit).isInstanceOf(IllegalStateException.class);
+        records.nextRecordFromSplit();
     }
 
     @Test
-    void testRecycleExhaustedBatch() {
+    public void testRecycleExhaustedBatch() {
         final AtomicBoolean recycled = new AtomicBoolean(false);
         final SingletonResultIterator<Object> iter =
                 new SingletonResultIterator<>(() -> recycled.set(true));
@@ -106,15 +107,15 @@ class FileRecordsTest {
         records.nextRecordFromSplit();
 
         // make sure we exhausted the iterator
-        assertThat(records.nextRecordFromSplit()).isNull();
-        assertThat(records.nextSplit()).isNull();
+        assertNull(records.nextRecordFromSplit());
+        assertNull(records.nextSplit());
 
         records.recycle();
-        assertThat(recycled.get()).isTrue();
+        assertTrue(recycled.get());
     }
 
     @Test
-    void testRecycleNonExhaustedBatch() {
+    public void testRecycleNonExhaustedBatch() {
         final AtomicBoolean recycled = new AtomicBoolean(false);
         final SingletonResultIterator<Object> iter =
                 new SingletonResultIterator<>(() -> recycled.set(true));
@@ -124,6 +125,6 @@ class FileRecordsTest {
         records.nextSplit();
 
         records.recycle();
-        assertThat(recycled.get()).isTrue();
+        assertTrue(recycled.get());
     }
 }

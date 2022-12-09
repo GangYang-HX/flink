@@ -60,15 +60,7 @@ public class BinaryHashPartition extends AbstractPagedInputView implements Seeka
     final int partitionNumber; // the number of the partition
 
     long probeSideRecordCounter; // number of probe-side records in this partition
-
-    /**
-     * These buffers are null when create the BinaryHashPartition first, it will be assigned value
-     * in two case: 1) when build stage end, if this partition in memory, all the segments occupied
-     * by this partition will be returned to it; 2) when build stage end, if this partition has
-     * spilled to disk, the data read from disk next time will be assigned to it.
-     */
     private MemorySegment[] partitionBuffers;
-
     private int currentBufferNum;
     private int finalBufferLimit;
 
@@ -215,7 +207,7 @@ public class BinaryHashPartition extends AbstractPagedInputView implements Seeka
                 : this.partitionBuffers.length;
     }
 
-    RandomAccessInputView getBuildStageInputView() {
+    RandomAccessInputView getBuildStateInputView() {
         return this.buildSideWriteBuffer.getBuildStageInputView();
     }
 
@@ -629,7 +621,7 @@ public class BinaryHashPartition extends AbstractPagedInputView implements Seeka
             }
         }
 
-        long getPointer() {
+        final long getPointer() {
             return this.currentPointer;
         }
 

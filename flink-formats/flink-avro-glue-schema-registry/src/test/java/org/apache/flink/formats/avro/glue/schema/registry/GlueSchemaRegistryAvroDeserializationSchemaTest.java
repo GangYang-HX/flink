@@ -18,10 +18,12 @@
 
 package org.apache.flink.formats.avro.glue.schema.registry;
 
+import org.apache.flink.util.TestLogger;
+
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import org.apache.avro.Schema;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,13 +33,13 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link GlueSchemaRegistryAvroDeserializationSchema}. */
-class GlueSchemaRegistryAvroDeserializationSchemaTest {
+public class GlueSchemaRegistryAvroDeserializationSchemaTest extends TestLogger {
     private static final String AVRO_USER_SCHEMA_FILE = "src/test/java/resources/avro/user.avsc";
     private static Schema userSchema;
     private static Map<String, Object> configs = new HashMap<>();
 
-    @BeforeAll
-    static void setup() throws IOException {
+    @BeforeClass
+    public static void setup() throws IOException {
         configs.put(AWSSchemaRegistryConstants.AWS_REGION, "us-west-2");
         configs.put(AWSSchemaRegistryConstants.AWS_ENDPOINT, "https://test");
         configs.put(AWSSchemaRegistryConstants.SCHEMA_AUTO_REGISTRATION_SETTING, true);
@@ -48,17 +50,19 @@ class GlueSchemaRegistryAvroDeserializationSchemaTest {
 
     /** Test whether forGeneric method works. */
     @Test
-    void testForGeneric_withValidParams_succeeds() {
+    public void testForGeneric_withValidParams_succeeds() {
         assertThat(GlueSchemaRegistryAvroDeserializationSchema.forGeneric(userSchema, configs))
-                .isNotNull()
+                .isNotNull();
+        assertThat(GlueSchemaRegistryAvroDeserializationSchema.forGeneric(userSchema, configs))
                 .isInstanceOf(GlueSchemaRegistryAvroDeserializationSchema.class);
     }
 
     /** Test whether forSpecific method works. */
     @Test
-    void testForSpecific_withValidParams_succeeds() {
+    public void testForSpecific_withValidParams_succeeds() {
         assertThat(GlueSchemaRegistryAvroDeserializationSchema.forSpecific(User.class, configs))
-                .isNotNull()
+                .isNotNull();
+        assertThat(GlueSchemaRegistryAvroDeserializationSchema.forSpecific(User.class, configs))
                 .isInstanceOf(GlueSchemaRegistryAvroDeserializationSchema.class);
     }
 }

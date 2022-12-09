@@ -113,7 +113,6 @@ public class BatchExecHashWindowAggregate extends ExecNodeBase<RowData>
 
         final AggregateInfoList aggInfos =
                 AggregateUtil.transformToBatchAggregateInfoList(
-                        planner.getTypeFactory(),
                         aggInputRowType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         null, // aggCallNeedRetractions
@@ -121,9 +120,8 @@ public class BatchExecHashWindowAggregate extends ExecNodeBase<RowData>
         final RowType inputRowType = (RowType) inputEdge.getOutputType();
         final HashWindowCodeGenerator hashWindowCodeGenerator =
                 new HashWindowCodeGenerator(
-                        new CodeGeneratorContext(
-                                config, planner.getFlinkContext().getClassLoader()),
-                        planner.createRelBuilder(),
+                        new CodeGeneratorContext(config.getTableConfig()),
+                        planner.getRelBuilder(),
                         window,
                         inputTimeFieldIndex,
                         inputTimeIsDate,

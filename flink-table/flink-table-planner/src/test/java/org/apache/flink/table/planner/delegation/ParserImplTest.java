@@ -20,36 +20,67 @@ package org.apache.flink.table.planner.delegation;
 
 import org.apache.flink.table.api.SqlParserEOFException;
 import org.apache.flink.table.api.SqlParserException;
+import org.apache.flink.table.api.TableConfig;
+import org.apache.flink.table.catalog.Catalog;
+import org.apache.flink.table.catalog.CatalogManager;
+import org.apache.flink.table.catalog.FunctionCatalog;
+import org.apache.flink.table.catalog.GenericInMemoryCatalog;
 import org.apache.flink.table.delegation.Parser;
+import org.apache.flink.table.module.ModuleManager;
 import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.planner.calcite.FlinkPlannerImpl;
-import org.apache.flink.table.planner.utils.PlannerMocks;
+import org.apache.flink.table.planner.catalog.CatalogManagerCalciteSchema;
+import org.apache.flink.table.utils.CatalogManagerMocks;
 
 import org.junit.Test;
 
 import javax.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
+import static org.apache.calcite.jdbc.CalciteSchemaBuilder.asRootSchema;
+import static org.apache.flink.core.testutils.CommonTestUtils.assertThrows;
 import static org.apache.flink.table.planner.delegation.ParserImplTest.TestSpec.forStatement;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 /** Test for {@link ParserImpl}. */
 public class ParserImplTest {
 
-    private final PlannerMocks plannerMocks = PlannerMocks.create(true);
+    private final boolean isStreamingMode = false;
+    private final TableConfig tableConfig = new TableConfig();
+    private final Catalog catalog = new GenericInMemoryCatalog("MockCatalog", "default");
+    private final CatalogManager catalogManager =
+            CatalogManagerMocks.preparedCatalogManager().defaultCatalog("builtin", catalog).build();
+    private final ModuleManager moduleManager = new ModuleManager();
+    private final FunctionCatalog functionCatalog =
+            new FunctionCatalog(tableConfig, catalogManager, moduleManager);
+    private final PlannerContext plannerContext =
+            new PlannerContext(
+                    !isStreamingMode,
+                    tableConfig,
+                    moduleManager,
+                    functionCatalog,
+                    catalogManager,
+                    asRootSchema(new CatalogManagerCalciteSchema(catalogManager, isStreamingMode)),
+                    new ArrayList<>());
 
-    private final Supplier<FlinkPlannerImpl> plannerSupplier = plannerMocks::getPlanner;
+    private final Supplier<FlinkPlannerImpl> plannerSupplier =
+            () ->
+                    plannerContext.createFlinkPlanner(
+                            catalogManager.getCurrentCatalog(),
+                            catalogManager.getCurrentDatabase());
 
     private final Parser parser =
             new ParserImpl(
-                    plannerMocks.getCatalogManager(),
+                    catalogManager,
                     plannerSupplier,
                     () -> plannerSupplier.get().parser(),
-                    plannerMocks.getPlannerContext().getRexFactory());
+                    plannerContext.getSqlExprToRexConverterFactory());
 
     private static final List<TestSpec> TEST_SPECS =
             Arrays.asList(
@@ -80,13 +111,14 @@ public class ParserImplTest {
         for (TestSpec spec : TEST_SPECS) {
             if (spec.expectedSummary != null) {
                 Operation op = parser.parse(spec.statement).get(0);
-                assertThat(op.asSummaryString()).isEqualTo(spec.expectedSummary);
+                assertEquals(spec.expectedSummary, op.asSummaryString());
             }
 
             if (spec.expectedError != null) {
-                assertThatThrownBy(() -> parser.parse(spec.statement))
-                        .isInstanceOf(SqlParserException.class)
-                        .hasMessageContaining(spec.expectedError);
+                assertThrows(
+                        spec.expectedError,
+                        SqlParserException.class,
+                        () -> parser.parse(spec.statement));
             }
         }
     }
@@ -145,6 +177,6 @@ public class ParserImplTest {
 
     private void verifySqlCompletion(String statement, int position, String[] expectedHints) {
         String[] hints = parser.getCompletionHints(statement, position);
-        assertThat(hints).isEqualTo(expectedHints);
+        assertArrayEquals(expectedHints, hints);
     }
 }

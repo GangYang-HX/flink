@@ -93,7 +93,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
-import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
+import static org.apache.flink.core.testutils.FlinkAssertions.containsCause;
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.AVRO_CONFLUENT;
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.DEBEZIUM_AVRO_CONFLUENT;
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptionsUtil.PROPERTIES_PREFIX;
@@ -144,6 +144,12 @@ public class KafkaDynamicTableFactoryTest {
         KAFKA_SINK_PROPERTIES.setProperty("bootstrap.servers", "dummy");
 
         KAFKA_FINAL_SINK_PROPERTIES.putAll(KAFKA_SINK_PROPERTIES);
+        KAFKA_FINAL_SINK_PROPERTIES.setProperty(
+                "value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
+        KAFKA_FINAL_SINK_PROPERTIES.setProperty(
+                "key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
+        KAFKA_FINAL_SINK_PROPERTIES.put("transaction.timeout.ms", 3600000);
+
         KAFKA_FINAL_SOURCE_PROPERTIES.putAll(KAFKA_SOURCE_PROPERTIES);
     }
 
@@ -690,7 +696,7 @@ public class KafkaDynamicTableFactoryTest {
         }
 
         if (avroFormats.contains(keyFormat)) {
-            assertThat(sink.keyEncodingFormat).isNotNull();
+            assert sink.keyEncodingFormat != null;
             SerializationSchema<RowData> actualKeyEncoder =
                     sink.keyEncodingFormat.createRuntimeEncoder(
                             new SinkRuntimeProviderContext(false), SCHEMA_DATA_TYPE);
@@ -738,9 +744,9 @@ public class KafkaDynamicTableFactoryTest {
                         })
                 .isInstanceOf(ValidationException.class)
                 .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Option 'topic' and 'topic-pattern' shouldn't be set together."));
+                        containsCause(
+                                new ValidationException(
+                                        "Option 'topic' and 'topic-pattern' shouldn't be set together.")));
     }
 
     @Test
@@ -757,10 +763,10 @@ public class KafkaDynamicTableFactoryTest {
                         })
                 .isInstanceOf(ValidationException.class)
                 .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "'scan.startup.timestamp-millis' "
-                                        + "is required in 'timestamp' startup mode but missing."));
+                        containsCause(
+                                new ValidationException(
+                                        "'scan.startup.timestamp-millis' "
+                                                + "is required in 'timestamp' startup mode but missing.")));
     }
 
     @Test
@@ -778,10 +784,10 @@ public class KafkaDynamicTableFactoryTest {
                         })
                 .isInstanceOf(ValidationException.class)
                 .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "'scan.startup.specific-offsets' "
-                                        + "is required in 'specific-offsets' startup mode but missing."));
+                        containsCause(
+                                new ValidationException(
+                                        "'scan.startup.specific-offsets' "
+                                                + "is required in 'specific-offsets' startup mode but missing.")));
     }
 
     @Test
@@ -797,9 +803,10 @@ public class KafkaDynamicTableFactoryTest {
                         })
                 .isInstanceOf(ValidationException.class)
                 .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Could not find and instantiate partitioner " + "class 'abc'"));
+                        containsCause(
+                                new ValidationException(
+                                        "Could not find and instantiate partitioner "
+                                                + "class 'abc'")));
     }
 
     @Test
@@ -816,10 +823,10 @@ public class KafkaDynamicTableFactoryTest {
                         })
                 .isInstanceOf(ValidationException.class)
                 .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Currently 'round-robin' partitioner only works "
-                                        + "when option 'key.fields' is not specified."));
+                        containsCause(
+                                new ValidationException(
+                                        "Currently 'round-robin' partitioner only works "
+                                                + "when option 'key.fields' is not specified.")));
     }
 
     @Test
@@ -843,9 +850,9 @@ public class KafkaDynamicTableFactoryTest {
                         })
                 .isInstanceOf(ValidationException.class)
                 .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "sink.transactional-id-prefix must be specified when using DeliveryGuarantee.EXACTLY_ONCE."));
+                        containsCause(
+                                new ValidationException(
+                                        "sink.transactional-id-prefix must be specified when using DeliveryGuarantee.EXACTLY_ONCE.")));
     }
 
     @Test

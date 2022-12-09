@@ -73,7 +73,6 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.planner.plan.utils.AggregateUtil.isTableAggregate;
-import static org.apache.flink.table.planner.utils.ShortcutUtils.unwrapContext;
 
 /** Flink-specific {@link RelBuilder}. */
 @Internal
@@ -89,7 +88,7 @@ public final class FlinkRelBuilder extends RelBuilder {
         super(context, cluster, relOptSchema);
 
         this.toRelNodeConverter =
-                new QueryOperationConverter(this, unwrapContext(context).isBatchMode());
+                new QueryOperationConverter(this, context.unwrap(FlinkContext.class).isBatchMode());
         this.expandFactory =
                 Util.first(
                         context.unwrap(ExpandFactory.class),

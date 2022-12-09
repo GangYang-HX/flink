@@ -26,6 +26,7 @@ import org.apache.flink.kubernetes.configuration.KubernetesConfigOptions;
 import org.apache.flink.kubernetes.configuration.KubernetesConfigOptionsInternal;
 import org.apache.flink.kubernetes.configuration.KubernetesDeploymentTarget;
 import org.apache.flink.kubernetes.entrypoint.KubernetesSessionClusterEntrypoint;
+import org.apache.flink.kubernetes.highavailability.KubernetesHaServicesFactory;
 import org.apache.flink.kubernetes.kubeclient.FlinkPod;
 import org.apache.flink.kubernetes.kubeclient.KubernetesJobManagerSpecification;
 import org.apache.flink.kubernetes.kubeclient.KubernetesJobManagerTestBase;
@@ -37,7 +38,6 @@ import org.apache.flink.kubernetes.kubeclient.decorators.KerberosMountDecorator;
 import org.apache.flink.kubernetes.kubeclient.services.HeadlessClusterIPService;
 import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.kubernetes.utils.KubernetesUtils;
-import org.apache.flink.runtime.jobmanager.HighAvailabilityMode;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.Container;
@@ -49,7 +49,8 @@ import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentSpec;
-import org.junit.jupiter.api.Test;
+import org.hamcrest.Matchers;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Base64;
@@ -62,10 +63,17 @@ import java.util.stream.Collectors;
 import static org.apache.flink.configuration.GlobalConfiguration.FLINK_CONF_FILENAME;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOG4J_NAME;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOGBACK_NAME;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /** General tests for the {@link KubernetesJobManagerFactory}. */
-class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
+public class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
 
     private static final String SERVICE_ACCOUNT_NAME = "service-test";
     private static final String ENTRY_POINT_CLASS =
@@ -119,52 +127,54 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
     }
 
     @Test
-    void testDeploymentMetadata() throws IOException {
+    public void testDeploymentMetadata() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
         final Deployment resultDeployment = this.kubernetesJobManagerSpecification.getDeployment();
-        assertThat(resultDeployment.getApiVersion()).isEqualTo(Constants.APPS_API_VERSION);
-        assertThat(resultDeployment.getMetadata().getName())
-                .isEqualTo(KubernetesUtils.getDeploymentName(CLUSTER_ID));
+        assertEquals(Constants.APPS_API_VERSION, resultDeployment.getApiVersion());
+        assertEquals(
+                KubernetesUtils.getDeploymentName(CLUSTER_ID),
+                resultDeployment.getMetadata().getName());
         final Map<String, String> expectedLabels = getCommonLabels();
         expectedLabels.put(Constants.LABEL_COMPONENT_KEY, Constants.LABEL_COMPONENT_JOB_MANAGER);
         expectedLabels.putAll(userLabels);
-        assertThat(resultDeployment.getMetadata().getLabels()).isEqualTo(expectedLabels);
+        assertEquals(expectedLabels, resultDeployment.getMetadata().getLabels());
 
-        assertThat(resultDeployment.getMetadata().getAnnotations()).isEqualTo(userAnnotations);
+        assertThat(resultDeployment.getMetadata().getAnnotations(), equalTo(userAnnotations));
 
-        assertThat(resultDeployment.getMetadata().getOwnerReferences())
-                .contains(OWNER_REFERENCES.toArray(new OwnerReference[0]));
+        assertThat(
+                resultDeployment.getMetadata().getOwnerReferences(),
+                Matchers.containsInAnyOrder(OWNER_REFERENCES.toArray()));
     }
 
     @Test
-    void testDeploymentSpec() throws IOException {
+    public void testDeploymentSpec() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
 
         final DeploymentSpec resultDeploymentSpec =
                 this.kubernetesJobManagerSpecification.getDeployment().getSpec();
-        assertThat(resultDeploymentSpec.getReplicas().intValue()).isEqualTo(1);
+        assertEquals(1, resultDeploymentSpec.getReplicas().intValue());
 
         final Map<String, String> expectedLabels = new HashMap<>(getCommonLabels());
         expectedLabels.put(Constants.LABEL_COMPONENT_KEY, Constants.LABEL_COMPONENT_JOB_MANAGER);
 
-        assertThat(resultDeploymentSpec.getSelector().getMatchLabels()).isEqualTo(expectedLabels);
+        assertEquals(expectedLabels, resultDeploymentSpec.getSelector().getMatchLabels());
 
         expectedLabels.putAll(userLabels);
-        assertThat(resultDeploymentSpec.getTemplate().getMetadata().getLabels())
-                .isEqualTo(expectedLabels);
+        assertEquals(expectedLabels, resultDeploymentSpec.getTemplate().getMetadata().getLabels());
 
-        assertThat(resultDeploymentSpec.getTemplate().getMetadata().getAnnotations())
-                .isEqualTo(userAnnotations);
+        assertThat(
+                resultDeploymentSpec.getTemplate().getMetadata().getAnnotations(),
+                equalTo(userAnnotations));
 
-        assertThat(resultDeploymentSpec.getTemplate().getSpec()).isNotNull();
+        assertNotNull(resultDeploymentSpec.getTemplate().getSpec());
     }
 
     @Test
-    void testPodSpec() throws IOException {
+    public void testPodSpec() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
@@ -176,65 +186,65 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                         .getTemplate()
                         .getSpec();
 
-        assertThat(resultPodSpec.getContainers()).hasSize(1);
-        assertThat(resultPodSpec.getServiceAccountName()).isEqualTo(SERVICE_ACCOUNT_NAME);
-        assertThat(resultPodSpec.getVolumes()).hasSize(3);
+        assertEquals(1, resultPodSpec.getContainers().size());
+        assertEquals(SERVICE_ACCOUNT_NAME, resultPodSpec.getServiceAccountName());
+        assertEquals(3, resultPodSpec.getVolumes().size());
 
         final Container resultedMainContainer = resultPodSpec.getContainers().get(0);
-        assertThat(resultedMainContainer.getName()).isEqualTo(Constants.MAIN_CONTAINER_NAME);
-        assertThat(resultedMainContainer.getImage()).isEqualTo(CONTAINER_IMAGE);
-        assertThat(resultedMainContainer.getImagePullPolicy())
-                .isEqualTo(CONTAINER_IMAGE_PULL_POLICY.name());
+        assertEquals(Constants.MAIN_CONTAINER_NAME, resultedMainContainer.getName());
+        assertEquals(CONTAINER_IMAGE, resultedMainContainer.getImage());
+        assertEquals(
+                CONTAINER_IMAGE_PULL_POLICY.name(), resultedMainContainer.getImagePullPolicy());
 
-        assertThat(resultedMainContainer.getEnv()).hasSize(3);
-        assertThat(resultedMainContainer.getEnv().stream())
-                .anyMatch(envVar -> envVar.getName().equals("key1"));
+        assertEquals(4, resultedMainContainer.getEnv().size());
+        assertTrue(
+                resultedMainContainer.getEnv().stream()
+                        .anyMatch(envVar -> envVar.getName().equals("key1")));
 
-        assertThat(resultedMainContainer.getPorts()).hasSize(3);
+        assertEquals(3, resultedMainContainer.getPorts().size());
 
         final Map<String, Quantity> requests = resultedMainContainer.getResources().getRequests();
-        assertThat(requests.get("cpu").getAmount()).isEqualTo(Double.toString(JOB_MANAGER_CPU));
-        assertThat(requests.get("memory").getAmount())
-                .isEqualTo(String.valueOf(JOB_MANAGER_MEMORY));
+        assertEquals(Double.toString(JOB_MANAGER_CPU), requests.get("cpu").getAmount());
+        assertEquals(String.valueOf(JOB_MANAGER_MEMORY), requests.get("memory").getAmount());
 
-        assertThat(resultedMainContainer.getCommand()).hasSize(1);
+        assertEquals(1, resultedMainContainer.getCommand().size());
         // The args list is [bash, -c, 'java -classpath $FLINK_CLASSPATH ...'].
-        assertThat(resultedMainContainer.getArgs()).hasSize(3);
+        assertEquals(3, resultedMainContainer.getArgs().size());
 
-        assertThat(resultedMainContainer.getVolumeMounts()).hasSize(3);
+        assertEquals(3, resultedMainContainer.getVolumeMounts().size());
     }
 
     @Test
-    void testAdditionalResourcesSize() throws IOException {
+    public void testAdditionalResourcesSize() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
 
         final List<HasMetadata> resultAdditionalResources =
                 this.kubernetesJobManagerSpecification.getAccompanyingResources();
-        assertThat(resultAdditionalResources).hasSize(5);
+        assertEquals(5, resultAdditionalResources.size());
 
         final List<HasMetadata> resultServices =
                 resultAdditionalResources.stream()
                         .filter(x -> x instanceof Service)
                         .collect(Collectors.toList());
-        assertThat(resultServices).hasSize(2);
+        assertEquals(2, resultServices.size());
 
         final List<HasMetadata> resultConfigMaps =
                 resultAdditionalResources.stream()
                         .filter(x -> x instanceof ConfigMap)
                         .collect(Collectors.toList());
-        assertThat(resultConfigMaps).hasSize(2);
+        assertEquals(2, resultConfigMaps.size());
 
         final List<HasMetadata> resultSecrets =
                 resultAdditionalResources.stream()
                         .filter(x -> x instanceof Secret)
                         .collect(Collectors.toList());
-        assertThat(resultSecrets).hasSize(1);
+        assertEquals(1, resultSecrets.size());
     }
 
     @Test
-    void testServices() throws IOException {
+    public void testServices() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
@@ -245,7 +255,7 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                         .map(x -> (Service) x)
                         .collect(Collectors.toList());
 
-        assertThat(resultServices).hasSize(2);
+        assertEquals(2, resultServices.size());
 
         final List<Service> internalServiceCandidates =
                 resultServices.stream()
@@ -258,7 +268,7 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                                                                 .getInternalServiceName(
                                                                         CLUSTER_ID)))
                         .collect(Collectors.toList());
-        assertThat(internalServiceCandidates).hasSize(1);
+        assertEquals(1, internalServiceCandidates.size());
 
         final List<Service> restServiceCandidates =
                 resultServices.stream()
@@ -271,27 +281,28 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                                                                 .getExternalServiceName(
                                                                         CLUSTER_ID)))
                         .collect(Collectors.toList());
-        assertThat(restServiceCandidates).hasSize(1);
+        assertEquals(1, restServiceCandidates.size());
 
         final Service resultInternalService = internalServiceCandidates.get(0);
-        assertThat(resultInternalService.getMetadata().getLabels()).hasSize(2);
+        assertEquals(2, resultInternalService.getMetadata().getLabels().size());
 
-        assertThat(resultInternalService.getSpec().getType()).isNull();
-        assertThat(resultInternalService.getSpec().getClusterIP())
-                .isEqualTo(HeadlessClusterIPService.HEADLESS_CLUSTER_IP);
-        assertThat(resultInternalService.getSpec().getPorts()).hasSize(2);
-        assertThat(resultInternalService.getSpec().getSelector()).hasSize(3);
+        assertNull(resultInternalService.getSpec().getType());
+        assertEquals(
+                HeadlessClusterIPService.HEADLESS_CLUSTER_IP,
+                resultInternalService.getSpec().getClusterIP());
+        assertEquals(2, resultInternalService.getSpec().getPorts().size());
+        assertEquals(3, resultInternalService.getSpec().getSelector().size());
 
         final Service resultRestService = restServiceCandidates.get(0);
-        assertThat(resultRestService.getMetadata().getLabels()).hasSize(2);
+        assertEquals(2, resultRestService.getMetadata().getLabels().size());
 
-        assertThat(resultRestService.getSpec().getType()).isEqualTo("ClusterIP");
-        assertThat(resultRestService.getSpec().getPorts()).hasSize(1);
-        assertThat(resultRestService.getSpec().getSelector()).hasSize(3);
+        assertEquals("ClusterIP", resultRestService.getSpec().getType());
+        assertEquals(1, resultRestService.getSpec().getPorts().size());
+        assertEquals(3, resultRestService.getSpec().getSelector().size());
     }
 
     @Test
-    void testKerberosConfConfigMap() throws IOException {
+    public void testKerberosConfConfigMap() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
@@ -311,18 +322,19 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                                 .collect(Collectors.toList())
                                 .get(0);
 
-        assertThat(resultConfigMap.getApiVersion()).isEqualTo(Constants.API_VERSION);
+        assertEquals(Constants.API_VERSION, resultConfigMap.getApiVersion());
 
-        assertThat(resultConfigMap.getMetadata().getName())
-                .isEqualTo(KerberosMountDecorator.getKerberosKrb5confConfigMapName(CLUSTER_ID));
+        assertEquals(
+                KerberosMountDecorator.getKerberosKrb5confConfigMapName(CLUSTER_ID),
+                resultConfigMap.getMetadata().getName());
 
         final Map<String, String> resultDatas = resultConfigMap.getData();
-        assertThat(resultDatas).hasSize(1);
-        assertThat(resultDatas.get(KRB5_CONF_FILE)).isEqualTo("some conf");
+        assertEquals(1, resultDatas.size());
+        assertEquals("some conf", resultDatas.get(KRB5_CONF_FILE));
     }
 
     @Test
-    void testKerberosKeytabSecret() throws IOException {
+    public void testKerberosKeytabSecret() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
@@ -343,13 +355,14 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                                 .get(0);
 
         final Map<String, String> resultDatas = resultSecret.getData();
-        assertThat(resultDatas).hasSize(1);
-        assertThat(resultDatas.get(KEYTAB_FILE))
-                .isEqualTo(Base64.getEncoder().encodeToString("some keytab".getBytes()));
+        assertEquals(1, resultDatas.size());
+        assertEquals(
+                Base64.getEncoder().encodeToString("some keytab".getBytes()),
+                resultDatas.get(KEYTAB_FILE));
     }
 
     @Test
-    void testFlinkConfConfigMap() throws IOException {
+    public void testFlinkConfConfigMap() throws IOException {
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
@@ -369,48 +382,53 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                                 .collect(Collectors.toList())
                                 .get(0);
 
-        assertThat(resultConfigMap.getMetadata().getLabels()).hasSize(2);
+        assertEquals(2, resultConfigMap.getMetadata().getLabels().size());
 
         final Map<String, String> resultDatas = resultConfigMap.getData();
-        assertThat(resultDatas).hasSize(3);
-        assertThat(resultDatas.get(CONFIG_FILE_LOG4J_NAME)).isEqualTo("some data");
-        assertThat(resultDatas.get(CONFIG_FILE_LOGBACK_NAME)).isEqualTo("some data");
-        assertThat(resultDatas.get(FLINK_CONF_FILENAME))
-                .contains(
-                        KubernetesConfigOptionsInternal.ENTRY_POINT_CLASS.key()
-                                + ": "
-                                + ENTRY_POINT_CLASS);
+        assertEquals(3, resultDatas.size());
+        assertEquals("some data", resultDatas.get(CONFIG_FILE_LOG4J_NAME));
+        assertEquals("some data", resultDatas.get(CONFIG_FILE_LOGBACK_NAME));
+        assertTrue(
+                resultDatas
+                        .get(FLINK_CONF_FILENAME)
+                        .contains(
+                                KubernetesConfigOptionsInternal.ENTRY_POINT_CLASS.key()
+                                        + ": "
+                                        + ENTRY_POINT_CLASS));
     }
 
     @Test
-    void testExistingHadoopConfigMap() throws IOException {
+    public void testExistingHadoopConfigMap() throws IOException {
         flinkConfig.set(
                 KubernetesConfigOptions.HADOOP_CONF_CONFIG_MAP, EXISTING_HADOOP_CONF_CONFIG_MAP);
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
 
-        assertThat(kubernetesJobManagerSpecification.getAccompanyingResources())
-                .noneMatch(
-                        resource ->
-                                resource.getMetadata()
-                                        .getName()
-                                        .equals(
-                                                HadoopConfMountDecorator.getHadoopConfConfigMapName(
-                                                        CLUSTER_ID)));
+        assertFalse(
+                kubernetesJobManagerSpecification.getAccompanyingResources().stream()
+                        .anyMatch(
+                                resource ->
+                                        resource.getMetadata()
+                                                .getName()
+                                                .equals(
+                                                        HadoopConfMountDecorator
+                                                                .getHadoopConfConfigMapName(
+                                                                        CLUSTER_ID))));
 
         final PodSpec podSpec =
                 kubernetesJobManagerSpecification.getDeployment().getSpec().getTemplate().getSpec();
-        assertThat(podSpec.getVolumes())
-                .anyMatch(
-                        volume ->
-                                volume.getConfigMap()
-                                        .getName()
-                                        .equals(EXISTING_HADOOP_CONF_CONFIG_MAP));
+        assertTrue(
+                podSpec.getVolumes().stream()
+                        .anyMatch(
+                                volume ->
+                                        volume.getConfigMap()
+                                                .getName()
+                                                .equals(EXISTING_HADOOP_CONF_CONFIG_MAP)));
     }
 
     @Test
-    void testHadoopConfConfigMap() throws IOException {
+    public void testHadoopConfConfigMap() throws IOException {
         setHadoopConfDirEnv();
         generateHadoopConfFileItems();
         kubernetesJobManagerSpecification =
@@ -432,40 +450,45 @@ class KubernetesJobManagerFactoryTest extends KubernetesJobManagerTestBase {
                                 .collect(Collectors.toList())
                                 .get(0);
 
-        assertThat(resultConfigMap.getMetadata().getLabels()).hasSize(2);
+        assertEquals(2, resultConfigMap.getMetadata().getLabels().size());
 
         final Map<String, String> resultDatas = resultConfigMap.getData();
-        assertThat(resultDatas).hasSize(2);
-        assertThat(resultDatas.get("core-site.xml")).isEqualTo("some data");
-        assertThat(resultDatas.get("hdfs-site.xml")).isEqualTo("some data");
+        assertEquals(2, resultDatas.size());
+        assertEquals("some data", resultDatas.get("core-site.xml"));
+        assertEquals("some data", resultDatas.get("hdfs-site.xml"));
     }
 
     @Test
-    void testEmptyHadoopConfDirectory() throws IOException {
+    public void testEmptyHadoopConfDirectory() throws IOException {
         setHadoopConfDirEnv();
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
 
-        assertThat(kubernetesJobManagerSpecification.getAccompanyingResources())
-                .noneMatch(
-                        resource ->
-                                resource.getMetadata()
-                                        .getName()
-                                        .equals(
-                                                HadoopConfMountDecorator.getHadoopConfConfigMapName(
-                                                        CLUSTER_ID)));
+        assertFalse(
+                kubernetesJobManagerSpecification.getAccompanyingResources().stream()
+                        .anyMatch(
+                                resource ->
+                                        resource.getMetadata()
+                                                .getName()
+                                                .equals(
+                                                        HadoopConfMountDecorator
+                                                                .getHadoopConfConfigMapName(
+                                                                        CLUSTER_ID))));
     }
 
     @Test
-    void testSetJobManagerDeploymentReplicas() throws Exception {
-        flinkConfig.set(HighAvailabilityOptions.HA_MODE, HighAvailabilityMode.KUBERNETES.name());
+    public void testSetJobManagerDeploymentReplicas() throws Exception {
+        flinkConfig.set(
+                HighAvailabilityOptions.HA_MODE,
+                KubernetesHaServicesFactory.class.getCanonicalName());
         flinkConfig.set(
                 KubernetesConfigOptions.KUBERNETES_JOBMANAGER_REPLICAS, JOBMANAGER_REPLICAS);
         kubernetesJobManagerSpecification =
                 KubernetesJobManagerFactory.buildKubernetesJobManagerSpecification(
                         flinkPod, kubernetesJobManagerParameters);
-        assertThat(kubernetesJobManagerSpecification.getDeployment().getSpec().getReplicas())
-                .isEqualTo(JOBMANAGER_REPLICAS);
+        assertThat(
+                kubernetesJobManagerSpecification.getDeployment().getSpec().getReplicas(),
+                is(JOBMANAGER_REPLICAS));
     }
 }

@@ -22,12 +22,6 @@ import org.apache.flink.connector.pulsar.source.enumerator.cursor.StopCursor;
 
 import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.api.MessageId;
-import org.apache.pulsar.client.impl.MessageIdImpl;
-
-import static org.apache.flink.connector.pulsar.source.enumerator.cursor.MessageIdUtils.unwrapMessageId;
-import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.apache.pulsar.client.api.MessageId.earliest;
-import static org.apache.pulsar.client.api.MessageId.latest;
 
 /**
  * Stop consuming message at a given message id. We use the {@link MessageId#compareTo(Object)} for
@@ -38,22 +32,24 @@ public class MessageIdStopCursor implements StopCursor {
 
     private final MessageId messageId;
 
-    private final boolean inclusive;
+    private final boolean exclusive;
 
-    public MessageIdStopCursor(MessageId messageId, boolean inclusive) {
-        MessageIdImpl idImpl = unwrapMessageId(messageId);
-        checkArgument(!earliest.equals(idImpl), "MessageId.earliest is not supported.");
-        checkArgument(
-                !latest.equals(idImpl),
-                "MessageId.latest is not supported, use LatestMessageStopCursor instead.");
+    public MessageIdStopCursor(MessageId messageId) {
+        this(messageId, true);
+    }
 
-        this.messageId = idImpl;
-        this.inclusive = inclusive;
+    public MessageIdStopCursor(MessageId messageId, boolean exclusive) {
+        this.messageId = messageId;
+        this.exclusive = exclusive;
     }
 
     @Override
-    public StopCondition shouldStop(Message<?> message) {
-        MessageId current = message.getMessageId();
-        return StopCondition.compare(messageId, current, inclusive);
+    public boolean shouldStop(Message<?> message) {
+        MessageId id = message.getMessageId();
+        if (exclusive) {
+            return id.compareTo(messageId) > 0;
+        } else {
+            return id.compareTo(messageId) >= 0;
+        }
     }
 }

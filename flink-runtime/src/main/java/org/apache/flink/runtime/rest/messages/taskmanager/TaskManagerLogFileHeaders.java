@@ -21,12 +21,11 @@ package org.apache.flink.runtime.rest.messages.taskmanager;
 import org.apache.flink.runtime.rest.HttpMethodWrapper;
 import org.apache.flink.runtime.rest.handler.taskmanager.TaskManagerLogFileHandler;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
-import org.apache.flink.runtime.rest.messages.RuntimeUntypedResponseMessageHeaders;
+import org.apache.flink.runtime.rest.messages.UntypedResponseMessageHeaders;
 
 /** Headers for the {@link TaskManagerLogFileHandler}. */
 public class TaskManagerLogFileHeaders
-        implements RuntimeUntypedResponseMessageHeaders<
-                EmptyRequestBody, TaskManagerMessageParameters> {
+        implements UntypedResponseMessageHeaders<EmptyRequestBody, TaskManagerMessageParameters> {
 
     private static final TaskManagerLogFileHeaders INSTANCE = new TaskManagerLogFileHeaders();
 

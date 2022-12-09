@@ -20,8 +20,10 @@ package org.apache.flink.runtime.util;
 
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.ConfigConstants;
+import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.StringUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
@@ -34,7 +36,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.lang.reflect.Constructor;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Utility class for working with Hadoop-related classes. This should only be used if Hadoop is on
@@ -49,6 +55,22 @@ public class HadoopUtils {
     /** The prefixes that Flink adds to the Hadoop config. */
     private static final String[] FLINK_CONFIG_PREFIXES = {"flink.hadoop."};
 
+    private static final String CALLER_CONTEXT_JOB_ID_PREFIX_STRING = "flink_";
+
+    private static final String CALLER_CONTEXT_JOB_ID_KEY_STRING = "JobId";
+
+    private static final String CALLER_CONTEXT_KEY_VALUE_DELIMITER = ":";
+
+    private static final String CALLER_CONTEXT_CONTENT_DELIMITER = "_";
+
+    private static final String HDFS_DN_CALLER_CONTEXT_KEY = "mapreduce.task.attempt.id";
+
+    private static final ThreadLocal<String> CURRENT_JOB_ID = new InheritableThreadLocal<>();
+
+    private static final String LOCAL_CURRENT_DIR = ".";
+
+    private static final String USER_DEFINE_CONFIG_DEFAULT_PATH = "/etc/second-hadoop";
+
     @SuppressWarnings("deprecation")
     public static Configuration getHadoopConfiguration(
             org.apache.flink.configuration.Configuration flinkConfiguration) {
@@ -57,67 +79,142 @@ public class HadoopUtils {
         // from the classpath
 
         Configuration result = new HdfsConfiguration();
+
+        // clean the default hadoop config from the classpath.
+        result.clear();
         boolean foundHadoopConfiguration = false;
 
-        // We need to load both core-site.xml and hdfs-site.xml to determine the default fs path and
-        // the hdfs configuration.
-        // The properties of a newly added resource will override the ones in previous resources, so
-        // a configuration
-        // file with higher priority should be added later.
+        foundHadoopConfiguration = addHadoopConfIfFound(result, LOCAL_CURRENT_DIR);
 
-        // Approach 1: HADOOP_HOME environment variables
-        String[] possibleHadoopConfPaths = new String[2];
+        if (!foundHadoopConfiguration) {
 
-        final String hadoopHome = System.getenv("HADOOP_HOME");
-        if (hadoopHome != null) {
-            LOG.debug("Searching Hadoop configuration files in HADOOP_HOME: {}", hadoopHome);
-            possibleHadoopConfPaths[0] = hadoopHome + "/conf";
-            possibleHadoopConfPaths[1] = hadoopHome + "/etc/hadoop"; // hadoop 2.2
-        }
+            // We need to load both core-site.xml and hdfs-site.xml to determine the default fs path
+            // and
+            // the hdfs configuration.
+            // The properties of a newly added resource will override the ones in previous
+            // resources, so
+            // a configuration
+            // file with higher priority should be added later.
 
-        for (String possibleHadoopConfPath : possibleHadoopConfPaths) {
-            if (possibleHadoopConfPath != null) {
-                foundHadoopConfiguration = addHadoopConfIfFound(result, possibleHadoopConfPath);
+            // Approach 1: HADOOP_HOME environment variables
+            Supplier<Boolean> approachOne =
+                    new Supplier() {
+                        @Override
+                        public Boolean get() {
+                            Boolean foundHadoopConfiguration = false;
+                            String[] possibleHadoopConfPaths = new String[2];
+
+                            final String hadoopHome = System.getenv("HADOOP_HOME");
+                            if (hadoopHome != null) {
+                                LOG.info(
+                                        "Searching Hadoop configuration files in HADOOP_HOME: {}",
+                                        hadoopHome);
+                                possibleHadoopConfPaths[0] = hadoopHome + "/conf";
+                                possibleHadoopConfPaths[1] =
+                                        hadoopHome + "/etc/hadoop"; // hadoop 2.2
+                            }
+
+                            for (String possibleHadoopConfPath : possibleHadoopConfPaths) {
+                                if (possibleHadoopConfPath != null) {
+                                    foundHadoopConfiguration |=
+                                            addHadoopConfIfFound(result, possibleHadoopConfPath);
+                                }
+                            }
+                            return foundHadoopConfiguration;
+                        }
+                    };
+
+            // Approach 2: Flink configuration (deprecated)
+            Supplier<Boolean> approachTwo =
+                    new Supplier<Boolean>() {
+                        @Override
+                        public Boolean get() {
+                            Boolean foundHadoopConfiguration = false;
+                            final String hdfsDefaultPath =
+                                    flinkConfiguration.getString(
+                                            ConfigConstants.HDFS_DEFAULT_CONFIG, null);
+                            if (hdfsDefaultPath != null) {
+                                result.addResource(new org.apache.hadoop.fs.Path(hdfsDefaultPath));
+                                LOG.info(
+                                        "Using hdfs-default configuration-file path from Flink config: {}",
+                                        hdfsDefaultPath);
+                                foundHadoopConfiguration = true;
+                            }
+
+                            final String hdfsSitePath =
+                                    flinkConfiguration.getString(
+                                            ConfigConstants.HDFS_SITE_CONFIG, null);
+                            if (hdfsSitePath != null) {
+                                result.addResource(new org.apache.hadoop.fs.Path(hdfsSitePath));
+                                LOG.info(
+                                        "Using hdfs-site configuration-file path from Flink config: {}",
+                                        hdfsSitePath);
+                                foundHadoopConfiguration = true;
+                            }
+
+                            final String hadoopConfigPath =
+                                    flinkConfiguration.getString(
+                                            ConfigConstants.PATH_HADOOP_CONFIG, null);
+                            if (hadoopConfigPath != null) {
+                                LOG.info(
+                                        "Searching Hadoop configuration files in Flink config: {}",
+                                        hadoopConfigPath);
+                                foundHadoopConfiguration |=
+                                        addHadoopConfIfFound(result, hadoopConfigPath)
+                                                || foundHadoopConfiguration;
+                            }
+                            return foundHadoopConfiguration;
+                        }
+                    };
+
+            // Approach 3: HADOOP_CONF_DIR environment variable
+            Supplier<Boolean> approachThree =
+                    new Supplier<Boolean>() {
+                        @Override
+                        public Boolean get() {
+                            Boolean foundHadoopConfiguration = false;
+                            String hadoopConfDir = System.getenv("HADOOP_CONF_DIR");
+                            if (hadoopConfDir != null) {
+                                LOG.info(
+                                        "Searching Hadoop configuration files in HADOOP_CONF_DIR: {}",
+                                        hadoopConfDir);
+                                foundHadoopConfiguration =
+                                        addHadoopConfIfFound(result, hadoopConfDir)
+                                                || foundHadoopConfiguration;
+                            }
+                            return foundHadoopConfiguration;
+                        }
+                    };
+
+            // Approach 4: Use User Define Config
+            Supplier<Boolean> approachFour =
+                    new Supplier<Boolean>() {
+                        @Override
+                        public Boolean get() {
+                            Boolean foundHadoopConfiguration = false;
+                            String secondHadoopConfig =
+                                    flinkConfiguration.getString(
+                                            ConfigConstants.USER_DEFINE_CONFIG_DIR,
+                                            USER_DEFINE_CONFIG_DEFAULT_PATH);
+                            if (secondHadoopConfig != null) {
+                                LOG.info(
+                                        "Searching Second Hadoop configuration files in : {}",
+                                        secondHadoopConfig);
+                                foundHadoopConfiguration =
+                                        addHadoopConfIfFound(result, secondHadoopConfig)
+                                                || foundHadoopConfiguration;
+                            }
+                            return foundHadoopConfiguration;
+                        }
+                    };
+            List<Supplier<Boolean>> approaches =
+                    Arrays.asList(approachOne, approachTwo, approachThree, approachFour);
+
+            for (Supplier<Boolean> approach : approaches) {
+                foundHadoopConfiguration |= approach.get();
             }
         }
 
-        // Approach 2: Flink configuration (deprecated)
-        final String hdfsDefaultPath =
-                flinkConfiguration.getString(ConfigConstants.HDFS_DEFAULT_CONFIG, null);
-        if (hdfsDefaultPath != null) {
-            result.addResource(new org.apache.hadoop.fs.Path(hdfsDefaultPath));
-            LOG.debug(
-                    "Using hdfs-default configuration-file path from Flink config: {}",
-                    hdfsDefaultPath);
-            foundHadoopConfiguration = true;
-        }
-
-        final String hdfsSitePath =
-                flinkConfiguration.getString(ConfigConstants.HDFS_SITE_CONFIG, null);
-        if (hdfsSitePath != null) {
-            result.addResource(new org.apache.hadoop.fs.Path(hdfsSitePath));
-            LOG.debug(
-                    "Using hdfs-site configuration-file path from Flink config: {}", hdfsSitePath);
-            foundHadoopConfiguration = true;
-        }
-
-        final String hadoopConfigPath =
-                flinkConfiguration.getString(ConfigConstants.PATH_HADOOP_CONFIG, null);
-        if (hadoopConfigPath != null) {
-            LOG.debug("Searching Hadoop configuration files in Flink config: {}", hadoopConfigPath);
-            foundHadoopConfiguration =
-                    addHadoopConfIfFound(result, hadoopConfigPath) || foundHadoopConfiguration;
-        }
-
-        // Approach 3: HADOOP_CONF_DIR environment variable
-        String hadoopConfDir = System.getenv("HADOOP_CONF_DIR");
-        if (hadoopConfDir != null) {
-            LOG.debug("Searching Hadoop configuration files in HADOOP_CONF_DIR: {}", hadoopConfDir);
-            foundHadoopConfiguration =
-                    addHadoopConfIfFound(result, hadoopConfDir) || foundHadoopConfiguration;
-        }
-
-        // Approach 4: Flink configuration
         // add all configuration key with prefix 'flink.hadoop.' in flink conf to hadoop conf
         for (String key : flinkConfiguration.keySet()) {
             for (String prefix : FLINK_CONFIG_PREFIXES) {
@@ -125,12 +222,11 @@ public class HadoopUtils {
                     String newKey = key.substring(prefix.length());
                     String value = flinkConfiguration.getString(key, null);
                     result.set(newKey, value);
-                    LOG.debug(
+                    LOG.info(
                             "Adding Flink config entry for {} as {}={} to Hadoop config",
                             key,
                             newKey,
                             value);
-                    foundHadoopConfiguration = true;
                 }
             }
         }
@@ -139,6 +235,11 @@ public class HadoopUtils {
             LOG.warn(
                     "Could not find Hadoop configuration via any of the supported methods "
                             + "(Flink configuration, environment variables).");
+        }
+
+        // set current job id.
+        if (!StringUtils.isNullOrWhitespaceOnly(CURRENT_JOB_ID.get())) {
+            result.set(HDFS_DN_CALLER_CONTEXT_KEY, CURRENT_JOB_ID.get());
         }
 
         return result;
@@ -229,7 +330,7 @@ public class HadoopUtils {
             if (new File(possibleHadoopConfPath + "/core-site.xml").exists()) {
                 configuration.addResource(
                         new org.apache.hadoop.fs.Path(possibleHadoopConfPath + "/core-site.xml"));
-                LOG.debug(
+                LOG.info(
                         "Adding "
                                 + possibleHadoopConfPath
                                 + "/core-site.xml to hadoop configuration");
@@ -238,7 +339,7 @@ public class HadoopUtils {
             if (new File(possibleHadoopConfPath + "/hdfs-site.xml").exists()) {
                 configuration.addResource(
                         new org.apache.hadoop.fs.Path(possibleHadoopConfPath + "/hdfs-site.xml"));
-                LOG.debug(
+                LOG.info(
                         "Adding "
                                 + possibleHadoopConfPath
                                 + "/hdfs-site.xml to hadoop configuration");
@@ -246,5 +347,43 @@ public class HadoopUtils {
             }
         }
         return foundHadoopConfiguration;
+    }
+
+    /**
+     * Set up the caller context [[callerContext]] by invoking Hadoop CallerContext API of
+     * [[org.apache.hadoop.ipc.CallerContext]], which was added in hadoop 2.8.
+     */
+    public static void setCallerContextJobID(
+            String jobID, org.apache.flink.configuration.Configuration flinkConfiguration) {
+        if (isMinHadoopVersion(2, 8)) {
+            String callerContext =
+                    CALLER_CONTEXT_JOB_ID_KEY_STRING
+                            + CALLER_CONTEXT_KEY_VALUE_DELIMITER
+                            + CALLER_CONTEXT_JOB_ID_PREFIX_STRING
+                            + flinkConfiguration.getString(
+                                    ExecutionOptions.CALLER_CONTEXT_APP_ID, "")
+                            + CALLER_CONTEXT_CONTENT_DELIMITER
+                            + jobID;
+
+            CURRENT_JOB_ID.set(
+                    CALLER_CONTEXT_JOB_ID_PREFIX_STRING
+                            + flinkConfiguration.getString(
+                                    ExecutionOptions.CALLER_CONTEXT_APP_ID, "")
+                            + CALLER_CONTEXT_CONTENT_DELIMITER
+                            + jobID);
+            try {
+                Class<?> callerContextClass = Class.forName("org.apache.hadoop.ipc.CallerContext");
+                Class<?> builder = Class.forName("org.apache.hadoop.ipc.CallerContext$Builder");
+                Constructor<?> builderInst = builder.getConstructor(callerContext.getClass());
+                callerContextClass
+                        .getMethod("setCurrent", callerContextClass)
+                        .invoke(
+                                null,
+                                builder.getMethod("build")
+                                        .invoke(builderInst.newInstance(callerContext)));
+            } catch (Exception e) {
+                LOG.warn("Not supported CallerContext with exception: ", e);
+            }
+        }
     }
 }

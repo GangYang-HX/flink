@@ -18,17 +18,14 @@
 
 package org.apache.flink.runtime.executiongraph;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+import org.apache.flink.runtime.util.EvictingBoundedList;
+
+import javax.annotation.Nullable;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Optional;
-
-import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** {@code ArchivedExecutionVertex} is a readonly representation of {@link ExecutionVertex}. */
 public class ArchivedExecutionVertex implements AccessExecutionVertex, Serializable {
@@ -37,46 +34,31 @@ public class ArchivedExecutionVertex implements AccessExecutionVertex, Serializa
 
     private final int subTaskIndex;
 
-    private final ExecutionHistory executionHistory;
+    private final EvictingBoundedList<ArchivedExecution> priorExecutions;
 
     /** The name in the format "myTask (2/7)", cached to avoid frequent string concatenations. */
     private final String taskNameWithSubtask;
 
     private final ArchivedExecution currentExecution; // this field must never be null
 
-    private final Collection<AccessExecution> currentExecutions;
-
     // ------------------------------------------------------------------------
 
     public ArchivedExecutionVertex(ExecutionVertex vertex) {
         this.subTaskIndex = vertex.getParallelSubtaskIndex();
-        this.executionHistory = getCopyOfExecutionHistory(vertex);
+        this.priorExecutions = vertex.getCopyOfPriorExecutionsList();
         this.taskNameWithSubtask = vertex.getTaskNameWithSubtaskIndex();
-
-        Execution vertexCurrentExecution = vertex.getCurrentExecutionAttempt();
-        ArrayList<AccessExecution> currentExecutionList =
-                new ArrayList<>(vertex.getCurrentExecutions().size());
-        currentExecution = vertexCurrentExecution.archive();
-        currentExecutionList.add(currentExecution);
-        for (Execution execution : vertex.getCurrentExecutions()) {
-            if (execution != vertexCurrentExecution) {
-                currentExecutionList.add(execution.archive());
-            }
-        }
-        currentExecutions = Collections.unmodifiableList(currentExecutionList);
+        this.currentExecution = vertex.getCurrentExecutionAttempt().archive();
     }
 
-    @VisibleForTesting
     public ArchivedExecutionVertex(
             int subTaskIndex,
             String taskNameWithSubtask,
             ArchivedExecution currentExecution,
-            ExecutionHistory executionHistory) {
+            EvictingBoundedList<ArchivedExecution> priorExecutions) {
         this.subTaskIndex = subTaskIndex;
-        this.taskNameWithSubtask = checkNotNull(taskNameWithSubtask);
-        this.currentExecution = checkNotNull(currentExecution);
-        this.executionHistory = checkNotNull(executionHistory);
-        this.currentExecutions = Collections.singletonList(currentExecution);
+        this.taskNameWithSubtask = taskNameWithSubtask;
+        this.currentExecution = currentExecution;
+        this.priorExecutions = priorExecutions;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -99,11 +81,6 @@ public class ArchivedExecutionVertex implements AccessExecutionVertex, Serializa
     }
 
     @Override
-    public Collection<AccessExecution> getCurrentExecutions() {
-        return currentExecutions;
-    }
-
-    @Override
     public ExecutionState getExecutionState() {
         return currentExecution.getState();
     }
@@ -123,12 +100,13 @@ public class ArchivedExecutionVertex implements AccessExecutionVertex, Serializa
         return currentExecution.getAssignedResourceLocation();
     }
 
+    @Nullable
     @Override
-    public ExecutionHistory getExecutionHistory() {
-        return executionHistory;
-    }
-
-    static ExecutionHistory getCopyOfExecutionHistory(ExecutionVertex executionVertex) {
-        return new ExecutionHistory(executionVertex.getExecutionHistory());
+    public ArchivedExecution getPriorExecutionAttempt(int attemptNumber) {
+        if (attemptNumber >= 0 && attemptNumber < priorExecutions.size()) {
+            return priorExecutions.get(attemptNumber);
+        } else {
+            throw new IllegalArgumentException("attempt does not exist");
+        }
     }
 }

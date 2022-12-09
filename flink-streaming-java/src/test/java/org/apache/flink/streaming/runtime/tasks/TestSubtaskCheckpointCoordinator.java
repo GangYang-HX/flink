@@ -99,7 +99,4 @@ public class TestSubtaskCheckpointCoordinator implements SubtaskCheckpointCoordi
 
     @Override
     public void close() {}
-
-    @Override
-    public void cancel() {}
 }

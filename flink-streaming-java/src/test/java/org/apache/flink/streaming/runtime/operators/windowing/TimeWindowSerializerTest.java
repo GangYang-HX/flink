@@ -23,7 +23,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 
 /** Tests for {@link TimeWindow.Serializer}. */
-class TimeWindowSerializerTest extends SerializerTestBase<TimeWindow> {
+public class TimeWindowSerializerTest extends SerializerTestBase<TimeWindow> {
     @Override
     protected TypeSerializer<TimeWindow> createSerializer() {
         return new TimeWindow.Serializer();

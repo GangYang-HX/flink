@@ -44,9 +44,9 @@ public class SlotManagerConfiguration {
     private final Time taskManagerRequestTimeout;
     private final Time slotRequestTimeout;
     private final Time taskManagerTimeout;
-    private final Duration requirementCheckDelay;
     private final boolean waitResultConsumedBeforeRelease;
     private final SlotMatchingStrategy slotMatchingStrategy;
+    private final Duration requirementCheckDelay;
     private final WorkerResourceSpec defaultWorkerResourceSpec;
     private final int numSlotsPerWorker;
     private final int maxSlotNum;

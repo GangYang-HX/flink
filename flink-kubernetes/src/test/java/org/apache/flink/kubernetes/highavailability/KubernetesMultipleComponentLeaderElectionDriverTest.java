@@ -30,21 +30,24 @@ import org.apache.flink.runtime.leaderelection.TestingLeaderElectionListener;
 import org.apache.flink.runtime.leaderelection.TestingListener;
 import org.apache.flink.runtime.leaderretrieval.DefaultLeaderRetrievalService;
 import org.apache.flink.runtime.util.TestingFatalErrorHandlerExtension;
-import org.apache.flink.testutils.TestingUtils;
 import org.apache.flink.testutils.executor.TestExecutorExtension;
+import org.apache.flink.util.TestLoggerExtension;
 import org.apache.flink.util.function.RunnableWithException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.Collections;
 import java.util.UUID;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for the {@link KubernetesMultipleComponentLeaderElectionDriver}. */
-class KubernetesMultipleComponentLeaderElectionDriverTest {
+@ExtendWith(TestLoggerExtension.class)
+public class KubernetesMultipleComponentLeaderElectionDriverTest {
 
     private static final String CLUSTER_ID = "test-cluster";
     private static final String LEADER_CONFIGMAP_NAME = "leader-configmap-name";
@@ -55,11 +58,11 @@ class KubernetesMultipleComponentLeaderElectionDriverTest {
             new TestingFatalErrorHandlerExtension();
 
     @RegisterExtension
-    private static final TestExecutorExtension<ScheduledExecutorService> testExecutorExtension =
-            TestingUtils.defaultExecutorExtension();
+    private static final TestExecutorExtension<ExecutorService> testExecutorExtension =
+            new TestExecutorExtension<>(Executors::newSingleThreadScheduledExecutor);
 
     @Test
-    void testElectionDriverGainsLeadership() throws Exception {
+    public void testElectionDriverGainsLeadership() throws Exception {
         new TestFixture() {
             {
                 runTest(
@@ -72,7 +75,7 @@ class KubernetesMultipleComponentLeaderElectionDriverTest {
     }
 
     @Test
-    void testElectionDriverLosesLeadership() throws Exception {
+    public void testElectionDriverLosesLeadership() throws Exception {
         new TestFixture() {
             {
                 runTest(
@@ -87,7 +90,7 @@ class KubernetesMultipleComponentLeaderElectionDriverTest {
     }
 
     @Test
-    void testPublishLeaderInformation() throws Exception {
+    public void testPublishLeaderInformation() throws Exception {
         new TestFixture() {
             {
                 runTest(
@@ -124,7 +127,7 @@ class KubernetesMultipleComponentLeaderElectionDriverTest {
     }
 
     @Test
-    void testLeaderInformationChangeNotifiesListener() throws Exception {
+    public void testLeaderInformationChangeNotifiesListener() throws Exception {
         new TestFixture() {
             {
                 runTest(

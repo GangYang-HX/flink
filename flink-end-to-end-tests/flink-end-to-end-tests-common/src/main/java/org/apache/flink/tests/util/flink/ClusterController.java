@@ -18,8 +18,6 @@
 
 package org.apache.flink.tests.util.flink;
 
-import org.apache.flink.test.util.JobSubmission;
-import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.util.AutoCloseableAsync;
 
 import java.io.IOException;
@@ -45,5 +43,5 @@ public interface ClusterController extends AutoCloseableAsync {
      * @param timeout the maximum time to wait.
      * @throws IOException if any IO error happen.
      */
-    void submitSQLJob(SQLJobSubmission job, Duration timeout) throws Exception;
+    void submitSQLJob(SQLJobSubmission job, Duration timeout) throws IOException;
 }

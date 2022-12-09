@@ -35,8 +35,6 @@ import org.apache.flink.util.Collector;
 import java.util.Collection;
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsText;
-
 /** Test broadcast input after branching. */
 public class BroadcastBranchingITCase extends JavaProgramTestBase {
     private static final String RESULT = "(2,112)\n";
@@ -92,7 +90,7 @@ public class BroadcastBranchingITCase extends JavaProgramTestBase {
         List<Tuple2<String, Integer>> result =
                 jn2.flatMap(new Mp2()).withBroadcastSet(mp1, "z").collect();
 
-        compareResultAsText(result, RESULT);
+        JavaProgramTestBase.compareResultAsText(result, RESULT);
     }
 
     private static class Jn1

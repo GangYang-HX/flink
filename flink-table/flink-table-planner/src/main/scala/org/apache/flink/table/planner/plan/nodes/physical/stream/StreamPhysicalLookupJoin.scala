@@ -24,11 +24,11 @@ import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecLookupJoi
 import org.apache.flink.table.planner.plan.nodes.physical.common.CommonPhysicalLookupJoin
 import org.apache.flink.table.planner.plan.utils.{FlinkRexUtil, JoinTypeUtil}
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil
+import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTableConfig
 
 import org.apache.calcite.plan.{RelOptCluster, RelOptTable, RelTraitSet}
 import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.core.{JoinInfo, JoinRelType}
-import org.apache.calcite.rel.hint.RelHint
 import org.apache.calcite.rex.RexProgram
 
 import java.util
@@ -39,23 +39,19 @@ import scala.collection.JavaConverters._
 class StreamPhysicalLookupJoin(
     cluster: RelOptCluster,
     traitSet: RelTraitSet,
-    inputRel: RelNode,
+    input: RelNode,
     temporalTable: RelOptTable,
     tableCalcProgram: Option[RexProgram],
     joinInfo: JoinInfo,
-    joinType: JoinRelType,
-    lookupHint: Option[RelHint],
-    upsertMaterialize: Boolean)
+    joinType: JoinRelType)
   extends CommonPhysicalLookupJoin(
     cluster,
     traitSet,
-    inputRel,
+    input,
     temporalTable,
     tableCalcProgram,
     joinInfo,
-    joinType,
-    lookupHint,
-    upsertMaterialize)
+    joinType)
   with StreamPhysicalRel {
 
   override def requireWatermark: Boolean = false
@@ -68,24 +64,7 @@ class StreamPhysicalLookupJoin(
       temporalTable,
       tableCalcProgram,
       joinInfo,
-      joinType,
-      lookupHint,
-      upsertMaterialize
-    )
-  }
-
-  def copy(upsertMaterialize: Boolean): StreamPhysicalLookupJoin = {
-    new StreamPhysicalLookupJoin(
-      cluster,
-      traitSet,
-      getInput,
-      temporalTable,
-      tableCalcProgram,
-      joinInfo,
-      joinType,
-      lookupHint,
-      upsertMaterialize
-    )
+      joinType)
   }
 
   override def translateToExecNode(): ExecNode[_] = {
@@ -96,22 +75,17 @@ class StreamPhysicalLookupJoin(
       case _ =>
         (null, null)
     }
-
     new StreamExecLookupJoin(
-      tableConfig,
+      unwrapTableConfig(this),
       JoinTypeUtil.getFlinkJoinType(joinType),
       remainingCondition.orNull,
       new TemporalTableSourceSpec(temporalTable),
       allLookupKeys.map(item => (Int.box(item._1), item._2)).asJava,
       projectionOnTemporalTable,
       filterOnTemporalTable,
-      lookupKeyContainsPrimaryKey(),
-      upsertMaterialize,
-      asyncOptions.orNull,
-      retryOptions.orNull,
-      inputChangelogMode,
       InputProperty.DEFAULT,
       FlinkTypeFactory.toLogicalRowType(getRowType),
       getRelDetailedDescription)
   }
+
 }

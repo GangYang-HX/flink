@@ -16,17 +16,13 @@
  * limitations under the License.
  */
 
-import { ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, OnDestroy, Inject } from '@angular/core';
-import {catchError, takeUntil} from 'rxjs/operators';
-import { ConfigService, TaskManagerService } from '@flink-runtime-web/services';
+import { ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, OnDestroy } from '@angular/core';
+import { TaskManagerDetail } from 'interfaces';
+import { first, takeUntil } from 'rxjs/operators';
+import { TaskManagerService } from 'services';
 import { EditorOptions } from 'ng-zorro-antd/code-editor/typings';
-import {of, Subject} from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
-import {
-  TASK_MANAGER_MODULE_CONFIG,
-  TASK_MANAGER_MODULE_DEFAULT_CONFIG,
-} from '@flink-runtime-web/pages/task-manager/task-manager.config';
-import {ModuleConfig} from "@flink-runtime-web/core/module-config";
+import { flinkEditorOptions } from 'share/common/editor/editor-config';
+import { Subject } from 'rxjs';
 
 @Component({
   selector: 'flink-task-manager-logs',
@@ -35,30 +31,22 @@ import {ModuleConfig} from "@flink-runtime-web/core/module-config";
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TaskManagerLogsComponent implements OnInit, OnDestroy {
-  public editorOptions: EditorOptions;
+  public readonly editorOptions: EditorOptions = flinkEditorOptions;
+
   public logs = '';
   public loading = true;
-  public taskManagerId: string;
-  public downloadUrl = '';
-  public downloadName = '';
+  public taskManagerDetail: TaskManagerDetail;
 
   private readonly destroy$ = new Subject<void>();
 
-  constructor(
-    private readonly taskManagerService: TaskManagerService,
-    private readonly configService: ConfigService,
-    private activatedRoute: ActivatedRoute,
-    private readonly cdr: ChangeDetectorRef,
-    @Inject(TASK_MANAGER_MODULE_CONFIG) readonly moduleConfig: ModuleConfig
-  ) {
-    this.editorOptions = moduleConfig.editorOptions || TASK_MANAGER_MODULE_DEFAULT_CONFIG.editorOptions;
-  }
+  constructor(private readonly taskManagerService: TaskManagerService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit() {
-    this.taskManagerId = this.activatedRoute.parent!.snapshot.params.taskManagerId;
-    this.downloadUrl = `${this.configService.BASE_URL}/taskmanagers/${this.taskManagerId}/log`;
-    this.downloadName = `taskmanager_${this.taskManagerId}_log`;
-    this.reload();
+    this.taskManagerService.taskManagerDetail$.pipe(first(), takeUntil(this.destroy$)).subscribe(data => {
+      this.taskManagerDetail = data;
+      this.reload();
+      this.cdr.markForCheck();
+    });
   }
 
   public ngOnDestroy(): void {
@@ -69,13 +57,20 @@ export class TaskManagerLogsComponent implements OnInit, OnDestroy {
   public reload() {
     this.loading = true;
     this.cdr.markForCheck();
-    this.taskManagerService
-      .loadLogs(this.taskManagerId)
-      .pipe(catchError(() => of('')), takeUntil(this.destroy$))
-      .subscribe(data => {
-        this.loading = false;
-        this.logs = data;
-        this.cdr.markForCheck();
-      });
+    if (this.taskManagerDetail) {
+      this.taskManagerService
+        .loadLogs(this.taskManagerDetail.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(
+          data => {
+            this.loading = false;
+            this.logs = data;
+            this.cdr.markForCheck();
+          },
+          () => {
+            this.cdr.markForCheck();
+          }
+        );
+    }
   }
 }

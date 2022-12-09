@@ -45,11 +45,11 @@ public class RegionToRestartInBatchJobBenchmark extends FailoverBenchmarkBase {
 
         final TestingLogicalSlotBuilder slotBuilder = new TestingLogicalSlotBuilder();
 
-        deployTasks(executionGraph, source.getID(), slotBuilder);
+        deployTasks(executionGraph, source.getID(), slotBuilder, true);
 
         transitionTaskStatus(executionGraph, source.getID(), ExecutionState.FINISHED);
 
-        deployTasks(executionGraph, sink.getID(), slotBuilder);
+        deployTasks(executionGraph, sink.getID(), slotBuilder, true);
     }
 
     public Set<ExecutionVertexID> calculateRegionToRestart() {

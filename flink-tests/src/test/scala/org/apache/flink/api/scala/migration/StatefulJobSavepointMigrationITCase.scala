@@ -153,6 +153,7 @@ class StatefulJobSavepointMigrationITCase(snapshotSpec: SnapshotSpec)
       case _ => throw new UnsupportedOperationException
     }
 
+    env.enableChangelogStateBackend(false)
     env.enableCheckpointing(500)
     env.setParallelism(4)
     env.setMaxParallelism(4)

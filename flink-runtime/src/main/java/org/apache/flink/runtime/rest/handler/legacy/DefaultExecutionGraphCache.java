@@ -43,7 +43,8 @@ public class DefaultExecutionGraphCache implements ExecutionGraphCache {
 
     public DefaultExecutionGraphCache(Time timeout, Time timeToLive) {
         this.timeout = checkNotNull(timeout);
-        this.timeToLive = checkNotNull(timeToLive);
+        // timeToLive <-- web.refresh-interval
+        this.timeToLive = Time.milliseconds(100L);
 
         cachedExecutionGraphs = new ConcurrentHashMap<>(4);
     }

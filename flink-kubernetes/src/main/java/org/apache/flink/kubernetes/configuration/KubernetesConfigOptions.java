@@ -84,6 +84,22 @@ public class KubernetesConfigOptions {
                                                     text(ServiceExposedType.NodePort.name()))
                                             .build());
 
+    public static final ConfigOption<Boolean> KUBERNETES_NETWORK_PROXY_ENABLE =
+            key("kubernetes.network.proxy.enable")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription(
+                            "Whether to enable kubernetes network proxy mode. "
+                                    + "kube-proxy is a network proxy that runs on each node in your cluster, implementing part of the Kubernetes Service concept. "
+                                    + "it maintains network rules on nodes. These network rules allow network communication to your Pods from network sessions inside or outside of your cluster.");
+
+    public static final ConfigOption<Integer> KUBERNETES_ENDPOINT_MAX_RETRIES =
+            key("kubernetes.endpoint.max-retries")
+                    .intType()
+                    .defaultValue(10)
+                    .withDescription(
+                            "When kubernetes network proxy disable, we should get target port directly.");
+
     public static final ConfigOption<String> JOB_MANAGER_SERVICE_ACCOUNT =
             key("kubernetes.jobmanager.service-account")
                     .stringType()
@@ -331,18 +347,6 @@ public class KubernetesConfigOptions {
                             "The user-specified annotations that are set to the TaskManager pod. The value could be "
                                     + "in the form of a1:v1,a2:v2");
 
-    public static final ConfigOption<String> KUBERNETES_JOBMANAGER_ENTRYPOINT_ARGS =
-            key("kubernetes.jobmanager.entrypoint.args")
-                    .stringType()
-                    .defaultValue("")
-                    .withDescription("Extra arguments used when starting the job manager.");
-
-    public static final ConfigOption<String> KUBERNETES_TASKMANAGER_ENTRYPOINT_ARGS =
-            key("kubernetes.taskmanager.entrypoint.args")
-                    .stringType()
-                    .defaultValue("")
-                    .withDescription("Extra arguments used when starting the task manager.");
-
     public static final ConfigOption<List<Map<String, String>>> JOB_MANAGER_TOLERATIONS =
             key("kubernetes.jobmanager.tolerations")
                     .mapType()
@@ -510,12 +514,19 @@ public class KubernetesConfigOptions {
                             "Whether to enable HostNetwork mode. "
                                     + "The HostNetwork allows the pod could use the node network namespace instead of the individual pod network namespace. Please note that the JobManager service account should have the permission to update Kubernetes service.");
 
-    public static final ConfigOption<String> KUBERNETES_CLIENT_USER_AGENT =
-            key("kubernetes.client.user-agent")
+    public static final ConfigOption<String> KUBERNETES_DNS_POLICY =
+            key("kubernetes.dns.policy")
                     .stringType()
-                    .defaultValue("flink")
+                    .noDefaultValue()
+                    .withDescription("Specify the dns policy to use.");
+
+    public static final ConfigOption<Map<String, String>> KUBERNETES_HOST_ALIASES =
+            key("kubernetes.host.aliases")
+                    .mapType()
+                    .noDefaultValue()
                     .withDescription(
-                            "The user agent to be used for contacting with Kubernetes APIServer.");
+                            "The user-specified host aliases that are add to the /etc/hosts. The value should be "
+                                    + "in the form of hostname:ip,hostname:ip");
 
     /**
      * This will only be used to support blocklist mechanism, which is experimental currently, so we
@@ -528,7 +539,8 @@ public class KubernetesConfigOptions {
                     .defaultValue("kubernetes.io/hostname")
                     .withDescription(
                             "The node label whose value is the same as the node name. "
-                                    + "Currently, this will only be used to set the node affinity of TM pods to avoid being scheduled on blocked nodes.");
+                                    + "Currently, this will only be used to set the node affinity"
+                                    + " of TM pods to avoid being scheduled on blocked nodes.");
 
     private static String getDefaultFlinkImage() {
         // The default container image that ties to the exact needed versions of both Flink and

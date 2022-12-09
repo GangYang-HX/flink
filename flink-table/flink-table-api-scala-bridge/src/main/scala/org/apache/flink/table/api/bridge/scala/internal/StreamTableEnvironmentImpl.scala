@@ -17,7 +17,7 @@
  */
 package org.apache.flink.table.api.bridge.scala.internal
 
-import org.apache.flink.annotation.Internal
+import org.apache.flink.annotation.{Internal, VisibleForTesting}
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.streaming.api.TimeCharacteristic
@@ -33,14 +33,12 @@ import org.apache.flink.table.factories.PlannerFactoryUtil
 import org.apache.flink.table.functions.{AggregateFunction, TableAggregateFunction, TableFunction, UserDefinedFunctionHelper}
 import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.operations._
-import org.apache.flink.table.resource.ResourceManager
 import org.apache.flink.table.sources.{TableSource, TableSourceValidation}
 import org.apache.flink.table.types.AbstractDataType
 import org.apache.flink.table.types.utils.TypeConversions
 import org.apache.flink.types.Row
-import org.apache.flink.util.{FlinkUserCodeClassLoaders, MutableURLClassLoader, Preconditions}
+import org.apache.flink.util.Preconditions
 
-import java.net.URL
 import java.util.Optional
 
 import scala.collection.JavaConverters._
@@ -53,22 +51,22 @@ import scala.collection.JavaConverters._
 class StreamTableEnvironmentImpl(
     catalogManager: CatalogManager,
     moduleManager: ModuleManager,
-    resourceManager: ResourceManager,
     functionCatalog: FunctionCatalog,
     tableConfig: TableConfig,
     scalaExecutionEnvironment: StreamExecutionEnvironment,
     planner: Planner,
     executor: Executor,
-    isStreaming: Boolean)
+    isStreaming: Boolean,
+    userClassLoader: ClassLoader)
   extends AbstractStreamTableEnvironmentImpl(
     catalogManager,
     moduleManager,
-    resourceManager,
     tableConfig,
     executor,
     functionCatalog,
     planner,
     isStreaming,
+    userClassLoader,
     scalaExecutionEnvironment.getWrappedStreamExecutionEnvironment)
   with StreamTableEnvironment {
 
@@ -293,24 +291,22 @@ object StreamTableEnvironmentImpl {
   def create(
       executionEnvironment: StreamExecutionEnvironment,
       settings: EnvironmentSettings): StreamTableEnvironmentImpl = {
-    val userClassLoader: MutableURLClassLoader =
-      FlinkUserCodeClassLoaders.create(
-        new Array[URL](0),
-        settings.getUserClassLoader,
-        settings.getConfiguration)
+
+    // temporary solution until FLINK-15635 is fixed
+    val classLoader = Thread.currentThread.getContextClassLoader
 
     val executor = AbstractStreamTableEnvironmentImpl.lookupExecutor(
-      userClassLoader,
+      classLoader,
       executionEnvironment.getWrappedStreamExecutionEnvironment)
 
     val tableConfig = TableConfig.getDefault
     tableConfig.setRootConfiguration(executor.getConfiguration)
     tableConfig.addConfiguration(settings.getConfiguration)
 
-    val resourceManager = new ResourceManager(settings.getConfiguration, userClassLoader)
     val moduleManager = new ModuleManager
+
     val catalogManager = CatalogManager.newBuilder
-      .classLoader(userClassLoader)
+      .classLoader(classLoader)
       .config(tableConfig)
       .defaultCatalog(
         settings.getBuiltInCatalogName,
@@ -318,13 +314,11 @@ object StreamTableEnvironmentImpl {
       .executionConfig(executionEnvironment.getConfig)
       .build
 
-    val functionCatalog =
-      new FunctionCatalog(tableConfig, resourceManager, catalogManager, moduleManager)
+    val functionCatalog = new FunctionCatalog(tableConfig, catalogManager, moduleManager)
 
     val planner = PlannerFactoryUtil.createPlanner(
       executor,
       tableConfig,
-      userClassLoader,
       moduleManager,
       catalogManager,
       functionCatalog)
@@ -332,13 +326,13 @@ object StreamTableEnvironmentImpl {
     new StreamTableEnvironmentImpl(
       catalogManager,
       moduleManager,
-      resourceManager,
       functionCatalog,
       tableConfig,
       executionEnvironment,
       planner,
       executor,
-      settings.isStreamingMode
+      settings.isStreamingMode,
+      classLoader
     )
   }
 }

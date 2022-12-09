@@ -80,12 +80,12 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
     private static final Logger LOG = LoggerFactory.getLogger(ParquetVectorizedInputFormat.class);
     private static final long serialVersionUID = 1L;
 
-    protected final SerializableConfiguration hadoopConfig;
+    private final SerializableConfiguration hadoopConfig;
     private final String[] projectedFields;
     private final LogicalType[] projectedTypes;
     private final ColumnBatchFactory<SplitT> batchFactory;
     private final int batchSize;
-    protected final boolean isUtcTimestamp;
+    private final boolean isUtcTimestamp;
     private final boolean isCaseSensitive;
     private final Set<Integer> unknownFieldsIndices = new HashSet<>();
 

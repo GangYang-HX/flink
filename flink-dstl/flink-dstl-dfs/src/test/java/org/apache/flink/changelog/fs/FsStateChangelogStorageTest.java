@@ -17,13 +17,10 @@
 
 package org.apache.flink.changelog.fs;
 
-import org.apache.flink.api.common.JobID;
 import org.apache.flink.changelog.fs.BatchingStateChangeUploadSchedulerTest.BlockingUploader;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.KeyGroupRange;
-import org.apache.flink.runtime.state.TestLocalRecoveryConfig;
-import org.apache.flink.runtime.state.changelog.ChangelogStateHandleStreamImpl;
 import org.apache.flink.runtime.state.changelog.StateChangelogStorage;
 import org.apache.flink.runtime.state.changelog.StateChangelogWriter;
 import org.apache.flink.runtime.state.changelog.inmemory.StateChangelogStorageTest;
@@ -31,35 +28,33 @@ import org.apache.flink.streaming.runtime.tasks.StreamTaskActionExecutor;
 import org.apache.flink.streaming.runtime.tasks.mailbox.MailboxExecutorImpl;
 import org.apache.flink.streaming.runtime.tasks.mailbox.TaskMailboxImpl;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.Stream;
 
 import static org.apache.flink.changelog.fs.UnregisteredChangelogStorageMetricGroup.createUnregisteredChangelogStorageMetricGroup;
 
 /** {@link FsStateChangelogStorage} test. */
-public class FsStateChangelogStorageTest
-        extends StateChangelogStorageTest<ChangelogStateHandleStreamImpl> {
+@RunWith(Parameterized.class)
+public class FsStateChangelogStorageTest extends StateChangelogStorageTest {
+    @Parameterized.Parameter public boolean compression;
 
-    public static Stream<Boolean> parameters() {
-        return Stream.of(true, false);
+    @Parameterized.Parameters(name = "use compression = {0}")
+    public static Object[] parameters() {
+        return new Object[] {true, false};
     }
 
     @Override
-    protected StateChangelogStorage<ChangelogStateHandleStreamImpl> getFactory(
-            boolean compression, File temporaryFolder) throws IOException {
+    protected StateChangelogStorage<?> getFactory() throws IOException {
         return new FsStateChangelogStorage(
-                JobID.generate(),
-                Path.fromLocalFile(temporaryFolder),
+                Path.fromLocalFile(temporaryFolder.newFolder()),
                 compression,
                 1024 * 1024 * 10,
-                createUnregisteredChangelogStorageMetricGroup(),
-                TaskChangelogRegistry.NO_OP,
-                TestLocalRecoveryConfig.disabled());
+                createUnregisteredChangelogStorageMetricGroup());
     }
 
     /**
@@ -102,11 +97,7 @@ public class FsStateChangelogStorageTest
                             }
                         };
                 StateChangelogWriter<?> writer =
-                        new FsStateChangelogStorage(
-                                        scheduler,
-                                        0,
-                                        TaskChangelogRegistry.NO_OP, /* persist immediately */
-                                        TestLocalRecoveryConfig.disabled())
+                        new FsStateChangelogStorage(scheduler, 0 /* persist immediately */)
                                 .createWriter(
                                         new OperatorID().toString(),
                                         KeyGroupRange.of(0, 0),

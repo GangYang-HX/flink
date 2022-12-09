@@ -33,8 +33,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -104,12 +102,10 @@ public class TaskMailboxProcessorTest {
     @Test
     public void testRunDefaultActionAndMails() throws Exception {
         AtomicBoolean stop = new AtomicBoolean(false);
-        AtomicInteger counter = new AtomicInteger();
         MailboxThread mailboxThread =
                 new MailboxThread() {
                     @Override
                     public void runDefaultAction(Controller controller) throws Exception {
-                        counter.incrementAndGet();
                         if (stop.get()) {
                             controller.allActionsCompleted();
                         } else {
@@ -121,10 +117,6 @@ public class TaskMailboxProcessorTest {
         MailboxProcessor mailboxProcessor = start(mailboxThread);
         mailboxProcessor.getMailboxExecutor(DEFAULT_PRIORITY).execute(() -> stop.set(true), "stop");
         mailboxThread.join();
-        assertThat(counter.get(), greaterThan(0));
-        assertThat(
-                mailboxProcessor.getMailboxMetricsControl().getMailCounter().getCount(),
-                greaterThan(0L));
     }
 
     @Test

@@ -18,7 +18,6 @@
 package org.apache.flink.runtime.executiongraph.failover.flip1;
 
 import org.apache.flink.runtime.JobException;
-import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.scheduler.strategy.SchedulingExecutionVertex;
 import org.apache.flink.runtime.scheduler.strategy.SchedulingTopology;
@@ -73,18 +72,18 @@ public class ExecutionFailureHandler {
      * Return result of failure handling. Can be a set of task vertices to restart and a delay of
      * the restarting. Or that the failure is not recoverable and the reason for it.
      *
-     * @param failedExecution is the failed execution
+     * @param failedTask is the ID of the failed task vertex
      * @param cause of the task failure
      * @param timestamp of the task failure
      * @return result of the failure handling
      */
     public FailureHandlingResult getFailureHandlingResult(
-            Execution failedExecution, Throwable cause, long timestamp) {
+            ExecutionVertexID failedTask, Throwable cause, long timestamp) {
         return handleFailure(
-                failedExecution,
+                failedTask,
                 cause,
                 timestamp,
-                failoverStrategy.getTasksNeedingRestart(failedExecution.getVertex().getID(), cause),
+                failoverStrategy.getTasksNeedingRestart(failedTask, cause),
                 false);
     }
 
@@ -110,7 +109,7 @@ public class ExecutionFailureHandler {
     }
 
     private FailureHandlingResult handleFailure(
-            @Nullable final Execution failedExecution,
+            @Nullable final ExecutionVertexID failingExecutionVertexId,
             final Throwable cause,
             long timestamp,
             final Set<ExecutionVertexID> verticesToRestart,
@@ -118,7 +117,7 @@ public class ExecutionFailureHandler {
 
         if (isUnrecoverableError(cause)) {
             return FailureHandlingResult.unrecoverable(
-                    failedExecution,
+                    failingExecutionVertexId,
                     new JobException("The failure is not recoverable", cause),
                     timestamp,
                     globalFailure);
@@ -129,7 +128,7 @@ public class ExecutionFailureHandler {
             numberOfRestarts++;
 
             return FailureHandlingResult.restartable(
-                    failedExecution,
+                    failingExecutionVertexId,
                     cause,
                     timestamp,
                     verticesToRestart,
@@ -137,7 +136,7 @@ public class ExecutionFailureHandler {
                     globalFailure);
         } else {
             return FailureHandlingResult.unrecoverable(
-                    failedExecution,
+                    failingExecutionVertexId,
                     new JobException(
                             "Recovery is suppressed by " + restartBackoffTimeStrategy, cause),
                     timestamp,

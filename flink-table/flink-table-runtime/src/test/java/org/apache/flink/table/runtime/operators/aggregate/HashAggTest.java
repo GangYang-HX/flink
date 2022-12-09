@@ -29,13 +29,12 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
 
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test hash agg. */
 public class HashAggTest {
@@ -99,9 +98,9 @@ public class HashAggTest {
         this.ioManager.close();
 
         if (this.memoryManager != null) {
-            assertThat(this.memoryManager.verifyEmpty())
-                    .as("Memory leak: not all segments have been returned to the memory manager.")
-                    .isTrue();
+            Assert.assertTrue(
+                    "Memory leak: not all segments have been returned to the memory manager.",
+                    this.memoryManager.verifyEmpty());
             this.memoryManager.shutdown();
             this.memoryManager = null;
         }
@@ -136,7 +135,7 @@ public class HashAggTest {
         expected.put(4, 5L);
         expected.put(5, 11L);
         expected.put(10, null);
-        assertThat(outputMap).isEqualTo(expected);
+        Assert.assertEquals(expected, outputMap);
     }
 
     @Test
@@ -149,6 +148,6 @@ public class HashAggTest {
         addRow(GenericRowData.of(null, 5L));
         operator.endInput();
         operator.close();
-        assertThat(outputMap).hasSize(30002);
+        Assert.assertEquals(30002, outputMap.size());
     }
 }

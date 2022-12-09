@@ -136,10 +136,6 @@ public class ConnectorCatalogTable<T1, T2> extends AbstractCatalogTable {
         if (source instanceof DefinedProctimeAttribute) {
             updateProctimeIndicator((DefinedProctimeAttribute) source, fieldNames, types);
         }
-        if (tableSchema.getPrimaryKey().isPresent()) {
-            String[] pkCols = tableSchema.getPrimaryKey().get().getColumns().toArray(new String[0]);
-            return TableSchema.builder().fields(fieldNames, types).primaryKey(pkCols).build();
-        }
         return TableSchema.builder().fields(fieldNames, types).build();
     }
 

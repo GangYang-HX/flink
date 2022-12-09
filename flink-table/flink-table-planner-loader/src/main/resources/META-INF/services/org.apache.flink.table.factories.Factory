@@ -14,4 +14,5 @@
 # limitations under the License.
 
 org.apache.flink.table.planner.loader.DelegateExecutorFactory
+org.apache.flink.table.planner.loader.DelegateExpressionParserFactory
 org.apache.flink.table.planner.loader.DelegatePlannerFactory

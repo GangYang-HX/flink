@@ -31,6 +31,7 @@ import static org.apache.flink.table.client.config.SqlClientOptions.EXECUTION_RE
 /** Describes a result to be expected from a table program. */
 public class ResultDescriptor {
 
+    private final String sessionId;
     private final String resultId;
     private final ResolvedSchema resultSchema;
     private final boolean isMaterialized;
@@ -38,16 +39,22 @@ public class ResultDescriptor {
     private final RowDataToStringConverter rowDataToStringConverter;
 
     public ResultDescriptor(
+            String sessionId,
             String resultId,
             ResolvedSchema resultSchema,
             boolean isMaterialized,
             ReadableConfig config,
             RowDataToStringConverter rowDataToStringConverter) {
+        this.sessionId = sessionId;
         this.resultId = resultId;
         this.resultSchema = resultSchema;
         this.isMaterialized = isMaterialized;
         this.config = config;
         this.rowDataToStringConverter = rowDataToStringConverter;
+    }
+
+    public String getSessionId() {
+        return sessionId;
     }
 
     public String getResultId() {

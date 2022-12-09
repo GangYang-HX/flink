@@ -19,7 +19,6 @@ package org.apache.flink.connector.kafka.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.sink2.Committer;
 import org.apache.flink.api.connector.sink2.StatefulSink;
 import org.apache.flink.api.connector.sink2.TwoPhaseCommittingSink;
@@ -59,13 +58,13 @@ public class KafkaSink<IN>
         implements StatefulSink<IN, KafkaWriterState>,
                 TwoPhaseCommittingSink<IN, KafkaCommittable> {
 
-    private final DeliveryGuarantee deliveryGuarantee;
+    protected final DeliveryGuarantee deliveryGuarantee;
 
-    private final KafkaRecordSerializationSchema<IN> recordSerializer;
-    private final Properties kafkaProducerConfig;
-    private final String transactionalIdPrefix;
+    protected final KafkaRecordSerializationSchema<IN> recordSerializer;
+    protected final Properties kafkaProducerConfig;
+    protected final String transactionalIdPrefix;
 
-    KafkaSink(
+    public KafkaSink(
             DeliveryGuarantee deliveryGuarantee,
             Properties kafkaProducerConfig,
             String transactionalIdPrefix,
@@ -129,10 +128,5 @@ public class KafkaSink<IN>
     @Override
     public SimpleVersionedSerializer<KafkaWriterState> getWriterStateSerializer() {
         return new KafkaWriterStateSerializer();
-    }
-
-    @VisibleForTesting
-    protected Properties getKafkaProducerConfig() {
-        return kafkaProducerConfig;
     }
 }

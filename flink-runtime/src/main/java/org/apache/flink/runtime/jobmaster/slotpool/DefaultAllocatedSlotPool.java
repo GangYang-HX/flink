@@ -179,8 +179,8 @@ public class DefaultAllocatedSlotPool implements AllocatedSlotPool {
     }
 
     @Override
-    public Optional<SlotInfo> getSlotInformation(AllocationID allocationID) {
-        return Optional.ofNullable(registeredSlots.get(allocationID));
+    public Optional<SlotInfo> getSlotInformation(AllocationID allocationId) {
+        return Optional.of(registeredSlots.get(allocationId));
     }
 
     @Override

@@ -101,7 +101,7 @@ public interface SlotPool extends AllocatedSlotActions, AutoCloseable {
      * accepted or rejected by returning the collection of accepted slot offers.
      *
      * @param taskManagerLocation from which the slot offers originate
-     * @param taskManagerGateway to talk to the slot offerer
+     * @param taskManagerGateway to talk to the slot provider
      * @param offers slot offers which are offered to the {@link SlotPool}
      * @return A collection of accepted slot offers. The remaining slot offers are implicitly
      *     rejected.

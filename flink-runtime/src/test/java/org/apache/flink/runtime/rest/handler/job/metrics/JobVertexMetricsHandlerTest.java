@@ -34,8 +34,6 @@ public class JobVertexMetricsHandlerTest extends MetricsHandlerTestBase<JobVerte
 
     private static final int TEST_SUBTASK_INDEX = 1;
 
-    private static final int TEST_ATTEMPT_NUMBER = 0;
-
     @Override
     JobVertexMetricsHandler getMetricsHandler() {
         return new JobVertexMetricsHandler(
@@ -45,7 +43,7 @@ public class JobVertexMetricsHandlerTest extends MetricsHandlerTestBase<JobVerte
     @Override
     QueryScopeInfo getQueryScopeInfo() {
         return new QueryScopeInfo.TaskQueryScopeInfo(
-                TEST_JOB_ID, TEST_VERTEX_ID, TEST_SUBTASK_INDEX, TEST_ATTEMPT_NUMBER);
+                TEST_JOB_ID, TEST_VERTEX_ID, TEST_SUBTASK_INDEX);
     }
 
     @Override

@@ -94,7 +94,7 @@ public class DefaultExecutionGraphCacheTest extends TestLogger {
     @Test
     public void testExecutionGraphEntryInvalidation() throws Exception {
         final Time timeout = Time.milliseconds(100L);
-        final Time timeToLive = Time.milliseconds(1L);
+        final Time timeToLive = Time.milliseconds(100L);
 
         final CountingRestfulGateway restfulGateway =
                 createCountingRestfulGateway(
@@ -110,7 +110,7 @@ public class DefaultExecutionGraphCacheTest extends TestLogger {
             assertEquals(expectedExecutionGraphInfo, executionGraphInfoFuture.get());
 
             // sleep for the TTL
-            Thread.sleep(timeToLive.toMilliseconds() * 5L);
+            Thread.sleep(timeToLive.toMilliseconds());
 
             CompletableFuture<ExecutionGraphInfo> executionGraphInfoFuture2 =
                     executionGraphCache.getExecutionGraphInfo(expectedJobId, restfulGateway);
@@ -166,7 +166,7 @@ public class DefaultExecutionGraphCacheTest extends TestLogger {
     @Test
     public void testCacheEntryCleanup() throws Exception {
         final Time timeout = Time.milliseconds(100L);
-        final Time timeToLive = Time.milliseconds(1L);
+        final Time timeToLive = Time.milliseconds(100L);
         final JobID expectedJobId2 = new JobID();
         final ExecutionGraphInfo expectedExecutionGraphInfo2 =
                 new ExecutionGraphInfo(new ArchivedExecutionGraphBuilder().build());

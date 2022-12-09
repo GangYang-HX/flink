@@ -21,6 +21,7 @@ package org.apache.flink.runtime.rest;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Assume;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -81,6 +82,7 @@ public class RestServerEndpointTest extends TestLogger {
         assertTrue(Files.exists(testUploadDir));
     }
 
+    @Ignore
     @Test
     public void testCreateUploadDirFails() throws Exception {
         final File file = temporaryFolder.newFolder();

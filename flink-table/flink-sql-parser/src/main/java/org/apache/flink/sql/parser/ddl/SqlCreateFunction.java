@@ -23,7 +23,6 @@ import org.apache.calcite.sql.SqlCreate;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.SqlWriter;
@@ -52,8 +51,6 @@ public class SqlCreateFunction extends SqlCreate {
 
     private final boolean isSystemFunction;
 
-    private final SqlNodeList resourceInfos;
-
     public SqlCreateFunction(
             SqlParserPos pos,
             SqlIdentifier functionIdentifier,
@@ -61,15 +58,13 @@ public class SqlCreateFunction extends SqlCreate {
             String functionLanguage,
             boolean ifNotExists,
             boolean isTemporary,
-            boolean isSystemFunction,
-            SqlNodeList resourceInfos) {
+            boolean isSystemFunction) {
         super(OPERATOR, pos, false, ifNotExists);
         this.functionIdentifier = requireNonNull(functionIdentifier);
         this.functionClassName = requireNonNull(functionClassName);
         this.isSystemFunction = isSystemFunction;
         this.isTemporary = isTemporary;
         this.functionLanguage = functionLanguage;
-        this.resourceInfos = resourceInfos;
     }
 
     @Override
@@ -80,7 +75,7 @@ public class SqlCreateFunction extends SqlCreate {
     @Nonnull
     @Override
     public List<SqlNode> getOperandList() {
-        return ImmutableNullableList.of(functionIdentifier, functionClassName, resourceInfos);
+        return ImmutableNullableList.of(functionIdentifier, functionClassName);
     }
 
     @Override
@@ -102,15 +97,6 @@ public class SqlCreateFunction extends SqlCreate {
         if (functionLanguage != null) {
             writer.keyword("LANGUAGE");
             writer.keyword(functionLanguage);
-        }
-        if (resourceInfos.size() > 0) {
-            writer.keyword("USING");
-            SqlWriter.Frame withFrame = writer.startList("", "");
-            for (SqlNode resourcePath : resourceInfos) {
-                writer.sep(",");
-                resourcePath.unparse(writer, leftPrec, rightPrec);
-            }
-            writer.endList(withFrame);
         }
     }
 
@@ -136,9 +122,5 @@ public class SqlCreateFunction extends SqlCreate {
 
     public String[] getFunctionIdentifier() {
         return functionIdentifier.names.toArray(new String[0]);
-    }
-
-    public List<SqlNode> getResourceInfos() {
-        return resourceInfos.getList();
     }
 }

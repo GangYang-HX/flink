@@ -42,14 +42,14 @@ public class UnresolvedTaskManagerLocation implements Serializable {
             final ResourceID resourceID,
             final String externalAddress,
             final int dataPort,
-            final String nodeId) {
+            String nodeId) {
         // -1 indicates a local instance connection info
         checkArgument(dataPort > 0 || dataPort == -1, "dataPort must be > 0, or -1 (local)");
 
         this.resourceID = checkNotNull(resourceID);
         this.externalAddress = checkNotNull(externalAddress);
         this.dataPort = dataPort;
-        this.nodeId = checkNotNull(nodeId);
+        this.nodeId = nodeId;
     }
 
     public ResourceID getResourceID() {
@@ -65,6 +65,6 @@ public class UnresolvedTaskManagerLocation implements Serializable {
     }
 
     public String getNodeId() {
-        return nodeId;
+        return this.nodeId;
     }
 }

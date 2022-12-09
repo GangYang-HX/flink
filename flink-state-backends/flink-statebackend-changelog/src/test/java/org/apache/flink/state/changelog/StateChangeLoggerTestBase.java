@@ -128,18 +128,17 @@ abstract class StateChangeLoggerTestBase<Namespace> {
         public void truncate(SequenceNumber to) {}
 
         @Override
-        public void confirm(SequenceNumber from, SequenceNumber to, long checkpointId) {}
+        public void confirm(SequenceNumber from, SequenceNumber to) {}
 
         @Override
-        public void subsume(long checkpointId) {}
-
-        @Override
-        public void reset(SequenceNumber from, SequenceNumber to, long checkpointId) {}
-
-        @Override
-        public void truncateAndClose(SequenceNumber from) {}
+        public void reset(SequenceNumber from, SequenceNumber to) {}
 
         @Override
         public void close() {}
+
+        @Override
+        public SequenceNumber getLowestSequenceNumber() {
+            return initialSequenceNumber();
+        }
     }
 }

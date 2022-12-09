@@ -25,7 +25,7 @@ import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.types.LogicalTypeParserTest;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,11 +35,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link DescriptorProperties}. */
-class DescriptorPropertiesTest {
+public class DescriptorPropertiesTest {
 
     private static final String ARRAY_KEY = "my-array";
     private static final String FIXED_INDEXED_PROPERTY_KEY = "my-fixed-indexed-property";
@@ -47,7 +46,7 @@ class DescriptorPropertiesTest {
     private static final String PROPERTY_2_KEY = "property-2";
 
     @Test
-    void testEquals() {
+    public void testEquals() {
         DescriptorProperties properties1 = new DescriptorProperties();
         properties1.putString("hello1", "12");
         properties1.putString("hello2", "13");
@@ -63,20 +62,20 @@ class DescriptorPropertiesTest {
         properties3.putString("hello3", "14");
         properties3.putString("hello2", "13");
 
-        assertThat(properties2).isEqualTo(properties1);
+        assertEquals(properties1, properties2);
 
-        assertThat(properties3).isEqualTo(properties1);
+        assertEquals(properties1, properties3);
     }
 
     @Test
-    void testMissingArray() {
+    public void testMissingArray() {
         DescriptorProperties properties = new DescriptorProperties();
 
         testArrayValidation(properties, 0, Integer.MAX_VALUE);
     }
 
     @Test
-    void testArrayValues() {
+    public void testArrayValues() {
         DescriptorProperties properties = new DescriptorProperties();
 
         properties.putString(ARRAY_KEY + ".0", "12");
@@ -85,63 +84,58 @@ class DescriptorPropertiesTest {
 
         testArrayValidation(properties, 1, Integer.MAX_VALUE);
 
-        assertThat(properties.getArray(ARRAY_KEY, properties::getInt))
-                .isEqualTo(Arrays.asList(12, 42, 66));
+        assertEquals(Arrays.asList(12, 42, 66), properties.getArray(ARRAY_KEY, properties::getInt));
     }
 
     @Test
-    void testArraySingleValue() {
+    public void testArraySingleValue() {
         DescriptorProperties properties = new DescriptorProperties();
         properties.putString(ARRAY_KEY, "12");
 
         testArrayValidation(properties, 1, Integer.MAX_VALUE);
 
-        assertThat(properties.getArray(ARRAY_KEY, properties::getInt))
-                .isEqualTo(Collections.singletonList(12));
+        assertEquals(
+                Collections.singletonList(12), properties.getArray(ARRAY_KEY, properties::getInt));
     }
 
-    @Test
-    void testArrayInvalidValues() {
+    @Test(expected = ValidationException.class)
+    public void testArrayInvalidValues() {
         DescriptorProperties properties = new DescriptorProperties();
         properties.putString(ARRAY_KEY + ".0", "12");
         properties.putString(ARRAY_KEY + ".1", "66");
         properties.putString(ARRAY_KEY + ".2", "INVALID");
 
-        assertThatThrownBy(() -> testArrayValidation(properties, 1, Integer.MAX_VALUE))
-                .isInstanceOf(ValidationException.class);
+        testArrayValidation(properties, 1, Integer.MAX_VALUE);
     }
 
-    @Test
-    void testArrayInvalidSingleValue() {
+    @Test(expected = ValidationException.class)
+    public void testArrayInvalidSingleValue() {
         DescriptorProperties properties = new DescriptorProperties();
         properties.putString(ARRAY_KEY, "INVALID");
 
-        assertThatThrownBy(() -> testArrayValidation(properties, 1, Integer.MAX_VALUE))
-                .isInstanceOf(ValidationException.class);
+        testArrayValidation(properties, 1, Integer.MAX_VALUE);
     }
 
-    @Test
-    void testInvalidMissingArray() {
+    @Test(expected = ValidationException.class)
+    public void testInvalidMissingArray() {
         DescriptorProperties properties = new DescriptorProperties();
 
-        assertThatThrownBy(() -> testArrayValidation(properties, 1, Integer.MAX_VALUE))
-                .isInstanceOf(ValidationException.class);
+        testArrayValidation(properties, 1, Integer.MAX_VALUE);
     }
 
-    @Test
-    void testInvalidFixedIndexedProperties() {
+    @Test(expected = ValidationException.class)
+    public void testInvalidFixedIndexedProperties() {
         DescriptorProperties property = new DescriptorProperties();
         List<List<String>> list = new ArrayList<>();
         list.add(Arrays.asList("1", "string"));
         list.add(Arrays.asList("INVALID", "string"));
         property.putIndexedFixedProperties(
                 FIXED_INDEXED_PROPERTY_KEY, Arrays.asList(PROPERTY_1_KEY, PROPERTY_2_KEY), list);
-        assertThatThrownBy(() -> testFixedIndexedPropertiesValidation(property))
-                .isInstanceOf(ValidationException.class);
+        testFixedIndexedPropertiesValidation(property);
     }
 
     @Test
-    void testRemoveKeys() {
+    public void testRemoveKeys() {
         DescriptorProperties properties = new DescriptorProperties();
         properties.putString("hello1", "12");
         properties.putString("hello2", "13");
@@ -152,11 +146,11 @@ class DescriptorPropertiesTest {
         DescriptorProperties expected = new DescriptorProperties();
         expected.putString("hello2", "13");
 
-        assertThat(actual).isEqualTo(expected);
+        assertEquals(expected, actual);
     }
 
     @Test
-    void testPrefixedMap() {
+    public void testPrefixedMap() {
         DescriptorProperties properties = new DescriptorProperties();
         properties.putString("hello1", "12");
         properties.putString("hello2", "13");
@@ -169,11 +163,11 @@ class DescriptorPropertiesTest {
         expected.putString("prefix.hello2", "13");
         expected.putString("prefix.hello3", "14");
 
-        assertThat(actual).isEqualTo(expected.asMap());
+        assertEquals(expected.asMap(), actual);
     }
 
     @Test
-    void testTableSchema() {
+    public void testTableSchema() {
         TableSchema schema =
                 TableSchema.builder()
                         .add(TableColumn.physical("f0", DataTypes.BIGINT().notNull()))
@@ -243,14 +237,14 @@ class DescriptorPropertiesTest {
         expected.put("schema.primary-key.name", "constraint1");
         expected.put("schema.primary-key.columns", "f0,f2");
 
-        assertThat(actual).isEqualTo(expected);
+        assertEquals(expected, actual);
 
         TableSchema restored = properties.getTableSchema("schema");
-        assertThat(restored).isEqualTo(schema);
+        assertEquals(schema, restored);
     }
 
     @Test
-    void testLegacyTableSchema() {
+    public void testLegacyTableSchema() {
         DescriptorProperties properties = new DescriptorProperties();
         Map<String, String> map = new HashMap<>();
         map.put("schema.0.name", "f0");
@@ -293,7 +287,7 @@ class DescriptorPropertiesTest {
                         .field("f9", Types.POJO(LogicalTypeParserTest.MyPojo.class))
                         .build();
 
-        assertThat(restored).isEqualTo(expected);
+        assertEquals(expected, restored);
     }
 
     private void testArrayValidation(

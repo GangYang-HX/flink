@@ -47,6 +47,7 @@ import org.apache.flink.runtime.filecache.FileCache;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.network.NettyShuffleEnvironmentBuilder;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.partition.NoOpResultPartitionConsumableNotifier;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.InputSplitProvider;
@@ -101,7 +102,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.RunnableFuture;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
@@ -191,7 +191,6 @@ public class TaskCheckpointingBehaviourTest extends TestLogger {
         cfg.setStreamOperator(op);
         cfg.setOperatorID(new OperatorID());
         cfg.setStateBackend(backend);
-        cfg.serializeAllConfigs();
 
         ExecutionConfig executionConfig = new ExecutionConfig();
 
@@ -218,8 +217,10 @@ public class TaskCheckpointingBehaviourTest extends TestLogger {
         return new Task(
                 jobInformation,
                 taskInformation,
-                createExecutionAttemptId(taskInformation.getJobVertexId()),
+                new ExecutionAttemptID(),
                 new AllocationID(),
+                0,
+                0,
                 Collections.<ResultPartitionDeploymentDescriptor>emptyList(),
                 Collections.<InputGateDeploymentDescriptor>emptyList(),
                 mock(MemoryManager.class),
@@ -241,6 +242,7 @@ public class TaskCheckpointingBehaviourTest extends TestLogger {
                         VoidPermanentBlobService.INSTANCE),
                 new TestingTaskManagerRuntimeInfo(),
                 UnregisteredMetricGroups.createUnregisteredTaskMetricGroup(),
+                new NoOpResultPartitionConsumableNotifier(),
                 mock(PartitionProducerStateChecker.class),
                 Executors.directExecutor());
     }

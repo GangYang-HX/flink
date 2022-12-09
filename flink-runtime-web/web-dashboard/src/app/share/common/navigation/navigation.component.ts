@@ -19,9 +19,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { filter, mergeMap, map, startWith, takeUntil } from 'rxjs/operators';
-
-import { RouterTab } from '@flink-runtime-web/core/module-config';
+import { filter, flatMap, map, startWith, takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'flink-navigation',
@@ -30,7 +28,7 @@ import { RouterTab } from '@flink-runtime-web/core/module-config';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class NavigationComponent implements OnInit, OnDestroy {
-  @Input() listOfNavigation: RouterTab[] = [];
+  @Input() listOfNavigation: Array<{ path: string; title: string }> = [];
   @Input() size = 'default';
   navIndex = 0;
   destroy$ = new Subject();
@@ -47,7 +45,7 @@ export class NavigationComponent implements OnInit, OnDestroy {
         filter(e => e instanceof NavigationEnd),
         startWith(true),
         filter(() => !!(this.activatedRoute && this.activatedRoute.firstChild)),
-        mergeMap(() => this.activatedRoute!.firstChild!.data),
+        flatMap(() => this.activatedRoute!.firstChild!.data),
         takeUntil(this.destroy$),
         map(data => data.path)
       )

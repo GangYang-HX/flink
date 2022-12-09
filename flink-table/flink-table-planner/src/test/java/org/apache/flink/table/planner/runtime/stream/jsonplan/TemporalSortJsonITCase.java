@@ -28,7 +28,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test for temporal sort json plan. */
 public class TemporalSortJsonITCase extends JsonPlanTestBase {
@@ -78,10 +78,10 @@ public class TemporalSortJsonITCase extends JsonPlanTestBase {
                         "insert into MySink SELECT `int` FROM MyTable order by rowtime, `double`")
                 .await();
 
-        assertThat(TestValuesTableFactory.getResults("MySink"))
-                .isEqualTo(
-                        Arrays.asList(
-                                "+I[1]", "+I[2]", "+I[2]", "+I[5]", "+I[6]", "+I[3]", "+I[3]",
-                                "+I[4]", "+I[7]", "+I[1]"));
+        assertEquals(
+                Arrays.asList(
+                        "+I[1]", "+I[2]", "+I[2]", "+I[5]", "+I[6]", "+I[3]", "+I[3]", "+I[4]",
+                        "+I[7]", "+I[1]"),
+                TestValuesTableFactory.getResults("MySink"));
     }
 }

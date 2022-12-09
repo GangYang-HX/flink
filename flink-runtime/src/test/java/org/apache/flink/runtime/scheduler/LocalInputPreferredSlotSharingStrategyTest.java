@@ -35,12 +35,9 @@ import org.apache.flink.runtime.scheduler.strategy.SchedulingTopology;
 import org.apache.flink.runtime.scheduler.strategy.TestingSchedulingExecutionVertex;
 import org.apache.flink.runtime.scheduler.strategy.TestingSchedulingTopology;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -49,7 +46,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -60,9 +56,6 @@ import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link LocalInputPreferredSlotSharingStrategy}. */
 public class LocalInputPreferredSlotSharingStrategyTest extends TestLogger {
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     private TestingSchedulingTopology topology;
 
@@ -287,9 +280,7 @@ public class LocalInputPreferredSlotSharingStrategyTest extends TestLogger {
 
         final JobGraph jobGraph = JobGraphTestUtils.batchJobGraph(v1, v2);
         final ExecutionGraph executionGraph =
-                TestingDefaultExecutionGraphBuilder.newBuilder()
-                        .setJobGraph(jobGraph)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                TestingDefaultExecutionGraphBuilder.newBuilder().setJobGraph(jobGraph).build();
         final SchedulingTopology topology = executionGraph.getSchedulingTopology();
 
         final SlotSharingStrategy strategy =

@@ -39,8 +39,8 @@ public class PythonScalarFunction extends ScalarFunction implements PythonFuncti
 
     private final String name;
     private final byte[] serializedScalarFunction;
-    private final DataType[] inputTypes;
-    private final DataType resultType;
+    private final TypeInformation[] inputTypes;
+    private final TypeInformation resultType;
     private final PythonFunctionKind pythonFunctionKind;
     private final boolean deterministic;
     private final PythonEnv pythonEnv;
@@ -49,8 +49,8 @@ public class PythonScalarFunction extends ScalarFunction implements PythonFuncti
     public PythonScalarFunction(
             String name,
             byte[] serializedScalarFunction,
-            DataType[] inputTypes,
-            DataType resultType,
+            TypeInformation[] inputTypes,
+            TypeInformation resultType,
             PythonFunctionKind pythonFunctionKind,
             boolean deterministic,
             boolean takesRowAsInput,
@@ -98,7 +98,7 @@ public class PythonScalarFunction extends ScalarFunction implements PythonFuncti
     @Override
     public TypeInformation[] getParameterTypes(Class[] signature) {
         if (inputTypes != null) {
-            return TypeConversions.fromDataTypeToLegacyInfo(inputTypes);
+            return inputTypes;
         } else {
             return super.getParameterTypes(signature);
         }
@@ -106,7 +106,7 @@ public class PythonScalarFunction extends ScalarFunction implements PythonFuncti
 
     @Override
     public TypeInformation getResultType(Class[] signature) {
-        return TypeConversions.fromDataTypeToLegacyInfo(resultType);
+        return resultType;
     }
 
     @Override
@@ -114,10 +114,15 @@ public class PythonScalarFunction extends ScalarFunction implements PythonFuncti
         TypeInference.Builder builder = TypeInference.newBuilder();
         if (inputTypes != null) {
             final List<DataType> argumentDataTypes =
-                    Stream.of(inputTypes).collect(Collectors.toList());
+                    Stream.of(inputTypes)
+                            .map(TypeConversions::fromLegacyInfoToDataType)
+                            .collect(Collectors.toList());
             builder.typedArguments(argumentDataTypes);
         }
-        return builder.outputTypeStrategy(TypeStrategies.explicit(resultType)).build();
+        return builder.outputTypeStrategy(
+                        TypeStrategies.explicit(
+                                TypeConversions.fromLegacyInfoToDataType(resultType)))
+                .build();
     }
 
     @Override

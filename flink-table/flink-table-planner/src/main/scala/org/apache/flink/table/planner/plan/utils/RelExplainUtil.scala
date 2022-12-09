@@ -170,12 +170,6 @@ object RelExplainUtil {
     var offset = fullGrouping.length
     val aggStrings = aggCallToAggFunction.zipWithIndex.map {
       case ((aggCall, udf), index) =>
-        val approximate = if (aggCall.isApproximate) {
-          "APPROXIMATE "
-        } else {
-          ""
-        }
-
         val distinct = if (aggCall.isDistinct) {
           if (aggCall.getArgList.size() == 0) {
             "DISTINCT"
@@ -214,10 +208,10 @@ object RelExplainUtil {
         }
 
         if (aggCall.filterArg >= 0 && aggCall.filterArg < inputFieldNames.size) {
-          s"${aggCall.getAggregation}($approximate$distinct$argListNames) FILTER " +
+          s"${aggCall.getAggregation}($distinct$argListNames) FILTER " +
             s"${inputFieldNames(aggCall.filterArg)}"
         } else {
-          s"${aggCall.getAggregation}($approximate$distinct$argListNames)"
+          s"${aggCall.getAggregation}($distinct$argListNames)"
         }
     }
 

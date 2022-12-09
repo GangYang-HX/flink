@@ -17,5 +17,10 @@
  */
 package org.apache.flink.table.planner.plan.optimize.program
 
+import org.apache.flink.table.planner.materialize.MaterializationsRegistry
+
 /** A FlinkOptimizeContext allows to obtain batch table environment information when optimizing. */
-trait BatchOptimizeContext extends FlinkOptimizeContext {}
+trait BatchOptimizeContext extends FlinkOptimizeContext {
+
+  def getMaterializationsRegistry: MaterializationsRegistry
+}

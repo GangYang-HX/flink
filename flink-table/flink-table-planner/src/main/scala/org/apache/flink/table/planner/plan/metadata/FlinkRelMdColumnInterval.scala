@@ -25,8 +25,6 @@ import org.apache.flink.table.planner.plan.nodes.physical.stream._
 import org.apache.flink.table.planner.plan.schema.FlinkPreparingTableBase
 import org.apache.flink.table.planner.plan.stats._
 import org.apache.flink.table.planner.plan.utils.{AggregateUtil, ColumnIntervalUtil, FlinkRelOptUtil, RankUtil}
-import org.apache.flink.table.planner.utils.ShortcutUtils
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTypeFactory
 import org.apache.flink.table.runtime.operators.rank.{ConstantRankRange, VariableRankRange}
 import org.apache.flink.util.Preconditions
 
@@ -638,11 +636,8 @@ class FlinkRelMdColumnInterval private extends MetadataHandler[ColumnInterval] {
           aggCalls: Seq[AggregateCall],
           inputType: RelDataType,
           isBounded: Boolean): AggregateCall = {
-        val outputIndexToAggCallIndexMap = AggregateUtil.getOutputIndexToAggCallIndexMap(
-          unwrapTypeFactory(input),
-          aggCalls,
-          inputType,
-          isBounded)
+        val outputIndexToAggCallIndexMap =
+          AggregateUtil.getOutputIndexToAggCallIndexMap(aggCalls, inputType, isBounded)
         if (outputIndexToAggCallIndexMap.containsKey(index)) {
           val realIndex = outputIndexToAggCallIndexMap.get(index)
           aggCalls(realIndex)
@@ -656,11 +651,8 @@ class FlinkRelMdColumnInterval private extends MetadataHandler[ColumnInterval] {
           globalAggCalls: Seq[AggregateCall],
           inputRowType: RelDataType,
           isBounded: Boolean): Integer = {
-        val outputIndexToAggCallIndexMap = AggregateUtil.getOutputIndexToAggCallIndexMap(
-          unwrapTypeFactory(input),
-          globalAggCalls,
-          inputRowType,
-          isBounded)
+        val outputIndexToAggCallIndexMap =
+          AggregateUtil.getOutputIndexToAggCallIndexMap(globalAggCalls, inputRowType, isBounded)
 
         outputIndexToAggCallIndexMap.foreach {
           case (k, v) =>

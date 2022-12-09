@@ -28,7 +28,6 @@ import java.io.IOException;
 
 /** Short {@link ColumnReader}. Using INT32 to store short, so just cast int to short. */
 public class ShortColumnReader extends AbstractColumnReader<WritableShortVector> {
-
     public ShortColumnReader(ColumnDescriptor descriptor, PageReader pageReader)
             throws IOException {
         super(descriptor, pageReader);

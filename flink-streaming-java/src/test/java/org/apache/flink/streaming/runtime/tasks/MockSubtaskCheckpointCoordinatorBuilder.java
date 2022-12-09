@@ -18,6 +18,7 @@
 
 package org.apache.flink.streaming.runtime.tasks;
 
+import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.runtime.checkpoint.CheckpointException;
 import org.apache.flink.runtime.checkpoint.channel.ChannelStateWriter;
 import org.apache.flink.runtime.execution.Environment;
@@ -42,6 +43,7 @@ public class MockSubtaskCheckpointCoordinatorBuilder {
     private Environment environment;
     private AsyncExceptionHandler asyncExceptionHandler;
     private StreamTaskActionExecutor actionExecutor = IMMEDIATE;
+    private CloseableRegistry closeableRegistry = new CloseableRegistry();
     private ExecutorService executorService = Executors.newDirectExecutorService();
     private BiFunctionWithException<
                     ChannelStateWriter, Long, CompletableFuture<Void>, CheckpointException>
@@ -103,14 +105,14 @@ public class MockSubtaskCheckpointCoordinatorBuilder {
                 checkpointStorage,
                 taskName,
                 actionExecutor,
+                closeableRegistry,
                 executorService,
                 environment,
                 asyncExceptionHandler,
                 unalignedCheckpointEnabled,
                 enableCheckpointAfterTasksFinished,
                 prepareInputSnapshot,
-                maxRecordAbortedCheckpoints,
-                (callable, duration) -> () -> {});
+                maxRecordAbortedCheckpoints);
     }
 
     private static class NonHandleAsyncException implements AsyncExceptionHandler {

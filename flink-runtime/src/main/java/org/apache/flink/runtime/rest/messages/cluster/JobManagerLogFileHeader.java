@@ -22,11 +22,11 @@ import org.apache.flink.runtime.rest.HttpMethodWrapper;
 import org.apache.flink.runtime.rest.handler.cluster.JobManagerLogFileHandler;
 import org.apache.flink.runtime.rest.messages.EmptyMessageParameters;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
-import org.apache.flink.runtime.rest.messages.RuntimeUntypedResponseMessageHeaders;
+import org.apache.flink.runtime.rest.messages.UntypedResponseMessageHeaders;
 
 /** Headers for the {@link JobManagerLogFileHandler}. */
 public class JobManagerLogFileHeader
-        implements RuntimeUntypedResponseMessageHeaders<EmptyRequestBody, EmptyMessageParameters> {
+        implements UntypedResponseMessageHeaders<EmptyRequestBody, EmptyMessageParameters> {
 
     private static final JobManagerLogFileHeader INSTANCE = new JobManagerLogFileHeader();
 

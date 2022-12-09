@@ -57,6 +57,11 @@ public class SessionWindowAssigner extends MergingWindowAssigner<TimeWindow>
     }
 
     @Override
+    public Collection<TimeWindow> matchWindows(long timestamp, boolean alignStart) {
+        return null;
+    }
+
+    @Override
     public void mergeWindows(
             TimeWindow newWindow,
             NavigableSet<TimeWindow> sortedWindows,

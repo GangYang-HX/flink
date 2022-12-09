@@ -175,7 +175,6 @@ public class StreamExecDeduplicate extends ExecNodeBase<RowData>
             operator =
                     new ProcTimeDeduplicateOperatorTranslator(
                                     config,
-                                    planner.getFlinkContext().getClassLoader(),
                                     rowTypeInfo,
                                     rowSerializer,
                                     inputRowType,
@@ -193,8 +192,7 @@ public class StreamExecDeduplicate extends ExecNodeBase<RowData>
                         inputTransform.getParallelism());
 
         final RowDataKeySelector selector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(), uniqueKeys, rowTypeInfo);
+                KeySelectorUtil.getRowDataSelector(uniqueKeys, rowTypeInfo);
         transform.setStateKeySelector(selector);
         transform.setStateKeyType(selector.getProducedType());
 
@@ -327,7 +325,6 @@ public class StreamExecDeduplicate extends ExecNodeBase<RowData>
 
         protected ProcTimeDeduplicateOperatorTranslator(
                 ReadableConfig config,
-                ClassLoader classLoader,
                 InternalTypeInfo<RowData> rowTypeInfo,
                 TypeSerializer<RowData> typeSerializer,
                 RowType inputRowType,
@@ -335,7 +332,7 @@ public class StreamExecDeduplicate extends ExecNodeBase<RowData>
                 boolean generateUpdateBefore) {
             super(config, rowTypeInfo, typeSerializer, keepLastRow, generateUpdateBefore);
             generatedEqualiser =
-                    new EqualiserCodeGenerator(inputRowType, classLoader)
+                    new EqualiserCodeGenerator(inputRowType)
                             .generateRecordEqualiser("DeduplicateRowEqualiser");
         }
 

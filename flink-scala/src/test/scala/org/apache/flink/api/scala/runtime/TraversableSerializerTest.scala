@@ -24,8 +24,8 @@ import org.apache.flink.api.java.typeutils.runtime.kryo.KryoSerializer
 import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.typeutils.TraversableSerializer
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.{Disabled, Test}
+import org.junit.{Assert, Ignore, Test}
+import org.junit.Assert._
 
 import scala.collection.immutable.{BitSet, LinearSeq}
 import scala.collection.mutable
@@ -107,7 +107,7 @@ class TraversableSerializerTest {
     val keyA = TraversableSerializer.Key(classLoaderA, "code")
     val keyB = TraversableSerializer.Key(classLoaderA, "code")
 
-    assertThat(keyA).isEqualTo(keyB)
+    assertEquals(keyA, keyB)
   }
 
   @Test
@@ -118,7 +118,7 @@ class TraversableSerializerTest {
     val keyA = TraversableSerializer.Key(classLoaderA, "code")
     val keyB = TraversableSerializer.Key(classLoaderB, "code")
 
-    assertThat(keyA).isNotEqualTo(keyB)
+    assertNotEquals(keyA, keyB)
   }
 
   @Test
@@ -128,7 +128,7 @@ class TraversableSerializerTest {
     val keyA = TraversableSerializer.Key(classLoaderA, "code")
     val keyB = keyA.copy(classLoaderRef = WeakReference(null))
 
-    assertThat(keyA).isNotEqualTo(keyB)
+    assertNotEquals(keyA, keyB)
   }
 
   @Test
@@ -136,7 +136,7 @@ class TraversableSerializerTest {
     val keyA = TraversableSerializer.Key(null, "a")
     val keyB = TraversableSerializer.Key(null, "a")
 
-    assertThat(keyA).isEqualTo(keyB)
+    assertEquals(keyA, keyB)
   }
 
   @Test
@@ -146,15 +146,22 @@ class TraversableSerializerTest {
     val keyA = TraversableSerializer.Key(classLoaderA, "a")
     val keyB = TraversableSerializer.Key(classLoaderA, "b")
 
-    assertThat(keyA).isNotEqualTo(keyB)
+    assertNotEquals(keyA, keyB)
   }
 
   final private def runTests[T: TypeInformation](instances: Array[T]) {
-    val typeInfo = implicitly[TypeInformation[T]]
-    val serializer = typeInfo.createSerializer(new ExecutionConfig)
-    val typeClass = typeInfo.getTypeClass
-    val test = new TraversableSerializerTestInstance[T](serializer, typeClass, -1, instances)
-    test.testAll()
+    try {
+      val typeInfo = implicitly[TypeInformation[T]]
+      val serializer = typeInfo.createSerializer(new ExecutionConfig)
+      val typeClass = typeInfo.getTypeClass
+      val test = new TraversableSerializerTestInstance[T](serializer, typeClass, -1, instances)
+      test.testAll()
+    } catch {
+      case e: Exception =>
+        System.err.println(e.getMessage)
+        e.printStackTrace()
+        Assert.fail(e.getMessage)
+    }
   }
 }
 
@@ -169,7 +176,7 @@ class Pojo(var name: String, var count: Int) {
   }
 }
 
-@Disabled("Prevents this class from being considered a test class by JUnit.")
+@Ignore("Prevents this class from being considered a test class by JUnit.")
 class TraversableSerializerTestInstance[T](
     serializer: TypeSerializer[T],
     typeClass: Class[T],
@@ -198,9 +205,7 @@ class TraversableSerializerTestInstance[T](
           val copy = serializer.copy(datum).asInstanceOf[Traversable[_]].toIterable
           copy.zip(original).foreach {
             case (c: AnyRef, o: AnyRef) =>
-              assertThat(c)
-                .isNotSameAs(o)
-                .withFailMessage("Copy of mutable element has reference equality.")
+              assertTrue("Copy of mutable element has reference equality.", c ne o)
             case _ => // ok
           }
       }
@@ -209,14 +214,21 @@ class TraversableSerializerTestInstance[T](
 
   @Test
   override def testInstantiate(): Unit = {
-    val serializer: TypeSerializer[T] = getSerializer
-    val instance: T = serializer.createInstance
-    assertThat(instance).isNotNull.withFailMessage("The created instance must not be null.")
-    val tpe: Class[T] = getTypeClass
-    assertThat(tpe).isNotNull.withFailMessage("The test is corrupt: type class is null.")
-    // We cannot check this because Collection Instances are not always of the type
-    // that the user writes, they might have generated names.
-    // assertEquals("Type of the instantiated object is wrong.", tpe, instance.getClass)
+    try {
+      val serializer: TypeSerializer[T] = getSerializer
+      val instance: T = serializer.createInstance
+      assertNotNull("The created instance must not be null.", instance)
+      val tpe: Class[T] = getTypeClass
+      assertNotNull("The test is corrupt: type class is null.", tpe)
+      // We cannot check this because Collection Instances are not always of the type
+      // that the user writes, they might have generated names.
+      // assertEquals("Type of the instantiated object is wrong.", tpe, instance.getClass)
+    } catch {
+      case e: Exception =>
+        System.err.println(e.getMessage)
+        e.printStackTrace()
+        fail("Exception in test: " + e.getMessage)
+    }
   }
 
 }

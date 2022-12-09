@@ -27,7 +27,8 @@ import java.util.function.Supplier;
 /**
  * Adapter between {@link Sink.InitContext} and {@link SerializationSchema.InitializationContext}.
  */
-class InitContextInitializationContextAdapter implements SerializationSchema.InitializationContext {
+public class InitContextInitializationContextAdapter
+        implements SerializationSchema.InitializationContext {
 
     private final UserCodeClassLoader userCodeClassLoader;
     private final Supplier<MetricGroup> metricGroupSupplier;

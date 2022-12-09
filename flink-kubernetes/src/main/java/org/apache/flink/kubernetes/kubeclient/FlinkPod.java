@@ -23,6 +23,10 @@ import io.fabric8.kubernetes.api.model.ContainerBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 
+import java.util.List;
+import java.util.Optional;
+
+import static org.apache.flink.kubernetes.utils.Constants.INIT_CONTAINER_NAME;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -46,6 +50,12 @@ public class FlinkPod {
 
     public Container getMainContainer() {
         return mainContainer;
+    }
+
+    public Optional<Container> getFetcherInitContainer() {
+        return podWithoutMainContainer.getSpec().getInitContainers().stream()
+                .filter(c -> c.getName().equals(INIT_CONTAINER_NAME))
+                .findAny();
     }
 
     public FlinkPod copy() {
@@ -81,6 +91,18 @@ public class FlinkPod {
         public Builder withPod(Pod pod) {
             this.podWithoutMainContainer = checkNotNull(pod);
             return this;
+        }
+
+        public Builder withFetcherInitContainer(FlinkPod flinkPod, Container newContainer) {
+            Optional<Container> container = flinkPod.getFetcherInitContainer();
+            if (container.isPresent()) {
+                List<Container> containers =
+                        flinkPod.getPodWithoutMainContainer().getSpec().getInitContainers();
+                containers.remove(container.get());
+                containers.add(newContainer);
+                flinkPod.getPodWithoutMainContainer().getSpec().setInitContainers(containers);
+            }
+            return withPod(flinkPod.getPodWithoutMainContainer());
         }
 
         public Builder withMainContainer(Container mainContainer) {

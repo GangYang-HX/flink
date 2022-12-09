@@ -21,7 +21,6 @@ package org.apache.flink.formats.csv;
 import org.apache.flink.api.common.serialization.BulkWriter;
 import org.apache.flink.core.fs.FSDataOutputStream;
 import org.apache.flink.formats.common.Converter;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonGenerator;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectWriter;
@@ -90,7 +89,7 @@ class CsvBulkWriter<T, R, C> implements BulkWriter<T> {
      */
     static <T> CsvBulkWriter<T, T, Void> forPojo(Class<T> pojoClass, FSDataOutputStream stream) {
         final Converter<T, T, Void> converter = (value, context) -> value;
-        final CsvMapper csvMapper = JacksonMapperFactory.createCsvMapper();
+        final CsvMapper csvMapper = new CsvMapper();
         final CsvSchema schema = csvMapper.schemaFor(pojoClass).withoutQuoteChar();
         return new CsvBulkWriter<>(csvMapper, schema, converter, null, stream);
     }

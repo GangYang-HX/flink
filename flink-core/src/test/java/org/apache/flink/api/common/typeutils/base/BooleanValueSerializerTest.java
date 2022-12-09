@@ -25,7 +25,7 @@ import org.apache.flink.types.BooleanValue;
 import java.util.Random;
 
 /** A test for the {@link BooleanValueSerializer}. */
-class BooleanValueSerializerTest extends SerializerTestBase<BooleanValue> {
+public class BooleanValueSerializerTest extends SerializerTestBase<BooleanValue> {
 
     @Override
     protected TypeSerializer<BooleanValue> createSerializer() {

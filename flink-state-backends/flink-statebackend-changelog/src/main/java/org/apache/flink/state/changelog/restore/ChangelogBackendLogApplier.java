@@ -40,7 +40,6 @@ import org.apache.flink.runtime.state.metainfo.StateMetaInfoSnapshotReadersWrite
 import org.apache.flink.state.changelog.ChangelogKeyedStateBackend;
 import org.apache.flink.state.changelog.ChangelogState;
 import org.apache.flink.state.changelog.StateChangeOperation;
-import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +64,7 @@ class ChangelogBackendLogApplier {
 
     public static void apply(
             StateChange stateChange,
-            ChangelogRestoreTarget<?> changelogRestoreTarget,
+            ChangelogKeyedStateBackend<?> changelogBackend,
             ClassLoader classLoader,
             Map<Short, StateID> stateIds)
             throws Exception {
@@ -74,7 +73,7 @@ class ChangelogBackendLogApplier {
         applyOperation(
                 StateChangeOperation.byCode(in.readByte()),
                 stateChange.getKeyGroup(),
-                changelogRestoreTarget,
+                changelogBackend,
                 in,
                 classLoader,
                 ChangelogApplierFactoryImpl.INSTANCE,
@@ -84,7 +83,7 @@ class ChangelogBackendLogApplier {
     private static void applyOperation(
             StateChangeOperation operation,
             int keyGroup,
-            ChangelogRestoreTarget<?> changelogRestoreTarget,
+            ChangelogKeyedStateBackend<?> backend,
             DataInputView in,
             ClassLoader classLoader,
             ChangelogApplierFactory factory,
@@ -92,15 +91,15 @@ class ChangelogBackendLogApplier {
             throws Exception {
         LOG.debug("apply {} in key group {}", operation, keyGroup);
         if (operation == METADATA) {
-            applyMetaDataChange(in, changelogRestoreTarget, classLoader, stateIds);
-        } else if (changelogRestoreTarget.getKeyGroupRange().contains(keyGroup)) {
-            applyDataChange(in, factory, changelogRestoreTarget, operation, stateIds);
+            applyMetaDataChange(in, backend, classLoader, stateIds);
+        } else if (backend.getKeyGroupRange().contains(keyGroup)) {
+            applyDataChange(in, factory, backend, operation, stateIds);
         }
     }
 
     private static void applyMetaDataChange(
             DataInputView in,
-            ChangelogRestoreTarget<?> changelogRestoreTarget,
+            ChangelogKeyedStateBackend<?> backend,
             ClassLoader classLoader,
             Map<Short, StateID> stateIds)
             throws Exception {
@@ -109,10 +108,10 @@ class ChangelogBackendLogApplier {
         RegisteredStateMetaInfoBase meta;
         switch (snapshot.getBackendStateType()) {
             case KEY_VALUE:
-                meta = restoreKvMetaData(changelogRestoreTarget, snapshot, in);
+                meta = restoreKvMetaData(backend, snapshot, in);
                 break;
             case PRIORITY_QUEUE:
-                meta = restorePqMetaData(changelogRestoreTarget, snapshot);
+                meta = restorePqMetaData(backend, snapshot);
                 break;
             default:
                 throw new RuntimeException(
@@ -148,9 +147,7 @@ class ChangelogBackendLogApplier {
     }
 
     private static RegisteredKeyValueStateBackendMetaInfo restoreKvMetaData(
-            ChangelogRestoreTarget<?> changelogRestoreTarget,
-            StateMetaInfoSnapshot snapshot,
-            DataInputView in)
+            ChangelogKeyedStateBackend<?> backend, StateMetaInfoSnapshot snapshot, DataInputView in)
             throws Exception {
         RegisteredKeyValueStateBackendMetaInfo meta =
                 new RegisteredKeyValueStateBackendMetaInfo(snapshot);
@@ -161,10 +158,11 @@ class ChangelogBackendLogApplier {
         // An alternative solution to load metadata "natively" by the base backends would require
         // base state to be always present, i.e. the 1st checkpoint would have to be "full" always.
         StateDescriptor stateDescriptor = toStateDescriptor(meta, defaultValue);
+        // todo: support changing ttl (FLINK-23143)
         if (ttlConfig.isEnabled()) {
             stateDescriptor.enableTimeToLive(ttlConfig);
         }
-        changelogRestoreTarget.createKeyedState(meta.getNamespaceSerializer(), stateDescriptor);
+        backend.getOrCreateKeyedState(meta.getNamespaceSerializer(), stateDescriptor);
         return meta;
     }
 
@@ -196,10 +194,10 @@ class ChangelogBackendLogApplier {
     }
 
     private static RegisteredPriorityQueueStateBackendMetaInfo restorePqMetaData(
-            ChangelogRestoreTarget<?> changelogRestoreTarget, StateMetaInfoSnapshot snapshot) {
+            ChangelogKeyedStateBackend<?> backend, StateMetaInfoSnapshot snapshot) {
         RegisteredPriorityQueueStateBackendMetaInfo meta =
                 new RegisteredPriorityQueueStateBackendMetaInfo(snapshot);
-        changelogRestoreTarget.createPqState(meta.getName(), meta.getElementSerializer());
+        backend.create(meta.getName(), meta.getElementSerializer());
         return meta;
     }
 
@@ -214,14 +212,12 @@ class ChangelogBackendLogApplier {
     private static void applyDataChange(
             DataInputView in,
             ChangelogApplierFactory factory,
-            ChangelogRestoreTarget<?> changelogRestoreTarget,
+            ChangelogKeyedStateBackend<?> backend,
             StateChangeOperation operation,
             Map<Short, StateID> stateIds)
             throws Exception {
         StateID id = checkNotNull(stateIds.get(in.readShort()));
-        ChangelogState state = changelogRestoreTarget.getExistingState(id.stateName, id.stateType);
-        Preconditions.checkState(
-                state != null, String.format("%s state %s not found", id.stateType, id.stateName));
+        ChangelogState state = backend.getExistingStateForRecovery(id.stateName, id.stateType);
         StateChangeApplier changeApplier = state.getChangeApplier(factory);
         changeApplier.apply(operation, in);
     }

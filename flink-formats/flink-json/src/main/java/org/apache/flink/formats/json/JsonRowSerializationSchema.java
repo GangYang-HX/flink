@@ -28,7 +28,6 @@ import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.WrappingRuntimeException;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,7 +79,7 @@ public class JsonRowSerializationSchema implements SerializationSchema<Row> {
     private final RowTypeInfo typeInfo;
 
     /** Object mapper that is used to create output JSON objects. */
-    private transient ObjectMapper mapper;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     private final SerializationRuntimeConverter runtimeConverter;
 
@@ -93,11 +92,6 @@ public class JsonRowSerializationSchema implements SerializationSchema<Row> {
                 typeInfo instanceof RowTypeInfo, "Only RowTypeInfo is supported");
         this.typeInfo = (RowTypeInfo) typeInfo;
         this.runtimeConverter = createConverter(typeInfo);
-    }
-
-    @Override
-    public void open(InitializationContext context) throws Exception {
-        mapper = JacksonMapperFactory.createObjectMapper();
     }
 
     /** Builder for {@link JsonRowSerializationSchema}. */

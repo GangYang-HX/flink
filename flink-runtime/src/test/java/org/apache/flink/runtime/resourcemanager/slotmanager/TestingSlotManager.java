@@ -115,7 +115,7 @@ public class TestingSlotManager implements SlotManager {
             ResourceManagerId newResourceManagerId,
             Executor newMainThreadExecutor,
             ResourceActions newResourceActions,
-            BlockedTaskManagerChecker newBlockedTaskManagerChecker) {}
+            BlockedTaskManagerChecker blockedTaskManagerChecker) {}
 
     @Override
     public void suspend() {}

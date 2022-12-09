@@ -55,6 +55,11 @@ public class NonPersistentMetadataCheckpointStorageLocation extends MemCheckpoin
         return CheckpointStorageLocationReference.getDefault();
     }
 
+    @Override
+    public String getMetadataFileFullPath() {
+        return null;
+    }
+
     // ------------------------------------------------------------------------
     //  CompletedCheckpointStorageLocation
     // ------------------------------------------------------------------------
@@ -86,6 +91,11 @@ public class NonPersistentMetadataCheckpointStorageLocation extends MemCheckpoin
 
         @Override
         public void disposeStorageLocation() {}
+
+        @Override
+        public String getMetadataFileFullPath() {
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------------

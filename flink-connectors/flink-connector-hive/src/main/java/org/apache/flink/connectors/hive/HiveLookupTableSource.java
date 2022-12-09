@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -211,7 +212,8 @@ public class HiveLookupTableSource extends HiveTableSource implements LookupTabl
                                             comparablePartitionValues.size(),
                                             tableFullPath));
                         }
-                        return partValueList;
+                        return KeepReadPartitionFetcher.getRecentReadyPartition(
+                                tableFullPath, context, partValueList);
                     };
         } else {
             // bounded-read partitioned table, the fetcher fetches all partitions of the given
@@ -222,6 +224,13 @@ public class HiveLookupTableSource extends HiveTableSource implements LookupTabl
                         List<PartitionFetcher.Context.ComparablePartitionValue>
                                 comparablePartitionValues =
                                         context.getComparablePartitionValueList();
+                        if (context.getBatchLookupSourceFetchLatestPartition()
+                                && comparablePartitionValues.size() > 0) {
+                            comparablePartitionValues.sort(
+                                    (o1, o2) -> o2.getComparator().compareTo(o1.getComparator()));
+                            comparablePartitionValues =
+                                    Collections.singletonList(comparablePartitionValues.get(0));
+                        }
                         for (PartitionFetcher.Context.ComparablePartitionValue
                                 comparablePartitionValue : comparablePartitionValues) {
                             partValueList.add(

@@ -35,13 +35,13 @@ import java.util.function.Function;
 
 /** Create result provider from a static set of data using external types. */
 @Internal
-public class StaticResultProvider implements ResultProvider {
+class StaticResultProvider implements ResultProvider {
 
     /**
      * This converter supports only String, long, int and boolean fields. Moreover, this converter
      * works only with {@link GenericRowData}.
      */
-    public static final RowDataToStringConverter SIMPLE_ROW_DATA_TO_STRING_CONVERTER =
+    static final RowDataToStringConverter SIMPLE_ROW_DATA_TO_STRING_CONVERTER =
             rowData -> {
                 GenericRowData genericRowData = (GenericRowData) rowData;
                 String[] results = new String[rowData.getArity()];

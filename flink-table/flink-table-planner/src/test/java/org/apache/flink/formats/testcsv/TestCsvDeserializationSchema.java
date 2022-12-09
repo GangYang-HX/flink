@@ -83,6 +83,7 @@ class TestCsvDeserializationSchema implements DeserializationSchema<RowData> {
         initFieldParsers();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public RowData deserialize(byte[] message) throws IOException {
         GenericRowData row = new GenericRowData(physicalFieldCount);

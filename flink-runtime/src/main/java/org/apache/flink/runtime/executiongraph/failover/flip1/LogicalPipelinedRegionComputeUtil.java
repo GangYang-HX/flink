@@ -39,21 +39,22 @@ public final class LogicalPipelinedRegionComputeUtil {
         final Map<LogicalVertex, Set<LogicalVertex>> vertexToRegion =
                 buildRawRegions(
                         topologicallySortedVertices,
-                        LogicalPipelinedRegionComputeUtil::getMustBePipelinedConsumedResults);
+                        LogicalPipelinedRegionComputeUtil::getNonReconnectableConsumedResults);
 
         // Since LogicalTopology is a DAG, there is no need to do cycle detection nor to merge
         // regions on cycles.
         return uniqueVertexGroups(vertexToRegion);
     }
 
-    private static Iterable<LogicalResult> getMustBePipelinedConsumedResults(LogicalVertex vertex) {
-        List<LogicalResult> mustBePipelinedConsumedResults = new ArrayList<>();
+    private static Iterable<LogicalResult> getNonReconnectableConsumedResults(
+            LogicalVertex vertex) {
+        List<LogicalResult> nonReconnectableConsumedResults = new ArrayList<>();
         for (LogicalResult consumedResult : vertex.getConsumedResults()) {
-            if (consumedResult.getResultType().mustBePipelinedConsumed()) {
-                mustBePipelinedConsumedResults.add(consumedResult);
+            if (!consumedResult.getResultType().isReconnectable()) {
+                nonReconnectableConsumedResults.add(consumedResult);
             }
         }
-        return mustBePipelinedConsumedResults;
+        return nonReconnectableConsumedResults;
     }
 
     private LogicalPipelinedRegionComputeUtil() {}

@@ -19,40 +19,41 @@
 package org.apache.flink.externalresource.gpu;
 
 import org.apache.flink.util.OperatingSystem;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
-import static org.assertj.core.api.Assumptions.assumeThat;
+import static org.junit.Assume.assumeTrue;
 
 /** Tests for the gpu-discovery-common.sh. */
-class GPUDiscoveryScriptTest {
+public class GPUDiscoveryScriptTest extends TestLogger {
 
     private static final String TEST_SCRIPT_PATH = "src/test/resources/test-coordination-mode.sh";
 
     @Test
-    void testNonCoordinationMode() throws Exception {
-        assumeThat(OperatingSystem.isLinux()).isTrue();
+    public void testNonCoordinationMode() throws Exception {
+        assumeTrue(OperatingSystem.isLinux());
         testExistWithNonZero("test_non_coordination_mode");
     }
 
     @Test
-    void testCoordinateIndexes() throws Exception {
-        assumeThat(OperatingSystem.isLinux()).isTrue();
+    public void testCoordinateIndexes() throws Exception {
+        assumeTrue(OperatingSystem.isLinux());
         testExistWithNonZero("test_coordinate_indexes");
     }
 
     @Test
-    void testPreemptFromDeadProcesses() throws Exception {
-        assumeThat(OperatingSystem.isLinux()).isTrue();
+    public void testPreemptFromDeadProcesses() throws Exception {
+        assumeTrue(OperatingSystem.isLinux());
         testExistWithNonZero("test_preempt_from_dead_processes");
     }
 
     @Test
-    void testSetCoordinationFile() throws Exception {
-        assumeThat(OperatingSystem.isLinux()).isTrue();
+    public void testSetCoordinationFile() throws Exception {
+        assumeTrue(OperatingSystem.isLinux());
         testExistWithNonZero("test_coordination_file");
     }
 

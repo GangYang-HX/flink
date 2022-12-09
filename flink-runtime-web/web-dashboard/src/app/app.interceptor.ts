@@ -21,8 +21,9 @@ import { Injectable, Injector } from '@angular/core';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
-import { StatusService } from '@flink-runtime-web/services';
-import { NzNotificationService, NzNotificationDataOptions } from 'ng-zorro-antd/notification';
+import { NzNotificationService } from 'ng-zorro-antd/notification';
+
+import { StatusService } from 'services';
 
 @Injectable()
 export class AppInterceptor implements HttpInterceptor {
@@ -32,12 +33,8 @@ export class AppInterceptor implements HttpInterceptor {
     // Error response from below url should be ignored
     const ignoreErrorUrlEndsList = ['checkpoints/config', 'checkpoints'];
     const ignoreErrorMessage = ['File not found.'];
-    const option: NzNotificationDataOptions = {
-      nzDuration: 0,
-      nzStyle: { width: 'auto', 'white-space': 'pre-wrap' }
-    };
 
-    return next.handle(req.clone({ withCredentials: true })).pipe(
+    return next.handle(req).pipe(
       catchError(res => {
         const errorMessage = res && res.error && res.error.errors && res.error.errors[0];
         if (
@@ -48,7 +45,7 @@ export class AppInterceptor implements HttpInterceptor {
           this.injector.get<StatusService>(StatusService).listOfErrorMessage.push(errorMessage);
           this.injector
             .get<NzNotificationService>(NzNotificationService)
-            .info('Server Response Message:', errorMessage.replaceAll(' at ', '\n at '), option);
+            .info('Server Response Message:', errorMessage);
         }
         return throwError(res);
       })

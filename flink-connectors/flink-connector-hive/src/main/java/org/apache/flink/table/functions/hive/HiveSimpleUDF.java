@@ -51,29 +51,28 @@ public class HiveSimpleUDF extends HiveScalarFunction<UDF> {
 
     private static final Logger LOG = LoggerFactory.getLogger(HiveSimpleUDF.class);
 
-    private final HiveShim hiveShim;
-
     private transient Method method;
     private transient GenericUDFUtils.ConversionHelper conversionHelper;
     private transient HiveObjectConversion[] conversions;
     private transient boolean allIdentityConverter;
+    private HiveShim hiveShim;
 
     public HiveSimpleUDF(HiveFunctionWrapper<UDF> hiveFunctionWrapper, HiveShim hiveShim) {
         super(hiveFunctionWrapper);
         this.hiveShim = hiveShim;
-        LOG.info("Creating HiveSimpleUDF from '{}'", this.hiveFunctionWrapper.getUDFClassName());
+        LOG.info("Creating HiveSimpleUDF from '{}'", this.hiveFunctionWrapper.getClassName());
     }
 
     @Override
     public void openInternal() {
-        LOG.info("Opening HiveSimpleUDF as '{}'", hiveFunctionWrapper.getUDFClassName());
+        LOG.info("Opening HiveSimpleUDF as '{}'", hiveFunctionWrapper.getClassName());
 
         function = hiveFunctionWrapper.createFunction();
 
         List<TypeInfo> typeInfos = new ArrayList<>();
 
-        for (int i = 0; i < arguments.size(); i++) {
-            typeInfos.add(HiveTypeUtil.toHiveTypeInfo(arguments.getDataType(i), false));
+        for (DataType arg : argTypes) {
+            typeInfos.add(HiveTypeUtil.toHiveTypeInfo(arg, false));
         }
 
         try {
@@ -84,7 +83,7 @@ public class HiveSimpleUDF extends HiveScalarFunction<UDF> {
                             ObjectInspectorFactory.ObjectInspectorOptions.JAVA);
             ObjectInspector[] argInspectors = new ObjectInspector[typeInfos.size()];
 
-            for (int i = 0; i < arguments.size(); i++) {
+            for (int i = 0; i < argTypes.length; i++) {
                 argInspectors[i] =
                         TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(typeInfos.get(i));
             }
@@ -94,9 +93,7 @@ public class HiveSimpleUDF extends HiveScalarFunction<UDF> {
             for (int i = 0; i < argInspectors.length; i++) {
                 conversions[i] =
                         HiveInspectors.getConversion(
-                                argInspectors[i],
-                                arguments.getDataType(i).getLogicalType(),
-                                hiveShim);
+                                argInspectors[i], argTypes[i].getLogicalType(), hiveShim);
             }
 
             allIdentityConverter =
@@ -105,7 +102,7 @@ public class HiveSimpleUDF extends HiveScalarFunction<UDF> {
             throw new FlinkHiveUDFException(
                     String.format(
                             "Failed to open HiveSimpleUDF from %s",
-                            hiveFunctionWrapper.getUDFClassName()),
+                            hiveFunctionWrapper.getClassName()),
                     e);
         }
     }
@@ -131,10 +128,10 @@ public class HiveSimpleUDF extends HiveScalarFunction<UDF> {
     }
 
     @Override
-    public DataType inferReturnType() throws UDFArgumentException {
+    protected DataType inferReturnType() throws UDFArgumentException {
         List<TypeInfo> argTypeInfo = new ArrayList<>();
-        for (int i = 0; i < arguments.size(); i++) {
-            argTypeInfo.add(HiveTypeUtil.toHiveTypeInfo(arguments.getDataType(i), false));
+        for (DataType argType : argTypes) {
+            argTypeInfo.add(HiveTypeUtil.toHiveTypeInfo(argType, false));
         }
 
         Method evalMethod =

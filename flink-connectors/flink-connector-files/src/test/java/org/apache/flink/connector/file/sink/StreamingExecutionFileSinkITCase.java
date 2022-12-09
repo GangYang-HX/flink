@@ -36,8 +36,10 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.streaming.api.graph.StreamGraph;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.util.Collections;
 import java.util.Map;
@@ -46,14 +48,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
 /** Tests the functionality of the {@link FileSink} in STREAMING mode. */
-class StreamingExecutionFileSinkITCase extends FileSinkITBase {
+@RunWith(Parameterized.class)
+public class StreamingExecutionFileSinkITCase extends FileSinkITBase {
 
     private static final Map<String, CountDownLatch> LATCH_MAP = new ConcurrentHashMap<>();
 
     private String latchId;
 
-    @BeforeEach
-    void setup() {
+    @Before
+    public void setup() {
         this.latchId = UUID.randomUUID().toString();
         // We wait for two successful checkpoints in sources before shutting down. This ensures that
         // the sink can commit its data.
@@ -63,8 +66,8 @@ class StreamingExecutionFileSinkITCase extends FileSinkITBase {
         LATCH_MAP.put(latchId, new CountDownLatch(NUM_SOURCES * 2));
     }
 
-    @AfterEach
-    void teardown() {
+    @After
+    public void teardown() {
         LATCH_MAP.remove(latchId);
     }
 
@@ -73,7 +76,7 @@ class StreamingExecutionFileSinkITCase extends FileSinkITBase {
      * Sink]. The source would trigger failover if required.
      */
     @Override
-    protected JobGraph createJobGraph(boolean triggerFailover, String path) {
+    protected JobGraph createJobGraph(String path) {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         Configuration config = new Configuration();
         config.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.STREAMING);

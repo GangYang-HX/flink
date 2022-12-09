@@ -30,6 +30,7 @@ import org.apache.flink.table.factories.FactoryUtil;
 import java.time.Duration;
 import java.util.List;
 
+import static org.apache.flink.configuration.ConfigOptions.key;
 import static org.apache.flink.configuration.description.TextElement.text;
 import static org.apache.flink.table.factories.FactoryUtil.FORMAT_SUFFIX;
 
@@ -248,6 +249,47 @@ public class KafkaConnectorOptions {
                             "If the delivery guarantee is configured as "
                                     + DeliveryGuarantee.EXACTLY_ONCE
                                     + " this value is used a prefix for the identifier of all opened Kafka transactions.");
+
+    // --------------------------------------------------------------------------------------------
+    // Blacklist options
+    // --------------------------------------------------------------------------------------------
+
+    public static final ConfigOption<String> BLACKLIST_ENABLE =
+            key("blacklist.enable")
+                    .stringType()
+                    .defaultValue("false")
+                    .withDescription("enable kafka tp blacklist");
+
+    public static final ConfigOption<String> BLACKLIST_ZK_HOST =
+            key("blacklist.zk.host")
+                    .stringType()
+                    .defaultValue(
+                            "jssz-failover-kafka-01.host.bilibili.co:2181,jssz-failover-kafka-02.host.bilibili.co:2181,jssz-failover-kafka-03.host.bilibili.co:2181,jssz-failover-kafka-04.host.bilibili.co:2181,jssz-failover-kafka-05.host.bilibili.co:2181")
+                    .withDescription("blacklist zk host");
+
+    public static final ConfigOption<String> BLACKLIST_ZK_ROOT_PATH =
+            key("blacklist.zk.root.path")
+                    .stringType()
+                    .defaultValue("/blacklist")
+                    .withDescription("blacklist zk host path");
+
+    public static final ConfigOption<String> BLACKLIST_LAG_THRESHOLD =
+            key("blacklist.lag.threshold")
+                    .stringType()
+                    .defaultValue("50000")
+                    .withDescription("kafka blacklist lag threshold");
+
+    public static final ConfigOption<String> BLACKLIST_KICK_THRESHOLD =
+            key("blacklist.kick.threshold")
+                    .stringType()
+                    .defaultValue("-1")
+                    .withDescription("kafka blacklist kick threshold");
+
+    public static final ConfigOption<String> BLACKLIST_LAG_TIMES =
+            key("blacklist.lag.times")
+                    .stringType()
+                    .defaultValue("10")
+                    .withDescription("kafka blacklist kick lag times");
 
     // --------------------------------------------------------------------------------------------
     // Enums

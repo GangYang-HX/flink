@@ -22,12 +22,11 @@ import org.apache.flink.table.api.{TableException, ValidationException}
 import org.apache.flink.table.api.TableColumn.ComputedColumn
 import org.apache.flink.table.api.config.TableConfigOptions
 import org.apache.flink.table.catalog.CatalogTable
-import org.apache.flink.table.factories.TableFactoryUtil
+import org.apache.flink.table.factories.{TableFactoryUtil, TableSourceFactory, TableSourceFactoryContextImpl}
 import org.apache.flink.table.planner.JMap
-import org.apache.flink.table.planner.calcite.{FlinkRelBuilder, FlinkTypeFactory}
+import org.apache.flink.table.planner.calcite.{FlinkContext, FlinkRelBuilder, FlinkTypeFactory}
 import org.apache.flink.table.planner.catalog.CatalogSchemaTable
 import org.apache.flink.table.planner.hint.FlinkHints
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapContext
 import org.apache.flink.table.sources.{StreamTableSource, TableSource, TableSourceValidation}
 import org.apache.flink.table.types.logical.{LocalZonedTimestampType, TimestampKind, TimestampType}
 
@@ -73,15 +72,16 @@ class LegacyCatalogSourceTable[T](
 
   override def toRel(context: RelOptTable.ToRelContext): RelNode = {
     val cluster = context.getCluster
-    val flinkContext = unwrapContext(cluster)
+    val flinkContext = cluster.getPlanner.getContext
+      .unwrap(classOf[FlinkContext])
     val typeFactory = cluster.getTypeFactory.asInstanceOf[FlinkTypeFactory]
 
-    val tableConfig = flinkContext.getTableConfig
+    val conf = flinkContext.getTableConfig
 
     val hintedOptions = FlinkHints.getHintedOptions(context.getTableHints)
     if (
       hintedOptions.nonEmpty
-      && !tableConfig.get(TableConfigOptions.TABLE_DYNAMIC_TABLE_OPTIONS_ENABLED)
+      && !conf.get(TableConfigOptions.TABLE_DYNAMIC_TABLE_OPTIONS_ENABLED)
     ) {
       throw new ValidationException(
         s"${FlinkHints.HINT_NAME_OPTIONS} hint is allowed only when "
@@ -89,7 +89,7 @@ class LegacyCatalogSourceTable[T](
           + s"is set to true")
     }
 
-    val tableSource = findAndCreateLegacyTableSource(hintedOptions, tableConfig)
+    val tableSource = findAndCreateLegacyTableSource(hintedOptions, conf)
 
     // erase time indicator types in the rowType
     val actualRowType = eraseTimeIndicator(rowType, typeFactory, tableSource)
@@ -117,7 +117,7 @@ class LegacyCatalogSourceTable[T](
     val relBuilder = FlinkRelBuilder.of(cluster, getRelOptSchema)
     relBuilder.push(scan)
 
-    val rexFactory = flinkContext.getRexFactory
+    val toRexFactory = flinkContext.getSqlExprToRexConverterFactory
 
     // 2. push computed column project
     val fieldNames = actualRowType.getFieldNames.asScala
@@ -130,9 +130,7 @@ class LegacyCatalogSourceTable[T](
             s"`$name`"
           }
       }.toArray
-      val rexNodes = rexFactory
-        .createSqlToRexConverter(newRelTable.getRowType, null)
-        .convertToRexNodes(fieldExprs)
+      val rexNodes = toRexFactory.create(newRelTable.getRowType, null).convertToRexNodes(fieldExprs)
       relBuilder.projectNamed(rexNodes.toList, fieldNames, true)
     }
 
@@ -153,8 +151,8 @@ class LegacyCatalogSourceTable[T](
           s"Nested field '$rowtime' as rowtime attribute is not supported right now.")
       }
       val rowtimeIndex = fieldNames.indexOf(rowtime)
-      val watermarkRexNode = rexFactory
-        .createSqlToRexConverter(actualRowType, null)
+      val watermarkRexNode = toRexFactory
+        .create(actualRowType, null)
         .convertToRexNode(watermarkSpec.get.getWatermarkExpr)
       relBuilder.watermark(rowtimeIndex, watermarkRexNode)
     }

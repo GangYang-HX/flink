@@ -30,7 +30,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test for {@link SerdeUtils}. */
 public class SerdeUtilsTest {
@@ -65,7 +65,7 @@ public class SerdeUtilsTest {
                         new TestingSourceSplitSerializer(),
                         HashSet::new);
 
-        assertThat(deseredSplitAssignments).isEqualTo(splitAssignments);
+        assertEquals(splitAssignments, deseredSplitAssignments);
     }
 
     private static class TestingSourceSplitSerializer

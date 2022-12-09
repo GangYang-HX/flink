@@ -30,8 +30,6 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobmaster.TestingLogicalSlotBuilder;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
@@ -39,11 +37,9 @@ import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
 import org.hamcrest.collection.IsIterableContainingInAnyOrder;
 import org.hamcrest.collection.IsIterableContainingInOrder;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -53,9 +49,6 @@ import static org.junit.Assert.assertThat;
  * {@code RootExceptionHistoryEntryTest} tests the creation of {@link RootExceptionHistoryEntry}.
  */
 public class RootExceptionHistoryEntryTest extends TestLogger {
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     private ExecutionGraph executionGraph;
 
@@ -65,9 +58,7 @@ public class RootExceptionHistoryEntryTest extends TestLogger {
         jobGraph.getVertices().forEach(v -> v.setParallelism(3));
 
         executionGraph =
-                TestingDefaultExecutionGraphBuilder.newBuilder()
-                        .setJobGraph(jobGraph)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                TestingDefaultExecutionGraphBuilder.newBuilder().setJobGraph(jobGraph).build();
         executionGraph.start(ComponentMainThreadExecutorServiceAdapter.forMainThread());
     }
 

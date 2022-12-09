@@ -17,39 +17,41 @@
 
 package org.apache.flink.streaming.connectors.gcp.pubsub.emulator;
 
-import org.apache.flink.util.DockerImageVersions;
 import org.apache.flink.util.TestLogger;
 
 import com.google.api.gax.grpc.GrpcTransportChannel;
 import com.google.api.gax.rpc.FixedTransportChannelProvider;
 import com.google.api.gax.rpc.TransportChannelProvider;
+import com.spotify.docker.client.exceptions.DockerException;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import org.junit.AfterClass;
-import org.junit.ClassRule;
-import org.testcontainers.containers.PubSubEmulatorContainer;
-import org.testcontainers.utility.DockerImageName;
+import org.junit.BeforeClass;
 
+import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.apache.flink.streaming.connectors.gcp.pubsub.emulator.GCloudEmulatorManager.getDockerIpAddress;
+import static org.apache.flink.streaming.connectors.gcp.pubsub.emulator.GCloudEmulatorManager.getDockerPubSubPort;
 
 /**
  * The base class from which unit tests should inherit if they need to use the Google cloud
  * emulators.
  */
-public class GCloudUnitTestBase extends TestLogger {
-
-    @ClassRule
-    public static final PubSubEmulatorContainer PUB_SUB_EMULATOR_CONTAINER =
-            new PubSubEmulatorContainer(
-                    DockerImageName.parse(DockerImageVersions.GOOGLE_CLOUD_PUBSUB_EMULATOR));
+public class GCloudUnitTestBase extends TestLogger implements Serializable {
+    @BeforeClass
+    public static void launchGCloudEmulator() throws Exception {
+        // Separated out into separate class so the entire test class to be serializable
+        GCloudEmulatorManager.launchDocker();
+    }
 
     @AfterClass
-    public static void terminateGCloudEmulator() throws InterruptedException {
+    public static void terminateGCloudEmulator() throws DockerException, InterruptedException {
         channel.shutdownNow();
         channel.awaitTermination(1, TimeUnit.MINUTES);
         channel = null;
+        GCloudEmulatorManager.terminateDocker();
     }
 
     // ====================================================================================
@@ -69,7 +71,7 @@ public class GCloudUnitTestBase extends TestLogger {
     }
 
     public static String getPubSubHostPort() {
-        return PUB_SUB_EMULATOR_CONTAINER.getEmulatorEndpoint();
+        return getDockerIpAddress() + ":" + getDockerPubSubPort();
     }
 
     @AfterClass

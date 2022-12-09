@@ -165,7 +165,6 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
         // through whether the current fired window is empty, see SliceSharedWindowAggProcessor.
         final AggregateInfoList aggInfoList =
                 AggregateUtil.deriveStreamWindowAggregateInfoList(
-                        planner.getTypeFactory(),
                         inputRowType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         windowing.getWindow(),
@@ -176,16 +175,12 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
                         sliceAssigner,
                         aggInfoList,
                         config,
-                        planner.getFlinkContext().getClassLoader(),
-                        planner.createRelBuilder(),
+                        planner.getRelBuilder(),
                         inputRowType.getChildren(),
                         shiftTimeZone);
 
         final RowDataKeySelector selector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        grouping,
-                        InternalTypeInfo.of(inputRowType));
+                KeySelectorUtil.getRowDataSelector(grouping, InternalTypeInfo.of(inputRowType));
         final LogicalType[] accTypes = convertToLogicalTypes(aggInfoList.getAccTypes());
 
         final OneInputStreamOperator<RowData, RowData> windowOperator =
@@ -219,13 +214,12 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
             SliceAssigner sliceAssigner,
             AggregateInfoList aggInfoList,
             ExecNodeConfig config,
-            ClassLoader classLoader,
             RelBuilder relBuilder,
             List<LogicalType> fieldTypes,
             ZoneId shiftTimeZone) {
         final AggsHandlerCodeGenerator generator =
                 new AggsHandlerCodeGenerator(
-                                new CodeGeneratorContext(config, classLoader),
+                                new CodeGeneratorContext(config.getTableConfig()),
                                 relBuilder,
                                 JavaScalaConversionUtil.toScala(fieldTypes),
                                 false) // copyInputField

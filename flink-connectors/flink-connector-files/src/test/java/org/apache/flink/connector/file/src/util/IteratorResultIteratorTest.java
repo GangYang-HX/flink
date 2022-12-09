@@ -18,17 +18,18 @@
 
 package org.apache.flink.connector.file.src.util;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 /** Unit tests for the {@link IteratorResultIterator}. */
-class IteratorResultIteratorTest {
+public class IteratorResultIteratorTest {
 
     @Test
-    void testGetElements() {
+    public void testGetElements() {
         final String[] elements = new String[] {"1", "2", "3", "4"};
         final long initialPos = 1422;
         final long initialSkipCount = 17;
@@ -39,20 +40,20 @@ class IteratorResultIteratorTest {
 
         for (int i = 0; i < elements.length; i++) {
             final RecordAndPosition<String> recAndPos = iter.next();
-            assertThat(recAndPos.getRecord()).isEqualTo(elements[i]);
-            assertThat(recAndPos.getOffset()).isEqualTo(initialPos);
-            assertThat(recAndPos.getRecordSkipCount()).isEqualTo(initialSkipCount + i + 1);
+            assertEquals(elements[i], recAndPos.getRecord());
+            assertEquals(initialPos, recAndPos.getOffset());
+            assertEquals(initialSkipCount + i + 1, recAndPos.getRecordSkipCount());
         }
     }
 
     @Test
-    void testExhausted() {
+    public void testExhausted() {
         final IteratorResultIterator<String> iter =
                 new IteratorResultIterator<>(Arrays.asList("1", "2").iterator(), 0L, 0L);
 
         iter.next();
         iter.next();
 
-        assertThat(iter.next()).isNull();
+        assertNull(iter.next());
     }
 }

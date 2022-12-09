@@ -137,6 +137,8 @@ public class CheckpointConfig implements java.io.Serializable {
      */
     private transient CheckpointStorage storage;
 
+    private boolean autoAdjustMaxParallelism;
+
     /**
      * Creates a deep copy of the provided {@link CheckpointConfig}.
      *
@@ -152,6 +154,7 @@ public class CheckpointConfig implements java.io.Serializable {
         this.minPauseBetweenCheckpoints = checkpointConfig.minPauseBetweenCheckpoints;
         this.tolerableCheckpointFailureNumber = checkpointConfig.tolerableCheckpointFailureNumber;
         this.unalignedCheckpointsEnabled = checkpointConfig.isUnalignedCheckpointsEnabled();
+        this.isCheckpointInfoListenerEnabled = checkpointConfig.isCheckpointInfoListenerEnabled;
         this.alignedCheckpointTimeout = checkpointConfig.alignedCheckpointTimeout;
         this.approximateLocalRecovery = checkpointConfig.isApproximateLocalRecoveryEnabled();
         this.externalizedCheckpointCleanup = checkpointConfig.externalizedCheckpointCleanup;
@@ -160,9 +163,13 @@ public class CheckpointConfig implements java.io.Serializable {
         this.storage = checkpointConfig.getCheckpointStorage();
         this.checkpointIdOfIgnoredInFlightData =
                 checkpointConfig.getCheckpointIdOfIgnoredInFlightData();
+        this.autoAdjustMaxParallelism = checkpointConfig.autoAdjustMaxParallelism;
     }
 
     public CheckpointConfig() {}
+
+    /** Flag to enable checkpoint information listener. */
+    private boolean isCheckpointInfoListenerEnabled = false;
 
     // ------------------------------------------------------------------------
 
@@ -532,6 +539,12 @@ public class CheckpointConfig implements java.io.Serializable {
         enableUnalignedCheckpoints(true);
     }
 
+    /** Sets whether enable checkpoint information listener. */
+    @PublicEvolving
+    public void enableCheckpointInfoListener(boolean enabled) {
+        isCheckpointInfoListenerEnabled = enabled;
+    }
+
     /**
      * Returns whether unaligned checkpoints are enabled.
      *
@@ -540,6 +553,14 @@ public class CheckpointConfig implements java.io.Serializable {
     @PublicEvolving
     public boolean isUnalignedCheckpointsEnabled() {
         return unalignedCheckpointsEnabled;
+    }
+
+    public void enableAutoAdjustMaxParallelism(boolean autoAdjustMaxParallelism) {
+        this.autoAdjustMaxParallelism = autoAdjustMaxParallelism;
+    }
+
+    public boolean autoAdjustMaxParallelismEnable() {
+        return autoAdjustMaxParallelism;
     }
 
     /**
@@ -625,6 +646,16 @@ public class CheckpointConfig implements java.io.Serializable {
     @Experimental
     public void enableApproximateLocalRecovery(boolean enabled) {
         approximateLocalRecovery = enabled;
+    }
+
+    /**
+     * Returns whether enable checkpoint information listener.
+     *
+     * @return <code>true</code> if enable checkpoint information listener.
+     */
+    @PublicEvolving
+    public boolean isCheckpointInfoListenerEnabled() {
+        return isCheckpointInfoListenerEnabled;
     }
 
     /**
@@ -827,6 +858,9 @@ public class CheckpointConfig implements java.io.Serializable {
                 .getOptional(ExecutionCheckpointingOptions.ENABLE_UNALIGNED)
                 .ifPresent(this::enableUnalignedCheckpoints);
         configuration
+                .getOptional(ExecutionCheckpointingOptions.ENABLE_CHECKPOINT_INFO_LISTENER)
+                .ifPresent(this::enableCheckpointInfoListener);
+        configuration
                 .getOptional(ExecutionCheckpointingOptions.CHECKPOINT_ID_OF_IGNORED_IN_FLIGHT_DATA)
                 .ifPresent(this::setCheckpointIdOfIgnoredInFlightData);
         configuration
@@ -838,5 +872,9 @@ public class CheckpointConfig implements java.io.Serializable {
         configuration
                 .getOptional(CheckpointingOptions.CHECKPOINTS_DIRECTORY)
                 .ifPresent(this::setCheckpointStorage);
+
+        configuration
+                .getOptional(ExecutionCheckpointingOptions.AUTO_ADJUST_MAX_PARALLELISM)
+                .ifPresent(this::enableAutoAdjustMaxParallelism);
     }
 }

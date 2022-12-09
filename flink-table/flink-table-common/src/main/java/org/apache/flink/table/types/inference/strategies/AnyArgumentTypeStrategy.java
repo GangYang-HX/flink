@@ -22,7 +22,7 @@ import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.inference.ArgumentTypeStrategy;
 import org.apache.flink.table.types.inference.CallContext;
-import org.apache.flink.table.types.inference.Signature.Argument;
+import org.apache.flink.table.types.inference.Signature;
 
 import java.util.Optional;
 
@@ -37,8 +37,9 @@ public final class AnyArgumentTypeStrategy implements ArgumentTypeStrategy {
     }
 
     @Override
-    public Argument getExpectedArgument(FunctionDefinition functionDefinition, int argumentPos) {
-        return Argument.ofGroup("ANY");
+    public Signature.Argument getExpectedArgument(
+            FunctionDefinition functionDefinition, int argumentPos) {
+        return Signature.Argument.of("<ANY>");
     }
 
     @Override

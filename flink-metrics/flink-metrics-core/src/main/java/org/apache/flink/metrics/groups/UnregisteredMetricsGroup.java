@@ -25,6 +25,7 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.metrics.SimpleCounter;
 
 import java.util.Collections;
@@ -68,8 +69,18 @@ public class UnregisteredMetricsGroup implements MetricGroup {
     }
 
     @Override
+    public MetricGroup addGroup(String name, QueryServiceMode mode) {
+        return null;
+    }
+
+    @Override
     public MetricGroup addGroup(String key, String value) {
         return new UnregisteredMetricsGroup();
+    }
+
+    @Override
+    public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
+        return null;
     }
 
     @Override
@@ -108,15 +119,21 @@ public class UnregisteredMetricsGroup implements MetricGroup {
         return new UnregisteredSplitEnumeratorMetricGroup();
     }
 
-    public static CacheMetricGroup createCacheMetricGroup() {
-        return new UnregisteredCacheMetricGroup();
-    }
-
     private static class UnregisteredOperatorMetricGroup extends UnregisteredMetricsGroup
             implements OperatorMetricGroup {
         @Override
         public OperatorIOMetricGroup getIOMetricGroup() {
             return new UnregisteredOperatorIOMetricGroup();
+        }
+
+        @Override
+        public MetricGroup addGroup(String name, QueryServiceMode mode) {
+            return null;
+        }
+
+        @Override
+        public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
+            return null;
         }
     }
 
@@ -141,6 +158,16 @@ public class UnregisteredMetricsGroup implements MetricGroup {
         public Counter getNumBytesOutCounter() {
             return new SimpleCounter();
         }
+
+        @Override
+        public MetricGroup addGroup(String name, QueryServiceMode mode) {
+            return null;
+        }
+
+        @Override
+        public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
+            return null;
+        }
     }
 
     private static class UnregisteredSourceReaderMetricGroup extends UnregisteredMetricsGroup
@@ -160,6 +187,16 @@ public class UnregisteredMetricsGroup implements MetricGroup {
 
         @Override
         public void setPendingRecordsGauge(Gauge<Long> pendingRecordsGauge) {}
+
+        @Override
+        public MetricGroup addGroup(String name, QueryServiceMode mode) {
+            return null;
+        }
+
+        @Override
+        public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
+            return null;
+        }
     }
 
     private static class DummyGauge<T> implements Gauge<T> {
@@ -181,29 +218,15 @@ public class UnregisteredMetricsGroup implements MetricGroup {
         public <G extends Gauge<Long>> G setUnassignedSplitsGauge(G unassignedSplitsGauge) {
             return null;
         }
-    }
-
-    private static class UnregisteredCacheMetricGroup extends UnregisteredMetricsGroup
-            implements CacheMetricGroup {
-        @Override
-        public void hitCounter(Counter hitCounter) {}
 
         @Override
-        public void missCounter(Counter missCounter) {}
+        public MetricGroup addGroup(String name, QueryServiceMode mode) {
+            return null;
+        }
 
         @Override
-        public void loadCounter(Counter loadCounter) {}
-
-        @Override
-        public void numLoadFailuresCounter(Counter numLoadFailuresCounter) {}
-
-        @Override
-        public void latestLoadTimeGauge(Gauge<Long> latestLoadTimeGauge) {}
-
-        @Override
-        public void numCachedRecordsGauge(Gauge<Long> numCachedRecordsGauge) {}
-
-        @Override
-        public void numCachedBytesGauge(Gauge<Long> numCachedBytesGauge) {}
+        public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
+            return null;
+        }
     }
 }

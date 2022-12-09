@@ -35,6 +35,8 @@ public interface OperatorCoordinatorCheckpointContext extends OperatorInfo, Chec
     void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> result)
             throws Exception;
 
+    void afterSourceBarrierInjection(long checkpointId);
+
     void abortCurrentTriggering();
 
     /**

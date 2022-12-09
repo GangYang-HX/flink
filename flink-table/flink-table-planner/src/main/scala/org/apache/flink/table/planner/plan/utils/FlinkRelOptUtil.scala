@@ -17,10 +17,10 @@
  */
 package org.apache.flink.table.planner.plan.utils
 
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.planner.JBoolean
-import org.apache.flink.table.planner.calcite.{FlinkPlannerImpl, FlinkTypeFactory}
+import org.apache.flink.table.planner.calcite.{FlinkContext, FlinkPlannerImpl, FlinkTypeFactory}
 import org.apache.flink.table.planner.plan.`trait`.{MiniBatchInterval, MiniBatchMode}
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTableConfig
 
 import org.apache.calcite.config.NullCollation
 import org.apache.calcite.plan.RelOptUtil
@@ -69,9 +69,7 @@ object FlinkRelOptUtil {
       detailLevel: SqlExplainLevel = SqlExplainLevel.DIGEST_ATTRIBUTES,
       withIdPrefix: Boolean = false,
       withChangelogTraits: Boolean = false,
-      withRowType: Boolean = false,
-      withUpsertKey: Boolean = false,
-      withQueryBlockAlias: Boolean = false): String = {
+      withRowType: Boolean = false): String = {
     if (rel == null) {
       return null
     }
@@ -82,10 +80,7 @@ object FlinkRelOptUtil {
       withIdPrefix,
       withChangelogTraits,
       withRowType,
-      withTreeStyle = true,
-      withUpsertKey,
-      withJoinHint = true,
-      withQueryBlockAlias)
+      withTreeStyle = true)
     rel.explain(planWriter)
     sw.toString
   }
@@ -146,8 +141,7 @@ object FlinkRelOptUtil {
         // expressions have different types
         withRowType = true,
         // ignore tree style, only contains RelNode's attributes
-        withTreeStyle = false,
-        withJoinHint = true))
+        withTreeStyle = false))
     sw.toString
   }
 
@@ -212,9 +206,13 @@ object FlinkRelOptUtil {
     new RelFieldCollation(fieldIndex, direction, nullDirection)
   }
 
+  def getTableConfigFromContext(rel: RelNode): TableConfig = {
+    rel.getCluster.getPlanner.getContext.unwrap(classOf[FlinkContext]).getTableConfig
+  }
+
   /** Get max cnf node limit by context of rel */
   def getMaxCnfNodeCount(rel: RelNode): Int = {
-    unwrapTableConfig(rel).get(FlinkRexUtil.TABLE_OPTIMIZER_CNF_NODES_LIMIT)
+    getTableConfigFromContext(rel).get(FlinkRexUtil.TABLE_OPTIMIZER_CNF_NODES_LIMIT)
   }
 
   /**

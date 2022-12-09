@@ -24,7 +24,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import java.util.Random;
 
 /** A test for the {@link org.apache.flink.api.common.typeutils.base.FloatSerializer}. */
-class FloatSerializerTest extends SerializerTestBase<Float> {
+public class FloatSerializerTest extends SerializerTestBase<Float> {
 
     @Override
     protected TypeSerializer<Float> createSerializer() {

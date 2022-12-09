@@ -36,7 +36,7 @@ import java.util.Collections;
 public class LocalAggregatePushDownITCase extends BatchTestBase {
 
     @Before
-    public void before() throws Exception {
+    public void before() {
         super.before();
         env().setParallelism(1); // set sink parallelism to 1
 

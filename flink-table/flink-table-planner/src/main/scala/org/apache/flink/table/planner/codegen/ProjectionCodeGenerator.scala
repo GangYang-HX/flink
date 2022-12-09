@@ -121,7 +121,11 @@ object ProjectionCodeGenerator {
          |}
         """.stripMargin
 
-    new GeneratedProjection(className, code, ctx.references.toArray, ctx.tableConfig)
+    new GeneratedProjection(
+      className,
+      code,
+      ctx.references.toArray,
+      ctx.tableConfig.getConfiguration)
   }
 
   /** For java invoke. */
@@ -137,22 +141,5 @@ object ProjectionCodeGenerator {
       inputType,
       outputType,
       inputMapping,
-      inputTerm = DEFAULT_INPUT1_TERM)
-
-  /** For java invoke. */
-  def generateProjection(
-      ctx: CodeGeneratorContext,
-      name: String,
-      inputType: RowType,
-      outputType: RowType,
-      inputMapping: Array[Int],
-      outClass: Class[_ <: RowData]): GeneratedProjection =
-    generateProjection(
-      ctx,
-      name,
-      inputType,
-      outputType,
-      inputMapping,
-      outClass = outClass,
       inputTerm = DEFAULT_INPUT1_TERM)
 }

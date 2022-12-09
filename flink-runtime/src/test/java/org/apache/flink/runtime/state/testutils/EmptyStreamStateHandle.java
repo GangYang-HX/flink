@@ -19,7 +19,7 @@
 package org.apache.flink.runtime.state.testutils;
 
 import org.apache.flink.core.fs.FSDataInputStream;
-import org.apache.flink.runtime.state.TestStreamStateHandle;
+import org.apache.flink.runtime.state.StreamStateHandle;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -28,7 +28,7 @@ import java.util.Optional;
  * A simple dummy implementation of a stream state handle that can be passed in tests. The handle
  * cannot open an input stream.
  */
-public class EmptyStreamStateHandle implements TestStreamStateHandle {
+public class EmptyStreamStateHandle implements StreamStateHandle {
 
     private static final long serialVersionUID = 0L;
 

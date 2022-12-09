@@ -37,7 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link MaterializedCollectBatchResult}. */
 public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTest {
@@ -67,7 +67,7 @@ public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTe
             result.processRecord(Row.of("A", 1));
             result.processRecord(Row.of("C", 2));
 
-            assertThat(result.snapshot(1)).isEqualTo(TypedResult.payload(4));
+            assertEquals(TypedResult.payload(4), result.snapshot(1));
 
             assertRowEquals(
                     Collections.singletonList(Row.of("A", 1)),
@@ -88,7 +88,7 @@ public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTe
 
             result.processRecord(Row.of("A", 1));
 
-            assertThat(result.snapshot(1)).isEqualTo(TypedResult.payload(5));
+            assertEquals(TypedResult.payload(5), result.snapshot(1));
 
             assertRowEquals(
                     Collections.singletonList(Row.of("A", 1)),
@@ -136,19 +136,20 @@ public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTe
 
             result.processRecord(Row.of("D", 1));
             result.processRecord(Row.of("A", 1));
+            // only first maxRowCount rows will be stored.
+            // rows blew will be discarded.
             result.processRecord(Row.of("B", 1));
             result.processRecord(Row.of("A", 1));
 
             assertRowEquals(
-                    Arrays.asList(
-                            null, null, Row.of("B", 1), Row.of("A", 1)), // two over-committed rows
+                    Arrays.asList(Row.of("D", 1), Row.of("A", 1)), // two over-committed rows
                     result.getMaterializedTable(),
                     rowConverter);
 
-            assertThat(result.snapshot(1)).isEqualTo(TypedResult.payload(2));
+            assertEquals(TypedResult.payload(2), result.snapshot(1));
 
             assertRowEquals(
-                    Collections.singletonList(Row.of("B", 1)),
+                    Collections.singletonList(Row.of("D", 1)),
                     result.retrievePage(1),
                     rowConverter);
             assertRowEquals(
@@ -159,14 +160,16 @@ public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTe
             result.processRecord(Row.of("C", 1));
 
             assertRowEquals(
-                    Arrays.asList(Row.of("A", 1), Row.of("C", 1)), // limit clean up has taken place
+                    Arrays.asList(
+                            Row.of("D", 1),
+                            Row.of("A", 1)), // clean up was removed, so result is not changed
                     result.getMaterializedTable(),
                     rowConverter);
 
             result.processRecord(Row.of("A", 1));
 
             assertRowEquals(
-                    Arrays.asList(null, Row.of("C", 1), Row.of("A", 1)),
+                    Arrays.asList(Row.of("D", 1), Row.of("A", 1)),
                     result.getMaterializedTable(),
                     rowConverter);
         }

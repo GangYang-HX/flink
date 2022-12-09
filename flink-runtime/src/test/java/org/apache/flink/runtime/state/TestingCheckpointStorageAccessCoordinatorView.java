@@ -139,6 +139,11 @@ public class TestingCheckpointStorageAccessCoordinatorView
 
         @Override
         public void disposeStorageLocation() throws IOException {}
+
+        @Override
+        public String getMetadataFileFullPath() {
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------------

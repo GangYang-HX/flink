@@ -23,7 +23,8 @@ import org.apache.flink.connector.file.sink.FileSinkCommittableSerializer;
 import org.apache.flink.connector.file.sink.utils.FileSinkTestUtils;
 
 /** Test for {@link CompactorRequestTypeInfo}. */
-class CompactorRequestTypeInfoTest extends TypeInformationTestBase<CompactorRequestTypeInfo> {
+public class CompactorRequestTypeInfoTest
+        extends TypeInformationTestBase<CompactorRequestTypeInfo> {
 
     @Override
     protected CompactorRequestTypeInfo[] getTestData() {

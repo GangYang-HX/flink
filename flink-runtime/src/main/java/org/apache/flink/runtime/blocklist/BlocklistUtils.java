@@ -36,8 +36,9 @@ public class BlocklistUtils {
     }
 
     public static boolean isBlocklistEnabled(Configuration configuration) {
-        // Currently, only enable blocklist for speculative execution
-        return configuration.getBoolean(JobManagerOptions.SPECULATIVE_ENABLED);
+        // TODO we should also enabled block list when speculative execution is enabled,
+        //  even when block list is not enabled.
+        return configuration.getBoolean(JobManagerOptions.BLOCKLIST_ENABLED);
     }
 
     /** Private default constructor to avoid being instantiated. */

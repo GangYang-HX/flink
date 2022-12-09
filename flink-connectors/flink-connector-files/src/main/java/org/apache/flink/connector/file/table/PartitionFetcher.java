@@ -58,6 +58,11 @@ public interface PartitionFetcher<P> extends Serializable {
         List<ComparablePartitionValue> getComparablePartitionValueList() throws Exception;
 
         /**
+         * Get the flag indicates whether HiveLookupTableSource should fetch the latest partition.
+         */
+        boolean getBatchLookupSourceFetchLatestPartition();
+
+        /**
          * close the resources of the Context, this method should call when the context do not need
          * any more.
          */

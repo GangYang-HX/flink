@@ -70,7 +70,7 @@ public class HeapKeyedStateBackendSnapshotMigrationTest extends HeapStateBackend
             stateDescr.initializeSerializerUnlessSet(new ExecutionConfig());
 
             InternalMapState<String, Integer, Long, Long> state =
-                    keyedBackend.createOrUpdateInternalState(IntSerializer.INSTANCE, stateDescr);
+                    keyedBackend.createInternalState(IntSerializer.INSTANCE, stateDescr);
 
             keyedBackend.setCurrentKey("abc");
             state.setCurrentNamespace(namespace1);

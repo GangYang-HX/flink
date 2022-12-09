@@ -21,6 +21,7 @@ package org.apache.flink.table.api.internal;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.table.api.CompiledPlan;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.planner.delegation.PlannerBase;
 import org.apache.flink.table.planner.plan.ExecNodeGraphInternalPlan;
 
 import java.util.List;
@@ -39,6 +40,7 @@ public class CompiledPlanUtils {
     public static List<Transformation<?>> toTransformations(
             TableEnvironment env, CompiledPlan compiledPlan) {
         final ExecNodeGraphInternalPlan internalPlan = unwrap(compiledPlan);
-        return ((TableEnvironmentImpl) env).getPlanner().translatePlan(internalPlan);
+        return ((PlannerBase) ((TableEnvironmentImpl) env).getPlanner())
+                .translateToPlan(internalPlan.getExecNodeGraph());
     }
 }

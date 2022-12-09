@@ -20,8 +20,9 @@ package org.apache.flink.table.expressions
 import org.apache.flink.table.api.ImplicitExpressionConversions
 import org.apache.flink.table.expressions.ApiExpressionUtils.unwrapFromApi
 
-import org.assertj.core.api.AssertionsForClassTypes.assertThat
-import org.junit.jupiter.api.Test
+import org.hamcrest.CoreMatchers.equalTo
+import org.junit.Assert.assertThat
+import org.junit.Test
 
 import java.math.{BigDecimal => JBigDecimal}
 
@@ -49,6 +50,6 @@ class ObjectToExpressionScalaTest extends ImplicitExpressionConversions {
   }
 
   private def assertThatEquals(actual: Expression, expected: Expression): Unit = {
-    assertThat(unwrapFromApi(actual)).isEqualTo(unwrapFromApi(expected))
+    assertThat(unwrapFromApi(actual), equalTo(unwrapFromApi(expected)))
   }
 }

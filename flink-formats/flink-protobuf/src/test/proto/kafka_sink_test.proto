@@ -1,0 +1,31 @@
+syntax = "proto3";
+package org.apache.flink.formats.protobuf.proto;
+option java_package = "org.apache.flink.formats.protobuf.testproto";
+option java_multiple_files = false;
+
+message KafkaSinkTest {
+    oneof name_oneof {
+        string name = 1;
+
+    }
+    oneof num_oneof {
+        int32 num = 2;
+    }
+    oneof xtime_oneof {
+        int64 xtime = 3;
+
+    }
+    ro row1 = 4;
+    message ro{
+        oneof a_oneof{
+            string a = 1;
+
+        }
+        oneof b_oneof{
+            int32 b = 2;
+        }
+
+    }
+}
+
+

@@ -17,14 +17,11 @@
  */
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
-import { of, Subject } from 'rxjs';
-import { catchError, mergeMap, takeUntil } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { mergeMap, takeUntil } from 'rxjs/operators';
 
-import { JobAccumulators, SubTaskAccumulators, UserAccumulators } from '@flink-runtime-web/interfaces';
-import { JobService } from '@flink-runtime-web/services';
-import { typeDefinition } from '@flink-runtime-web/utils/strong-type';
-
-import { JobLocalService } from '../../job-local.service';
+import { SubTaskAccumulators, UserAccumulators } from 'interfaces';
+import { JobService } from 'services';
 
 @Component({
   selector: 'flink-job-overview-drawer-accumulators',
@@ -33,45 +30,34 @@ import { JobLocalService } from '../../job-local.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class JobOverviewDrawerAccumulatorsComponent implements OnInit, OnDestroy {
-  public readonly trackByName = (_: number, node: UserAccumulators): string => node.name;
+  public readonly trackByName = (_: number, node: SubTaskAccumulators): string => node.name;
 
   public listOfAccumulator: UserAccumulators[] = [];
   public listOfSubTaskAccumulator: SubTaskAccumulators[] = [];
   public isLoading = true;
-  public virtualItemSize = 36;
-  public readonly narrowUserAccumulators = typeDefinition<UserAccumulators>();
-  public readonly narrowSubTaskAccumulators = typeDefinition<SubTaskAccumulators>();
 
   private readonly destroy$ = new Subject<void>();
 
-  constructor(
-    private readonly jobService: JobService,
-    private readonly jobLocalService: JobLocalService,
-    private readonly cdr: ChangeDetectorRef
-  ) {}
+  constructor(private readonly jobService: JobService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit(): void {
-    this.jobLocalService
-      .jobWithVertexChanges()
+    this.jobService.jobWithVertex$
       .pipe(
-        mergeMap(data =>
-          this.jobService.loadAccumulators(data.job.jid, data.vertex!.id).pipe(
-            catchError(() => {
-              return of({
-                main: [],
-                subtasks: []
-              } as JobAccumulators);
-            })
-          )
-        ),
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
+        mergeMap(data => this.jobService.loadAccumulators(data.job.jid, data.vertex!.id))
       )
-      .subscribe(data => {
-        this.isLoading = false;
-        this.listOfAccumulator = data.main;
-        this.listOfSubTaskAccumulator = this.transformToSubTaskAccumulator(data.subtasks) || [];
-        this.cdr.markForCheck();
-      });
+      .subscribe(
+        data => {
+          this.isLoading = false;
+          this.listOfAccumulator = data.main;
+          this.listOfSubTaskAccumulator = this.transformToSubTaskAccumulator(data.subtasks) || [];
+          this.cdr.markForCheck();
+        },
+        () => {
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        }
+      );
   }
 
   public ngOnDestroy(): void {
@@ -79,7 +65,7 @@ export class JobOverviewDrawerAccumulatorsComponent implements OnInit, OnDestroy
     this.destroy$.complete();
   }
 
-  private transformToSubTaskAccumulator(list: SubTaskAccumulators[]): SubTaskAccumulators[] {
+  public transformToSubTaskAccumulator(list: SubTaskAccumulators[]): SubTaskAccumulators[] {
     const transformed: SubTaskAccumulators[] = [];
     list.forEach(accumulator => {
       // @ts-ignore

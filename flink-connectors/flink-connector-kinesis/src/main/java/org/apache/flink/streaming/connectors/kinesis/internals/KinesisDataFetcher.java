@@ -819,7 +819,7 @@ public class KinesisDataFetcher<T> {
                 LOG.warn("Encountered exception closing record publisher factory", e);
             }
         } finally {
-            gracefulShutdownShardConsumers();
+            shardConsumersExecutor.shutdownNow();
 
             cancelFuture.complete(null);
 
@@ -850,11 +850,6 @@ public class KinesisDataFetcher<T> {
     @VisibleForTesting
     protected void deregisterStreamConsumer() {
         StreamConsumerRegistrarUtil.deregisterStreamConsumers(configProps, streams);
-    }
-
-    /** Gracefully stops shardConsumersExecutor without interrupting running threads. */
-    private void gracefulShutdownShardConsumers() {
-        shardConsumersExecutor.shutdown();
     }
 
     /**

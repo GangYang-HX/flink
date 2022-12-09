@@ -64,8 +64,7 @@ public abstract class CommonExecValues extends ExecNodeBase<RowData>
             PlannerBase planner, ExecNodeConfig config) {
         final ValuesInputFormat inputFormat =
                 ValuesCodeGenerator.generatorInputFormat(
-                        config,
-                        planner.getFlinkContext().getClassLoader(),
+                        config.getTableConfig(),
                         (RowType) getOutputType(),
                         tuples,
                         getClass().getSimpleName());

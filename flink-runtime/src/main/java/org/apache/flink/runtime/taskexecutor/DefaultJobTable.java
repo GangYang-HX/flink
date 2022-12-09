@@ -21,6 +21,7 @@ package org.apache.flink.runtime.taskexecutor;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
+import org.apache.flink.runtime.io.network.partition.ResultPartitionConsumableNotifier;
 import org.apache.flink.runtime.jobmaster.JobMasterGateway;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.taskmanager.CheckpointResponder;
@@ -167,6 +168,11 @@ public final class DefaultJobTable implements JobTable {
         }
 
         @Override
+        public ResultPartitionConsumableNotifier getResultPartitionConsumableNotifier() {
+            return verifyContainsEstablishedConnection().getResultPartitionConsumableNotifier();
+        }
+
+        @Override
         public PartitionProducerStateChecker getPartitionStateChecker() {
             return verifyContainsEstablishedConnection().getPartitionStateChecker();
         }
@@ -198,6 +204,7 @@ public final class DefaultJobTable implements JobTable {
                 TaskManagerActions taskManagerActions,
                 CheckpointResponder checkpointResponder,
                 GlobalAggregateManager aggregateManager,
+                ResultPartitionConsumableNotifier resultPartitionConsumableNotifier,
                 PartitionProducerStateChecker partitionStateChecker) {
             verifyJobIsNotClosed();
             Preconditions.checkState(connection == null);
@@ -209,6 +216,7 @@ public final class DefaultJobTable implements JobTable {
                             taskManagerActions,
                             checkpointResponder,
                             aggregateManager,
+                            resultPartitionConsumableNotifier,
                             partitionStateChecker);
             resourceIdJobIdIndex.put(resourceId, jobId);
 
@@ -258,6 +266,9 @@ public final class DefaultJobTable implements JobTable {
         // GlobalAggregateManager interface to job manager
         private final GlobalAggregateManager globalAggregateManager;
 
+        // Result partition consumable notifier for the specific job manager
+        private final ResultPartitionConsumableNotifier resultPartitionConsumableNotifier;
+
         // Partition state checker for the specific job manager
         private final PartitionProducerStateChecker partitionStateChecker;
 
@@ -267,12 +278,15 @@ public final class DefaultJobTable implements JobTable {
                 TaskManagerActions taskManagerActions,
                 CheckpointResponder checkpointResponder,
                 GlobalAggregateManager globalAggregateManager,
+                ResultPartitionConsumableNotifier resultPartitionConsumableNotifier,
                 PartitionProducerStateChecker partitionStateChecker) {
             this.resourceID = Preconditions.checkNotNull(resourceID);
             this.jobMasterGateway = Preconditions.checkNotNull(jobMasterGateway);
             this.taskManagerActions = Preconditions.checkNotNull(taskManagerActions);
             this.checkpointResponder = Preconditions.checkNotNull(checkpointResponder);
             this.globalAggregateManager = Preconditions.checkNotNull(globalAggregateManager);
+            this.resultPartitionConsumableNotifier =
+                    Preconditions.checkNotNull(resultPartitionConsumableNotifier);
             this.partitionStateChecker = Preconditions.checkNotNull(partitionStateChecker);
         }
 
@@ -298,6 +312,10 @@ public final class DefaultJobTable implements JobTable {
 
         public GlobalAggregateManager getGlobalAggregateManager() {
             return globalAggregateManager;
+        }
+
+        public ResultPartitionConsumableNotifier getResultPartitionConsumableNotifier() {
+            return resultPartitionConsumableNotifier;
         }
 
         public PartitionProducerStateChecker getPartitionStateChecker() {

@@ -32,9 +32,9 @@ import scala.collection.JavaConversions._
 abstract class StreamPhysicalCorrelateBase(
     cluster: RelOptCluster,
     traitSet: RelTraitSet,
-    val inputRel: RelNode,
-    val scan: FlinkLogicalTableFunctionScan,
-    val condition: Option[RexNode],
+    inputRel: RelNode,
+    scan: FlinkLogicalTableFunctionScan,
+    condition: Option[RexNode],
     outputRowType: RelDataType,
     joinType: JoinRelType)
   extends SingleRel(cluster, traitSet, inputRel)

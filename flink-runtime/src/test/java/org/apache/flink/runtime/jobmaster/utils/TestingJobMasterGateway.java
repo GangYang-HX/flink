@@ -98,6 +98,10 @@ public class TestingJobMasterGateway implements JobMasterGateway {
             requestPartitionStateFunction;
 
     @Nonnull
+    private final Function<ResultPartitionID, CompletableFuture<Acknowledge>>
+            notifyPartitionDataAvailableFunction;
+
+    @Nonnull
     private final Function<ResourceID, CompletableFuture<Acknowledge>>
             disconnectTaskManagerFunction;
 
@@ -208,6 +212,9 @@ public class TestingJobMasterGateway implements JobMasterGateway {
                                     CompletableFuture<ExecutionState>>
                             requestPartitionStateFunction,
             @Nonnull
+                    Function<ResultPartitionID, CompletableFuture<Acknowledge>>
+                            notifyPartitionDataAvailableFunction,
+            @Nonnull
                     Function<ResourceID, CompletableFuture<Acknowledge>>
                             disconnectTaskManagerFunction,
             @Nonnull Consumer<ResourceManagerId> disconnectResourceManagerConsumer,
@@ -297,6 +304,7 @@ public class TestingJobMasterGateway implements JobMasterGateway {
         this.updateTaskExecutionStateFunction = updateTaskExecutionStateFunction;
         this.requestNextInputSplitFunction = requestNextInputSplitFunction;
         this.requestPartitionStateFunction = requestPartitionStateFunction;
+        this.notifyPartitionDataAvailableFunction = notifyPartitionDataAvailableFunction;
         this.disconnectTaskManagerFunction = disconnectTaskManagerFunction;
         this.disconnectResourceManagerConsumer = disconnectResourceManagerConsumer;
         this.offerSlotsFunction = offerSlotsFunction;
@@ -344,6 +352,12 @@ public class TestingJobMasterGateway implements JobMasterGateway {
     public CompletableFuture<ExecutionState> requestPartitionState(
             IntermediateDataSetID intermediateResultId, ResultPartitionID partitionId) {
         return requestPartitionStateFunction.apply(intermediateResultId, partitionId);
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> notifyPartitionDataAvailable(
+            ResultPartitionID partitionID, Time timeout) {
+        return notifyPartitionDataAvailableFunction.apply(partitionID);
     }
 
     @Override

@@ -138,8 +138,8 @@ public class TestingYarnAMRMClientAsync extends AMRMClientAsyncImpl<AMRMClient.C
     }
 
     @Override
-    public void updateBlacklist(List<String> blocklistAdditions, List<String> blocklistRemovals) {
-        updateBlocklistConsumer.accept(blocklistAdditions, blocklistRemovals);
+    public void updateBlacklist(List<String> blacklistAdditions, List<String> blacklistRemovals) {
+        updateBlocklistConsumer.accept(blacklistAdditions, blacklistRemovals);
     }
 
     static Builder builder() {

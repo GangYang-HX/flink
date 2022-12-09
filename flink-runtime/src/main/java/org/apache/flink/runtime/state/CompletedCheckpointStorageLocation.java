@@ -43,4 +43,6 @@ public interface CompletedCheckpointStorageLocation extends java.io.Serializable
      * checkpoint directory.
      */
     void disposeStorageLocation() throws IOException;
+
+    String getMetadataFileFullPath();
 }

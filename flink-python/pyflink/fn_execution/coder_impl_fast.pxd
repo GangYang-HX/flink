@@ -184,26 +184,3 @@ cdef class CountWindowCoderImpl(FieldCoderImpl):
 cdef class DataViewFilterCoderImpl(FieldCoderImpl):
     cdef object _udf_data_view_specs
     cdef PickleCoderImpl _pickle_coder
-
-cdef class AvroCoderImpl(FieldCoderImpl):
-    cdef object _buffer_wrapper
-    cdef object _schema
-    cdef object _decoder
-    cdef object _encoder
-    cdef object _reader
-    cdef object _writer
-
-cdef class LocalDateCoderImpl(FieldCoderImpl):
-    @staticmethod
-    cdef _encode_to_stream(value, OutputStream out_stream)
-    @staticmethod
-    cdef _decode_from_stream(InputStream in_stream)
-
-cdef class LocalTimeCoderImpl(FieldCoderImpl):
-    @staticmethod
-    cdef _encode_to_stream(value, OutputStream out_stream)
-    @staticmethod
-    cdef _decode_from_stream(InputStream in_stream)
-
-cdef class LocalDateTimeCoderImpl(FieldCoderImpl):
-    pass

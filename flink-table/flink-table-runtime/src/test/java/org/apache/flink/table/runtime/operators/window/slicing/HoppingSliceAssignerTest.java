@@ -26,10 +26,14 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.TimeZone;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link SliceAssigners.HoppingSliceAssigner}. */
 @RunWith(Parameterized.class)
@@ -47,12 +51,15 @@ public class HoppingSliceAssignerTest extends SliceAssignerTestBase {
         SliceAssigner assigner =
                 SliceAssigners.hopping(0, shiftTimeZone, Duration.ofHours(5), Duration.ofHours(1));
 
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T00:00:00")))
-                .isEqualTo(utcMills("1970-01-01T01:00:00"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T04:59:59.999")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T05:00:00")))
-                .isEqualTo(utcMills("1970-01-01T06:00:00"));
+        assertEquals(
+                utcMills("1970-01-01T01:00:00"),
+                assignSliceEnd(assigner, localMills("1970-01-01T00:00:00")));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00"),
+                assignSliceEnd(assigner, localMills("1970-01-01T04:59:59.999")));
+        assertEquals(
+                utcMills("1970-01-01T06:00:00"),
+                assignSliceEnd(assigner, localMills("1970-01-01T05:00:00")));
     }
 
     @Test
@@ -61,12 +68,15 @@ public class HoppingSliceAssignerTest extends SliceAssignerTestBase {
                 SliceAssigners.hopping(0, shiftTimeZone, Duration.ofHours(5), Duration.ofHours(1))
                         .withOffset(Duration.ofMillis(100));
 
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T00:00:00.1")))
-                .isEqualTo(utcMills("1970-01-01T01:00:00.1"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.099")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00.1"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.1")))
-                .isEqualTo(utcMills("1970-01-01T06:00:00.1"));
+        assertEquals(
+                utcMills("1970-01-01T01:00:00.1"),
+                assignSliceEnd(assigner, localMills("1970-01-01T00:00:00.1")));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00.1"),
+                assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.099")));
+        assertEquals(
+                utcMills("1970-01-01T06:00:00.1"),
+                assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.1")));
     }
 
     @Test
@@ -111,22 +121,30 @@ public class HoppingSliceAssignerTest extends SliceAssignerTestBase {
         SliceAssigner assigner =
                 SliceAssigners.hopping(0, shiftTimeZone, Duration.ofHours(5), Duration.ofHours(1));
 
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T00:00:00")))
-                .isEqualTo(utcMills("1969-12-31T19:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T01:00:00")))
-                .isEqualTo(utcMills("1969-12-31T20:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T02:00:00")))
-                .isEqualTo(utcMills("1969-12-31T21:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T03:00:00")))
-                .isEqualTo(utcMills("1969-12-31T22:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T04:00:00")))
-                .isEqualTo(utcMills("1969-12-31T23:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T05:00:00")))
-                .isEqualTo(utcMills("1970-01-01T00:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T06:00:00")))
-                .isEqualTo(utcMills("1970-01-01T01:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T10:00:00")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00"));
+        assertEquals(
+                utcMills("1969-12-31T19:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T00:00:00")));
+        assertEquals(
+                utcMills("1969-12-31T20:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T01:00:00")));
+        assertEquals(
+                utcMills("1969-12-31T21:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T02:00:00")));
+        assertEquals(
+                utcMills("1969-12-31T22:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T03:00:00")));
+        assertEquals(
+                utcMills("1969-12-31T23:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T04:00:00")));
+        assertEquals(
+                utcMills("1970-01-01T00:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T05:00:00")));
+        assertEquals(
+                utcMills("1970-01-01T01:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T06:00:00")));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T10:00:00")));
     }
 
     @Test
@@ -135,12 +153,15 @@ public class HoppingSliceAssignerTest extends SliceAssignerTestBase {
         SliceAssigner assigner =
                 SliceAssigners.hopping(0, shiftTimeZone, Duration.ofHours(4), Duration.ofHours(1));
 
-        assertThat(expiredSlices(assigner, utcMills("1970-01-01T00:00:00")))
-                .containsExactly(utcMills("1969-12-31T21:00:00"));
-        assertThat(expiredSlices(assigner, utcMills("1970-01-01T04:00:00")))
-                .containsExactly(utcMills("1970-01-01T01:00:00"));
-        assertThat(expiredSlices(assigner, utcMills("1970-01-01T08:00:00")))
-                .containsExactly(utcMills("1970-01-01T05:00:00"));
+        assertEquals(
+                Collections.singletonList(utcMills("1969-12-31T21:00:00")),
+                expiredSlices(assigner, utcMills("1970-01-01T00:00:00")));
+        assertEquals(
+                Collections.singletonList(utcMills("1970-01-01T01:00:00")),
+                expiredSlices(assigner, utcMills("1970-01-01T04:00:00")));
+        assertEquals(
+                Collections.singletonList(utcMills("1970-01-01T05:00:00")),
+                expiredSlices(assigner, utcMills("1970-01-01T08:00:00")));
     }
 
     @Test
@@ -148,35 +169,35 @@ public class HoppingSliceAssignerTest extends SliceAssignerTestBase {
         SliceAssigners.HoppingSliceAssigner assigner =
                 SliceAssigners.hopping(0, shiftTimeZone, Duration.ofHours(5), Duration.ofHours(1));
 
-        assertThat(mergeResultSlice(assigner, utcMills("1970-01-01T00:00:00"))).isNull();
-        assertThat(toBeMergedSlices(assigner, utcMills("1970-01-01T00:00:00")))
-                .isEqualTo(
-                        Arrays.asList(
-                                utcMills("1970-01-01T00:00:00"),
-                                utcMills("1969-12-31T23:00:00"),
-                                utcMills("1969-12-31T22:00:00"),
-                                utcMills("1969-12-31T21:00:00"),
-                                utcMills("1969-12-31T20:00:00")));
+        assertNull(mergeResultSlice(assigner, utcMills("1970-01-01T00:00:00")));
+        assertEquals(
+                Arrays.asList(
+                        utcMills("1970-01-01T00:00:00"),
+                        utcMills("1969-12-31T23:00:00"),
+                        utcMills("1969-12-31T22:00:00"),
+                        utcMills("1969-12-31T21:00:00"),
+                        utcMills("1969-12-31T20:00:00")),
+                toBeMergedSlices(assigner, utcMills("1970-01-01T00:00:00")));
 
-        assertThat(mergeResultSlice(assigner, utcMills("1970-01-01T05:00:00"))).isNull();
-        assertThat(toBeMergedSlices(assigner, utcMills("1970-01-01T05:00:00")))
-                .isEqualTo(
-                        Arrays.asList(
-                                utcMills("1970-01-01T05:00:00"),
-                                utcMills("1970-01-01T04:00:00"),
-                                utcMills("1970-01-01T03:00:00"),
-                                utcMills("1970-01-01T02:00:00"),
-                                utcMills("1970-01-01T01:00:00")));
+        assertNull(mergeResultSlice(assigner, utcMills("1970-01-01T05:00:00")));
+        assertEquals(
+                Arrays.asList(
+                        utcMills("1970-01-01T05:00:00"),
+                        utcMills("1970-01-01T04:00:00"),
+                        utcMills("1970-01-01T03:00:00"),
+                        utcMills("1970-01-01T02:00:00"),
+                        utcMills("1970-01-01T01:00:00")),
+                toBeMergedSlices(assigner, utcMills("1970-01-01T05:00:00")));
 
-        assertThat(mergeResultSlice(assigner, utcMills("1970-01-01T06:00:00"))).isNull();
-        assertThat(toBeMergedSlices(assigner, utcMills("1970-01-01T06:00:00")))
-                .isEqualTo(
-                        Arrays.asList(
-                                utcMills("1970-01-01T06:00:00"),
-                                utcMills("1970-01-01T05:00:00"),
-                                utcMills("1970-01-01T04:00:00"),
-                                utcMills("1970-01-01T03:00:00"),
-                                utcMills("1970-01-01T02:00:00")));
+        assertNull(mergeResultSlice(assigner, utcMills("1970-01-01T06:00:00")));
+        assertEquals(
+                Arrays.asList(
+                        utcMills("1970-01-01T06:00:00"),
+                        utcMills("1970-01-01T05:00:00"),
+                        utcMills("1970-01-01T04:00:00"),
+                        utcMills("1970-01-01T03:00:00"),
+                        utcMills("1970-01-01T02:00:00")),
+                toBeMergedSlices(assigner, utcMills("1970-01-01T06:00:00")));
     }
 
     @Test
@@ -184,35 +205,49 @@ public class HoppingSliceAssignerTest extends SliceAssignerTestBase {
         SliceAssigners.HoppingSliceAssigner assigner =
                 SliceAssigners.hopping(0, shiftTimeZone, Duration.ofHours(5), Duration.ofHours(1));
 
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T00:00:00"), () -> false))
-                .isEqualTo(Optional.of(utcMills("1970-01-01T01:00:00")));
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T01:00:00"), () -> false))
-                .isEqualTo(Optional.of(utcMills("1970-01-01T02:00:00")));
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T02:00:00"), () -> false))
-                .isEqualTo(Optional.of(utcMills("1970-01-01T03:00:00")));
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T03:00:00"), () -> false))
-                .isEqualTo(Optional.of(utcMills("1970-01-01T04:00:00")));
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T04:00:00"), () -> false))
-                .isEqualTo(Optional.of(utcMills("1970-01-01T05:00:00")));
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T05:00:00"), () -> false))
-                .isEqualTo(Optional.of(utcMills("1970-01-01T06:00:00")));
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T06:00:00"), () -> false))
-                .isEqualTo(Optional.of(utcMills("1970-01-01T07:00:00")));
+        assertEquals(
+                Optional.of(utcMills("1970-01-01T01:00:00")),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T00:00:00"), () -> false));
+        assertEquals(
+                Optional.of(utcMills("1970-01-01T02:00:00")),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T01:00:00"), () -> false));
+        assertEquals(
+                Optional.of(utcMills("1970-01-01T03:00:00")),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T02:00:00"), () -> false));
+        assertEquals(
+                Optional.of(utcMills("1970-01-01T04:00:00")),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T03:00:00"), () -> false));
+        assertEquals(
+                Optional.of(utcMills("1970-01-01T05:00:00")),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T04:00:00"), () -> false));
+        assertEquals(
+                Optional.of(utcMills("1970-01-01T06:00:00")),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T05:00:00"), () -> false));
+        assertEquals(
+                Optional.of(utcMills("1970-01-01T07:00:00")),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T06:00:00"), () -> false));
 
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T00:00:00"), () -> true))
-                .isEqualTo(Optional.empty());
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T01:00:00"), () -> true))
-                .isEqualTo(Optional.empty());
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T02:00:00"), () -> true))
-                .isEqualTo(Optional.empty());
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T03:00:00"), () -> true))
-                .isEqualTo(Optional.empty());
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T04:00:00"), () -> true))
-                .isEqualTo(Optional.empty());
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T05:00:00"), () -> true))
-                .isEqualTo(Optional.empty());
-        assertThat(assigner.nextTriggerWindow(utcMills("1970-01-01T06:00:00"), () -> true))
-                .isEqualTo(Optional.empty());
+        assertEquals(
+                Optional.empty(),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T00:00:00"), () -> true));
+        assertEquals(
+                Optional.empty(),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T01:00:00"), () -> true));
+        assertEquals(
+                Optional.empty(),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T02:00:00"), () -> true));
+        assertEquals(
+                Optional.empty(),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T03:00:00"), () -> true));
+        assertEquals(
+                Optional.empty(),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T04:00:00"), () -> true));
+        assertEquals(
+                Optional.empty(),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T05:00:00"), () -> true));
+        assertEquals(
+                Optional.empty(),
+                assigner.nextTriggerWindow(utcMills("1970-01-01T06:00:00"), () -> true));
     }
 
     @Test
@@ -220,12 +255,12 @@ public class HoppingSliceAssignerTest extends SliceAssignerTestBase {
         SliceAssigner assigner1 =
                 SliceAssigners.hopping(
                         0, shiftTimeZone, Duration.ofSeconds(5), Duration.ofSeconds(1));
-        assertThat(assigner1.isEventTime()).isTrue();
+        assertTrue(assigner1.isEventTime());
 
         SliceAssigner assigner2 =
                 SliceAssigners.hopping(
                         -1, shiftTimeZone, Duration.ofSeconds(5), Duration.ofSeconds(1));
-        assertThat(assigner2.isEventTime()).isFalse();
+        assertFalse(assigner2.isEventTime());
     }
 
     @Test

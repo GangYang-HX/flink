@@ -31,6 +31,7 @@ import org.apache.calcite.plan.RelOptRule.{any, operand}
 import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rex.RexProgram
+import org.apache.calcite.sql.`type`.BasicSqlType
 
 import java.util
 
@@ -62,6 +63,7 @@ trait CommonLookupJoinRule extends CommonTemporalTableJoinRule {
     // Other temporal table join will be matched by CommonTemporalTableJoinRule
     val isProcessingTime = snapshot.getPeriod.getType match {
       case t: TimeIndicatorRelDataType if !t.isEventTime => true
+      case t: BasicSqlType => true
       case _ => false
     }
     isProcessingTime

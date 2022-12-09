@@ -41,6 +41,7 @@ import static org.apache.flink.architecture.common.GivenJavaClasses.javaClassesT
 import static org.apache.flink.architecture.common.GivenJavaClasses.noJavaClassesThat;
 import static org.apache.flink.architecture.common.Predicates.areDirectlyAnnotatedWithAtLeastOneOf;
 import static org.apache.flink.architecture.common.SourcePredicates.areJavaClasses;
+import static org.apache.flink.architecture.common.SourcePredicates.areProductionCode;
 
 /** Rules for API visibility annotations. */
 public class ApiAnnotationRules {
@@ -130,8 +131,7 @@ public class ApiAnnotationRules {
     @ArchTest
     public static final ArchRule NO_CALLS_TO_VISIBLE_FOR_TESTING_METHODS =
             freeze(
-                    noJavaClassesThat()
-                            .resideInAPackage("org.apache.flink..")
+                    noJavaClassesThat(areProductionCode())
                             .should()
                             .callMethodWhere(
                                     new DescribedPredicate<JavaMethodCall>(

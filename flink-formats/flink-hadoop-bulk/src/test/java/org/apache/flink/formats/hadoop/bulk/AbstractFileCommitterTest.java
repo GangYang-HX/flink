@@ -42,7 +42,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** Tests the behaviors of {@link HadoopFileCommitter}. */
 @RunWith(Parameterized.class)
@@ -231,9 +233,9 @@ public abstract class AbstractFileCommitterTest extends AbstractTestBase {
 
         FileSystem fileSystem = FileSystem.get(basePath.toUri(), configuration);
         for (String targetFileName : targetFileNames) {
-            assertThat(fileSystem.exists(new Path(basePath, targetFileName)))
-                    .as("Pre-committed file should not exists: " + targetFileName)
-                    .isFalse();
+            assertFalse(
+                    "Pre-committed file should not exists: " + targetFileName,
+                    fileSystem.exists(new Path(basePath, targetFileName)));
         }
     }
 
@@ -244,13 +246,11 @@ public abstract class AbstractFileCommitterTest extends AbstractTestBase {
         FileSystem fileSystem = FileSystem.get(basePath.toUri(), configuration);
         for (String targetFileName : targetFileNames) {
             Path targetFilePath = new Path(basePath, targetFileName);
-            assertThat(fileSystem.exists(targetFilePath))
-                    .as("Committed file should exists: " + targetFileName)
-                    .isTrue();
+            assertTrue(
+                    "Committed file should exists: " + targetFileName,
+                    fileSystem.exists(targetFilePath));
             List<String> written = readFile(fileSystem, targetFilePath);
-            assertThat(written)
-                    .as("Unexpected file content for file " + targetFilePath)
-                    .isEqualTo(CONTENTS);
+            assertEquals("Unexpected file content for file " + targetFilePath, CONTENTS, written);
         }
     }
 
@@ -268,14 +268,13 @@ public abstract class AbstractFileCommitterTest extends AbstractTestBase {
             fileNames.add(file.getPath().getName());
         }
         Collections.sort(fileNames);
-        assertThat(fileNames).as("Remain files are " + fileNames).isEqualTo(expectedNames);
+        assertEquals("Remain files are " + fileNames, expectedNames, fileNames);
 
         for (FileStatus file : files) {
             if (!file.getPath().getName().startsWith(".")) {
                 List<String> written = readFile(fileSystem, files[0].getPath());
-                assertThat(written)
-                        .as("Unexpected file content for file " + file.getPath())
-                        .isEqualTo(CONTENTS);
+                assertEquals(
+                        "Unexpected file content for file " + file.getPath(), CONTENTS, written);
             }
         }
     }

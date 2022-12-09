@@ -24,6 +24,7 @@ import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.LogicalScopeProvider;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.metrics.SimpleCounter;
 
 import java.util.Collections;
@@ -85,7 +86,17 @@ public class TestMetricGroup implements MetricGroup, LogicalScopeProvider {
     }
 
     @Override
+    public MetricGroup addGroup(String name, QueryServiceMode mode) {
+        return this;
+    }
+
+    @Override
     public MetricGroup addGroup(String key, String value) {
+        return this;
+    }
+
+    @Override
+    public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
         return this;
     }
 

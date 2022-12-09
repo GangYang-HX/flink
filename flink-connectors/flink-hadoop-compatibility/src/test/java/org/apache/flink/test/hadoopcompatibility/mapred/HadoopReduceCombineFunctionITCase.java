@@ -42,8 +42,6 @@ import org.junit.runners.Parameterized;
 import java.io.IOException;
 import java.util.Iterator;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultsByLinesInMemory;
-
 /** IT case for the {@link HadoopReduceCombineFunction}. */
 @RunWith(Parameterized.class)
 public class HadoopReduceCombineFunctionITCase extends MultipleProgramsTestBase {

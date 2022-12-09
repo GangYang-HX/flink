@@ -22,7 +22,6 @@ import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.CoreOptions;
-import org.apache.flink.core.testutils.AllCallbackWrapper;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
@@ -30,18 +29,21 @@ import org.apache.flink.runtime.rest.handler.HandlerRequestException;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
 import org.apache.flink.runtime.rest.messages.MessageParameter;
 import org.apache.flink.runtime.rest.messages.MessageQueryParameter;
-import org.apache.flink.runtime.util.BlobServerExtension;
+import org.apache.flink.runtime.util.BlobServerResource;
 import org.apache.flink.runtime.webmonitor.TestingDispatcherGateway;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.runtime.webmonitor.testutils.ParameterProgram;
+import org.apache.flink.testutils.TestingUtils;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -51,15 +53,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static junit.framework.TestCase.assertEquals;
+import static junit.framework.TestCase.fail;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /** Base test class for jar request handlers. */
-abstract class JarHandlerParameterTest<
-        REQB extends JarRequestBody, M extends JarMessageParameters> {
+public abstract class JarHandlerParameterTest<
+                REQB extends JarRequestBody, M extends JarMessageParameters>
+        extends TestLogger {
     enum ProgramArgsParType {
         String,
         List,
@@ -69,9 +76,10 @@ abstract class JarHandlerParameterTest<
     static final String[] PROG_ARGS = new String[] {"--host", "localhost", "--port", "1234"};
     static final int PARALLELISM = 4;
 
-    @RegisterExtension
-    private static final AllCallbackWrapper<BlobServerExtension> blobServerExtension =
-            new AllCallbackWrapper<>(new BlobServerExtension());
+    @ClassRule public static final TemporaryFolder TMP = new TemporaryFolder();
+
+    @ClassRule
+    public static final BlobServerResource BLOB_SERVER_RESOURCE = new BlobServerResource();
 
     static final AtomicReference<JobGraph> LAST_SUBMITTED_JOB_GRAPH_REFERENCE =
             new AtomicReference<>();
@@ -84,12 +92,13 @@ abstract class JarHandlerParameterTest<
             CompletableFuture.completedFuture("shazam://localhost:12345");
     static Time timeout = Time.seconds(10);
     static Map<String, String> responseHeaders = Collections.emptyMap();
+    static Executor executor = TestingUtils.defaultExecutor();
 
     private static Path jarWithManifest;
     private static Path jarWithoutManifest;
 
-    static void init(File tmpDir) throws Exception {
-        jarDir = tmpDir.toPath();
+    static void init() throws Exception {
+        jarDir = TMP.newFolder().toPath();
 
         // properties are set property by surefire plugin
         final String parameterProgramJarName = System.getProperty("parameterJarName") + ".jar";
@@ -108,8 +117,7 @@ abstract class JarHandlerParameterTest<
 
         restfulGateway =
                 TestingDispatcherGateway.newBuilder()
-                        .setBlobServerPort(
-                                blobServerExtension.getCustomExtension().getBlobServerPort())
+                        .setBlobServerPort(BLOB_SERVER_RESOURCE.getBlobServerPort())
                         .setSubmitFunction(
                                 jobGraph -> {
                                     LAST_SUBMITTED_JOB_GRAPH_REFERENCE.set(jobGraph);
@@ -121,15 +129,16 @@ abstract class JarHandlerParameterTest<
         localAddressFuture = CompletableFuture.completedFuture("shazam://localhost:12345");
         timeout = Time.seconds(10);
         responseHeaders = Collections.emptyMap();
+        executor = TestingUtils.defaultExecutor();
     }
 
-    @BeforeEach
-    private void reset() {
+    @Before
+    public void reset() {
         ParameterProgram.actualArguments = null;
     }
 
     @Test
-    void testDefaultParameters() throws Exception {
+    public void testDefaultParameters() throws Exception {
         // baseline, ensure that reasonable defaults are chosen
         handleRequest(
                 createRequest(
@@ -141,23 +150,24 @@ abstract class JarHandlerParameterTest<
     }
 
     @Test
-    void testConfigurationViaQueryParametersWithProgArgsAsString() throws Exception {
+    public void testConfigurationViaQueryParametersWithProgArgsAsString() throws Exception {
         testConfigurationViaQueryParameters(ProgramArgsParType.String);
     }
 
     @Test
-    void testConfigurationViaQueryParametersWithProgArgsAsList() throws Exception {
+    public void testConfigurationViaQueryParametersWithProgArgsAsList() throws Exception {
         testConfigurationViaQueryParameters(ProgramArgsParType.List);
     }
 
     @Test
-    void testConfigurationViaQueryParametersFailWithProgArgsAsStringAndList() throws Exception {
-        assertThatThrownBy(() -> testConfigurationViaQueryParameters(ProgramArgsParType.Both))
-                .isInstanceOf(RestHandlerException.class)
-                .satisfies(
-                        e ->
-                                assertThat(((RestHandlerException) e).getHttpResponseStatus())
-                                        .isEqualTo(HttpResponseStatus.BAD_REQUEST));
+    public void testConfigurationViaQueryParametersFailWithProgArgsAsStringAndList()
+            throws Exception {
+        try {
+            testConfigurationViaQueryParameters(ProgramArgsParType.Both);
+            fail("RestHandlerException is excepted");
+        } catch (RestHandlerException e) {
+            assertEquals(HttpResponseStatus.BAD_REQUEST, e.getHttpResponseStatus());
+        }
     }
 
     private void testConfigurationViaQueryParameters(ProgramArgsParType programArgsParType)
@@ -173,27 +183,27 @@ abstract class JarHandlerParameterTest<
     }
 
     @Test
-    void testConfigurationViaJsonRequestWithProgArgsAsString() throws Exception {
+    public void testConfigurationViaJsonRequestWithProgArgsAsString() throws Exception {
         testConfigurationViaJsonRequest(ProgramArgsParType.String);
     }
 
     @Test
-    void testConfigurationViaJsonRequestWithProgArgsAsList() throws Exception {
+    public void testConfigurationViaJsonRequestWithProgArgsAsList() throws Exception {
         testConfigurationViaJsonRequest(ProgramArgsParType.List);
     }
 
     @Test
-    void testConfigurationViaJsonRequestFailWithProgArgsAsStringAndList() throws Exception {
-        assertThatThrownBy(() -> testConfigurationViaJsonRequest(ProgramArgsParType.Both))
-                .isInstanceOf(RestHandlerException.class)
-                .satisfies(
-                        e ->
-                                assertThat(((RestHandlerException) e).getHttpResponseStatus())
-                                        .isEqualTo(HttpResponseStatus.BAD_REQUEST));
+    public void testConfigurationViaJsonRequestFailWithProgArgsAsStringAndList() throws Exception {
+        try {
+            testConfigurationViaJsonRequest(ProgramArgsParType.Both);
+            fail("RestHandlerException is excepted");
+        } catch (RestHandlerException e) {
+            assertEquals(HttpResponseStatus.BAD_REQUEST, e.getHttpResponseStatus());
+        }
     }
 
     @Test
-    void testProvideJobId() throws Exception {
+    public void testProvideJobId() throws Exception {
         JobID jobId = new JobID();
 
         HandlerRequest<REQB> request =
@@ -207,8 +217,8 @@ abstract class JarHandlerParameterTest<
 
         Optional<JobGraph> jobGraph = getLastSubmittedJobGraphAndReset();
 
-        assertThat(jobGraph.isPresent()).isTrue();
-        assertThat(jobGraph.get().getJobID()).isEqualTo(jobId);
+        assertThat(jobGraph.isPresent(), is(true));
+        assertThat(jobGraph.get().getJobID(), is(equalTo(jobId)));
     }
 
     private void testConfigurationViaJsonRequest(ProgramArgsParType programArgsParType)
@@ -223,23 +233,23 @@ abstract class JarHandlerParameterTest<
     }
 
     @Test
-    void testParameterPrioritizationWithProgArgsAsString() throws Exception {
+    public void testParameterPrioritizationWithProgArgsAsString() throws Exception {
         testParameterPrioritization(ProgramArgsParType.String);
     }
 
     @Test
-    void testParameterPrioritizationWithProgArgsAsList() throws Exception {
+    public void testParameterPrioritizationWithProgArgsAsList() throws Exception {
         testParameterPrioritization(ProgramArgsParType.List);
     }
 
     @Test
-    void testFailIfProgArgsAreAsStringAndAsList() throws Exception {
-        assertThatThrownBy(() -> testParameterPrioritization(ProgramArgsParType.Both))
-                .isInstanceOf(RestHandlerException.class)
-                .satisfies(
-                        e ->
-                                assertThat(((RestHandlerException) e).getHttpResponseStatus())
-                                        .isEqualTo(HttpResponseStatus.BAD_REQUEST));
+    public void testFailIfProgArgsAreAsStringAndAsList() throws Exception {
+        try {
+            testParameterPrioritization(ProgramArgsParType.Both);
+            fail("RestHandlerException is excepted");
+        } catch (RestHandlerException e) {
+            assertEquals(HttpResponseStatus.BAD_REQUEST, e.getHttpResponseStatus());
+        }
     }
 
     private void testParameterPrioritization(ProgramArgsParType programArgsParType)
@@ -310,16 +320,17 @@ abstract class JarHandlerParameterTest<
 
     JobGraph validateDefaultGraph() {
         JobGraph jobGraph = LAST_SUBMITTED_JOB_GRAPH_REFERENCE.getAndSet(null);
-        assertThat(ParameterProgram.actualArguments).isEmpty();
-        assertThat(getExecutionConfig(jobGraph).getParallelism())
-                .isEqualTo(CoreOptions.DEFAULT_PARALLELISM.defaultValue().intValue());
+        Assert.assertEquals(0, ParameterProgram.actualArguments.length);
+        Assert.assertEquals(
+                CoreOptions.DEFAULT_PARALLELISM.defaultValue().intValue(),
+                getExecutionConfig(jobGraph).getParallelism());
         return jobGraph;
     }
 
     JobGraph validateGraph() {
         JobGraph jobGraph = LAST_SUBMITTED_JOB_GRAPH_REFERENCE.getAndSet(null);
-        assertThat(ParameterProgram.actualArguments).isEqualTo(PROG_ARGS);
-        assertThat(getExecutionConfig(jobGraph).getParallelism()).isEqualTo(PARALLELISM);
+        Assert.assertArrayEquals(PROG_ARGS, ParameterProgram.actualArguments);
+        Assert.assertEquals(PARALLELISM, getExecutionConfig(jobGraph).getParallelism());
         return jobGraph;
     }
 

@@ -41,14 +41,13 @@ import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.LocalTaskManagerLocation;
 import org.apache.flink.runtime.util.ResourceCounter;
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.clock.SystemClock;
-
-import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
 
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.annotation.Nonnull;
 
@@ -63,10 +62,16 @@ import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for the {@link DeclarativeSlotPoolService}. */
-class DeclarativeSlotPoolServiceTest {
+public class DeclarativeSlotPoolServiceTest extends TestLogger {
 
     private static final JobID jobId = new JobID();
     private static final JobMasterId jobMasterId = JobMasterId.generate();
@@ -75,34 +80,32 @@ class DeclarativeSlotPoolServiceTest {
     private static final String address = "localhost";
 
     @Test
-    void testUnknownTaskManagerRegistration() throws Exception {
+    public void testUnknownTaskManagerRegistration() throws Exception {
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
                 createDeclarativeSlotPoolService()) {
             final ResourceID unknownTaskManager = ResourceID.generate();
 
-            assertThat(
-                            declarativeSlotPoolService.isTaskManagerRegistered(
-                                    unknownTaskManager.getResourceID()))
-                    .isFalse();
+            assertFalse(
+                    declarativeSlotPoolService.isTaskManagerRegistered(
+                            unknownTaskManager.getResourceID()));
         }
     }
 
     @Test
-    void testKnownTaskManagerRegistration() throws Exception {
+    public void testKnownTaskManagerRegistration() throws Exception {
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
                 createDeclarativeSlotPoolService()) {
             final ResourceID knownTaskManager = ResourceID.generate();
             declarativeSlotPoolService.registerTaskManager(knownTaskManager);
 
-            assertThat(
-                            declarativeSlotPoolService.isTaskManagerRegistered(
-                                    knownTaskManager.getResourceID()))
-                    .isTrue();
+            assertTrue(
+                    declarativeSlotPoolService.isTaskManagerRegistered(
+                            knownTaskManager.getResourceID()));
         }
     }
 
     @Test
-    void testReleaseTaskManager() throws Exception {
+    public void testReleaseTaskManager() throws Exception {
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
                 createDeclarativeSlotPoolService()) {
             final ResourceID knownTaskManager = ResourceID.generate();
@@ -110,15 +113,14 @@ class DeclarativeSlotPoolServiceTest {
             declarativeSlotPoolService.releaseTaskManager(
                     knownTaskManager, new FlinkException("Test cause"));
 
-            assertThat(
-                            declarativeSlotPoolService.isTaskManagerRegistered(
-                                    knownTaskManager.getResourceID()))
-                    .isFalse();
+            assertFalse(
+                    declarativeSlotPoolService.isTaskManagerRegistered(
+                            knownTaskManager.getResourceID()));
         }
     }
 
     @Test
-    void testSlotOfferingOfUnknownTaskManagerIsIgnored() throws Exception {
+    public void testSlotOfferingOfUnknownTaskManagerIsIgnored() throws Exception {
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
                 createDeclarativeSlotPoolService()) {
             final Collection<SlotOffer> slotOffers =
@@ -136,12 +138,12 @@ class DeclarativeSlotPoolServiceTest {
                                     jobMasterId),
                             slotOffers);
 
-            assertThat(acceptedSlots).isEmpty();
+            assertThat(acceptedSlots, is(empty()));
         }
     }
 
     @Test
-    void testSlotOfferingOfKnownTaskManager() throws Exception {
+    public void testSlotOfferingOfKnownTaskManager() throws Exception {
         final AtomicReference<Collection<? extends SlotOffer>> receivedSlotOffers =
                 new AtomicReference<>();
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
@@ -172,12 +174,12 @@ class DeclarativeSlotPoolServiceTest {
                             jobMasterId),
                     slotOffers);
 
-            assertThat(receivedSlotOffers.get()).isEqualTo(slotOffers);
+            assertThat(receivedSlotOffers.get(), is(slotOffers));
         }
     }
 
     @Test
-    void testConnectToResourceManagerDeclaresRequiredResources() throws Exception {
+    public void testConnectToResourceManagerDeclaresRequiredResources() throws Exception {
         final Collection<ResourceRequirement> requiredResources =
                 Arrays.asList(
                         ResourceRequirement.create(ResourceProfile.UNKNOWN, 2),
@@ -205,14 +207,14 @@ class DeclarativeSlotPoolServiceTest {
 
             final ResourceRequirements resourceRequirements = declaredResourceRequirements.join();
 
-            assertThat(resourceRequirements.getResourceRequirements()).isEqualTo(requiredResources);
-            assertThat(resourceRequirements.getJobId()).isEqualTo(jobId);
-            assertThat(resourceRequirements.getTargetAddress()).isEqualTo(address);
+            assertThat(resourceRequirements.getResourceRequirements(), is(requiredResources));
+            assertThat(resourceRequirements.getJobId(), is(jobId));
+            assertThat(resourceRequirements.getTargetAddress(), is(address));
         }
     }
 
     @Test
-    void testCreateAllocatedSlotReport() throws Exception {
+    public void testCreateAllocatedSlotReport() throws Exception {
         final LocalTaskManagerLocation taskManagerLocation1 = new LocalTaskManagerLocation();
         final LocalTaskManagerLocation taskManagerLocation2 = new LocalTaskManagerLocation();
         final SimpleSlotContext simpleSlotContext2 = createSimpleSlotContext(taskManagerLocation2);
@@ -228,18 +230,14 @@ class DeclarativeSlotPoolServiceTest {
                     declarativeSlotPoolService.createAllocatedSlotReport(
                             taskManagerLocation2.getResourceID());
 
-            assertThat(allocatedSlotReport.getAllocatedSlotInfos())
-                    .allMatch(
-                            context ->
-                                    context.getAllocationId()
-                                                    .equals(simpleSlotContext2.getAllocationId())
-                                            && context.getSlotIndex()
-                                                    == simpleSlotContext2.getPhysicalSlotNumber());
+            assertThat(
+                    allocatedSlotReport.getAllocatedSlotInfos(),
+                    contains(matchesWithSlotContext(simpleSlotContext2)));
         }
     }
 
     @Test
-    void testFailAllocationReleasesSlot() throws Exception {
+    public void testFailAllocationReleasesSlot() throws Exception {
         final CompletableFuture<AllocationID> releasedSlot = new CompletableFuture<>();
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
                 createDeclarativeSlotPoolService(
@@ -258,12 +256,12 @@ class DeclarativeSlotPoolServiceTest {
             declarativeSlotPoolService.failAllocation(
                     taskManagerId, allocationId, new FlinkException("Test cause"));
 
-            assertThat(releasedSlot.join()).isEqualTo(allocationId);
+            assertThat(releasedSlot.join(), is(allocationId));
         }
     }
 
     @Test
-    void testFailLastAllocationOfTaskManagerReturnsIt() throws Exception {
+    public void testFailLastAllocationOfTaskManagerReturnsIt() throws Exception {
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
                 createDeclarativeSlotPoolService()) {
             final ResourceID taskManagerId = ResourceID.generate();
@@ -274,14 +272,14 @@ class DeclarativeSlotPoolServiceTest {
                             taskManagerId, new AllocationID(), new FlinkException("Test cause"));
 
             assertThat(
-                            emptyTaskManager.orElseThrow(
-                                    () -> new Exception("Expected empty task manager")))
-                    .isEqualTo(taskManagerId);
+                    emptyTaskManager.orElseThrow(
+                            () -> new Exception("Expected empty task manager")),
+                    is(taskManagerId));
         }
     }
 
     @Test
-    void testCloseReleasesAllSlotsForAllRegisteredTaskManagers() throws Exception {
+    public void testCloseReleasesAllSlotsForAllRegisteredTaskManagers() throws Exception {
         final Queue<ResourceID> releasedSlotsFor = new ArrayDeque<>(2);
         try (DeclarativeSlotPoolService declarativeSlotPoolService =
                 createDeclarativeSlotPoolService(
@@ -303,53 +301,7 @@ class DeclarativeSlotPoolServiceTest {
 
             declarativeSlotPoolService.close();
 
-            assertThat(releasedSlotsFor)
-                    .containsExactlyInAnyOrderElementsOf(taskManagerResourceIds);
-        }
-    }
-
-    @Test
-    void testReleaseFreeSlotsOnTaskManager() throws Exception {
-        try (DeclarativeSlotPoolService slotPoolService = createDeclarativeSlotPoolService()) {
-            final LocalTaskManagerLocation taskManagerLocation = new LocalTaskManagerLocation();
-            slotPoolService.registerTaskManager(taskManagerLocation.getResourceID());
-
-            final ResourceProfile resourceProfile =
-                    ResourceProfile.newBuilder().setCpuCores(1).build();
-
-            SlotOffer slotOffer1 = new SlotOffer(new AllocationID(), 0, resourceProfile);
-            SlotOffer slotOffer2 = new SlotOffer(new AllocationID(), 1, resourceProfile);
-
-            final DeclarativeSlotPool slotPool = slotPoolService.getDeclarativeSlotPool();
-            slotPool.setResourceRequirements(ResourceCounter.withResource(resourceProfile, 2));
-
-            final DefaultDeclarativeSlotPoolTest.FreeSlotConsumer freeSlotConsumer =
-                    new DefaultDeclarativeSlotPoolTest.FreeSlotConsumer();
-
-            final Collection<SlotOffer> slotOffers = Arrays.asList(slotOffer1, slotOffer2);
-
-            slotPoolService.offerSlots(
-                    taskManagerLocation,
-                    new RpcTaskManagerGateway(
-                            new TestingTaskExecutorGatewayBuilder()
-                                    .setFreeSlotFunction(freeSlotConsumer)
-                                    .createTestingTaskExecutorGateway(),
-                            jobMasterId),
-                    slotOffers);
-
-            // slot1 is reserved, slot2 is free.
-            slotPool.reserveFreeSlot(slotOffer1.getAllocationId(), resourceProfile);
-
-            slotPoolService.releaseFreeSlotsOnTaskManager(
-                    taskManagerLocation.getResourceID(), new FlinkException("Test cause"));
-
-            assertThat(slotPool.getFreeSlotsInformation()).isEmpty();
-            assertThat(
-                            Iterables.getOnlyElement(slotPool.getAllSlotsInformation())
-                                    .getAllocationId())
-                    .isEqualTo(slotOffer1.getAllocationId());
-            assertThat(Iterables.getOnlyElement(freeSlotConsumer.drainFreedSlots()))
-                    .isEqualTo(slotOffer2.getAllocationId());
+            assertThat(releasedSlotsFor, containsInAnyOrder(taskManagerResourceIds.toArray()));
         }
     }
 

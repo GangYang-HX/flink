@@ -48,10 +48,8 @@ public interface DataStreamScanProvider extends ScanTableSource.ScanRuntimeProvi
      *
      * @see SingleOutputStreamOperator#uid(String)
      */
-    default DataStream<RowData> produceDataStream(
-            ProviderContext providerContext, StreamExecutionEnvironment execEnv) {
-        return produceDataStream(execEnv);
-    }
+    DataStream<RowData> produceDataStream(
+            ProviderContext providerContext, StreamExecutionEnvironment execEnv);
 
     /** Creates a scan Java {@link DataStream} from a {@link StreamExecutionEnvironment}. */
     @Deprecated

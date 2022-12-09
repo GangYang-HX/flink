@@ -22,8 +22,9 @@
   [ngModel]="dump"
   [nzEditorOption]="editorOptions"
 ></nz-code-editor>
-<flink-addon-compact
-  [downloadHref]="downloadUrl"
-  [downloadName]="downloadName"
+<flink-refresh-download
+  [compactMode]="true"
+  [downloadHref]="'taskmanagers/' + taskManagerDetail?.id + '/thread-dump'"
+  [downloadName]="'taskmanager_' + taskManagerDetail?.id + '_thread_dump'"
   (reload)="reload()"
-></flink-addon-compact>
+></flink-refresh-download>

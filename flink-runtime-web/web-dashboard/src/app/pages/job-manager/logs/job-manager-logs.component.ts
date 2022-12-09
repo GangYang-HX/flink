@@ -16,17 +16,12 @@
  * limitations under the License.
  */
 
-import { ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, OnDestroy, Inject } from '@angular/core';
-import { ConfigService, JobManagerService } from '@flink-runtime-web/services';
+import { ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, OnDestroy } from '@angular/core';
+import { JobManagerService } from 'services';
 import { EditorOptions } from 'ng-zorro-antd/code-editor/typings';
-import { flinkEditorOptions } from '@flink-runtime-web/share/common/editor/editor-config';
-import {of, Subject} from 'rxjs';
-import {catchError, takeUntil} from 'rxjs/operators';
-import {
-  JOB_MANAGER_MODULE_CONFIG,
-  JOB_MANAGER_MODULE_DEFAULT_CONFIG,
-  JobManagerModuleConfig
-} from '@flink-runtime-web/pages/job-manager/job-manager.config';
+import { flinkEditorOptions } from 'share/common/editor/editor-config';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'flink-job-manager-logs',
@@ -35,23 +30,14 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class JobManagerLogsComponent implements OnInit, OnDestroy {
-  public readonly downloadName = `jobmanager_log`;
-  public downloadUrl: string;
-  public editorOptions: EditorOptions = flinkEditorOptions;
+  public readonly editorOptions: EditorOptions = flinkEditorOptions;
+
   public logs = '';
   public loading = true;
 
   private readonly destroy$ = new Subject<void>();
 
-  constructor(
-    private readonly jobManagerService: JobManagerService,
-    private readonly configService: ConfigService,
-    private readonly cdr: ChangeDetectorRef,
-    @Inject(JOB_MANAGER_MODULE_CONFIG) readonly moduleConfig: JobManagerModuleConfig
-  ) {
-    this.editorOptions = moduleConfig.editorOptions || JOB_MANAGER_MODULE_DEFAULT_CONFIG.editorOptions;
-    this.downloadUrl = `${this.configService.BASE_URL}/jobmanager/log`;
-  }
+  constructor(private readonly jobManagerService: JobManagerService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit() {
     this.reload();
@@ -67,9 +53,7 @@ export class JobManagerLogsComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     this.jobManagerService
       .loadLogs()
-      .pipe(
-        catchError(() => of('')),
-        takeUntil(this.destroy$))
+      .pipe(takeUntil(this.destroy$))
       .subscribe(data => {
         this.loading = false;
         this.logs = data;

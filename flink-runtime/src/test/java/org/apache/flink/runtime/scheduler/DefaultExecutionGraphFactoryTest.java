@@ -39,7 +39,6 @@ import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.shuffle.ShuffleTestUtils;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
 import org.hamcrest.MatcherAssert;
@@ -52,7 +51,6 @@ import javax.annotation.Nonnull;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
@@ -62,10 +60,6 @@ import static org.junit.Assert.fail;
 public class DefaultExecutionGraphFactoryTest extends TestLogger {
 
     @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     @Test
     public void testRestoringModifiedJobFromSavepointFails() throws Exception {
@@ -129,8 +123,8 @@ public class DefaultExecutionGraphFactoryTest extends TestLogger {
                         new Configuration(),
                         ClassLoader.getSystemClassLoader(),
                         new DefaultExecutionDeploymentTracker(),
-                        EXECUTOR_RESOURCE.getExecutor(),
-                        EXECUTOR_RESOURCE.getExecutor(),
+                        TestingUtils.defaultExecutor(),
+                        TestingUtils.defaultExecutor(),
                         Time.milliseconds(0L),
                         UnregisteredMetricGroups.createUnregisteredJobManagerJobMetricGroup(),
                         VoidBlobWriter.getInstance(),

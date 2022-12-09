@@ -25,6 +25,10 @@ import org.apache.flink.table.runtime.operators.window.TimeWindow;
 import org.apache.flink.util.IterableIterator;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -75,6 +79,47 @@ public class CumulativeWindowAssigner extends PanedWindowAssigner<TimeWindow>
             windows.add(new TimeWindow(start, end));
         }
         return windows;
+    }
+
+    @Override
+    public Collection<TimeWindow> matchWindows(long timestamp, boolean alignStart) {
+        List<TimeWindow> windows = new ArrayList<>();
+        long start =
+                getWindowStartWithOffset(
+                        timestamp,
+                        offset
+                                + diffBetweenTimeZones(
+                                        "GMT+00:00", ZoneId.systemDefault().toString()),
+                        maxSize);
+        start = start == timestamp && !alignStart ? start - maxSize : start;
+        long lastEnd = start + maxSize;
+        long firstEnd = start + step;
+
+        if (!alignStart && start < 0) {
+            return windows;
+        }
+
+        for (long end = firstEnd; end <= lastEnd; end += step) {
+            if (alignStart) {
+                if (start != timestamp) {
+                    break;
+                }
+                windows.add(new TimeWindow(start, end));
+            } else {
+                if (end == timestamp) {
+                    windows.add(new TimeWindow(start, end));
+                }
+            }
+        }
+
+        return windows;
+    }
+
+    private static long diffBetweenTimeZones(String tz1, String tz2) {
+        LocalDateTime today = LocalDateTime.now();
+        ZonedDateTime zdt1 = today.atZone(ZoneId.of(tz1));
+        ZonedDateTime zdt2 = today.atZone(ZoneId.of(tz2));
+        return ChronoUnit.MILLIS.between(zdt1, zdt2);
     }
 
     @Override

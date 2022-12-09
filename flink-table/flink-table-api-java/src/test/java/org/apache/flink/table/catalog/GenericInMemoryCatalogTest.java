@@ -33,21 +33,22 @@ import org.apache.flink.table.functions.TestGenericUDF;
 import org.apache.flink.table.functions.TestSimpleUDF;
 import org.apache.flink.table.utils.TableEnvironmentMock;
 
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Test for GenericInMemoryCatalog. */
-class GenericInMemoryCatalogTest extends CatalogTestBase {
+public class GenericInMemoryCatalogTest extends CatalogTestBase {
 
-    @BeforeAll
-    static void init() {
+    @BeforeClass
+    public static void init() {
         catalog = new GenericInMemoryCatalog(TEST_CATALOG_NAME);
         catalog.open();
     }
@@ -55,23 +56,23 @@ class GenericInMemoryCatalogTest extends CatalogTestBase {
     // ------ tables ------
 
     @Test
-    void testDropTable_partitionedTable() throws Exception {
+    public void testDropTable_partitionedTable() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createPartitionedTable(), false);
         CatalogPartition catalogPartition = createPartition();
         CatalogPartitionSpec catalogPartitionSpec = createPartitionSpec();
         catalog.createPartition(path1, catalogPartitionSpec, catalogPartition, false);
 
-        assertThat(catalog.tableExists(path1)).isTrue();
+        assertTrue(catalog.tableExists(path1));
 
         catalog.dropTable(path1, false);
 
-        assertThat(catalog.tableExists(path1)).isFalse();
-        assertThat(catalog.partitionExists(path1, catalogPartitionSpec)).isFalse();
+        assertFalse(catalog.tableExists(path1));
+        assertFalse(catalog.partitionExists(path1, catalogPartitionSpec));
     }
 
     @Test
-    void testRenameTable_partitionedTable() throws Exception {
+    public void testRenameTable_partitionedTable() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
         CatalogTable table = createPartitionedTable();
         catalog.createTable(path1, table, false);
@@ -80,20 +81,20 @@ class GenericInMemoryCatalogTest extends CatalogTestBase {
         catalog.createPartition(path1, catalogPartitionSpec, catalogPartition, false);
 
         CatalogTestUtil.checkEquals(table, (CatalogTable) catalog.getTable(path1));
-        assertThat(catalog.partitionExists(path1, catalogPartitionSpec)).isTrue();
+        assertTrue(catalog.partitionExists(path1, catalogPartitionSpec));
 
         catalog.renameTable(path1, t2, false);
 
         CatalogTestUtil.checkEquals(table, (CatalogTable) catalog.getTable(path3));
-        assertThat(catalog.partitionExists(path3, catalogPartitionSpec)).isTrue();
-        assertThat(catalog.tableExists(path1)).isFalse();
-        assertThat(catalog.partitionExists(path1, catalogPartitionSpec)).isFalse();
+        assertTrue(catalog.partitionExists(path3, catalogPartitionSpec));
+        assertFalse(catalog.tableExists(path1));
+        assertFalse(catalog.partitionExists(path1, catalogPartitionSpec));
     }
 
     // ------ statistics ------
 
     @Test
-    void testStatistics() throws Exception {
+    public void testStatistics() throws Exception {
         // Table related
         catalog.createDatabase(db1, createDb(), false);
         CatalogTable table = createTable();
@@ -137,76 +138,6 @@ class GenericInMemoryCatalogTest extends CatalogTestBase {
         catalog.dropDatabase(db1, false, false);
         catalog.dropTable(path2, false);
         catalog.dropDatabase(db2, false, false);
-    }
-
-    @Test
-    void testBulkGetPartitionStatistics() throws Exception {
-        // create table
-        catalog.createDatabase(db1, createDb(), false);
-        CatalogTable table1 = createPartitionedTable();
-        catalog.createTable(path1, table1, false);
-        // create two partition specs
-        CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        catalog.createPartition(path1, partitionSpec, createPartition(), false);
-        CatalogPartitionSpec anotherPartitionSpec = createAnotherPartitionSpec();
-        catalog.createPartition(path1, anotherPartitionSpec, createPartition(), false);
-
-        List<CatalogTableStatistics> catalogTableStatistics =
-                catalog.bulkGetPartitionStatistics(
-                        path1, Arrays.asList(partitionSpec, anotherPartitionSpec));
-        // got statistic from catalog should be unknown since no statistic has been put into
-        // partition
-        for (CatalogTableStatistics statistics : catalogTableStatistics) {
-            CatalogTestUtil.checkEquals(statistics, CatalogTableStatistics.UNKNOWN);
-        }
-
-        // put statistic for partition
-        CatalogTableStatistics tableStatistics = new CatalogTableStatistics(5, 2, 100, 575);
-        CatalogTableStatistics anotherTableStatistics = new CatalogTableStatistics(1, 1, 1, 5);
-        catalog.alterPartitionStatistics(path1, partitionSpec, tableStatistics, false);
-        catalog.alterPartitionStatistics(
-                path1, anotherPartitionSpec, anotherTableStatistics, false);
-
-        catalogTableStatistics =
-                catalog.bulkGetPartitionStatistics(
-                        path1, Arrays.asList(partitionSpec, anotherPartitionSpec));
-        CatalogTestUtil.checkEquals(catalogTableStatistics.get(0), tableStatistics);
-        CatalogTestUtil.checkEquals(catalogTableStatistics.get(1), anotherTableStatistics);
-    }
-
-    @Test
-    void testBulkGetPartitionColumnStatistics() throws Exception {
-        // create table
-        catalog.createDatabase(db1, createDb(), false);
-        CatalogTable table1 = createPartitionedTable();
-        catalog.createTable(path1, table1, false);
-        // create two partition specs
-        CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        catalog.createPartition(path1, partitionSpec, createPartition(), false);
-        CatalogPartitionSpec anotherPartitionSpec = createAnotherPartitionSpec();
-        catalog.createPartition(path1, anotherPartitionSpec, createPartition(), false);
-        List<CatalogPartitionSpec> catalogPartitionSpecs =
-                Arrays.asList(partitionSpec, anotherPartitionSpec);
-
-        List<CatalogColumnStatistics> catalogColumnStatistics =
-                catalog.bulkGetPartitionColumnStatistics(path1, catalogPartitionSpecs);
-        // got statistic from catalog should be unknown since no statistic has been put into
-        // partition
-        for (CatalogColumnStatistics statistics : catalogColumnStatistics) {
-            CatalogTestUtil.checkEquals(statistics, CatalogColumnStatistics.UNKNOWN);
-        }
-
-        // put statistic for partition
-        CatalogColumnStatistics columnStatistics = createColumnStats();
-        catalog.alterPartitionColumnStatistics(path1, partitionSpec, columnStatistics, false);
-        catalog.alterPartitionColumnStatistics(
-                path1, anotherPartitionSpec, columnStatistics, false);
-
-        catalogColumnStatistics =
-                catalog.bulkGetPartitionColumnStatistics(path1, catalogPartitionSpecs);
-        for (CatalogColumnStatistics statistics : catalogColumnStatistics) {
-            CatalogTestUtil.checkEquals(statistics, columnStatistics);
-        }
     }
 
     // ------ utilities ------
@@ -256,13 +187,13 @@ class GenericInMemoryCatalogTest extends CatalogTestBase {
     }
 
     @Test
-    void testRegisterCatalog() {
+    public void testRegisterCatalog() {
         final TableEnvironmentMock tableEnv = TableEnvironmentMock.getStreamingInstance();
         try {
             tableEnv.registerCatalog(TEST_CATALOG_NAME, new MyCatalog(TEST_CATALOG_NAME));
         } catch (CatalogException e) {
         }
-        assertThat(tableEnv.getCatalog(TEST_CATALOG_NAME)).isNotPresent();
+        assertThat(tableEnv.getCatalog(TEST_CATALOG_NAME).isPresent(), equalTo(false));
     }
 
     class MyCatalog extends GenericInMemoryCatalog {

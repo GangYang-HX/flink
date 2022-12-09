@@ -24,7 +24,6 @@ import org.apache.flink.configuration.IllegalConfigurationException;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.configuration.StateBackendOptions;
 import org.apache.flink.configuration.StateChangelogOptions;
-import org.apache.flink.runtime.state.changelog.ChangelogStateBackendHandle;
 import org.apache.flink.runtime.state.delegate.DelegatingStateBackend;
 import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 import org.apache.flink.runtime.state.hashmap.HashMapStateBackendFactory;
@@ -41,7 +40,6 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.Collection;
 import java.util.Optional;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -54,10 +52,6 @@ public class StateBackendLoader {
     /** Used for Loading ChangelogStateBackend. */
     private static final String CHANGELOG_STATE_BACKEND =
             "org.apache.flink.state.changelog.ChangelogStateBackend";
-
-    /** Used for Loading TempChangelogStateBackend. */
-    private static final String DEACTIVATED_CHANGELOG_STATE_BACKEND =
-            "org.apache.flink.state.changelog.DeactivatedChangelogStateBackend";
 
     /** Used for loading RocksDBStateBackend. */
     private static final String ROCKSDB_STATE_BACKEND_FACTORY =
@@ -311,7 +305,7 @@ public class StateBackendLoader {
 
         StateBackend backend;
         if (enableChangeLog) {
-            backend = wrapStateBackend(rootBackend, classLoader, CHANGELOG_STATE_BACKEND);
+            backend = loadChangelogStateBackend(rootBackend, classLoader);
             LOG.info(
                     "State backend loader loads {} to delegate {}",
                     backend.getClass().getSimpleName(),
@@ -364,57 +358,26 @@ public class StateBackendLoader {
         return false;
     }
 
-    /**
-     * Load state backend which may wrap the original state backend for recovery.
-     *
-     * @param originalStateBackend StateBackend loaded from application or config.
-     * @param classLoader User code classloader.
-     * @param keyedStateHandles The state handles for restore.
-     * @return Wrapped state backend for recovery.
-     * @throws DynamicCodeLoadingException Thrown if keyed state handles of wrapped state backend
-     *     are found and the class was not found or could not be instantiated.
-     */
-    public static StateBackend loadStateBackendFromKeyedStateHandles(
-            StateBackend originalStateBackend,
-            ClassLoader classLoader,
-            Collection<KeyedStateHandle> keyedStateHandles)
-            throws DynamicCodeLoadingException {
-        // Wrapping ChangelogStateBackend or ChangelogStateBackendHandle is not supported currently.
-        if (!isChangelogStateBackend(originalStateBackend)
-                && keyedStateHandles.stream()
-                        .anyMatch(
-                                stateHandle ->
-                                        stateHandle instanceof ChangelogStateBackendHandle)) {
-            return wrapStateBackend(
-                    originalStateBackend, classLoader, DEACTIVATED_CHANGELOG_STATE_BACKEND);
-        }
-        return originalStateBackend;
-    }
-
-    public static boolean isChangelogStateBackend(StateBackend backend) {
-        return CHANGELOG_STATE_BACKEND.equals(backend.getClass().getName());
-    }
-
-    private static StateBackend wrapStateBackend(
-            StateBackend backend, ClassLoader classLoader, String className)
-            throws DynamicCodeLoadingException {
+    private static StateBackend loadChangelogStateBackend(
+            StateBackend backend, ClassLoader classLoader) throws DynamicCodeLoadingException {
 
         // ChangelogStateBackend resides in a separate module, load it using reflection
         try {
             Constructor<? extends DelegatingStateBackend> constructor =
-                    Class.forName(className, false, classLoader)
+                    Class.forName(CHANGELOG_STATE_BACKEND, false, classLoader)
                             .asSubclass(DelegatingStateBackend.class)
                             .getDeclaredConstructor(StateBackend.class);
             constructor.setAccessible(true);
             return constructor.newInstance(backend);
         } catch (ClassNotFoundException e) {
             throw new DynamicCodeLoadingException(
-                    "Cannot find DelegateStateBackend class: " + className, e);
+                    "Cannot find DelegateStateBackend class: " + CHANGELOG_STATE_BACKEND, e);
         } catch (InstantiationException
                 | IllegalAccessException
                 | NoSuchMethodException
                 | InvocationTargetException e) {
-            throw new DynamicCodeLoadingException("Fail to initialize: " + className, e);
+            throw new DynamicCodeLoadingException(
+                    "Fail to initialize: " + CHANGELOG_STATE_BACKEND, e);
         }
     }
 

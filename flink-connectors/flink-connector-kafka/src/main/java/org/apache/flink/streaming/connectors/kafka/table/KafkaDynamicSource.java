@@ -80,7 +80,7 @@ import java.util.stream.Stream;
 public class KafkaDynamicSource
         implements ScanTableSource, SupportsReadingMetadata, SupportsWatermarkPushDown {
 
-    private static final String KAFKA_TRANSFORMATION = "kafka";
+    protected static final String KAFKA_TRANSFORMATION = "kafka";
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
@@ -434,7 +434,7 @@ public class KafkaDynamicSource
         return kafkaSourceBuilder.build();
     }
 
-    private OffsetResetStrategy getResetStrategy(String offsetResetConfig) {
+    protected OffsetResetStrategy getResetStrategy(String offsetResetConfig) {
         return Arrays.stream(OffsetResetStrategy.values())
                 .filter(ors -> ors.name().equals(offsetResetConfig.toUpperCase(Locale.ROOT)))
                 .findAny()
@@ -451,7 +451,7 @@ public class KafkaDynamicSource
                                                         .collect(Collectors.joining(",")))));
     }
 
-    private KafkaDeserializationSchema<RowData> createKafkaDeserializationSchema(
+    protected KafkaDeserializationSchema<RowData> createKafkaDeserializationSchema(
             DeserializationSchema<RowData> keyDeserialization,
             DeserializationSchema<RowData> valueDeserialization,
             TypeInformation<RowData> producedTypeInfo) {
@@ -494,7 +494,8 @@ public class KafkaDynamicSource
                 upsertMode);
     }
 
-    private @Nullable DeserializationSchema<RowData> createDeserialization(
+    @Nullable
+    protected DeserializationSchema<RowData> createDeserialization(
             DynamicTableSource.Context context,
             @Nullable DecodingFormat<DeserializationSchema<RowData>> format,
             int[] projection,
@@ -513,7 +514,8 @@ public class KafkaDynamicSource
     // Metadata handling
     // --------------------------------------------------------------------------------------------
 
-    enum ReadableMetadata {
+    /** topic metadata info. */
+    protected enum ReadableMetadata {
         TOPIC(
                 "topic",
                 DataTypes.STRING().notNull(),
@@ -604,11 +606,11 @@ public class KafkaDynamicSource
                     }
                 });
 
-        final String key;
+        public final String key;
 
         final DataType dataType;
 
-        final MetadataConverter converter;
+        public final MetadataConverter converter;
 
         ReadableMetadata(String key, DataType dataType, MetadataConverter converter) {
             this.key = key;

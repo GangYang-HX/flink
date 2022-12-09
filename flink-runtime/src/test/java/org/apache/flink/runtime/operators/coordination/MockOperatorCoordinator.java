@@ -39,12 +39,12 @@ public final class MockOperatorCoordinator implements OperatorCoordinator {
     }
 
     @Override
-    public void handleEventFromOperator(int subtask, int attemptNumber, OperatorEvent event) {
+    public void handleEventFromOperator(int subtask, OperatorEvent event) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void executionAttemptFailed(int subtask, int attemptNumber, @Nullable Throwable reason) {
+    public void subtaskFailed(int subtask, @Nullable Throwable reason) {
         throw new UnsupportedOperationException();
     }
 
@@ -54,7 +54,7 @@ public final class MockOperatorCoordinator implements OperatorCoordinator {
     }
 
     @Override
-    public void executionAttemptReady(int subtask, int attemptNumber, SubtaskGateway gateway) {
+    public void subtaskReady(int subtask, SubtaskGateway gateway) {
         throw new UnsupportedOperationException();
     }
 

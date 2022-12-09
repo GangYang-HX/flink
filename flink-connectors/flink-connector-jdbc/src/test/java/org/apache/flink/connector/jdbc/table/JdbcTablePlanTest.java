@@ -28,7 +28,7 @@ import org.junit.Test;
 /** Plan tests for JDBC connector, for example, testing projection push down. */
 public class JdbcTablePlanTest extends TableTestBase {
 
-    private final StreamTableTestUtil util = streamTestUtil(TableConfig.getDefault());
+    private final StreamTableTestUtil util = streamTestUtil(new TableConfig());
 
     @Before
     public void setup() {

@@ -23,7 +23,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import java.util.Random;
 
 /** Test class for {@link ByteArrayWrapperSerializer}. */
-class ByteArrayWrapperSerializerTest extends SerializerTestBase<ByteArrayWrapper> {
+public class ByteArrayWrapperSerializerTest extends SerializerTestBase<ByteArrayWrapper> {
 
     private final Random rnd = new Random(346283764872L);
 
@@ -52,6 +52,7 @@ class ByteArrayWrapperSerializerTest extends SerializerTestBase<ByteArrayWrapper
             randomByteArray(1),
             randomByteArray(2),
             randomByteArray(1024 * 1024),
+            randomByteArray(32 * 1024 * 1024),
         };
     }
 

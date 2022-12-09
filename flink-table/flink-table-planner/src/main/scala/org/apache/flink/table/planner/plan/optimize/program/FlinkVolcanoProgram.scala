@@ -18,16 +18,20 @@
 package org.apache.flink.table.planner.plan.optimize.program
 
 import org.apache.flink.table.api.TableException
+import org.apache.flink.table.api.config.OptimizerConfigOptions
+import org.apache.flink.table.planner.materialize.FlinkRelOptMaterialization
 import org.apache.flink.table.planner.plan.metadata.FlinkRelMdNonCumulativeCost
 import org.apache.flink.table.planner.plan.utils.FlinkRelOptUtil
 import org.apache.flink.util.Preconditions
 
 import com.google.common.collect.ImmutableList
+import org.apache.calcite.plan.{RelOptMaterialization, RelTrait}
 import org.apache.calcite.plan.RelOptPlanner.CannotPlanException
-import org.apache.calcite.plan.RelTrait
 import org.apache.calcite.plan.volcano.VolcanoPlanner
 import org.apache.calcite.rel.RelNode
 import org.apache.calcite.tools.{Programs, RuleSet}
+
+import scala.collection.JavaConverters._
 
 /**
  * A FlinkRuleSetProgram that runs with [[org.apache.calcite.plan.volcano.VolcanoPlanner]].
@@ -59,7 +63,23 @@ class FlinkVolcanoProgram[OC <: FlinkOptimizeContext] extends FlinkRuleSetProgra
 
     try {
       FlinkRelMdNonCumulativeCost.THREAD_PLANNER.set(planner)
-      optProgram.run(planner, root, targetTraits, ImmutableList.of(), ImmutableList.of())
+      val enableMaterialization =
+        context.getTableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_MATERIALIZATION_ENABLED)
+      val batchContext = context.isInstanceOf[BatchOptimizeContext]
+      var mvs: List[RelOptMaterialization] = List()
+      if (enableMaterialization && batchContext) {
+        val queryFlagTime = context.getTableConfig
+          .getOptional(OptimizerConfigOptions.TABLE_OPTIMIZER_MATERIALIZATION_QUERY_FLAG_START_TIME)
+          .orElse(System.currentTimeMillis)
+        val materializations = context
+          .asInstanceOf[BatchOptimizeContext]
+          .getMaterializationsRegistry
+          .getAllMaterializations
+        mvs = mvs ++ materializations.asScala.filter(
+          x => x.asInstanceOf[FlinkRelOptMaterialization].getCtime <= queryFlagTime)
+      }
+
+      optProgram.run(planner, root, targetTraits, mvs.asJava, ImmutableList.of())
     } catch {
       case e: CannotPlanException =>
         throw new TableException(

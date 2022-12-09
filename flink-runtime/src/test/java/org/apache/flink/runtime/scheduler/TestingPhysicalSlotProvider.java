@@ -48,8 +48,6 @@ public class TestingPhysicalSlotProvider implements PhysicalSlotProvider {
     private final Function<ResourceProfile, CompletableFuture<TestingPhysicalSlot>>
             physicalSlotCreator;
 
-    private boolean batchSlotRequestTimeoutCheckEnabled = true;
-
     public static TestingPhysicalSlotProvider create(
             Function<ResourceProfile, CompletableFuture<TestingPhysicalSlot>> physicalSlotCreator) {
         return new TestingPhysicalSlotProvider(physicalSlotCreator);
@@ -128,11 +126,6 @@ public class TestingPhysicalSlotProvider implements PhysicalSlotProvider {
         cancellations.put(slotRequestId, cause);
     }
 
-    @Override
-    public void disableBatchSlotRequestTimeoutCheck() {
-        batchSlotRequestTimeoutCheckEnabled = false;
-    }
-
     public CompletableFuture<TestingPhysicalSlot> getResultForRequestId(
             SlotRequestId slotRequestId) {
         return getResponses().get(slotRequestId);
@@ -166,9 +159,5 @@ public class TestingPhysicalSlotProvider implements PhysicalSlotProvider {
         Optional<T> element = collection.stream().findFirst();
         Preconditions.checkState(element.isPresent());
         return element.get();
-    }
-
-    boolean isBatchSlotRequestTimeoutCheckEnabled() {
-        return batchSlotRequestTimeoutCheckEnabled;
     }
 }

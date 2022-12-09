@@ -30,7 +30,6 @@ import org.apache.flink.configuration.description.Formatter;
 import org.apache.flink.configuration.description.HtmlFormatter;
 import org.apache.flink.configuration.description.InlineElement;
 import org.apache.flink.configuration.description.TextElement;
-import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.TimeUtils;
 import org.apache.flink.util.function.ThrowingConsumer;
 
@@ -58,10 +57,8 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -114,8 +111,6 @@ public class ConfigOptionsDocGenerator {
                         "flink-libraries/flink-cep", "org.apache.flink.cep.configuration"),
                 new OptionsClassLocation(
                         "flink-dstl/flink-dstl-dfs", "org.apache.flink.changelog.fs"),
-                new OptionsClassLocation(
-                        "flink-table/flink-sql-gateway", "org.apache.flink.table.gateway.rest.util")
             };
 
     static final Set<String> EXCLUSIONS =
@@ -473,7 +468,7 @@ public class ConfigOptionsDocGenerator {
         return ""
                 + "        <tr>\n"
                 + "            <td><h5>"
-                + escapeCharacters(getDocumentedKey(optionWithMetaInfo))
+                + escapeCharacters(option.key())
                 + "</h5>"
                 + execModeStringBuilder.toString()
                 + "</td>\n"
@@ -487,24 +482,6 @@ public class ConfigOptionsDocGenerator {
                 + getDescription(optionWithMetaInfo)
                 + "</td>\n"
                 + "        </tr>\n";
-    }
-
-    @VisibleForTesting
-    static String getDocumentedKey(OptionWithMetaInfo optionWithMetaInfo) {
-        Documentation.SuffixOption suffixOptionAnnotation =
-                optionWithMetaInfo.field.getAnnotation(Documentation.SuffixOption.class);
-        if (suffixOptionAnnotation == null) {
-            suffixOptionAnnotation =
-                    optionWithMetaInfo
-                            .field
-                            .getDeclaringClass()
-                            .getAnnotation(Documentation.SuffixOption.class);
-        }
-
-        final String originalKey = optionWithMetaInfo.option.key();
-        return suffixOptionAnnotation == null
-                ? originalKey
-                : suffixOptionAnnotation.value() + "." + originalKey;
     }
 
     @VisibleForTesting
@@ -528,32 +505,16 @@ public class ConfigOptionsDocGenerator {
         if (!clazz.isEnum()) {
             return null;
         }
-        AtomicReference<IllegalAccessException> exception = new AtomicReference<>(null);
+
         InlineElement[] optionDescriptions =
-                Arrays.stream(clazz.getDeclaredFields())
-                        .filter(field -> field.isEnumConstant() && shouldBeDocumented(field))
-                        .map(
-                                field -> {
-                                    try {
-                                        return field.get(null);
-                                    } catch (IllegalAccessException e) {
-                                        exception.set(
-                                                ExceptionUtils.firstOrSuppressed(
-                                                        e, exception.get()));
-                                    }
-                                    return null;
-                                })
-                        .filter(Objects::nonNull)
+                Arrays.stream(clazz.getEnumConstants())
                         .map(ConfigOptionsDocGenerator::formatEnumOption)
                         .map(
                                 elements ->
                                         TextElement.wrap(
                                                 elements.stream().toArray(InlineElement[]::new)))
                         .toArray(InlineElement[]::new);
-        if (exception.get() != null) {
-            throw new RuntimeException(
-                    "config option should have public access right.", exception.get());
-        }
+
         return Description.builder().text("Possible values:").list(optionDescriptions).build();
     }
 
@@ -679,7 +640,7 @@ public class ConfigOptionsDocGenerator {
     }
 
     private static void sortOptions(List<OptionWithMetaInfo> configOptions) {
-        configOptions.sort(Comparator.comparing(option -> getDocumentedKey(option)));
+        configOptions.sort(Comparator.comparing(option -> option.option.key()));
     }
 
     /**

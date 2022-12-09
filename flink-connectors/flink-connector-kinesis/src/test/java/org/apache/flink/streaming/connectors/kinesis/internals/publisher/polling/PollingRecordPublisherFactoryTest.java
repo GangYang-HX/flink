@@ -29,7 +29,8 @@ import java.util.Properties;
 import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.SHARD_USE_ADAPTIVE_READS;
 import static org.apache.flink.streaming.connectors.kinesis.internals.ShardConsumerTestUtils.createFakeShardConsumerMetricGroup;
 import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber.SENTINEL_LATEST_SEQUENCE_NUM;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 /** Tests for {@link PollingRecordPublisherFactory}. */
@@ -48,8 +49,8 @@ public class PollingRecordPublisherFactoryTest {
                         createFakeShardConsumerMetricGroup(),
                         mock(StreamShardHandle.class));
 
-        assertThat(recordPublisher).isInstanceOf(PollingRecordPublisher.class);
-        assertThat(recordPublisher).isNotInstanceOf(AdaptivePollingRecordPublisher.class);
+        assertTrue(recordPublisher instanceof PollingRecordPublisher);
+        assertFalse(recordPublisher instanceof AdaptivePollingRecordPublisher);
     }
 
     @Test
@@ -65,7 +66,7 @@ public class PollingRecordPublisherFactoryTest {
                         createFakeShardConsumerMetricGroup(),
                         mock(StreamShardHandle.class));
 
-        assertThat(recordPublisher).isInstanceOf(PollingRecordPublisher.class);
-        assertThat(recordPublisher).isInstanceOf(AdaptivePollingRecordPublisher.class);
+        assertTrue(recordPublisher instanceof PollingRecordPublisher);
+        assertTrue(recordPublisher instanceof AdaptivePollingRecordPublisher);
     }
 }

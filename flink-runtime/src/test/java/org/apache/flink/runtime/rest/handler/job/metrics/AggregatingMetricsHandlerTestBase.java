@@ -67,6 +67,7 @@ public abstract class AggregatingMetricsHandlerTestBase<
     private static final GatewayRetriever<DispatcherGateway> LEADER_RETRIEVER;
     private static final Time TIMEOUT = Time.milliseconds(50);
     private static final Map<String, String> TEST_HEADERS = Collections.emptyMap();
+    private static final Executor EXECUTOR = TestingUtils.defaultExecutor();
 
     static {
         TEST_REST_ADDRESS = CompletableFuture.completedFuture("localhost:12345");
@@ -102,13 +103,7 @@ public abstract class AggregatingMetricsHandlerTestBase<
             store.add(dump);
         }
 
-        handler =
-                getHandler(
-                        LEADER_RETRIEVER,
-                        TIMEOUT,
-                        TEST_HEADERS,
-                        Executors.directExecutor(),
-                        fetcher);
+        handler = getHandler(LEADER_RETRIEVER, TIMEOUT, TEST_HEADERS, EXECUTOR, fetcher);
         pathParameters = getPathParameters();
     }
 

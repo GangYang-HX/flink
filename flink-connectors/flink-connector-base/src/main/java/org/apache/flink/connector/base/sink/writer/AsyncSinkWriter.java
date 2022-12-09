@@ -22,11 +22,6 @@ import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.operators.ProcessingTimeService;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.StatefulSink;
-import org.apache.flink.connector.base.sink.writer.config.AsyncSinkWriterConfiguration;
-import org.apache.flink.connector.base.sink.writer.strategy.BasicRequestInfo;
-import org.apache.flink.connector.base.sink.writer.strategy.BasicResultInfo;
-import org.apache.flink.connector.base.sink.writer.strategy.RateLimitingStrategy;
-import org.apache.flink.connector.base.sink.writer.strategy.RequestInfo;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 import org.apache.flink.util.Preconditions;
@@ -58,6 +53,9 @@ import java.util.function.Consumer;
 public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable>
         implements StatefulSink.StatefulSinkWriter<InputT, BufferedRequestState<RequestEntryT>> {
 
+    private static final int INFLIGHT_MESSAGES_LIMIT_INCREASE_RATE = 10;
+    private static final double INFLIGHT_MESSAGES_LIMIT_DECREASE_FACTOR = 0.5;
+
     private final MailboxExecutor mailboxExecutor;
     private final ProcessingTimeService timeService;
 
@@ -76,9 +74,21 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
     /* Counter for number of records this sink has attempted to send to the destination. */
     private final Counter numRecordsSendCounter;
 
-    private final RateLimitingStrategy rateLimitingStrategy;
+    /**
+     * Rate limiting strategy {@code inflightMessages} at any given time, {@code
+     * rateLimitingStrategy.getRateLimit()} is used to adjust the sink's throughput not to exceed
+     * destination's throttle rate.
+     *
+     * <p>throttled requests should update limit by calling {@code rateLimitingStrategy.scaleDown()}
+     * and successful requests should update by calling {@code rateLimitingStrategy.scaleUp()}
+     *
+     * <p>Failure of throttled request decreases limit resulting in yielding on fewer number of
+     * messages.
+     */
+    private final AIMDRateLimitingStrategy rateLimitingStrategy;
 
     private final int maxBatchSize;
+    private final int maxInFlightRequests;
     private final int maxBufferedRequests;
     private final long maxBatchSizeInBytes;
     private final long maxTimeInBufferMS;
@@ -115,10 +125,24 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
      * request entry that was not successfully persisted needs to be handled and retried by the
      * logic in {@code submitRequestsToApi}.
      *
+     * <p>There is a limit on the number of concurrent (async) requests that can be handled by the
+     * client library. This limit is enforced by checking the queue size before accepting a new
+     * element into the queue.
+     *
      * <p>To complete a checkpoint, we need to make sure that no requests are in flight, as they may
      * fail, which could then lead to data loss.
      */
     private int inFlightRequestsCount;
+
+    /**
+     * Tracks number of messages (request entries) in the inflight requests. This variable is used
+     * to control rate of outbound messages flow as {@code inFlightMessages} should not exceed
+     * {@code rateLimitingStrategy}.
+     *
+     * <p>{@code inFlightMessages} should also be consistent with {@code inFlightRequestsCount}
+     * where {@code inFlightMessages} should never exceed {@code inFlightRequestsCount} at any time.
+     */
+    private int inFlightMessages;
 
     /**
      * Tracks the cumulative size of all elements in {@code bufferedRequestEntries} to facilitate
@@ -146,14 +170,14 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
      * the valid limits of the destination). The logic then needs to create and execute the request
      * asynchronously against the destination (ideally by batching together multiple request entries
      * to increase efficiency). The logic also needs to identify individual request entries that
-     * were not persisted successfully and resubmit them using the {@code requestToRetry} callback.
+     * were not persisted successfully and resubmit them using the {@code requestResult} callback.
      *
      * <p>From a threading perspective, the mailbox thread will call this method and initiate the
      * asynchronous request to persist the {@code requestEntries}. NOTE: The client must support
      * asynchronous requests and the method called to persist the records must asynchronously
      * execute and return a future with the results of that request. A thread from the destination
      * client thread pool should complete the request and submit the failed entries that should be
-     * retried. The {@code requestToRetry} will then trigger the mailbox thread to requeue the
+     * retried. The {@code requestResult} will then trigger the mailbox thread to requeue the
      * unsuccessful elements.
      *
      * <p>An example implementation of this method is included:
@@ -161,15 +185,15 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
      * <pre>{@code
      * @Override
      * protected void submitRequestEntries
-     *   (List<RequestEntryT> records, Consumer<Collection<RequestEntryT>> requestToRetry) {
+     *   (List<RequestEntryT> records, Consumer<Collection<RequestEntryT>> requestResult) {
      *     Future<Response> response = destinationClient.putRecords(records);
      *     response.whenComplete(
      *         (response, error) -> {
      *             if(error){
      *                 List<RequestEntryT> retryableFailedRecords = getRetryableFailed(response);
-     *                 requestToRetry.accept(retryableFailedRecords);
+     *                 requestResult.accept(retryableFailedRecords);
      *             }else{
-     *                 requestToRetry.accept(Collections.emptyList());
+     *                 requestResult.accept(Collections.emptyList());
      *             }
      *         }
      *     );
@@ -181,14 +205,14 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
      * requests.
      *
      * @param requestEntries a set of request entries that should be sent to the destination
-     * @param requestToRetry the {@code accept} method should be called on this Consumer once the
+     * @param requestResult the {@code accept} method should be called on this Consumer once the
      *     processing of the {@code requestEntries} are complete. Any entries that encountered
-     *     difficulties in persisting should be re-queued through {@code requestToRetry} by
-     *     including that element in the collection of {@code RequestEntryT}s passed to the {@code
-     *     accept} method. All other elements are assumed to have been successfully persisted.
+     *     difficulties in persisting should be re-queued through {@code requestResult} by including
+     *     that element in the collection of {@code RequestEntryT}s passed to the {@code accept}
+     *     method. All other elements are assumed to have been successfully persisted.
      */
     protected abstract void submitRequestEntries(
-            List<RequestEntryT> requestEntries, Consumer<List<RequestEntryT>> requestToRetry);
+            List<RequestEntryT> requestEntries, Consumer<List<RequestEntryT>> requestResult);
 
     /**
      * This method allows the getting of the size of a {@code RequestEntryT} in bytes. The size in
@@ -201,11 +225,6 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
      */
     protected abstract long getSizeInBytes(RequestEntryT requestEntry);
 
-    /**
-     * This method is deprecated, please use the constructor that specifies the {@link
-     * AsyncSinkWriterConfiguration}.
-     */
-    @Deprecated
     public AsyncSinkWriter(
             ElementConverter<InputT, RequestEntryT> elementConverter,
             Sink.InitContext context,
@@ -227,11 +246,6 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
                 Collections.emptyList());
     }
 
-    /**
-     * This method is deprecated, please use the constructor that specifies the {@link
-     * AsyncSinkWriterConfiguration}.
-     */
-    @Deprecated
     public AsyncSinkWriter(
             ElementConverter<InputT, RequestEntryT> elementConverter,
             Sink.InitContext context,
@@ -242,53 +256,42 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
             long maxTimeInBufferMS,
             long maxRecordSizeInBytes,
             Collection<BufferedRequestState<RequestEntryT>> states) {
-        this(
-                elementConverter,
-                context,
-                AsyncSinkWriterConfiguration.builder()
-                        .setMaxBatchSize(maxBatchSize)
-                        .setMaxBatchSizeInBytes(maxBatchSizeInBytes)
-                        .setMaxInFlightRequests(maxInFlightRequests)
-                        .setMaxBufferedRequests(maxBufferedRequests)
-                        .setMaxTimeInBufferMS(maxTimeInBufferMS)
-                        .setMaxRecordSizeInBytes(maxRecordSizeInBytes)
-                        .build(),
-                states);
-    }
-
-    public AsyncSinkWriter(
-            ElementConverter<InputT, RequestEntryT> elementConverter,
-            Sink.InitContext context,
-            AsyncSinkWriterConfiguration configuration,
-            Collection<BufferedRequestState<RequestEntryT>> states) {
         this.elementConverter = elementConverter;
         this.mailboxExecutor = context.getMailboxExecutor();
         this.timeService = context.getProcessingTimeService();
 
         Preconditions.checkNotNull(elementConverter);
-        Preconditions.checkArgument(configuration.getMaxBatchSize() > 0);
-        Preconditions.checkArgument(configuration.getMaxBufferedRequests() > 0);
-        Preconditions.checkArgument(configuration.getMaxBatchSizeInBytes() > 0);
-        Preconditions.checkArgument(configuration.getMaxTimeInBufferMS() > 0);
-        Preconditions.checkArgument(configuration.getMaxRecordSizeInBytes() > 0);
+        Preconditions.checkArgument(maxBatchSize > 0);
+        Preconditions.checkArgument(maxBufferedRequests > 0);
+        Preconditions.checkArgument(maxInFlightRequests > 0);
+        Preconditions.checkArgument(maxBatchSizeInBytes > 0);
+        Preconditions.checkArgument(maxTimeInBufferMS > 0);
+        Preconditions.checkArgument(maxRecordSizeInBytes > 0);
         Preconditions.checkArgument(
-                configuration.getMaxBufferedRequests() > configuration.getMaxBatchSize(),
+                maxBufferedRequests > maxBatchSize,
                 "The maximum number of requests that may be buffered should be strictly"
                         + " greater than the maximum number of requests per batch.");
         Preconditions.checkArgument(
-                configuration.getMaxBatchSizeInBytes() >= configuration.getMaxRecordSizeInBytes(),
+                maxBatchSizeInBytes >= maxRecordSizeInBytes,
                 "The maximum allowed size in bytes per flush must be greater than or equal to the"
                         + " maximum allowed size in bytes of a single record.");
-        Preconditions.checkNotNull(configuration.getRateLimitingStrategy());
-        this.maxBatchSize = configuration.getMaxBatchSize();
-        this.maxBufferedRequests = configuration.getMaxBufferedRequests();
-        this.maxBatchSizeInBytes = configuration.getMaxBatchSizeInBytes();
-        this.maxTimeInBufferMS = configuration.getMaxTimeInBufferMS();
-        this.maxRecordSizeInBytes = configuration.getMaxRecordSizeInBytes();
-        this.rateLimitingStrategy = configuration.getRateLimitingStrategy();
+        this.maxBatchSize = maxBatchSize;
+        this.maxInFlightRequests = maxInFlightRequests;
+        this.maxBufferedRequests = maxBufferedRequests;
+        this.maxBatchSizeInBytes = maxBatchSizeInBytes;
+        this.maxTimeInBufferMS = maxTimeInBufferMS;
+        this.maxRecordSizeInBytes = maxRecordSizeInBytes;
 
         this.inFlightRequestsCount = 0;
         this.bufferedRequestEntriesTotalSizeInBytes = 0;
+
+        this.inFlightMessages = 0;
+        this.rateLimitingStrategy =
+                new AIMDRateLimitingStrategy(
+                        INFLIGHT_MESSAGES_LIMIT_INCREASE_RATE,
+                        INFLIGHT_MESSAGES_LIMIT_DECREASE_FACTOR,
+                        maxBatchSize * maxInFlightRequests,
+                        maxBatchSize * maxInFlightRequests);
 
         this.metrics = context.metricGroup();
         this.metrics.setCurrentSendTimeGauge(() -> this.ackTime - this.lastSendTimestamp);
@@ -341,65 +344,69 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
      * </ul>
      */
     private void nonBlockingFlush() throws InterruptedException {
-        while (!rateLimitingStrategy.shouldBlock(createRequestInfo())
+        while (!isInFlightRequestOrMessageLimitExceeded()
                 && (bufferedRequestEntries.size() >= getNextBatchSizeLimit()
                         || bufferedRequestEntriesTotalSizeInBytes >= maxBatchSizeInBytes)) {
             flush();
         }
     }
 
-    private BasicRequestInfo createRequestInfo() {
-        int batchSize = getNextBatchSize();
-        return new BasicRequestInfo(batchSize);
+    /**
+     * Determines if the sink should block and complete existing in flight requests before it may
+     * prudently create any new ones. This is exactly determined by if the number of requests
+     * currently in flight exceeds the maximum supported by the sink OR if the number of in flight
+     * messages exceeds the maximum determined to be appropriate by the rate limiting strategy.
+     */
+    private boolean isInFlightRequestOrMessageLimitExceeded() {
+        return inFlightRequestsCount >= maxInFlightRequests
+                || inFlightMessages >= rateLimitingStrategy.getRateLimit();
     }
 
     /**
      * Persists buffered RequestsEntries into the destination by invoking {@code
      * submitRequestEntries} with batches according to the user specified buffering hints.
      *
-     * <p>The method checks with the {@code rateLimitingStrategy} to see if it should block the
-     * request.
+     * <p>The method blocks if too many async requests are in flight.
      */
     private void flush() throws InterruptedException {
-        RequestInfo requestInfo = createRequestInfo();
-        while (rateLimitingStrategy.shouldBlock(requestInfo)) {
+        while (isInFlightRequestOrMessageLimitExceeded()) {
             mailboxExecutor.yield();
-            requestInfo = createRequestInfo();
         }
 
-        List<RequestEntryT> batch = createNextAvailableBatch(requestInfo);
+        List<RequestEntryT> batch = createNextAvailableBatch();
+        int batchSize = batch.size();
+
         if (batch.size() == 0) {
             return;
         }
 
-        int batchSize = requestInfo.getBatchSize();
-        long requestTimestamp = System.currentTimeMillis();
-        Consumer<List<RequestEntryT>> requestToRetry =
+        long timestampOfRequest = System.currentTimeMillis();
+        Consumer<List<RequestEntryT>> requestResult =
                 failedRequestEntries ->
                         mailboxExecutor.execute(
                                 () ->
                                         completeRequest(
-                                                failedRequestEntries, batchSize, requestTimestamp),
+                                                failedRequestEntries,
+                                                batchSize,
+                                                timestampOfRequest),
                                 "Mark in-flight request as completed and requeue %d request entries",
                                 failedRequestEntries.size());
-        rateLimitingStrategy.registerInFlightRequest(requestInfo);
-        inFlightRequestsCount++;
-        submitRequestEntries(batch, requestToRetry);
-    }
 
-    private int getNextBatchSize() {
-        return Math.min(getNextBatchSizeLimit(), bufferedRequestEntries.size());
+        inFlightRequestsCount++;
+        inFlightMessages += batchSize;
+        submitRequestEntries(batch, requestResult);
     }
 
     /**
      * Creates the next batch of request entries while respecting the {@code maxBatchSize} and
      * {@code maxBatchSizeInBytes}. Also adds these to the metrics counters.
      */
-    private List<RequestEntryT> createNextAvailableBatch(RequestInfo requestInfo) {
-        List<RequestEntryT> batch = new ArrayList<>(requestInfo.getBatchSize());
+    private List<RequestEntryT> createNextAvailableBatch() {
+        int batchSize = Math.min(getNextBatchSizeLimit(), bufferedRequestEntries.size());
+        List<RequestEntryT> batch = new ArrayList<>(batchSize);
 
-        long batchSizeBytes = 0;
-        for (int i = 0; i < requestInfo.getBatchSize(); i++) {
+        int batchSizeBytes = 0;
+        for (int i = 0; i < batchSize; i++) {
             long requestEntrySize = bufferedRequestEntries.peek().getSize();
             if (batchSizeBytes + requestEntrySize > maxBatchSizeInBytes) {
                 break;
@@ -429,8 +436,9 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
         ackTime = System.currentTimeMillis();
 
         inFlightRequestsCount--;
-        rateLimitingStrategy.registerCompletedRequest(
-                new BasicResultInfo(failedRequestEntries.size(), batchSize));
+        inFlightMessages -= batchSize;
+
+        updateInFlightMessagesLimit(failedRequestEntries.size() == 0);
 
         ListIterator<RequestEntryT> iterator =
                 failedRequestEntries.listIterator(failedRequestEntries.size());
@@ -438,6 +446,14 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
             addEntryToBuffer(iterator.previous(), true);
         }
         nonBlockingFlush();
+    }
+
+    private void updateInFlightMessagesLimit(boolean isSuccessfulRequest) {
+        if (isSuccessfulRequest) {
+            rateLimitingStrategy.scaleUp();
+        } else {
+            rateLimitingStrategy.scaleDown();
+        }
     }
 
     private void addEntryToBuffer(RequestEntryT entry, boolean insertAtHead) {
@@ -524,7 +540,7 @@ public abstract class AsyncSinkWriter<InputT, RequestEntryT extends Serializable
     public void close() {}
 
     private int getNextBatchSizeLimit() {
-        return Math.min(maxBatchSize, rateLimitingStrategy.getMaxBatchSize());
+        return Math.min(maxBatchSize, rateLimitingStrategy.getRateLimit());
     }
 
     protected Consumer<Exception> getFatalExceptionCons() {

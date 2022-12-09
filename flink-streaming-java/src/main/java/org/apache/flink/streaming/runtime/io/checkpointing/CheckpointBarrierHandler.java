@@ -212,4 +212,9 @@ public abstract class CheckpointBarrierHandler implements Closeable {
     protected final Clock getClock() {
         return clock;
     }
+
+    /** A handle to a delayed action which can be cancelled. */
+    interface Cancellable {
+        void cancel();
+    }
 }

@@ -22,7 +22,9 @@ import org.apache.flink.table.api.config.OptimizerConfigOptions
 import org.apache.flink.table.planner.plan.nodes.FlinkConventions
 import org.apache.flink.table.planner.plan.rules.FlinkBatchRuleSets
 
+import org.apache.calcite.plan.RelOptRules
 import org.apache.calcite.plan.hep.HepMatchOrder
+import org.apache.calcite.tools.RuleSets
 
 /** Defines a sequence of programs to optimize flink batch table plan. */
 object FlinkBatchProgram {
@@ -41,7 +43,7 @@ object FlinkBatchProgram {
   val PHYSICAL = "physical"
   val PHYSICAL_REWRITE = "physical_rewrite"
 
-  def buildProgram(tableConfig: ReadableConfig): FlinkChainedProgram[BatchOptimizeContext] = {
+  def buildProgram(config: ReadableConfig): FlinkChainedProgram[BatchOptimizeContext] = {
     val chainedProgram = new FlinkChainedProgram[BatchOptimizeContext]()
 
     chainedProgram.addLast(
@@ -183,12 +185,11 @@ object FlinkBatchProgram {
             .build(),
           "prune empty after predicate push down"
         )
-        .addProgram(new FlinkRecomputeStatisticsProgram, "recompute statistics")
         .build()
     )
 
     // join reorder
-    if (tableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED)) {
+    if (config.get(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED)) {
       chainedProgram.addLast(
         JOIN_REORDER,
         FlinkGroupProgramBuilder
@@ -252,6 +253,7 @@ object FlinkBatchProgram {
       LOGICAL,
       FlinkVolcanoProgramBuilder.newBuilder
         .add(FlinkBatchRuleSets.LOGICAL_OPT_RULES)
+        .add(RuleSets.ofList(RelOptRules.MATERIALIZATION_RULES))
         .setRequiredOutputTraits(Array(FlinkConventions.LOGICAL))
         .build()
     )

@@ -30,10 +30,10 @@ import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.IntType;
 
 /** Test for {@link ArrayDataSerializer}. */
-class ArrayDataSerializerTest {
+public class ArrayDataSerializerTest {
 
     /** Test for ArrayData with Primitive data type. */
-    static class BaseArrayWithPrimitiveTest extends SerializerTestBase<ArrayData> {
+    public static class BaseArrayWithPrimitiveTest extends SerializerTestBase<ArrayData> {
         @Override
         protected TypeSerializer<ArrayData> createSerializer() {
             return new ArrayDataSerializer(new BigIntType(), LongSerializer.INSTANCE);
@@ -56,7 +56,7 @@ class ArrayDataSerializerTest {
     }
 
     /** Test for ArrayData with ArrayData data type. */
-    static class ArrayDataWithBinaryArrayTest extends SerializerTestBase<ArrayData> {
+    public static class ArrayDataWithBinaryArrayTest extends SerializerTestBase<ArrayData> {
 
         @Override
         protected TypeSerializer<ArrayData> createSerializer() {
@@ -89,7 +89,7 @@ class ArrayDataSerializerTest {
     }
 
     /** Test for ArrayData with ArrayData data type. */
-    static class BaseArrayWithNullTest extends SerializerTestBase<ArrayData> {
+    public static class BaseArrayWithNullTest extends SerializerTestBase<ArrayData> {
 
         @Override
         protected TypeSerializer<ArrayData> createSerializer() {

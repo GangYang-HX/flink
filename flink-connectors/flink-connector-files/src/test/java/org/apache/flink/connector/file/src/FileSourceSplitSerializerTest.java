@@ -22,17 +22,19 @@ import org.apache.flink.connector.file.src.util.CheckpointedPosition;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerialization;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 
 /** Unit tests for the {@link FileSourceSplitSerializer}. */
-class FileSourceSplitSerializerTest {
+public class FileSourceSplitSerializerTest {
 
     @Test
-    void serializeSplitWithHosts() throws Exception {
+    public void serializeSplitWithHosts() throws Exception {
         final FileSourceSplit split =
                 new FileSourceSplit(
                         "random-id",
@@ -51,7 +53,7 @@ class FileSourceSplitSerializerTest {
     }
 
     @Test
-    void serializeSplitWithoutHosts() throws Exception {
+    public void serializeSplitWithoutHosts() throws Exception {
         final FileSourceSplit split =
                 new FileSourceSplit(
                         "some-id",
@@ -67,7 +69,7 @@ class FileSourceSplitSerializerTest {
     }
 
     @Test
-    void serializeSplitWithReaderPosition() throws Exception {
+    public void serializeSplitWithReaderPosition() throws Exception {
         final FileSourceSplit split =
                 new FileSourceSplit(
                         "random-id",
@@ -85,7 +87,7 @@ class FileSourceSplitSerializerTest {
     }
 
     @Test
-    void repeatedSerialization() throws Exception {
+    public void repeatedSerialization() throws Exception {
         final FileSourceSplit split =
                 new FileSourceSplit(
                         "an-id",
@@ -103,7 +105,7 @@ class FileSourceSplitSerializerTest {
     }
 
     @Test
-    void repeatedSerializationCaches() throws Exception {
+    public void repeatedSerializationCaches() throws Exception {
         final FileSourceSplit split =
                 new FileSourceSplit(
                         "random-id",
@@ -119,7 +121,7 @@ class FileSourceSplitSerializerTest {
         final byte[] ser1 = FileSourceSplitSerializer.INSTANCE.serialize(split);
         final byte[] ser2 = FileSourceSplitSerializer.INSTANCE.serialize(split);
 
-        assertThat(ser1).isSameAs(ser2);
+        assertSame(ser1, ser2);
     }
 
     // ------------------------------------------------------------------------
@@ -135,11 +137,11 @@ class FileSourceSplitSerializerTest {
     }
 
     static void assertSplitsEqual(FileSourceSplit expected, FileSourceSplit actual) {
-        assertThat(actual.splitId()).isEqualTo(expected.splitId());
-        assertThat(actual.path()).isEqualTo(expected.path());
-        assertThat(actual.offset()).isEqualTo(expected.offset());
-        assertThat(actual.length()).isEqualTo(expected.length());
-        assertThat(actual.hostnames()).isEqualTo(expected.hostnames());
-        assertThat(actual.getReaderPosition()).isEqualTo(expected.getReaderPosition());
+        assertEquals(expected.splitId(), actual.splitId());
+        assertEquals(expected.path(), actual.path());
+        assertEquals(expected.offset(), actual.offset());
+        assertEquals(expected.length(), actual.length());
+        assertArrayEquals(expected.hostnames(), actual.hostnames());
+        assertEquals(expected.getReaderPosition(), actual.getReaderPosition());
     }
 }

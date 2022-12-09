@@ -100,10 +100,11 @@ class TableAggregateTest extends TableTestBase {
     val table = util.addTableSource[(Int, Long, Long)]('a, 'b, 'c)
 
     val func = new EmptyTableAggFunc
+    util.addFunction("func", func)
 
     val resultTable = table
       .groupBy($"c")
-      .flatAggregate(func($"a"))
+      .flatAggregate("func(a)")
       .select($"*")
 
     util.verifyExecPlan(resultTable)

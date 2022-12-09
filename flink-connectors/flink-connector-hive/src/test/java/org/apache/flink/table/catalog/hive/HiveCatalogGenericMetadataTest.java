@@ -37,20 +37,21 @@ import org.apache.hadoop.hive.metastore.api.Function;
 import org.apache.hadoop.hive.metastore.api.FunctionType;
 import org.apache.hadoop.hive.metastore.api.PrincipalType;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 /** Test for HiveCatalog on generic metadata. */
-class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
+public class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
 
-    @BeforeAll
-    static void init() {
+    @BeforeClass
+    public static void init() {
         catalog = HiveTestUtils.createHiveCatalog();
         catalog.open();
     }
@@ -58,7 +59,7 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
     // ------ tables ------
 
     @Test
-    void testGenericTableSchema() throws Exception {
+    public void testGenericTableSchema() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
         TableSchema tableSchema =
@@ -80,7 +81,7 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
                     new CatalogTableImpl(tableSchema, getBatchTableProperties(), TEST_COMMENT),
                     false);
 
-            assertThat(catalog.getTable(tablePath).getSchema()).isEqualTo(tableSchema);
+            assertEquals(tableSchema, catalog.getTable(tablePath).getSchema());
         } finally {
             catalog.dropTable(tablePath, true);
         }
@@ -88,7 +89,7 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
 
     @Test
     // NOTE: Be careful to modify this test, it is important to backward compatibility
-    void testTableSchemaCompatibility() throws Exception {
+    public void testTableSchemaCompatibility() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
         try {
             // table with numeric types
@@ -120,7 +121,7 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
             hiveTable.getParameters().put("flink.generic.table.schema.7.data-type", "DOUBLE");
             ((HiveCatalog) catalog).client.createTable(hiveTable);
             CatalogBaseTable catalogBaseTable = catalog.getTable(tablePath);
-            assertThat(HiveCatalog.isHiveTable(catalogBaseTable.getOptions())).isFalse();
+            assertFalse(HiveCatalog.isHiveTable(catalogBaseTable.getOptions()));
             TableSchema expectedSchema =
                     TableSchema.builder()
                             .fields(
@@ -136,7 +137,7 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
                                     })
                             .field("cost", DataTypes.DOUBLE(), "`d` * `bi`")
                             .build();
-            assertThat(catalogBaseTable.getSchema()).isEqualTo(expectedSchema);
+            assertEquals(expectedSchema, catalogBaseTable.getSchema());
 
             // table with character types
             tablePath = new ObjectPath(db1, "generic2");
@@ -186,7 +187,7 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
                                     })
                             .field("len", DataTypes.INT(), "CHAR_LENGTH(`s`)")
                             .build();
-            assertThat(catalogBaseTable.getSchema()).isEqualTo(expectedSchema);
+            assertEquals(expectedSchema, catalogBaseTable.getSchema());
 
             // table with date/time types
             tablePath = new ObjectPath(db1, "generic3");
@@ -232,7 +233,7 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
                                     })
                             .watermark("ts", "ts", DataTypes.TIMESTAMP(3))
                             .build();
-            assertThat(catalogBaseTable.getSchema()).isEqualTo(expectedSchema);
+            assertEquals(expectedSchema, catalogBaseTable.getSchema());
 
             // table with complex/misc types
             tablePath = new ObjectPath(db1, "generic4");
@@ -292,14 +293,14 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
                                     })
                             .watermark("ts", "`ts` - INTERVAL '5' SECOND", DataTypes.TIMESTAMP(3))
                             .build();
-            assertThat(catalogBaseTable.getSchema()).isEqualTo(expectedSchema);
+            assertEquals(expectedSchema, catalogBaseTable.getSchema());
         } finally {
             catalog.dropDatabase(db1, true, true);
         }
     }
 
     @Test
-    void testFunctionCompatibility() throws Exception {
+    public void testFunctionCompatibility() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
         // create a function with old prefix 'flink:' and make sure we can properly retrieve it
         ((HiveCatalog) catalog)
@@ -314,12 +315,12 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
                                 FunctionType.JAVA,
                                 new ArrayList<>()));
         CatalogFunction catalogFunction = catalog.getFunction(path1);
-        assertThat(catalogFunction.getClassName()).isEqualTo("class.name");
-        assertThat(catalogFunction.getFunctionLanguage()).isEqualTo(FunctionLanguage.JAVA);
+        assertEquals("class.name", catalogFunction.getClassName());
+        assertEquals(FunctionLanguage.JAVA, catalogFunction.getFunctionLanguage());
     }
 
     @Test
-    void testGenericTableWithoutConnectorProp() throws Exception {
+    public void testGenericTableWithoutConnectorProp() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
         TableSchema tableSchema =
                 TableSchema.builder()
@@ -331,38 +332,38 @@ class HiveCatalogGenericMetadataTest extends HiveCatalogMetadataTestBase {
         CatalogTable catalogTable = new CatalogTableImpl(tableSchema, Collections.emptyMap(), null);
         catalog.createTable(path1, catalogTable, false);
         CatalogTable retrievedTable = (CatalogTable) catalog.getTable(path1);
-        assertThat(retrievedTable.getSchema()).isEqualTo(tableSchema);
-        assertThat(retrievedTable.getOptions()).isEmpty();
+        assertEquals(tableSchema, retrievedTable.getSchema());
+        assertEquals(Collections.emptyMap(), retrievedTable.getOptions());
     }
 
     // ------ functions ------
 
     @Test
-    void testFunctionWithNonExistClass() throws Exception {
+    public void testFunctionWithNonExistClass() throws Exception {
         // to make sure hive catalog doesn't check function class
         catalog.createDatabase(db1, createDb(), false);
         CatalogFunction catalogFunction =
                 new CatalogFunctionImpl("non.exist.scala.class", FunctionLanguage.SCALA);
         catalog.createFunction(path1, catalogFunction, false);
-        assertThat(catalog.getFunction(path1).getClassName())
-                .isEqualTo(catalogFunction.getClassName());
-        assertThat(catalog.getFunction(path1).getFunctionLanguage())
-                .isEqualTo(catalogFunction.getFunctionLanguage());
+        assertEquals(catalogFunction.getClassName(), catalog.getFunction(path1).getClassName());
+        assertEquals(
+                catalogFunction.getFunctionLanguage(),
+                catalog.getFunction(path1).getFunctionLanguage());
         // alter the function
         catalogFunction = new CatalogFunctionImpl("non.exist.java.class", FunctionLanguage.JAVA);
         catalog.alterFunction(path1, catalogFunction, false);
-        assertThat(catalog.getFunction(path1).getClassName())
-                .isEqualTo(catalogFunction.getClassName());
-        assertThat(catalog.getFunction(path1).getFunctionLanguage())
-                .isEqualTo(catalogFunction.getFunctionLanguage());
+        assertEquals(catalogFunction.getClassName(), catalog.getFunction(path1).getClassName());
+        assertEquals(
+                catalogFunction.getFunctionLanguage(),
+                catalog.getFunction(path1).getFunctionLanguage());
 
         catalogFunction =
                 new CatalogFunctionImpl("non.exist.python.class", FunctionLanguage.PYTHON);
         catalog.alterFunction(path1, catalogFunction, false);
-        assertThat(catalog.getFunction(path1).getClassName())
-                .isEqualTo(catalogFunction.getClassName());
-        assertThat(catalog.getFunction(path1).getFunctionLanguage())
-                .isEqualTo(catalogFunction.getFunctionLanguage());
+        assertEquals(catalogFunction.getClassName(), catalog.getFunction(path1).getClassName());
+        assertEquals(
+                catalogFunction.getFunctionLanguage(),
+                catalog.getFunction(path1).getFunctionLanguage());
     }
 
     // ------ partitions ------

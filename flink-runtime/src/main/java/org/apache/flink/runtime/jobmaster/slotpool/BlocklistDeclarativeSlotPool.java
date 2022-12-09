@@ -104,7 +104,7 @@ public class BlocklistDeclarativeSlotPool extends DefaultDeclarativeSlotPool {
             }
         }
 
-        log.debug(
+        LOG.debug(
                 "Received {} slots from a blocked TaskManager {}, {} was accepted before: {}, {} was rejected: {}.",
                 offers.size(),
                 taskManagerLocation,
@@ -129,7 +129,7 @@ public class BlocklistDeclarativeSlotPool extends DefaultDeclarativeSlotPool {
         if (!isBlockedTaskManager(taskManagerId)) {
             return super.freeReservedSlot(allocationId, cause, currentTime);
         } else {
-            log.debug("Free reserved slot {}.", allocationId);
+            LOG.debug("Free reserved slot {}.", allocationId);
             return releaseSlot(
                     allocationId,
                     new FlinkRuntimeException(

@@ -28,8 +28,11 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.utils.DataTypeUtils;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.ExceptionUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,19 +47,23 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.connector.testutils.formats.SchemaTestUtils.open;
 import static org.apache.flink.table.api.DataTypes.FIELD;
 import static org.apache.flink.table.api.DataTypes.FLOAT;
 import static org.apache.flink.table.api.DataTypes.INT;
 import static org.apache.flink.table.api.DataTypes.ROW;
 import static org.apache.flink.table.api.DataTypes.STRING;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.startsWith;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for {@link DebeziumJsonSerializationSchema} and {@link DebeziumJsonDeserializationSchema}.
  */
-class DebeziumJsonSerDeSchemaTest {
+public class DebeziumJsonSerDeSchemaTest {
+
+    @Rule public ExpectedException thrown = ExpectedException.none();
 
     private static final DataType PHYSICAL_DATA_TYPE =
             ROW(
@@ -66,39 +73,41 @@ class DebeziumJsonSerDeSchemaTest {
                     FIELD("weight", FLOAT()));
 
     @Test
-    void testSerializationAndSchemaIncludeDeserialization() throws Exception {
+    public void testSerializationAndSchemaIncludeDeserialization() throws Exception {
         testSerializationDeserialization("debezium-data-schema-include.txt", true);
     }
 
     @Test
-    void testSerializationAndSchemaExcludeDeserialization() throws Exception {
+    public void testSerializationAndSchemaExcludeDeserialization() throws Exception {
         testSerializationDeserialization("debezium-data-schema-exclude.txt", false);
     }
 
     @Test
-    void testSerializationAndPostgresSchemaIncludeDeserialization() throws Exception {
+    public void testSerializationAndPostgresSchemaIncludeDeserialization() throws Exception {
         testSerializationDeserialization("debezium-postgres-data-schema-include.txt", true);
     }
 
     @Test
-    void testSerializationAndPostgresSchemaExcludeDeserialization() throws Exception {
+    public void testSerializationAndPostgresSchemaExcludeDeserialization() throws Exception {
         testSerializationDeserialization("debezium-postgres-data-schema-exclude.txt", false);
     }
 
     @Test
-    void testPostgresDefaultReplicaIdentify() {
-        assertThatThrownBy(
-                        () ->
-                                testSerializationDeserialization(
-                                        "debezium-postgres-data-replica-identity.txt", false))
-                .as(
-                        "The \"before\" field of UPDATE message is null, if you are using Debezium Postgres Connector, "
-                                + "please check the Postgres table has been set REPLICA IDENTITY to FULL level.")
-                .isInstanceOf(Exception.class);
+    public void testPostgresDefaultReplicaIdentify() {
+        try {
+            testSerializationDeserialization("debezium-postgres-data-replica-identity.txt", false);
+        } catch (Exception e) {
+            assertTrue(
+                    ExceptionUtils.findThrowableWithMessage(
+                                    e,
+                                    "The \"before\" field of UPDATE message is null, if you are using Debezium Postgres Connector, "
+                                            + "please check the Postgres table has been set REPLICA IDENTITY to FULL level.")
+                            .isPresent());
+        }
     }
 
     @Test
-    void testTombstoneMessages() throws Exception {
+    public void testTombstoneMessages() throws Exception {
         DebeziumJsonDeserializationSchema deserializationSchema =
                 new DebeziumJsonDeserializationSchema(
                         PHYSICAL_DATA_TYPE,
@@ -110,62 +119,63 @@ class DebeziumJsonSerDeSchemaTest {
         SimpleCollector collector = new SimpleCollector();
         deserializationSchema.deserialize(null, collector);
         deserializationSchema.deserialize(new byte[] {}, collector);
-        assertThat(collector.list).isEmpty();
+        assertTrue(collector.list.isEmpty());
     }
 
     @Test
-    void testDeserializationWithMetadata() throws Exception {
+    public void testDeserializationWithMetadata() throws Exception {
         testDeserializationWithMetadata(
                 "debezium-data-schema-include.txt",
                 true,
                 row -> {
-                    assertThat(row.getInt(0)).isEqualTo(101);
-                    assertThat(row.getString(1).toString()).isEqualTo("scooter");
-                    assertThat(row.getString(2).toString()).isEqualTo("Small 2-wheel scooter");
-                    assertThat(row.getFloat(3)).isEqualTo(3.14f);
-                    assertThat(row.getString(4).toString())
-                            .startsWith(
-                                    "{\"type\":\"struct\",\"fields\":[{\"type\":\"struct\",\"fields\":[{\"type\":\"int32\",\"optional\":false,\"field\":\"id\"},");
-                    assertThat(row.getTimestamp(5, 3).getMillisecond()).isEqualTo(1589355606100L);
-                    assertThat(row.getTimestamp(6, 3).getMillisecond()).isEqualTo(0L);
-                    assertThat(row.getString(7).toString()).isEqualTo("inventory");
-                    assertThat(row.isNullAt(8)).isEqualTo(true);
-                    assertThat(row.getString(9).toString()).isEqualTo("products");
-                    assertThat(row.getMap(10).size()).isEqualTo(14);
+                    assertThat(row.getInt(0), equalTo(101));
+                    assertThat(row.getString(1).toString(), equalTo("scooter"));
+                    assertThat(row.getString(2).toString(), equalTo("Small 2-wheel scooter"));
+                    assertThat(row.getFloat(3), equalTo(3.14f));
+                    assertThat(
+                            row.getString(4).toString(),
+                            startsWith(
+                                    "{\"type\":\"struct\",\"fields\":[{\"type\":\"struct\",\"fields\":[{\"type\":\"int32\",\"optional\":false,\"field\":\"id\"},"));
+                    assertThat(row.getTimestamp(5, 3).getMillisecond(), equalTo(1589355606100L));
+                    assertThat(row.getTimestamp(6, 3).getMillisecond(), equalTo(0L));
+                    assertThat(row.getString(7).toString(), equalTo("inventory"));
+                    assertThat(row.isNullAt(8), equalTo(true));
+                    assertThat(row.getString(9).toString(), equalTo("products"));
+                    assertThat(row.getMap(10).size(), equalTo(14));
                 });
 
         testDeserializationWithMetadata(
                 "debezium-data-schema-exclude.txt",
                 false,
                 row -> {
-                    assertThat(row.getInt(0)).isEqualTo(101);
-                    assertThat(row.getString(1).toString()).isEqualTo("scooter");
-                    assertThat(row.getString(2).toString()).isEqualTo("Small 2-wheel scooter");
-                    assertThat(row.getFloat(3)).isEqualTo(3.14f);
-                    assertThat(row.isNullAt(4)).isEqualTo(true);
-                    assertThat(row.getTimestamp(5, 3).getMillisecond()).isEqualTo(1589355606100L);
-                    assertThat(row.getTimestamp(6, 3).getMillisecond()).isEqualTo(0L);
-                    assertThat(row.getString(7).toString()).isEqualTo("inventory");
-                    assertThat(row.isNullAt(8)).isEqualTo(true);
-                    assertThat(row.getString(9).toString()).isEqualTo("products");
-                    assertThat(row.getMap(10).size()).isEqualTo(14);
+                    assertThat(row.getInt(0), equalTo(101));
+                    assertThat(row.getString(1).toString(), equalTo("scooter"));
+                    assertThat(row.getString(2).toString(), equalTo("Small 2-wheel scooter"));
+                    assertThat(row.getFloat(3), equalTo(3.14f));
+                    assertThat(row.isNullAt(4), equalTo(true));
+                    assertThat(row.getTimestamp(5, 3).getMillisecond(), equalTo(1589355606100L));
+                    assertThat(row.getTimestamp(6, 3).getMillisecond(), equalTo(0L));
+                    assertThat(row.getString(7).toString(), equalTo("inventory"));
+                    assertThat(row.isNullAt(8), equalTo(true));
+                    assertThat(row.getString(9).toString(), equalTo("products"));
+                    assertThat(row.getMap(10).size(), equalTo(14));
                 });
 
         testDeserializationWithMetadata(
                 "debezium-postgres-data-schema-exclude.txt",
                 false,
                 row -> {
-                    assertThat(row.getInt(0)).isEqualTo(101);
-                    assertThat(row.getString(1).toString()).isEqualTo("scooter");
-                    assertThat(row.getString(2).toString()).isEqualTo("Small 2-wheel scooter");
-                    assertThat(row.getFloat(3)).isEqualTo(3.14f);
-                    assertThat(row.isNullAt(4)).isEqualTo(true);
-                    assertThat(row.getTimestamp(5, 3).getMillisecond()).isEqualTo(1596001099434L);
-                    assertThat(row.getTimestamp(6, 3).getMillisecond()).isEqualTo(1596001099434L);
-                    assertThat(row.getString(7).toString()).isEqualTo("postgres");
-                    assertThat(row.getString(8).toString()).isEqualTo("inventory");
-                    assertThat(row.getString(9).toString()).isEqualTo("products");
-                    assertThat(row.getMap(10).size()).isEqualTo(11);
+                    assertThat(row.getInt(0), equalTo(101));
+                    assertThat(row.getString(1).toString(), equalTo("scooter"));
+                    assertThat(row.getString(2).toString(), equalTo("Small 2-wheel scooter"));
+                    assertThat(row.getFloat(3), equalTo(3.14f));
+                    assertThat(row.isNullAt(4), equalTo(true));
+                    assertThat(row.getTimestamp(5, 3).getMillisecond(), equalTo(1596001099434L));
+                    assertThat(row.getTimestamp(6, 3).getMillisecond(), equalTo(1596001099434L));
+                    assertThat(row.getString(7).toString(), equalTo("postgres"));
+                    assertThat(row.getString(8).toString(), equalTo("inventory"));
+                    assertThat(row.getString(9).toString(), equalTo("products"));
+                    assertThat(row.getMap(10).size(), equalTo(11));
                 });
     }
 
@@ -180,7 +190,6 @@ class DebeziumJsonSerDeSchemaTest {
                         schemaInclude,
                         false,
                         TimestampFormat.ISO_8601);
-        open(deserializationSchema);
 
         SimpleCollector collector = new SimpleCollector();
         for (String line : lines) {
@@ -241,7 +250,7 @@ class DebeziumJsonSerDeSchemaTest {
                         "-D(111,scooter,Big 2-wheel scooter ,5.17)");
         List<String> actual =
                 collector.list.stream().map(Object::toString).collect(Collectors.toList());
-        assertThat(actual).isEqualTo(expected);
+        assertEquals(expected, actual);
 
         DebeziumJsonSerializationSchema serializationSchema =
                 new DebeziumJsonSerializationSchema(
@@ -251,7 +260,7 @@ class DebeziumJsonSerDeSchemaTest {
                         "null",
                         true);
 
-        open(serializationSchema);
+        serializationSchema.open(null);
         actual = new ArrayList<>();
         for (RowData rowData : collector.list) {
             actual.add(new String(serializationSchema.serialize(rowData), StandardCharsets.UTF_8));
@@ -279,7 +288,7 @@ class DebeziumJsonSerDeSchemaTest {
                         "{\"before\":{\"id\":111,\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter \",\"weight\":5.18},\"after\":null,\"op\":\"d\"}",
                         "{\"before\":null,\"after\":{\"id\":111,\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter \",\"weight\":5.17},\"op\":\"c\"}",
                         "{\"before\":{\"id\":111,\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter \",\"weight\":5.17},\"after\":null,\"op\":\"d\"}");
-        assertThat(actual).isEqualTo(expected);
+        assertEquals(expected, actual);
     }
 
     private void testDeserializationWithMetadata(
@@ -305,13 +314,12 @@ class DebeziumJsonSerDeSchemaTest {
                         schemaInclude,
                         false,
                         TimestampFormat.ISO_8601);
-        open(deserializationSchema);
 
         final SimpleCollector collector = new SimpleCollector();
         deserializationSchema.deserialize(firstLine.getBytes(StandardCharsets.UTF_8), collector);
 
-        assertThat(collector.list).hasSize(1);
-        assertThat(collector.list.get(0)).satisfies(testConsumer);
+        assertEquals(1, collector.list.size());
+        testConsumer.accept(collector.list.get(0));
     }
 
     // --------------------------------------------------------------------------------------------

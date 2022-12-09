@@ -59,7 +59,6 @@ public class UnboundedOverWindowFrame implements OverWindowFrame {
 
     @Override
     public void prepare(ResettableExternalBuffer rows) throws Exception {
-        processor.setWindowSize(rows.size());
         // cleanup the retired accumulators value
         processor.setAccumulators(processor.createAccumulators());
         ResettableExternalBuffer.BufferIterator iterator = rows.newIterator();

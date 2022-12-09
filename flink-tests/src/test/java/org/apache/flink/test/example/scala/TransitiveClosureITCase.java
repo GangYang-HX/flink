@@ -26,8 +26,6 @@ import org.apache.flink.test.util.JavaProgramTestBase;
 
 import java.io.BufferedReader;
 
-import static org.apache.flink.test.util.TestBaseUtils.getResultReader;
-
 /** Test for {@link TransitiveClosureNaive}. */
 public class TransitiveClosureITCase extends JavaProgramTestBase {
 

@@ -73,4 +73,9 @@ public class FsCompletedCheckpointStorageLocation implements CompletedCheckpoint
         }
         fs.delete(exclusiveCheckpointDir, false);
     }
+
+    @Override
+    public String getMetadataFileFullPath() {
+        return metadataFileHandle.getFilePath().getPath();
+    }
 }

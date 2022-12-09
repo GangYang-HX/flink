@@ -25,7 +25,7 @@ import org.apache.flink.types.CharValue;
 import java.util.Random;
 
 /** A test for the {@link CharValueArraySerializer}. */
-class CharValueArraySerializerTest extends ValueArraySerializerTestBase<CharValueArray> {
+public class CharValueArraySerializerTest extends ValueArraySerializerTestBase<CharValueArray> {
 
     @Override
     protected TypeSerializer<CharValueArray> createSerializer() {

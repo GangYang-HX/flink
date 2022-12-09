@@ -21,7 +21,6 @@ import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
-import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
 import org.apache.flink.runtime.client.JobExecutionException;
@@ -30,20 +29,20 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.datagen.DataGeneratorSource;
 import org.apache.flink.streaming.api.functions.source.datagen.RandomGenerator;
 import org.apache.flink.util.DockerImageVersions;
+import org.apache.flink.util.TestLogger;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Test;
 import org.rnorth.ducttape.ratelimits.RateLimiter;
 import org.rnorth.ducttape.ratelimits.RateLimiterBuilder;
 import org.testcontainers.containers.Network;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.core.SdkSystemSetting;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -64,8 +63,7 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.HTTP_PROT
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.TRUST_ALL_CERTIFICATES;
 
 /** IT cases for using Kinesis Data Streams Sink based on Kinesalite. */
-@Testcontainers
-class KinesisStreamsSinkITCase {
+public class KinesisStreamsSinkITCase extends TestLogger {
 
     private static final String DEFAULT_FIRST_SHARD_NAME = "shardId-000000000000";
 
@@ -74,35 +72,36 @@ class KinesisStreamsSinkITCase {
             element -> String.valueOf(element.hashCode());
     private final PartitionKeyGenerator<String> longPartitionKeyGenerator = element -> element;
 
-    @Container
-    private static final KinesaliteContainer KINESALITE =
+    @ClassRule
+    public static final KinesaliteContainer KINESALITE =
             new KinesaliteContainer(DockerImageName.parse(DockerImageVersions.KINESALITE))
                     .withNetwork(Network.newNetwork())
                     .withNetworkAliases("kinesalite");
 
     private StreamExecutionEnvironment env;
-    private SdkHttpClient httpClient;
-    private KinesisClient kinesisClient;
+    private SdkAsyncHttpClient httpClient;
+    private KinesisAsyncClient kinesisClient;
 
-    @BeforeEach
-    void setUp() {
+    @Before
+    public void setUp() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
 
         env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
 
-        httpClient = AWSServicesTestUtils.createHttpClient();
+        httpClient = KINESALITE.buildSdkAsyncHttpClient();
         kinesisClient = KINESALITE.createHostClient(httpClient);
     }
 
-    @AfterEach
-    void teardown() {
+    @After
+    public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
         AWSGeneralUtil.closeResources(httpClient, kinesisClient);
     }
 
     @Test
-    void elementsMaybeWrittenSuccessfullyToLocalInstanceWhenBatchSizeIsReached() throws Exception {
+    public void elementsMaybeWrittenSuccessfullyToLocalInstanceWhenBatchSizeIsReached()
+            throws Exception {
 
         new Scenario()
                 .withKinesaliteStreamName("test-stream-name-1")
@@ -111,7 +110,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void elementsBufferedAndTriggeredByTimeBasedFlushShouldBeFlushedIfSourcedIsKeptAlive()
+    public void elementsBufferedAndTriggeredByTimeBasedFlushShouldBeFlushedIfSourcedIsKeptAlive()
             throws Exception {
 
         new Scenario()
@@ -124,7 +123,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void veryLargeMessagesSucceedInBeingPersisted() throws Exception {
+    public void veryLargeMessagesSucceedInBeingPersisted() throws Exception {
 
         new Scenario()
                 .withNumberOfElementsToSend(5)
@@ -137,7 +136,8 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void multipleInFlightRequestsResultsInCorrectNumberOfElementsPersisted() throws Exception {
+    public void multipleInFlightRequestsResultsInCorrectNumberOfElementsPersisted()
+            throws Exception {
 
         new Scenario()
                 .withNumberOfElementsToSend(150)
@@ -152,12 +152,12 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void nonExistentStreamNameShouldResultInFailureInFailOnErrorIsOn() {
+    public void nonExistentStreamNameShouldResultInFailureInFailOnErrorIsOn() {
         testJobFatalFailureTerminatesCorrectlyWithFailOnErrorFlagSetTo(true, "test-stream-name-5");
     }
 
     @Test
-    void nonExistentStreamNameShouldResultInFailureInFailOnErrorIsOff() {
+    public void nonExistentStreamNameShouldResultInFailureInFailOnErrorIsOff() {
         testJobFatalFailureTerminatesCorrectlyWithFailOnErrorFlagSetTo(false, "test-stream-name-6");
     }
 
@@ -177,7 +177,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void veryLargeMessagesFailGracefullyWithBrokenElementConverter() {
+    public void veryLargeMessagesFailGracefullyWithBrokenElementConverter() {
         Assertions.assertThatExceptionOfType(JobExecutionException.class)
                 .isThrownBy(
                         () ->
@@ -197,12 +197,12 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void badRegionShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void badRegionShouldResultInFailureWhenInFailOnErrorIsOn() {
         badRegionShouldResultInFailureWhenInFailOnErrorIs(true);
     }
 
     @Test
-    void badRegionShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void badRegionShouldResultInFailureWhenInFailOnErrorIsOff() {
         badRegionShouldResultInFailureWhenInFailOnErrorIs(false);
     }
 
@@ -215,12 +215,12 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void missingRegionShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void missingRegionShouldResultInFailureWhenInFailOnErrorIsOn() {
         missingRegionShouldResultInFailureWhenInFailOnErrorIs(true);
     }
 
     @Test
-    void missingRegionShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void missingRegionShouldResultInFailureWhenInFailOnErrorIsOff() {
         missingRegionShouldResultInFailureWhenInFailOnErrorIs(false);
     }
 
@@ -232,12 +232,12 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void noURIEndpointShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void noURIEndpointShouldResultInFailureWhenInFailOnErrorIsOn() {
         noURIEndpointShouldResultInFailureWhenInFailOnErrorIs(true);
     }
 
     @Test
-    void noURIEndpointShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void noURIEndpointShouldResultInFailureWhenInFailOnErrorIsOff() {
         noURIEndpointShouldResultInFailureWhenInFailOnErrorIs(false);
     }
 
@@ -249,12 +249,12 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void badEndpointShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void badEndpointShouldResultInFailureWhenInFailOnErrorIsOn() {
         badEndpointShouldResultInFailureWhenInFailOnErrorIs(true);
     }
 
     @Test
-    void badEndpointShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void badEndpointShouldResultInFailureWhenInFailOnErrorIsOff() {
         badEndpointShouldResultInFailureWhenInFailOnErrorIs(false);
     }
 
@@ -268,7 +268,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void envVarWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void envVarWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 true,
                 AWSConfigConstants.CredentialProvider.ENV_VAR.toString(),
@@ -276,7 +276,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void envVarWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void envVarWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 false,
                 AWSConfigConstants.CredentialProvider.ENV_VAR.toString(),
@@ -284,7 +284,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void sysPropWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void sysPropWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 true,
                 AWSConfigConstants.CredentialProvider.SYS_PROP.toString(),
@@ -292,7 +292,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void sysPropWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void sysPropWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 false,
                 AWSConfigConstants.CredentialProvider.SYS_PROP.toString(),
@@ -300,7 +300,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void basicWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void basicWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 true,
                 AWSConfigConstants.CredentialProvider.BASIC.toString(),
@@ -308,7 +308,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void basicWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void basicWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 false,
                 AWSConfigConstants.CredentialProvider.BASIC.toString(),
@@ -316,7 +316,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void webIdentityTokenWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void webIdentityTokenWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 true,
                 AWSConfigConstants.CredentialProvider.WEB_IDENTITY_TOKEN.toString(),
@@ -324,7 +324,7 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void webIdentityTokenWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void webIdentityTokenWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 false,
                 AWSConfigConstants.CredentialProvider.WEB_IDENTITY_TOKEN.toString(),
@@ -332,13 +332,13 @@ class KinesisStreamsSinkITCase {
     }
 
     @Test
-    void wrongCredentialProviderNameShouldResultInFailureWhenInFailOnErrorIsOn() {
+    public void wrongCredentialProviderNameShouldResultInFailureWhenInFailOnErrorIsOn() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 true, "WRONG", "Invalid AWS Credential Provider Type");
     }
 
     @Test
-    void wrongCredentialProviderNameShouldResultInFailureWhenInFailOnErrorIsOff() {
+    public void wrongCredentialProviderNameShouldResultInFailureWhenInFailOnErrorIsOff() {
         noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
                 false, "WRONG", "Invalid AWS Credential Provider Type");
     }
@@ -456,6 +456,7 @@ class KinesisStreamsSinkITCase {
                                             .shardIteratorType(ShardIteratorType.TRIM_HORIZON)
                                             .streamName(kinesaliteStreamName)
                                             .build())
+                            .get()
                             .shardIterator();
 
             Assertions.assertThat(
@@ -464,6 +465,7 @@ class KinesisStreamsSinkITCase {
                                             GetRecordsRequest.builder()
                                                     .shardIterator(shardIterator)
                                                     .build())
+                                    .get()
                                     .records()
                                     .size())
                     .isEqualTo(expectedElements);
@@ -537,8 +539,13 @@ class KinesisStreamsSinkITCase {
                             .withConstantThroughput()
                             .build();
 
-            kinesisClient.createStream(
-                    CreateStreamRequest.builder().streamName(streamName).shardCount(1).build());
+            kinesisClient
+                    .createStream(
+                            CreateStreamRequest.builder()
+                                    .streamName(streamName)
+                                    .shardCount(1)
+                                    .build())
+                    .get();
 
             Deadline deadline = Deadline.fromNow(Duration.ofMinutes(1));
             while (!rateLimiter.getWhenReady(() -> streamExists(streamName))) {
@@ -555,6 +562,7 @@ class KinesisStreamsSinkITCase {
                                         DescribeStreamRequest.builder()
                                                 .streamName(streamName)
                                                 .build())
+                                .get()
                                 .streamDescription()
                                 .streamStatus()
                         == StreamStatus.ACTIVE;

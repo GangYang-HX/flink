@@ -131,64 +131,9 @@ public abstract class AbstractKeyedStateBackend<K>
             CloseableRegistry cancelStreamRegistry,
             StreamCompressionDecorator keyGroupCompressionDecorator,
             InternalKeyContext<K> keyContext) {
-        this(
-                kvStateRegistry,
-                keySerializer,
-                userCodeClassLoader,
-                executionConfig,
-                ttlTimeProvider,
-                latencyTrackingStateConfig,
-                cancelStreamRegistry,
-                keyGroupCompressionDecorator,
-                Preconditions.checkNotNull(keyContext),
-                keyContext.getNumberOfKeyGroups(),
-                keyContext.getKeyGroupRange(),
-                new HashMap<>(),
-                new ArrayList<>(1),
-                null,
-                null);
-    }
-
-    // Copy constructor
-    protected AbstractKeyedStateBackend(AbstractKeyedStateBackend<K> abstractKeyedStateBackend) {
-        this(
-                abstractKeyedStateBackend.kvStateRegistry,
-                abstractKeyedStateBackend.keySerializer,
-                abstractKeyedStateBackend.userCodeClassLoader,
-                abstractKeyedStateBackend.executionConfig,
-                abstractKeyedStateBackend.ttlTimeProvider,
-                abstractKeyedStateBackend.latencyTrackingStateConfig,
-                abstractKeyedStateBackend.cancelStreamRegistry,
-                abstractKeyedStateBackend.keyGroupCompressionDecorator,
-                abstractKeyedStateBackend.keyContext,
-                abstractKeyedStateBackend.numberOfKeyGroups,
-                abstractKeyedStateBackend.keyGroupRange,
-                abstractKeyedStateBackend.keyValueStatesByName,
-                abstractKeyedStateBackend.keySelectionListeners,
-                abstractKeyedStateBackend.lastState,
-                abstractKeyedStateBackend.lastName);
-    }
-
-    @SuppressWarnings("rawtypes")
-    private AbstractKeyedStateBackend(
-            TaskKvStateRegistry kvStateRegistry,
-            TypeSerializer<K> keySerializer,
-            ClassLoader userCodeClassLoader,
-            ExecutionConfig executionConfig,
-            TtlTimeProvider ttlTimeProvider,
-            LatencyTrackingStateConfig latencyTrackingStateConfig,
-            CloseableRegistry cancelStreamRegistry,
-            StreamCompressionDecorator keyGroupCompressionDecorator,
-            InternalKeyContext<K> keyContext,
-            int numberOfKeyGroups,
-            KeyGroupRange keyGroupRange,
-            HashMap<String, InternalKvState<K, ?, ?>> keyValueStatesByName,
-            ArrayList<KeySelectionListener<K>> keySelectionListeners,
-            InternalKvState lastState,
-            String lastName) {
         this.keyContext = Preconditions.checkNotNull(keyContext);
-        this.numberOfKeyGroups = numberOfKeyGroups;
-        this.keyGroupRange = Preconditions.checkNotNull(keyGroupRange);
+        this.numberOfKeyGroups = keyContext.getNumberOfKeyGroups();
+        this.keyGroupRange = Preconditions.checkNotNull(keyContext.getKeyGroupRange());
         Preconditions.checkArgument(
                 numberOfKeyGroups >= 1, "NumberOfKeyGroups must be a positive number");
         Preconditions.checkArgument(
@@ -202,14 +147,12 @@ public abstract class AbstractKeyedStateBackend<K>
         this.keySerializer = keySerializer;
         this.userCodeClassLoader = Preconditions.checkNotNull(userCodeClassLoader);
         this.cancelStreamRegistry = cancelStreamRegistry;
-        this.keyValueStatesByName = keyValueStatesByName;
+        this.keyValueStatesByName = new HashMap<>();
         this.executionConfig = executionConfig;
         this.keyGroupCompressionDecorator = keyGroupCompressionDecorator;
         this.ttlTimeProvider = Preconditions.checkNotNull(ttlTimeProvider);
         this.latencyTrackingStateConfig = Preconditions.checkNotNull(latencyTrackingStateConfig);
-        this.keySelectionListeners = keySelectionListeners;
-        this.lastState = lastState;
-        this.lastName = lastName;
+        this.keySelectionListeners = new ArrayList<>(1);
     }
 
     private static StreamCompressionDecorator determineStreamCompression(

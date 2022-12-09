@@ -27,7 +27,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
-/** {@link EncodingFormat} for protobuf encoding. */
+/** {@link org.apache.flink.table.connector.format.EncodingFormat} for protobuf encoding. */
 public class PbEncodingFormat implements EncodingFormat<SerializationSchema<RowData>> {
     private final PbFormatConfig pbFormatConfig;
 

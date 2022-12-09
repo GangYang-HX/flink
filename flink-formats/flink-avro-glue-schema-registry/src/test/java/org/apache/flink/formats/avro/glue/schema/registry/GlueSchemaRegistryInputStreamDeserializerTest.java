@@ -19,6 +19,7 @@
 package org.apache.flink.formats.avro.glue.schema.registry;
 
 import org.apache.flink.formats.avro.utils.MutableByteArrayInputStream;
+import org.apache.flink.util.TestLogger;
 
 import com.amazonaws.services.schemaregistry.common.GlueSchemaRegistryCompressionHandler;
 import com.amazonaws.services.schemaregistry.common.GlueSchemaRegistryDefaultCompression;
@@ -32,8 +33,10 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumWriter;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.glue.model.DataFormat;
@@ -52,10 +55,9 @@ import static com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConst
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ACCESS_KEY_ID;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_SECRET_ACCESS_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link GlueSchemaRegistryInputStreamDeserializer}. */
-class GlueSchemaRegistryInputStreamDeserializerTest {
+public class GlueSchemaRegistryInputStreamDeserializerTest extends TestLogger {
     private static final String testTopic = "Test-Topic";
     private static final UUID USER_SCHEMA_VERSION_ID = UUID.randomUUID();
     private static final String AVRO_USER_SCHEMA_FILE = "src/test/java/resources/avro/user.avsc";
@@ -68,10 +70,11 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
     private static GlueSchemaRegistryCompressionHandler compressionHandler;
     private static final AwsCredentialsProvider credentialsProvider =
             DefaultCredentialsProvider.builder().build();
+    @Rule public ExpectedException thrown = ExpectedException.none();
     private GlueSchemaRegistryDeserializationFacade glueSchemaRegistryDeserializationFacade;
 
-    @BeforeEach
-    void setup() throws IOException {
+    @Before
+    public void setup() throws IOException {
         metadata.put("test-key", "test-value");
         metadata.put(AWSSchemaRegistryConstants.TRANSPORT_METADATA_KEY, testTopic);
 
@@ -94,7 +97,7 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
 
     /** Test whether constructor works with configuration map. */
     @Test
-    void testConstructor_withConfigs_succeeds() {
+    public void testConstructor_withConfigs_succeeds() {
         GlueSchemaRegistryInputStreamDeserializer glueSchemaRegistryInputStreamDeserializer =
                 new GlueSchemaRegistryInputStreamDeserializer(configs);
         assertThat(glueSchemaRegistryInputStreamDeserializer)
@@ -102,7 +105,7 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
     }
 
     @Test
-    void testDefaultAwsCredentialsProvider() throws Exception {
+    public void testDefaultAwsCredentialsProvider() throws Exception {
         GlueSchemaRegistryInputStreamDeserializer glueSchemaRegistryInputStreamDeserializer =
                 new GlueSchemaRegistryInputStreamDeserializer(configs);
 
@@ -116,7 +119,7 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
     }
 
     @Test
-    void testAwsCredentialsProviderFromConfig() throws Exception {
+    public void testAwsCredentialsProviderFromConfig() throws Exception {
         Map<String, Object> config = new HashMap<>(configs);
         config.put(AWS_ACCESS_KEY_ID, "ak");
         config.put(AWS_SECRET_ACCESS_KEY, "sk");
@@ -136,7 +139,7 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
 
     /** Test whether constructor works with AWS de-serializer input. */
     @Test
-    void testConstructor_withDeserializer_succeeds() {
+    public void testConstructor_withDeserializer_succeeds() {
         GlueSchemaRegistryInputStreamDeserializer glueSchemaRegistryInputStreamDeserializer =
                 new GlueSchemaRegistryInputStreamDeserializer(
                         glueSchemaRegistryDeserializationFacade);
@@ -146,7 +149,8 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
 
     /** Test whether getSchemaAndDeserializedStream method when compression is not enabled works. */
     @Test
-    void testGetSchemaAndDeserializedStream_withoutCompression_succeeds() throws IOException {
+    public void testGetSchemaAndDeserializedStream_withoutCompression_succeeds()
+            throws IOException {
         compressionByte = COMPRESSION_DEFAULT_BYTE;
         compressionHandler = new GlueSchemaRegistryDefaultCompression();
 
@@ -175,7 +179,7 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
 
     /** Test whether getSchemaAndDeserializedStream method when compression is enabled works. */
     @Test
-    void testGetSchemaAndDeserializedStream_withCompression_succeeds() throws IOException {
+    public void testGetSchemaAndDeserializedStream_withCompression_succeeds() throws IOException {
         COMPRESSION compressionType = COMPRESSION.ZLIB;
         compressionByte = AWSSchemaRegistryConstants.COMPRESSION_BYTE;
         compressionHandler = new GlueSchemaRegistryDefaultCompression();
@@ -207,7 +211,8 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
 
     /** Test whether getSchemaAndDeserializedStream method throws exception with invalid schema. */
     @Test
-    void testGetSchemaAndDeserializedStream_withWrongSchema_throwsException() {
+    public void testGetSchemaAndDeserializedStream_withWrongSchema_throwsException()
+            throws IOException {
         String schemaDefinition =
                 "{"
                         + "\"type\":\"record\","
@@ -230,14 +235,11 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
                 new GlueSchemaRegistryInputStreamDeserializer(
                         glueSchemaRegistryDeserializationFacade);
 
-        assertThatThrownBy(
-                        () ->
-                                awsSchemaRegistryInputStreamDeserializer
-                                        .getSchemaAndDeserializedStream(
-                                                mutableByteArrayInputStream))
-                .isInstanceOf(AWSSchemaRegistryException.class)
-                .hasMessage(
-                        "Error occurred while parsing schema, see inner exception for details.");
+        thrown.expect(AWSSchemaRegistryException.class);
+        thrown.expectMessage(
+                "Error occurred while parsing schema, see inner exception for details.");
+        awsSchemaRegistryInputStreamDeserializer.getSchemaAndDeserializedStream(
+                mutableByteArrayInputStream);
     }
 
     private ByteArrayOutputStream buildByteArrayOutputStream(byte headerByte, byte compressionByte)

@@ -23,7 +23,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 
 import java.util.UUID;
 
-class ValueSerializerUUIDTest extends SerializerTestBase<ValueID> {
+public class ValueSerializerUUIDTest extends SerializerTestBase<ValueID> {
     @Override
     protected TypeSerializer<ValueID> createSerializer() {
         return new ValueSerializer<>(ValueID.class);

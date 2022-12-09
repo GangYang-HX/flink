@@ -66,7 +66,6 @@ import java.util.NoSuchElementException;
 import java.util.OptionalLong;
 import java.util.stream.StreamSupport;
 
-import static org.apache.flink.runtime.state.StateBackendLoader.loadStateBackendFromKeyedStateHandles;
 import static org.apache.flink.runtime.state.StateUtil.unexpectedStateHandleException;
 
 /**
@@ -327,25 +326,19 @@ public class StreamTaskStateInitializerImpl implements StreamTaskStateInitialize
                 backendRestorer =
                         new BackendRestorerProcedure<>(
                                 (stateHandles) ->
-                                        loadStateBackendFromKeyedStateHandles(
-                                                        stateBackend,
-                                                        environment
-                                                                .getUserCodeClassLoader()
-                                                                .asClassLoader(),
-                                                        stateHandles)
-                                                .createKeyedStateBackend(
-                                                        environment,
-                                                        environment.getJobID(),
-                                                        operatorIdentifierText,
-                                                        keySerializer,
-                                                        taskInfo.getMaxNumberOfParallelSubtasks(),
-                                                        keyGroupRange,
-                                                        environment.getTaskKvStateRegistry(),
-                                                        ttlTimeProvider,
-                                                        metricGroup,
-                                                        stateHandles,
-                                                        cancelStreamRegistryForRestore,
-                                                        managedMemoryFraction),
+                                        stateBackend.createKeyedStateBackend(
+                                                environment,
+                                                environment.getJobID(),
+                                                operatorIdentifierText,
+                                                keySerializer,
+                                                taskInfo.getMaxNumberOfParallelSubtasks(),
+                                                keyGroupRange,
+                                                environment.getTaskKvStateRegistry(),
+                                                ttlTimeProvider,
+                                                metricGroup,
+                                                stateHandles,
+                                                cancelStreamRegistryForRestore,
+                                                managedMemoryFraction),
                                 backendCloseableRegistry,
                                 logDescription);
 

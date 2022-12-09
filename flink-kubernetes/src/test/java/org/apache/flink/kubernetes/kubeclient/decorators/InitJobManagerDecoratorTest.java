@@ -32,7 +32,8 @@ import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceRequirements;
 import io.fabric8.kubernetes.api.model.Toleration;
-import org.junit.jupiter.api.Test;
+import org.hamcrest.Matchers;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -40,10 +41,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /** General tests for the {@link InitJobManagerDecorator}. */
-class InitJobManagerDecoratorTest extends KubernetesJobManagerTestBase {
+public class InitJobManagerDecoratorTest extends KubernetesJobManagerTestBase {
 
     private static final String SERVICE_ACCOUNT_NAME = "service-test";
     private static final List<String> IMAGE_PULL_SECRETS = Arrays.asList("s1", "s2", "s3");
@@ -63,6 +68,12 @@ class InitJobManagerDecoratorTest extends KubernetesJobManagerTestBase {
                     new Toleration("NoExecute", "key2", "Exists", 6000L, null));
 
     private static final String USER_DEFINED_FLINK_LOG_DIR = "/path/of/flink-log";
+    private static final Map<String, String> HOST_ALIASES =
+            new HashMap<String, String>() {
+                {
+                    put("test.com", "127.0.0.1");
+                }
+            };
 
     private Pod resultPod;
     private Container resultMainContainer;
@@ -79,6 +90,7 @@ class InitJobManagerDecoratorTest extends KubernetesJobManagerTestBase {
         this.flinkConfig.setString(
                 KubernetesConfigOptions.JOB_MANAGER_TOLERATIONS.key(), TOLERATION_STRING);
         this.flinkConfig.set(KubernetesConfigOptions.FLINK_LOG_DIR, USER_DEFINED_FLINK_LOG_DIR);
+        this.flinkConfig.set(KubernetesConfigOptions.KUBERNETES_HOST_ALIASES, HOST_ALIASES);
     }
 
     @Override
@@ -94,42 +106,41 @@ class InitJobManagerDecoratorTest extends KubernetesJobManagerTestBase {
     }
 
     @Test
-    void testApiVersion() {
-        assertThat(this.resultPod.getApiVersion()).isEqualTo(Constants.API_VERSION);
+    public void testApiVersion() {
+        assertEquals(Constants.API_VERSION, this.resultPod.getApiVersion());
     }
 
     @Test
-    void testMainContainerName() {
-        assertThat(this.resultMainContainer.getName()).isEqualTo(Constants.MAIN_CONTAINER_NAME);
+    public void testMainContainerName() {
+        assertEquals(Constants.MAIN_CONTAINER_NAME, this.resultMainContainer.getName());
     }
 
     @Test
-    void testMainContainerImage() {
-        assertThat(this.resultMainContainer.getImage()).isEqualTo(CONTAINER_IMAGE);
-        assertThat(this.resultMainContainer.getImagePullPolicy())
-                .isEqualTo(CONTAINER_IMAGE_PULL_POLICY.name());
+    public void testMainContainerImage() {
+        assertEquals(CONTAINER_IMAGE, this.resultMainContainer.getImage());
+        assertEquals(
+                CONTAINER_IMAGE_PULL_POLICY.name(), this.resultMainContainer.getImagePullPolicy());
     }
 
     @Test
-    void testMainContainerResourceRequirements() {
+    public void testMainContainerResourceRequirements() {
         final ResourceRequirements resourceRequirements = this.resultMainContainer.getResources();
 
         final Map<String, Quantity> requests = resourceRequirements.getRequests();
-        assertThat(requests.get("cpu").getAmount()).isEqualTo(Double.toString(JOB_MANAGER_CPU));
-        assertThat(requests.get("memory").getAmount())
-                .isEqualTo(String.valueOf(JOB_MANAGER_MEMORY));
+        assertEquals(Double.toString(JOB_MANAGER_CPU), requests.get("cpu").getAmount());
+        assertEquals(String.valueOf(JOB_MANAGER_MEMORY), requests.get("memory").getAmount());
 
         final Map<String, Quantity> limits = resourceRequirements.getLimits();
-        assertThat(limits.get("cpu").getAmount())
-                .isEqualTo(Double.toString(JOB_MANAGER_CPU * JOB_MANAGER_CPU_LIMIT_FACTOR));
-        assertThat(limits.get("memory").getAmount())
-                .isEqualTo(
-                        Integer.toString(
-                                (int) (JOB_MANAGER_MEMORY * JOB_MANAGER_MEMORY_LIMIT_FACTOR)));
+        assertEquals(
+                Double.toString(JOB_MANAGER_CPU * JOB_MANAGER_CPU_LIMIT_FACTOR),
+                limits.get("cpu").getAmount());
+        assertEquals(
+                Integer.toString((int) (JOB_MANAGER_MEMORY * JOB_MANAGER_MEMORY_LIMIT_FACTOR)),
+                limits.get("memory").getAmount());
     }
 
     @Test
-    void testMainContainerPorts() {
+    public void testMainContainerPorts() {
         final List<ContainerPort> expectedContainerPorts =
                 Arrays.asList(
                         new ContainerPortBuilder()
@@ -145,81 +156,92 @@ class InitJobManagerDecoratorTest extends KubernetesJobManagerTestBase {
                                 .withContainerPort(BLOB_SERVER_PORT)
                                 .build());
 
-        assertThat(this.resultMainContainer.getPorts()).isEqualTo(expectedContainerPorts);
+        assertEquals(expectedContainerPorts, this.resultMainContainer.getPorts());
     }
 
     @Test
-    void testMainContainerEnv() {
+    public void testMainContainerEnv() {
         final List<EnvVar> envVars = this.resultMainContainer.getEnv();
 
         final Map<String, String> envs = new HashMap<>();
         envVars.forEach(env -> envs.put(env.getName(), env.getValue()));
-        this.customizedEnvs.forEach((k, v) -> assertThat(v).isEqualTo(envs.get(k)));
+        this.customizedEnvs.forEach((k, v) -> assertEquals(envs.get(k), v));
 
-        assertThat(envVars)
-                .anyMatch(
-                        env ->
-                                env.getName().equals(Constants.ENV_FLINK_POD_IP_ADDRESS)
-                                        && env.getValueFrom()
-                                                .getFieldRef()
-                                                .getApiVersion()
-                                                .equals(Constants.API_VERSION)
-                                        && env.getValueFrom()
-                                                .getFieldRef()
-                                                .getFieldPath()
-                                                .equals(Constants.POD_IP_FIELD_PATH));
+        assertTrue(
+                envVars.stream()
+                        .anyMatch(
+                                env ->
+                                        env.getName().equals(Constants.ENV_FLINK_POD_IP_ADDRESS)
+                                                && env.getValueFrom()
+                                                        .getFieldRef()
+                                                        .getApiVersion()
+                                                        .equals(Constants.API_VERSION)
+                                                && env.getValueFrom()
+                                                        .getFieldRef()
+                                                        .getFieldPath()
+                                                        .equals(Constants.POD_IP_FIELD_PATH)));
     }
 
     @Test
-    void testPodLabels() {
+    public void testPodLabels() {
         final Map<String, String> expectedLabels = new HashMap<>(getCommonLabels());
         expectedLabels.put(Constants.LABEL_COMPONENT_KEY, Constants.LABEL_COMPONENT_JOB_MANAGER);
         expectedLabels.putAll(userLabels);
 
-        assertThat(this.resultPod.getMetadata().getLabels()).isEqualTo(expectedLabels);
+        assertEquals(expectedLabels, this.resultPod.getMetadata().getLabels());
     }
 
     @Test
-    void testPodAnnotations() {
+    public void testPodAnnotations() {
         final Map<String, String> resultAnnotations =
                 kubernetesJobManagerParameters.getAnnotations();
-        assertThat(resultAnnotations).isEqualTo(ANNOTATIONS);
+        assertThat(resultAnnotations, is(equalTo(ANNOTATIONS)));
     }
 
     @Test
-    void testPodServiceAccountName() {
-        assertThat(this.resultPod.getSpec().getServiceAccountName())
-                .isEqualTo(SERVICE_ACCOUNT_NAME);
+    public void testPodServiceAccountName() {
+        assertEquals(SERVICE_ACCOUNT_NAME, this.resultPod.getSpec().getServiceAccountName());
     }
 
     @Test
-    void testImagePullSecrets() {
+    public void testImagePullSecrets() {
         final List<String> resultSecrets =
                 this.resultPod.getSpec().getImagePullSecrets().stream()
                         .map(LocalObjectReference::getName)
                         .collect(Collectors.toList());
 
-        assertThat(resultSecrets).isEqualTo(IMAGE_PULL_SECRETS);
+        assertEquals(IMAGE_PULL_SECRETS, resultSecrets);
     }
 
     @Test
-    void testNodeSelector() {
-        assertThat(this.resultPod.getSpec().getNodeSelector()).isEqualTo(nodeSelector);
+    public void testNodeSelector() {
+        assertThat(this.resultPod.getSpec().getNodeSelector(), is(equalTo(nodeSelector)));
     }
 
     @Test
-    void testPodTolerations() {
-        assertThat(this.resultPod.getSpec().getTolerations())
-                .containsExactlyInAnyOrderElementsOf(TOLERATION);
+    public void testPodTolerations() {
+        assertThat(
+                this.resultPod.getSpec().getTolerations(),
+                Matchers.containsInAnyOrder(TOLERATION.toArray()));
     }
 
     @Test
-    void testFlinkLogDirEnvShouldBeSetIfConfiguredViaOptions() {
+    public void testFlinkLogDirEnvShouldBeSetIfConfiguredViaOptions() {
         final List<EnvVar> envVars = this.resultMainContainer.getEnv();
-        assertThat(envVars)
-                .anyMatch(
-                        envVar ->
-                                envVar.getName().equals(Constants.ENV_FLINK_LOG_DIR)
-                                        && envVar.getValue().equals(USER_DEFINED_FLINK_LOG_DIR));
+        assertThat(
+                envVars.stream()
+                        .anyMatch(
+                                envVar ->
+                                        envVar.getName().equals(Constants.ENV_FLINK_LOG_DIR)
+                                                && envVar.getValue()
+                                                        .equals(USER_DEFINED_FLINK_LOG_DIR)),
+                is(true));
+    }
+
+    @Test
+    public void testHostAliases() {
+        assertTrue(
+                HOST_ALIASES.containsValue(
+                        this.resultPod.getSpec().getHostAliases().get(0).getIp()));
     }
 }

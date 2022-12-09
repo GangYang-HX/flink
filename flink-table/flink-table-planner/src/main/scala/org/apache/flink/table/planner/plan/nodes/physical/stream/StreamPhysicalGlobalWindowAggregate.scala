@@ -22,14 +22,14 @@ import org.apache.flink.table.planner.plan.logical.{SliceAttachedWindowingStrate
 import org.apache.flink.table.planner.plan.nodes.exec.{ExecNode, InputProperty}
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecGlobalWindowAggregate
 import org.apache.flink.table.planner.plan.rules.physical.stream.TwoStageOptimizedWindowAggregateRule
-import org.apache.flink.table.planner.plan.utils.{AggregateUtil, RelExplainUtil, WindowUtil}
+import org.apache.flink.table.planner.plan.utils.{AggregateUtil, FlinkRelOptUtil, RelExplainUtil, WindowUtil}
 import org.apache.flink.table.planner.plan.utils.WindowUtil.checkEmitConfiguration
-import org.apache.flink.table.planner.utils.ShortcutUtils.{unwrapTableConfig, unwrapTypeFactory}
+import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTableConfig
 import org.apache.flink.table.runtime.groupwindow.NamedWindowProperty
 
 import org.apache.calcite.plan.{RelOptCluster, RelTraitSet}
 import org.apache.calcite.rel.`type`.RelDataType
-import org.apache.calcite.rel.{RelNode, RelWriter}
+import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
 import org.apache.calcite.rel.core.AggregateCall
 import org.apache.calcite.util.Litmus
 
@@ -58,21 +58,14 @@ class StreamPhysicalGlobalWindowAggregate(
     traitSet: RelTraitSet,
     inputRel: RelNode,
     val inputRowTypeOfLocalAgg: RelDataType,
-    grouping: Array[Int],
-    aggCalls: Seq[AggregateCall],
+    val grouping: Array[Int],
+    val aggCalls: Seq[AggregateCall],
     val windowing: WindowingStrategy,
-    namedWindowProperties: Seq[NamedWindowProperty])
-  extends StreamPhysicalWindowAggregateBase(
-    cluster,
-    traitSet,
-    inputRel,
-    grouping,
-    aggCalls,
-    namedWindowProperties)
+    val namedWindowProperties: Seq[NamedWindowProperty])
+  extends SingleRel(cluster, traitSet, inputRel)
   with StreamPhysicalRel {
 
   private lazy val aggInfoList = AggregateUtil.deriveStreamWindowAggregateInfoList(
-    unwrapTypeFactory(inputRel),
     FlinkTypeFactory.toLogicalRowType(inputRowTypeOfLocalAgg),
     aggCalls,
     windowing.getWindow,
@@ -136,7 +129,7 @@ class StreamPhysicalGlobalWindowAggregate(
   }
 
   override def translateToExecNode(): ExecNode[_] = {
-    checkEmitConfiguration(unwrapTableConfig(this))
+    checkEmitConfiguration(FlinkRelOptUtil.getTableConfigFromContext(this))
     new StreamExecGlobalWindowAggregate(
       unwrapTableConfig(this),
       grouping,

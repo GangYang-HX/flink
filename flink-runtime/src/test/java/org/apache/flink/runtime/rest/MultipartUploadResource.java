@@ -28,8 +28,8 @@ import org.apache.flink.runtime.rest.handler.RestHandlerException;
 import org.apache.flink.runtime.rest.messages.EmptyMessageParameters;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.EmptyResponseBody;
+import org.apache.flink.runtime.rest.messages.MessageHeaders;
 import org.apache.flink.runtime.rest.messages.RequestBody;
-import org.apache.flink.runtime.rest.messages.RuntimeMessageHeaders;
 import org.apache.flink.runtime.rest.util.TestRestServerEndpoint;
 import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
@@ -272,8 +272,7 @@ public class MultipartUploadResource extends ExternalResource {
     }
 
     private static final class MultipartMixedHeaders
-            implements RuntimeMessageHeaders<
-                    TestRequestBody, EmptyResponseBody, EmptyMessageParameters> {
+            implements MessageHeaders<TestRequestBody, EmptyResponseBody, EmptyMessageParameters> {
         private static final MultipartMixedHeaders INSTANCE = new MultipartMixedHeaders();
 
         private MultipartMixedHeaders() {}
@@ -419,7 +418,7 @@ public class MultipartUploadResource extends ExternalResource {
     }
 
     private abstract static class TestHeadersBase<R extends RequestBody>
-            implements RuntimeMessageHeaders<R, EmptyResponseBody, EmptyMessageParameters> {
+            implements MessageHeaders<R, EmptyResponseBody, EmptyMessageParameters> {
 
         @Override
         public Class<EmptyResponseBody> getResponseClass() {

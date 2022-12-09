@@ -26,14 +26,17 @@ import org.apache.flink.table.types.logical.TimestampKind;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.utils.TypeConversions;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized;
+
+import java.util.Arrays;
+import java.util.List;
 
 /** Tests for {@link CurrentWatermarkTypeStrategy}. */
-class CurrentWatermarkTypeStrategyTest extends TypeStrategiesTestBase {
+public class CurrentWatermarkTypeStrategyTest extends TypeStrategiesTestBase {
 
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
                 // CURRENT_WATERMARK
                 TestSpec.forStrategy(
                                 "TIMESTAMP(3) *ROWTIME*", SpecificTypeStrategies.CURRENT_WATERMARK)

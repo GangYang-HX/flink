@@ -23,7 +23,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-filesystems</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-s3-fs-presto</artifactId>
@@ -32,7 +33,8 @@ under the License.
 	<packaging>jar</packaging>
 
 	<properties>
-		<presto.version>0.272</presto.version>
+		<presto.version>0.257</presto.version>
+		<maven.test.skip>true</maven.test.skip>
 	</properties>
 
 	<dependencies>

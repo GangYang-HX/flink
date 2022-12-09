@@ -25,12 +25,12 @@ import org.apache.flink.api.common.typeutils.TypeInformationTestBase;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.tuple.Tuple1;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Test for {@link TupleTypeInfo}. */
-class TupleTypeInfoTest extends TypeInformationTestBase<TupleTypeInfo<?>> {
+public class TupleTypeInfoTest extends TypeInformationTestBase<TupleTypeInfo<?>> {
 
     @Override
     protected TupleTypeInfo<?>[] getTestData() {
@@ -41,7 +41,7 @@ class TupleTypeInfoTest extends TypeInformationTestBase<TupleTypeInfo<?>> {
     }
 
     @Test
-    void testTupleTypeInfoSymmetricEqualityRelation() {
+    public void testTupleTypeInfoSymmetricEqualityRelation() {
         TupleTypeInfo<Tuple1<Integer>> tupleTypeInfo =
                 new TupleTypeInfo<>(BasicTypeInfo.INT_TYPE_INFO);
 
@@ -75,8 +75,6 @@ class TupleTypeInfoTest extends TypeInformationTestBase<TupleTypeInfo<?>> {
         boolean tupleVsAnonymous = tupleTypeInfo.equals(anonymousTupleTypeInfo);
         boolean anonymousVsTuple = anonymousTupleTypeInfo.equals(tupleTypeInfo);
 
-        assertThat(tupleVsAnonymous)
-                .as("Equality relation should be symmetric")
-                .isEqualTo(anonymousVsTuple);
+        assertTrue("Equality relation should be symmetric", tupleVsAnonymous == anonymousVsTuple);
     }
 }

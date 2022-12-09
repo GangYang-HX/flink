@@ -45,8 +45,13 @@ import org.apache.flink.table.types.utils.DataTypeFactoryMock;
 import org.apache.flink.types.Row;
 
 import org.hamcrest.Matcher;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import javax.annotation.Nullable;
 
@@ -60,21 +65,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.stream.Stream;
 
-import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
 import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
 import static org.apache.flink.table.test.TableAssertions.assertThat;
 import static org.apache.flink.table.types.utils.DataTypeFactoryMock.dummyRaw;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link DataTypeExtractor}. */
+@RunWith(Parameterized.class)
 @SuppressWarnings("unused")
-class DataTypeExtractorTest {
+public class DataTypeExtractorTest {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
                 // simple extraction of INT
                 TestSpec.forType(Integer.class).expectDataType(DataTypes.INT()),
 
@@ -470,18 +474,17 @@ class DataTypeExtractorTest {
                                         DataTypes.FIELD("string_field", DataTypes.STRING()))));
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testExtraction(TestSpec testSpec) {
+    @Parameter public TestSpec testSpec;
+
+    @Rule public ExpectedException thrown = ExpectedException.none();
+
+    @Test
+    public void testExtraction() {
         if (testSpec.expectedErrorMessage != null) {
-            assertThatThrownBy(() -> runExtraction(testSpec))
-                    .isInstanceOf(ValidationException.class)
-                    .satisfies(
-                            anyCauseMatches(
-                                    ValidationException.class, testSpec.expectedErrorMessage));
-        } else {
-            runExtraction(testSpec);
+            thrown.expect(ValidationException.class);
+            thrown.expectCause(errorMatcher(testSpec));
         }
+        runExtraction(testSpec);
     }
 
     // --------------------------------------------------------------------------------------------

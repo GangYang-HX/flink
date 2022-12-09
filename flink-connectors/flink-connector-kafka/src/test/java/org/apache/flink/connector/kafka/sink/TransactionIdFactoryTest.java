@@ -21,7 +21,7 @@ import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link TransactionalIdFactory}. */
 public class TransactionIdFactoryTest extends TestLogger {
@@ -29,7 +29,6 @@ public class TransactionIdFactoryTest extends TestLogger {
     @Test
     public void testBuildTransactionalId() {
         final String expected = "prefix-0-2";
-        assertThat(TransactionalIdFactory.buildTransactionalId("prefix", 0, 2L))
-                .isEqualTo(expected);
+        assertEquals(expected, TransactionalIdFactory.buildTransactionalId("prefix", 0, 2L));
     }
 }

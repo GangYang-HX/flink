@@ -21,6 +21,7 @@ package org.apache.flink.connector.jdbc.table;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.jdbc.dialect.JdbcDialect;
 import org.apache.flink.connector.jdbc.internal.options.JdbcConnectorOptions;
+import org.apache.flink.connector.jdbc.internal.options.JdbcLookupOptions;
 import org.apache.flink.connector.jdbc.internal.options.JdbcReadOptions;
 import org.apache.flink.connector.jdbc.split.JdbcNumericBetweenParametersProvider;
 import org.apache.flink.table.connector.ChangelogMode;
@@ -29,16 +30,12 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.InputFormatProvider;
 import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
+import org.apache.flink.table.connector.source.TableFunctionProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
-import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
-import org.apache.flink.table.connector.source.lookup.PartialCachingLookupProvider;
-import org.apache.flink.table.connector.source.lookup.cache.LookupCache;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Preconditions;
-
-import javax.annotation.Nullable;
 
 import java.util.Objects;
 
@@ -52,8 +49,7 @@ public class JdbcDynamicTableSource
 
     private final JdbcConnectorOptions options;
     private final JdbcReadOptions readOptions;
-    private final int lookupMaxRetryTimes;
-    @Nullable private final LookupCache cache;
+    private final JdbcLookupOptions lookupOptions;
     private DataType physicalRowDataType;
     private final String dialectName;
     private long limit = -1;
@@ -61,13 +57,11 @@ public class JdbcDynamicTableSource
     public JdbcDynamicTableSource(
             JdbcConnectorOptions options,
             JdbcReadOptions readOptions,
-            int lookupMaxRetryTimes,
-            @Nullable LookupCache cache,
+            JdbcLookupOptions lookupOptions,
             DataType physicalRowDataType) {
         this.options = options;
         this.readOptions = readOptions;
-        this.lookupMaxRetryTimes = lookupMaxRetryTimes;
-        this.cache = cache;
+        this.lookupOptions = lookupOptions;
         this.physicalRowDataType = physicalRowDataType;
         this.dialectName = options.getDialect().dialectName();
     }
@@ -83,19 +77,15 @@ public class JdbcDynamicTableSource
             keyNames[i] = DataType.getFieldNames(physicalRowDataType).get(innerKeyArr[0]);
         }
         final RowType rowType = (RowType) physicalRowDataType.getLogicalType();
-        JdbcRowDataLookupFunction lookupFunction =
+
+        return TableFunctionProvider.of(
                 new JdbcRowDataLookupFunction(
                         options,
-                        lookupMaxRetryTimes,
+                        lookupOptions,
                         DataType.getFieldNames(physicalRowDataType).toArray(new String[0]),
                         DataType.getFieldDataTypes(physicalRowDataType).toArray(new DataType[0]),
                         keyNames,
-                        rowType);
-        if (cache != null) {
-            return PartialCachingLookupProvider.of(lookupFunction, cache);
-        } else {
-            return LookupFunctionProvider.of(lookupFunction);
-        }
+                        rowType));
     }
 
     @Override
@@ -159,8 +149,7 @@ public class JdbcDynamicTableSource
 
     @Override
     public DynamicTableSource copy() {
-        return new JdbcDynamicTableSource(
-                options, readOptions, lookupMaxRetryTimes, cache, physicalRowDataType);
+        return new JdbcDynamicTableSource(options, readOptions, lookupOptions, physicalRowDataType);
     }
 
     @Override
@@ -179,8 +168,7 @@ public class JdbcDynamicTableSource
         JdbcDynamicTableSource that = (JdbcDynamicTableSource) o;
         return Objects.equals(options, that.options)
                 && Objects.equals(readOptions, that.readOptions)
-                && Objects.equals(lookupMaxRetryTimes, that.lookupMaxRetryTimes)
-                && Objects.equals(cache, that.cache)
+                && Objects.equals(lookupOptions, that.lookupOptions)
                 && Objects.equals(physicalRowDataType, that.physicalRowDataType)
                 && Objects.equals(dialectName, that.dialectName)
                 && Objects.equals(limit, that.limit);
@@ -189,13 +177,7 @@ public class JdbcDynamicTableSource
     @Override
     public int hashCode() {
         return Objects.hash(
-                options,
-                readOptions,
-                lookupMaxRetryTimes,
-                cache,
-                physicalRowDataType,
-                dialectName,
-                limit);
+                options, readOptions, lookupOptions, physicalRowDataType, dialectName, limit);
     }
 
     @Override

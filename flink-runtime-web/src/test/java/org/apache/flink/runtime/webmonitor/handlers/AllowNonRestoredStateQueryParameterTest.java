@@ -18,31 +18,28 @@
 
 package org.apache.flink.runtime.webmonitor.handlers;
 
-import org.junit.jupiter.api.Test;
+import org.apache.flink.util.TestLogger;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link AllowNonRestoredStateQueryParameter}. */
-class AllowNonRestoredStateQueryParameterTest {
+public class AllowNonRestoredStateQueryParameterTest extends TestLogger {
 
     private final AllowNonRestoredStateQueryParameter allowNonRestoredStateQueryParameter =
             new AllowNonRestoredStateQueryParameter();
 
     @Test
-    void testConvertStringToValue() {
-        assertThat(allowNonRestoredStateQueryParameter.convertValueToString(false))
-                .isEqualTo("false");
-        assertThat(allowNonRestoredStateQueryParameter.convertValueToString(true))
-                .isEqualTo("true");
+    public void testConvertStringToValue() {
+        assertEquals("false", allowNonRestoredStateQueryParameter.convertValueToString(false));
+        assertEquals("true", allowNonRestoredStateQueryParameter.convertValueToString(true));
     }
 
     @Test
-    void testConvertValueFromString() {
-        assertThat(allowNonRestoredStateQueryParameter.convertStringToValue("false"))
-                .isEqualTo(false);
-        assertThat(allowNonRestoredStateQueryParameter.convertStringToValue("true"))
-                .isEqualTo(true);
-        assertThat(allowNonRestoredStateQueryParameter.convertStringToValue("TRUE"))
-                .isEqualTo(true);
+    public void testConvertValueFromString() {
+        assertEquals(false, allowNonRestoredStateQueryParameter.convertStringToValue("false"));
+        assertEquals(true, allowNonRestoredStateQueryParameter.convertStringToValue("true"));
+        assertEquals(true, allowNonRestoredStateQueryParameter.convertStringToValue("TRUE"));
     }
 }

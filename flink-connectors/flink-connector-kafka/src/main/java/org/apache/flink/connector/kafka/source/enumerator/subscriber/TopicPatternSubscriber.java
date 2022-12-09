@@ -44,11 +44,15 @@ class TopicPatternSubscriber implements KafkaSubscriber {
 
     @Override
     public Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient) {
+        return getSubscribedTopicPartitions(adminClient, DO_NOT_RETRY);
+    }
+
+    @Override
+    public Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient, int retry) {
         LOG.debug("Fetching descriptions for all topics on Kafka cluster");
-        final Map<String, TopicDescription> allTopicMetadata = getAllTopicMetadata(adminClient);
-
+        final Map<String, TopicDescription> allTopicMetadata =
+                getAllTopicMetadata(adminClient, retry);
         Set<TopicPartition> subscribedTopicPartitions = new HashSet<>();
-
         allTopicMetadata.forEach(
                 (topicName, topicDescription) -> {
                     if (topicPattern.matcher(topicName).matches()) {
@@ -59,7 +63,6 @@ class TopicPatternSubscriber implements KafkaSubscriber {
                         }
                     }
                 });
-
         return subscribedTopicPartitions;
     }
 }

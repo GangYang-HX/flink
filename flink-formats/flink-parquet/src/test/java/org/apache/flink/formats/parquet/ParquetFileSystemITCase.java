@@ -26,6 +26,7 @@ import org.apache.flink.util.CollectionUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -41,7 +42,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.range;
 import static org.apache.parquet.hadoop.ParquetFileReader.readFooter;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** ITCase for {@link ParquetFileFormatFactory}. */
 @RunWith(Parameterized.class)
@@ -94,18 +95,20 @@ public class ParquetFileSystemITCase extends BatchFileSystemITCaseBase {
         File directory = new File(URI.create(resultPath()).getPath());
         File[] files =
                 directory.listFiles((dir, name) -> !name.startsWith(".") && !name.startsWith("_"));
-        assertThat(files).isNotNull();
+        Assert.assertNotNull(files);
         Path path = new Path(URI.create(files[0].getAbsolutePath()));
 
         try {
             ParquetMetadata footer =
                     readFooter(new Configuration(), path, range(0, Long.MAX_VALUE));
             if (configure) {
-                assertThat(footer.getBlocks().get(0).getColumns().get(0).getCodec().toString())
-                        .isEqualTo("GZIP");
+                Assert.assertEquals(
+                        "GZIP",
+                        footer.getBlocks().get(0).getColumns().get(0).getCodec().toString());
             } else {
-                assertThat(footer.getBlocks().get(0).getColumns().get(0).getCodec().toString())
-                        .isEqualTo("SNAPPY");
+                Assert.assertEquals(
+                        "SNAPPY",
+                        footer.getBlocks().get(0).getColumns().get(0).getCodec().toString());
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -123,7 +126,7 @@ public class ParquetFileSystemITCase extends BatchFileSystemITCaseBase {
         TableResult tableResult1 =
                 super.tableEnv().executeSql("SELECT * FROM parquetLimitTable limit 5");
         List<Row> rows1 = CollectionUtil.iteratorToList(tableResult1.collect());
-        assertThat(rows1).hasSize(5);
+        assertEquals(5, rows1.size());
 
         check(
                 "select a from parquetLimitTable limit 5",

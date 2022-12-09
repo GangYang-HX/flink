@@ -20,7 +20,6 @@ package org.apache.flink.table.connector.source;
 
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.factories.DynamicTableFactory;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonGenerator;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonParser;
@@ -51,7 +50,7 @@ public class CompactPartitions implements Serializable {
 
     private static final long serialVersionUID = 1L;
     private static final String FIELD_NAME_COMPACT_PARTITIONS = "compact-partitions";
-    private static final ObjectMapper MAPPER = JacksonMapperFactory.createObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final List<CompactPartition> compactPartitions;
 

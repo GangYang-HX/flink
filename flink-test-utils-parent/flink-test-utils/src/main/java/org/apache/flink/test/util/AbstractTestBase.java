@@ -21,7 +21,6 @@ package org.apache.flink.test.util;
 import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.util.FileUtils;
-import org.apache.flink.util.TestLogger;
 
 import org.junit.After;
 import org.junit.ClassRule;
@@ -57,7 +56,7 @@ import java.io.IOException;
  *
  * </pre>
  */
-public abstract class AbstractTestBase extends TestLogger {
+public abstract class AbstractTestBase extends TestBaseUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractTestBase.class);
 

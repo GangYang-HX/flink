@@ -38,9 +38,6 @@ import org.junit.runners.Parameterized;
 import java.util.Collection;
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsText;
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /** Integration tests for {@link CrossFunction} and {@link RichCrossFunction}. */
 @RunWith(Parameterized.class)
 public class CrossITCase extends MultipleProgramsTestBase {

@@ -110,11 +110,11 @@ public abstract class BoundedDataTestBase {
     }
 
     private void testWriteAndReadData(BoundedData bd) throws Exception {
-        final int numLongs = 10_000_000;
-        final int numBuffers = writeLongs(bd, numLongs);
+        final int numInts = 10_000_000;
+        final int numBuffers = writeInts(bd, numInts);
         bd.finishWrite();
 
-        readLongs(bd.createReader(), numBuffers, numLongs);
+        readInts(bd.createReader(), numBuffers, numInts);
     }
 
     @Test
@@ -181,59 +181,49 @@ public abstract class BoundedDataTestBase {
     //  utils
     // ------------------------------------------------------------------------
 
-    private static int writeLongs(BoundedData bd, int numLongs) throws IOException {
-        final int numLongsInBuffer = BUFFER_SIZE / Long.BYTES;
+    private static int writeInts(BoundedData bd, int numInts) throws IOException {
+        final int numIntsInBuffer = BUFFER_SIZE / 4;
         int numBuffers = 0;
 
-        for (long nextValue = 0; nextValue < numLongs; nextValue += numLongsInBuffer) {
+        for (int nextValue = 0; nextValue < numInts; nextValue += numIntsInBuffer) {
             Buffer buffer =
-                    BufferBuilderTestUtils.buildBufferWithAscendingLongs(
-                            BUFFER_SIZE, numLongsInBuffer, nextValue);
+                    BufferBuilderTestUtils.buildBufferWithAscendingInts(
+                            BUFFER_SIZE, numIntsInBuffer, nextValue);
             if (compressionEnabled) {
-                Buffer compressedBuffer = COMPRESSOR.compressToIntermediateBuffer(buffer);
-                bd.writeBuffer(compressedBuffer);
-                // recycle intermediate buffer.
-                if (compressedBuffer != buffer) {
-                    compressedBuffer.recycleBuffer();
-                }
+                bd.writeBuffer(COMPRESSOR.compressToIntermediateBuffer(buffer));
             } else {
                 bd.writeBuffer(buffer);
             }
             numBuffers++;
-            buffer.recycleBuffer();
         }
 
         return numBuffers;
     }
 
-    private static void readLongs(BoundedData.Reader reader, int numBuffersExpected, int numLongs)
+    private static void readInts(BoundedData.Reader reader, int numBuffersExpected, int numInts)
             throws IOException {
         Buffer b;
-        long nextValue = 0;
+        int nextValue = 0;
         int numBuffers = 0;
 
-        int numLongsInBuffer;
         while ((b = reader.nextBuffer()) != null) {
+            final int numIntsInBuffer = b.getSize() / 4;
             if (compressionEnabled && b.isCompressed()) {
                 Buffer decompressedBuffer = DECOMPRESSOR.decompressToIntermediateBuffer(b);
-                numLongsInBuffer = decompressedBuffer.getSize() / Long.BYTES;
-                BufferBuilderTestUtils.validateBufferWithAscendingLongs(
-                        decompressedBuffer, numLongsInBuffer, nextValue);
-                // recycle intermediate buffer.
-                decompressedBuffer.recycleBuffer();
+                BufferBuilderTestUtils.validateBufferWithAscendingInts(
+                        decompressedBuffer, numIntsInBuffer, nextValue);
             } else {
-                numLongsInBuffer = b.getSize() / Long.BYTES;
-                BufferBuilderTestUtils.validateBufferWithAscendingLongs(
-                        b, numLongsInBuffer, nextValue);
+                BufferBuilderTestUtils.validateBufferWithAscendingInts(
+                        b, numIntsInBuffer, nextValue);
             }
-            nextValue += numLongsInBuffer;
+            nextValue += numIntsInBuffer;
             numBuffers++;
 
             b.recycleBuffer();
         }
 
         assertEquals(numBuffersExpected, numBuffers);
-        assertThat(nextValue, Matchers.greaterThanOrEqualTo((long) numLongs));
+        assertThat(nextValue, Matchers.greaterThanOrEqualTo(numInts));
     }
 
     private static Path createTempPath() throws IOException {

@@ -26,7 +26,8 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.stream.Stream;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /** Check if the static methods defined in {@link BuiltInMethods} are valid. */
 class BuiltInMethodsTest {
@@ -42,6 +43,12 @@ class BuiltInMethodsTest {
     @ParameterizedTest
     @MethodSource
     void testMethodsAreAvailable(Method m) throws Exception {
-        assertThat(m.invoke(null)).isNotNull();
+        assertDoesNotThrow(
+                () ->
+                        // Note that this null is because the method is static, hence no instance
+                        // should be supplied when calling the reflection
+                        m.invoke(null),
+                "Method " + m.getName() + " throws an exception, perhaps a bad definition?");
+        assertNotNull(m.invoke(null));
     }
 }

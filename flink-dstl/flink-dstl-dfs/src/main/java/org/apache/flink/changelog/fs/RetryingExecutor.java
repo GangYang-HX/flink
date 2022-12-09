@@ -44,36 +44,26 @@ class RetryingExecutor implements AutoCloseable {
     private final ScheduledExecutorService timer; // schedule timeouts
     private final ScheduledExecutorService blockingExecutor; // schedule and run actual uploads
     private final Histogram attemptsPerTaskHistogram;
-    private final Histogram totalAttemptsPerTaskHistogram;
 
-    RetryingExecutor(
-            int nThreads,
-            Histogram attemptsPerTaskHistogram,
-            Histogram totalAttemptsPerTaskHistogram) {
+    RetryingExecutor(int nThreads, Histogram attemptsPerTaskHistogram) {
         this(
                 SchedulerFactory.create(1, "ChangelogRetryScheduler", LOG),
                 SchedulerFactory.create(nThreads, "ChangelogBlockingExecutor", LOG),
-                attemptsPerTaskHistogram,
-                totalAttemptsPerTaskHistogram);
+                attemptsPerTaskHistogram);
     }
 
     @VisibleForTesting
-    RetryingExecutor(
-            ScheduledExecutorService executor,
-            Histogram attemptsPerTaskHistogram,
-            Histogram totalAttemptsPerTaskHistogram) {
-        this(executor, executor, attemptsPerTaskHistogram, totalAttemptsPerTaskHistogram);
+    RetryingExecutor(ScheduledExecutorService executor, Histogram attemptsPerTaskHistogram) {
+        this(executor, executor, attemptsPerTaskHistogram);
     }
 
     RetryingExecutor(
             ScheduledExecutorService timer,
             ScheduledExecutorService blockingExecutor,
-            Histogram attemptsPerTaskHistogram,
-            Histogram totalAttemptsPerTaskHistogram) {
+            Histogram attemptsPerTaskHistogram) {
         this.timer = timer;
         this.blockingExecutor = blockingExecutor;
         this.attemptsPerTaskHistogram = attemptsPerTaskHistogram;
-        this.totalAttemptsPerTaskHistogram = totalAttemptsPerTaskHistogram;
     }
 
     /**
@@ -86,12 +76,7 @@ class RetryingExecutor implements AutoCloseable {
         LOG.debug("execute with retryPolicy: {}", retryPolicy);
         RetriableActionAttempt<T> task =
                 RetriableActionAttempt.initialize(
-                        action,
-                        retryPolicy,
-                        blockingExecutor,
-                        attemptsPerTaskHistogram,
-                        totalAttemptsPerTaskHistogram,
-                        timer);
+                        action, retryPolicy, blockingExecutor, attemptsPerTaskHistogram, timer);
         blockingExecutor.submit(task);
     }
 
@@ -180,15 +165,7 @@ class RetryingExecutor implements AutoCloseable {
 
         private final AtomicInteger activeAttempts;
 
-        /**
-         * The field shared across all attempts to execute the same {#link #runnable action}
-         * representing the total count of upload attempts.
-         */
-        private final AtomicInteger totalAttempts;
-
         private final Histogram attemptsPerTaskHistogram;
-
-        private final Histogram totalAttemptsPerTaskHistogram;
 
         private RetriableActionAttempt(
                 int attemptNumber,
@@ -198,19 +175,15 @@ class RetryingExecutor implements AutoCloseable {
                 ScheduledExecutorService blockingExecutor,
                 ScheduledExecutorService timer,
                 AtomicInteger activeAttempts,
-                AtomicInteger totalAttempts,
-                Histogram attemptsPerTaskHistogram,
-                Histogram totalAttemptsPerTaskHistogram) {
+                Histogram attemptsPerTaskHistogram) {
             this.attemptNumber = attemptNumber;
             this.action = action;
             this.retryPolicy = retryPolicy;
             this.blockingExecutor = blockingExecutor;
             this.actionCompleted = actionCompleted;
             this.attemptsPerTaskHistogram = attemptsPerTaskHistogram;
-            this.totalAttemptsPerTaskHistogram = totalAttemptsPerTaskHistogram;
             this.timer = timer;
             this.activeAttempts = activeAttempts;
-            this.totalAttempts = totalAttempts;
             this.attemptCompleted = new AtomicBoolean(false);
         }
 
@@ -227,7 +200,6 @@ class RetryingExecutor implements AutoCloseable {
                     LOG.debug("succeeded with {} attempts", attemptNumber);
                     action.completeWithResult(result);
                     attemptsPerTaskHistogram.update(attemptNumber);
-                    totalAttemptsPerTaskHistogram.update(totalAttempts.get());
                 } else {
                     LOG.debug("discard unnecessarily uploaded state, attempt {}", attemptNumber);
                     try {
@@ -253,7 +225,6 @@ class RetryingExecutor implements AutoCloseable {
             long nextAttemptDelay = retryPolicy.retryAfter(attemptNumber, e);
             if (nextAttemptDelay >= 0L) {
                 activeAttempts.incrementAndGet();
-                totalAttempts.incrementAndGet();
                 scheduleNext(nextAttemptDelay, next());
             }
             if (activeAttempts.decrementAndGet() == 0
@@ -276,7 +247,6 @@ class RetryingExecutor implements AutoCloseable {
                 RetryPolicy retryPolicy,
                 ScheduledExecutorService blockingExecutor,
                 Histogram attemptsPerTaskHistogram,
-                Histogram totalAttemptsPerTaskHistogram,
                 ScheduledExecutorService timer) {
             return new RetriableActionAttempt(
                     1,
@@ -286,9 +256,7 @@ class RetryingExecutor implements AutoCloseable {
                     blockingExecutor,
                     timer,
                     new AtomicInteger(1),
-                    new AtomicInteger(1),
-                    attemptsPerTaskHistogram,
-                    totalAttemptsPerTaskHistogram);
+                    attemptsPerTaskHistogram);
         }
 
         private RetriableActionAttempt<Result> next() {
@@ -300,9 +268,7 @@ class RetryingExecutor implements AutoCloseable {
                     blockingExecutor,
                     timer,
                     activeAttempts,
-                    totalAttempts,
-                    attemptsPerTaskHistogram,
-                    totalAttemptsPerTaskHistogram);
+                    attemptsPerTaskHistogram);
         }
 
         private Optional<ScheduledFuture<?>> scheduleTimeout() {

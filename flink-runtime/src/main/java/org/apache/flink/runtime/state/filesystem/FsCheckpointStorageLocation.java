@@ -122,6 +122,11 @@ public class FsCheckpointStorageLocation extends FsCheckpointStreamFactory
         return reference;
     }
 
+    @Override
+    public String getMetadataFileFullPath() {
+        return metadataFilePath.getPath();
+    }
+
     // ------------------------------------------------------------------------
     //  Utilities
     // ------------------------------------------------------------------------

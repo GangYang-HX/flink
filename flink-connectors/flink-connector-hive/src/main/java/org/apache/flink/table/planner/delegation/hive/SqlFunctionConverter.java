@@ -42,8 +42,6 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.fun.SqlCastFunction;
-import org.apache.calcite.sql.fun.SqlMonotonicBinaryOperator;
-import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.hadoop.hive.ql.plan.ExprNodeConstantDesc;
@@ -52,7 +50,6 @@ import org.apache.hadoop.hive.ql.session.SessionState;
 import java.lang.reflect.Field;
 import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /** A RexShuttle that converts Hive function calls so that Flink recognizes them. */
@@ -97,7 +94,8 @@ public class SqlFunctionConverter extends RexShuttle {
             if (convertedOp instanceof FlinkSqlTimestampFunction) {
                 // flink's current_timestamp has different type from hive's, convert it to a literal
                 Timestamp currentTS =
-                        ((HiveSessionState) SessionState.get()).getHiveParserCurrentTS();
+                        ((HiveParser.HiveParserSessionState) SessionState.get())
+                                .getHiveParserCurrentTS();
                 HiveShim hiveShim = HiveParserUtils.getSessionHiveShim();
                 try {
                     return HiveParserRexNodeConverter.convertConstant(
@@ -105,12 +103,6 @@ public class SqlFunctionConverter extends RexShuttle {
                 } catch (SemanticException e) {
                     throw new FlinkHiveException(e);
                 }
-            } else if (convertedOp instanceof SqlMonotonicBinaryOperator
-                    && isTimeInterval(operands.get(0).getType())
-                    && isTimePoint(operands.get(1).getType())) {
-                // Flink can't handle INTERVAL + DATETIME (INTERVAL at left).
-                // so we manually switch them here
-                operands = Arrays.asList(operands.get(1), operands.get(0));
             }
             return builder.makeCall(convertedOp, visitList(operands, update));
         }
@@ -196,23 +188,6 @@ public class SqlFunctionConverter extends RexShuttle {
             return (List<RexFieldCollation>) REX_WINDOW_ORDER_KEYS.get(window);
         } catch (IllegalAccessException e) {
             throw new FlinkHiveException("Failed to get orderKeys from RexWindow", e);
-        }
-    }
-
-    private boolean isTimeInterval(RelDataType relDataType) {
-        return SqlTypeName.INTERVAL_TYPES.contains(relDataType.getSqlTypeName());
-    }
-
-    private boolean isTimePoint(RelDataType relDataType) {
-        switch (relDataType.getSqlTypeName()) {
-            case DATE:
-            case TIME:
-            case TIMESTAMP:
-            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-            case TIME_WITH_LOCAL_TIME_ZONE:
-                return true;
-            default:
-                return false;
         }
     }
 }

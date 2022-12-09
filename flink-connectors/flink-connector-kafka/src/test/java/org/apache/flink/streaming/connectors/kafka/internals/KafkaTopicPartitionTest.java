@@ -23,8 +23,9 @@ import org.junit.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for the {@link KafkaTopicPartition}. */
 public class KafkaTopicPartitionTest {
@@ -40,15 +41,15 @@ public class KafkaTopicPartitionTest {
             return;
         }
 
-        assertThat(Modifier.isStatic(uidField.getModifiers())).isTrue();
-        assertThat(Modifier.isFinal(uidField.getModifiers())).isTrue();
-        assertThat(Modifier.isPrivate(uidField.getModifiers())).isTrue();
+        assertTrue(Modifier.isStatic(uidField.getModifiers()));
+        assertTrue(Modifier.isFinal(uidField.getModifiers()));
+        assertTrue(Modifier.isPrivate(uidField.getModifiers()));
 
-        assertThat(uidField.getType()).isEqualTo(long.class);
+        assertEquals(long.class, uidField.getType());
 
         // the UID has to be constant to make sure old checkpoints/savepoints can be read
         try {
-            assertThat(uidField.getLong(null)).isEqualTo(722083576322742325L);
+            assertEquals(722083576322742325L, uidField.getLong(null));
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());

@@ -33,10 +33,8 @@ import org.apache.flink.runtime.rest.handler.legacy.utils.ArchivedExecutionGraph
 import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
 import org.apache.flink.runtime.util.ManualTicker;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.ManuallyTriggeredScheduledExecutor;
-import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
 
 import org.apache.flink.shaded.guava30.com.google.common.base.Ticker;
 import org.apache.flink.shaded.guava30.com.google.common.cache.LoadingCache;
@@ -52,7 +50,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -65,11 +62,6 @@ import static org.junit.Assert.assertTrue;
 
 /** Tests for the {@link FileExecutionGraphInfoStore}. */
 public class FileExecutionGraphInfoStoreTest extends TestLogger {
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
-
     @ClassRule public static TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     /**
@@ -93,9 +85,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
         final File rootDir = temporaryFolder.newFolder();
 
         try (final FileExecutionGraphInfoStore executionGraphStore =
-                createDefaultExecutionGraphInfoStore(
-                        rootDir,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()))) {
+                createDefaultExecutionGraphInfoStore(rootDir)) {
             assertThat(executionGraphStore.get(new JobID()), Matchers.nullValue());
         }
     }
@@ -118,9 +108,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
         final File rootDir = temporaryFolder.newFolder();
 
         try (final FileExecutionGraphInfoStore executionGraphInfoStore =
-                createDefaultExecutionGraphInfoStore(
-                        rootDir,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()))) {
+                createDefaultExecutionGraphInfoStore(rootDir)) {
             for (ExecutionGraphInfo executionGraphInfo : executionGraphInfos) {
                 executionGraphInfoStore.put(executionGraphInfo);
             }
@@ -143,9 +131,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
         final File rootDir = temporaryFolder.newFolder();
 
         try (final FileExecutionGraphInfoStore executionGraphInfoStore =
-                createDefaultExecutionGraphInfoStore(
-                        rootDir,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()))) {
+                createDefaultExecutionGraphInfoStore(rootDir)) {
             for (ExecutionGraphInfo executionGraphInfo : executionGraphInfos) {
                 executionGraphInfoStore.put(executionGraphInfo);
             }
@@ -214,9 +200,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
         assertThat(rootDir.listFiles().length, Matchers.equalTo(0));
 
         try (final FileExecutionGraphInfoStore executionGraphInfoStore =
-                createDefaultExecutionGraphInfoStore(
-                        rootDir,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()))) {
+                createDefaultExecutionGraphInfoStore(rootDir)) {
 
             assertThat(rootDir.listFiles().length, Matchers.equalTo(1));
 
@@ -247,7 +231,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
                         Time.hours(1L),
                         Integer.MAX_VALUE,
                         100L << 10,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()),
+                        TestingUtils.defaultScheduledExecutor(),
                         Ticker.systemTicker())) {
 
             final LoadingCache<JobID, ExecutionGraphInfo> executionGraphInfoCache =
@@ -312,7 +296,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
                         Time.hours(1L),
                         maxCapacity,
                         10000L,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()),
+                        TestingUtils.defaultScheduledExecutor(),
                         Ticker.systemTicker())) {
 
             for (ExecutionGraphInfo executionGraphInfo : oldExecutionGraphInfos) {
@@ -341,8 +325,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
         try (final MiniCluster miniCluster =
                 new ExecutionGraphInfoStoreTestUtils.PersistingMiniCluster(
                         new MiniClusterConfiguration.Builder().withRandomPorts().build(),
-                        rootDir,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()))) {
+                        rootDir)) {
             miniCluster.start();
             final JobVertex vertex = new JobVertex("blockingVertex");
             // The adaptive scheduler expects that every vertex has a configured parallelism
@@ -362,9 +345,7 @@ public class FileExecutionGraphInfoStoreTest extends TestLogger {
         final File rootDir = temporaryFolder.newFolder();
 
         try (final FileExecutionGraphInfoStore executionGraphStore =
-                createDefaultExecutionGraphInfoStore(
-                        rootDir,
-                        new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor()))) {
+                createDefaultExecutionGraphInfoStore(rootDir)) {
 
             final File storageDirectory = executionGraphStore.getStorageDir();
 

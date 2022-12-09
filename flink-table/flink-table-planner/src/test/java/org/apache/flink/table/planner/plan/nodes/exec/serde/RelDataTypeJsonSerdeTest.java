@@ -20,7 +20,6 @@ package org.apache.flink.table.planner.plan.nodes.exec.serde;
 
 import org.apache.flink.api.common.typeutils.base.VoidSerializer;
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
-import org.apache.flink.table.planner.calcite.FlinkTypeSystem;
 import org.apache.flink.table.planner.typeutils.LogicalRelDataTypeConverterTest.PojoClass;
 import org.apache.flink.table.types.logical.DayTimeIntervalType;
 import org.apache.flink.table.types.logical.RawType;
@@ -51,9 +50,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @Execution(CONCURRENT)
 public class RelDataTypeJsonSerdeTest {
 
-    private static final FlinkTypeFactory FACTORY =
-            new FlinkTypeFactory(
-                    RelDataTypeJsonSerdeTest.class.getClassLoader(), FlinkTypeSystem.INSTANCE);
+    private static final FlinkTypeFactory FACTORY = FlinkTypeFactory.INSTANCE();
 
     @ParameterizedTest
     @MethodSource("testRelDataTypeSerde")

@@ -20,19 +20,20 @@ package org.apache.flink.table.examples.java.basics;
 
 import org.apache.flink.table.examples.utils.ExampleOutputTestBase;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.junit.Assert.assertThat;
 
 /** Test for Java {@link GettingStartedExample}. */
-class GettingStartedExampleITCase extends ExampleOutputTestBase {
+public class GettingStartedExampleITCase extends ExampleOutputTestBase {
 
     @Test
-    void testExample() throws Exception {
+    public void testExample() throws Exception {
         GettingStartedExample.main(new String[0]);
         final String consoleOutput = getOutputString();
-        assertThat(consoleOutput)
-                .contains("|                    6 |                 1979 |")
-                .contains("SUCCESS!");
+        assertThat(
+                consoleOutput, containsString("|                    6 |                 1979 |"));
+        assertThat(consoleOutput, containsString("SUCCESS!"));
     }
 }

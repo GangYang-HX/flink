@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Tests for the RetryOnException annotation. */
 @ExtendWith(RetryExtension.class)
-class RetryOnExceptionExtensionTest {
+public class RetryOnExceptionExtensionTest {
 
     private static final int NUMBER_OF_RUNS = 3;
 
@@ -41,7 +41,7 @@ class RetryOnExceptionExtensionTest {
     private static int runsForPassAfterOneFailure = 0;
 
     @AfterAll
-    static void verify() {
+    public static void verify() {
         assertEquals(NUMBER_OF_RUNS + 1, runsForTestWithMatchingException);
         assertEquals(NUMBER_OF_RUNS + 1, runsForTestWithSubclassException);
         assertEquals(1, runsForSuccessfulTest);
@@ -50,13 +50,13 @@ class RetryOnExceptionExtensionTest {
 
     @TestTemplate
     @RetryOnException(times = NUMBER_OF_RUNS, exception = IllegalArgumentException.class)
-    void testSuccessfulTest() {
+    public void testSuccessfulTest() {
         runsForSuccessfulTest++;
     }
 
     @TestTemplate
     @RetryOnException(times = NUMBER_OF_RUNS, exception = IllegalArgumentException.class)
-    void testMatchingException() {
+    public void testMatchingException() {
         runsForTestWithMatchingException++;
         if (runsForTestWithMatchingException <= NUMBER_OF_RUNS) {
             throw new IllegalArgumentException();
@@ -65,7 +65,7 @@ class RetryOnExceptionExtensionTest {
 
     @TestTemplate
     @RetryOnException(times = NUMBER_OF_RUNS, exception = RuntimeException.class)
-    void testSubclassException() {
+    public void testSubclassException() {
         runsForTestWithSubclassException++;
         if (runsForTestWithSubclassException <= NUMBER_OF_RUNS) {
             throw new IllegalArgumentException();
@@ -74,7 +74,7 @@ class RetryOnExceptionExtensionTest {
 
     @TestTemplate
     @RetryOnException(times = NUMBER_OF_RUNS, exception = IllegalArgumentException.class)
-    void testPassAfterOneFailure() {
+    public void testPassAfterOneFailure() {
         runsForPassAfterOneFailure++;
         if (runsForPassAfterOneFailure == 1) {
             throw new IllegalArgumentException();

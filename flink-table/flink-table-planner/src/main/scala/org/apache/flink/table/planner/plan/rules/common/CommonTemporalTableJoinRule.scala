@@ -28,7 +28,7 @@ import org.apache.calcite.plan.hep.HepRelVertex
 import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rel.logical.{LogicalProject, LogicalTableScan}
-import org.apache.calcite.rex.{RexCorrelVariable, RexFieldAccess}
+import org.apache.calcite.rex.{RexCall, RexCorrelVariable, RexFieldAccess}
 
 /**
  * Base implementation that matches temporal join node.
@@ -47,6 +47,7 @@ trait CommonTemporalTableJoinRule {
       case r: RexFieldAccess
           if r.getType.isInstanceOf[TimeIndicatorRelDataType] &&
             r.getReferenceExpr.isInstanceOf[RexCorrelVariable] => // pass
+      case r: RexCall if "NOW".equals(r.op.getName) =>
       case _ =>
         throw new TableException(
           "Temporal table join currently only supports " +

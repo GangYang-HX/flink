@@ -1,0 +1,12 @@
+syntax = "proto3";
+package org.apache.flink.formats.protobuf.proto;
+option java_package = "org.apache.flink.formats.protobuf.testproto";
+option java_multiple_files = false;
+
+message KafkaDiversionSinkTest {
+  string broker_arg = 1;
+  string topic_arg = 2;
+  string name = 3;
+  int32 num = 4;
+  int64 xtime = 5;
+}

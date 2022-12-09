@@ -35,6 +35,7 @@ import org.apache.flink.runtime.util.JvmShutdownSafeguard;
 import org.apache.flink.runtime.util.SignalHandler;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.yarn.YarnEnvironmentUtils;
 import org.apache.flink.yarn.configuration.YarnConfigOptions;
 
 import org.apache.hadoop.fs.Path;
@@ -63,13 +64,13 @@ public final class YarnApplicationClusterEntryPoint extends ApplicationClusterEn
     }
 
     public static void main(final String[] args) {
+        Map<String, String> env = System.getenv();
+        YarnEnvironmentUtils.overwriteProps(env, LOG);
         // startup checks and logging
         EnvironmentInformation.logEnvironmentInfo(
                 LOG, YarnApplicationClusterEntryPoint.class.getSimpleName(), args);
         SignalHandler.register(LOG);
         JvmShutdownSafeguard.installAsShutdownHook(LOG);
-
-        Map<String, String> env = System.getenv();
 
         final String workingDirectory = env.get(ApplicationConstants.Environment.PWD.key());
         Preconditions.checkArgument(

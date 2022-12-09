@@ -64,17 +64,9 @@ public interface ElasticsearchSinkFunction<T> extends Serializable, Function {
 
     /**
      * Initialization method for the function. It is called once before the actual working process
-     * methods, if {@link #open(RuntimeContext)} is not overridden.
-     */
-    default void open() throws Exception {}
-
-    /**
-     * Initialization method for the function. It is called once before the actual working process
      * methods.
      */
-    default void open(RuntimeContext ctx) throws Exception {
-        open();
-    }
+    default void open() throws Exception {}
 
     /** Tear-down method for the function. It is called when the sink closes. */
     default void close() throws Exception {}

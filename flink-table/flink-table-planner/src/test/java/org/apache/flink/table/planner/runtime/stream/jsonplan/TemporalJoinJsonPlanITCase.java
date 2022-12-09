@@ -28,8 +28,6 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.flink.table.api.Expressions.$;
-
 /** Test for TemporalJoin json plan. */
 public class TemporalJoinJsonPlanITCase extends JsonPlanTestBase {
 
@@ -70,8 +68,7 @@ public class TemporalJoinJsonPlanITCase extends JsonPlanTestBase {
                 "PRIMARY KEY(currency) NOT ENFORCED");
 
         TemporalTableFunction temporalTableFunction =
-                tableEnv.from("RatesHistory")
-                        .createTemporalTableFunction($("rowtime"), $("currency"));
+                tableEnv.from("RatesHistory").createTemporalTableFunction("rowtime", "currency");
         tableEnv.createTemporarySystemFunction("Rates", temporalTableFunction);
         createTestValuesSinkTable("MySink", "amount bigint");
     }

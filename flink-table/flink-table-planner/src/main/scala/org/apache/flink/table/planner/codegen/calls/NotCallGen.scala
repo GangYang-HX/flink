@@ -30,10 +30,7 @@ class NotCallGen(callGenerator: CallGenerator) extends CallGenerator {
   ): GeneratedExpression = {
     assert(returnType.isInstanceOf[BooleanType])
 
-    ScalarOperatorGens.generateNot(
-      ctx,
-      callGenerator.generate(ctx, operands, returnType),
-      returnType)
+    ScalarOperatorGens.generateNot(ctx, callGenerator.generate(ctx, operands, returnType))
   }
 
 }

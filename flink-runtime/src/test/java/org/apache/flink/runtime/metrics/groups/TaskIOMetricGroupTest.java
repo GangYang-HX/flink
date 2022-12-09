@@ -38,8 +38,6 @@ public class TaskIOMetricGroupTest {
     public void testTaskIOMetricGroup() throws InterruptedException {
         TaskMetricGroup task = UnregisteredMetricGroups.createUnregisteredTaskMetricGroup();
         TaskIOMetricGroup taskIO = task.getIOMetricGroup();
-        taskIO.setEnableBusyTime(true);
-        final long startTime = System.currentTimeMillis();
 
         // test counter forwarding
         assertNotNull(taskIO.getNumRecordsInCounter());
@@ -77,19 +75,6 @@ public class TaskIOMetricGroupTest {
         assertEquals(100L, io.getNumBytesIn());
         assertEquals(250L, io.getNumBytesOut());
         assertEquals(3L, taskIO.getNumBuffersOutCounter().getCount());
-        assertEquals(
-                taskIO.getIdleTimeMsPerSecond().getAccumulatedCount(), io.getAccumulateIdleTime());
-        assertEquals(
-                taskIO.getHardBackPressuredTimePerSecond().getAccumulatedCount()
-                        + taskIO.getSoftBackPressuredTimePerSecond().getAccumulatedCount(),
-                io.getAccumulateBackPressuredTime());
-        assertThat(
-                io.getAccumulateBusyTime(),
-                greaterThanOrEqualTo(
-                        (double) System.currentTimeMillis()
-                                - startTime
-                                - io.getAccumulateIdleTime()
-                                - io.getAccumulateBackPressuredTime()));
         assertThat(taskIO.getIdleTimeMsPerSecond().getCount(), greaterThanOrEqualTo(softSleepTime));
         assertThat(
                 taskIO.getSoftBackPressuredTimePerSecond().getCount(),

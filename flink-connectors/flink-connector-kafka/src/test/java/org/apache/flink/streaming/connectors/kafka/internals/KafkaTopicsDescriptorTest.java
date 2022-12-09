@@ -17,6 +17,7 @@
 
 package org.apache.flink.streaming.connectors.kafka.internals;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -25,8 +26,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.regex.Pattern;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for the {@link KafkaTopicsDescriptor}. */
 @RunWith(Parameterized.class)
@@ -61,6 +60,6 @@ public class KafkaTopicsDescriptorTest {
         KafkaTopicsDescriptor topicsDescriptor =
                 new KafkaTopicsDescriptor(fixedTopics, topicPattern);
 
-        assertThat(topicsDescriptor.isMatchingTopic(topic)).isEqualTo(expected);
+        Assert.assertEquals(expected, topicsDescriptor.isMatchingTopic(topic));
     }
 }

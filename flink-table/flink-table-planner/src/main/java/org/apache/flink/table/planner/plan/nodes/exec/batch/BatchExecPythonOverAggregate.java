@@ -161,8 +161,7 @@ public class BatchExecPythonOverAggregate extends BatchExecOverAggregateBase {
                         InternalTypeInfo.of(getOutputType()).toRowType(),
                         isRangeWindows,
                         pythonConfig,
-                        config,
-                        planner.getFlinkContext().getClassLoader());
+                        config);
         if (CommonPythonUtil.isPythonWorkerUsingManagedMemory(pythonConfig)) {
             transform.declareManagedMemoryUseCaseAtSlotScope(ManagedMemoryUseCase.PYTHON);
         }
@@ -175,8 +174,7 @@ public class BatchExecPythonOverAggregate extends BatchExecOverAggregateBase {
             RowType outputRowType,
             boolean[] isRangeWindows,
             Configuration pythonConfig,
-            ExecNodeConfig config,
-            ClassLoader classLoader) {
+            ExecNodeConfig config) {
         Tuple2<int[], PythonFunctionInfo[]> aggCallInfos =
                 CommonPythonUtil.extractPythonAggregateFunctionInfosFromAggregateCall(
                         aggCalls.toArray(new AggregateCall[0]));
@@ -185,7 +183,6 @@ public class BatchExecPythonOverAggregate extends BatchExecOverAggregateBase {
         OneInputStreamOperator<RowData, RowData> pythonOperator =
                 getPythonOverWindowAggregateFunctionOperator(
                         config,
-                        classLoader,
                         pythonConfig,
                         inputRowType,
                         outputRowType,
@@ -204,7 +201,6 @@ public class BatchExecPythonOverAggregate extends BatchExecOverAggregateBase {
     @SuppressWarnings("unchecked")
     private OneInputStreamOperator<RowData, RowData> getPythonOverWindowAggregateFunctionOperator(
             ExecNodeConfig config,
-            ClassLoader classLoader,
             Configuration pythonConfig,
             RowType inputRowType,
             RowType outputRowType,
@@ -257,13 +253,13 @@ public class BatchExecPythonOverAggregate extends BatchExecOverAggregateBase {
                             sortSpec.getFieldIndices()[0],
                             sortSpec.getAscendingOrders()[0],
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "UdafInputProjection",
                                     inputRowType,
                                     udfInputType,
                                     udafInputOffsets),
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "GroupKey",
                                     inputRowType,
                                     (RowType)
@@ -271,7 +267,7 @@ public class BatchExecPythonOverAggregate extends BatchExecOverAggregateBase {
                                                     .project(inputRowType),
                                     partitionSpec.getFieldIndices()),
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "GroupSet",
                                     inputRowType,
                                     (RowType)

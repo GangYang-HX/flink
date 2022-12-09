@@ -28,17 +28,21 @@ import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.annotation.Nonnull;
 
 import java.io.IOException;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.lessThan;
+import static org.junit.Assert.assertThat;
 
 /** Tests for {@link SkipListKeyComparator}. */
-class SkipListKeyComparatorTest {
+public class SkipListKeyComparatorTest extends TestLogger {
     private static final SkipListKeySerializer<Long, Integer> skipListKeySerializerForPrimitive =
             new SkipListKeySerializer<>(LongSerializer.INSTANCE, IntSerializer.INSTANCE);
     private static final SkipListKeySerializer<byte[], byte[]> skipListKeySerializerForByteArray =
@@ -49,104 +53,104 @@ class SkipListKeyComparatorTest {
                             ByteArraySerializer.INSTANCE, ByteArraySerializer.INSTANCE);
 
     @Test
-    void testPrimitiveEqualKeyAndEqualNamespace() {
+    public void testPrimitiveEqualKeyAndEqualNamespace() {
         // verify equal namespace and key
-        assertThat(compareSkipListKeyOfPrimitive(0L, 0, 0L, 0)).isEqualTo(0);
+        assertThat(compareSkipListKeyOfPrimitive(0L, 0, 0L, 0), is(0));
     }
 
     @Test
-    void testPrimitiveDiffKeyAndEqualNamespace() {
+    public void testPrimitiveDiffKeyAndEqualNamespace() {
         // verify equal namespace and unequal key
-        assertThat(compareSkipListKeyOfPrimitive(0L, 5, 1L, 5)).isLessThan(0);
-        assertThat(compareSkipListKeyOfPrimitive(192L, 90, 87L, 90)).isGreaterThan(0);
+        assertThat(compareSkipListKeyOfPrimitive(0L, 5, 1L, 5), lessThan(0));
+        assertThat(compareSkipListKeyOfPrimitive(192L, 90, 87L, 90), greaterThan(0));
     }
 
     @Test
-    void testPrimitiveEqualKeyAndDiffNamespace() {
+    public void testPrimitiveEqualKeyAndDiffNamespace() {
         // verify unequal namespace and equal key
-        assertThat(compareSkipListKeyOfPrimitive(8374L, 2, 8374L, 3)).isLessThan(0);
-        assertThat(compareSkipListKeyOfPrimitive(839L, 3, 839L, 2)).isGreaterThan(0);
+        assertThat(compareSkipListKeyOfPrimitive(8374L, 2, 8374L, 3), lessThan(0));
+        assertThat(compareSkipListKeyOfPrimitive(839L, 3, 839L, 2), greaterThan(0));
     }
 
     @Test
-    void testPrimitiveDiffKeyAndDiffNamespace() {
+    public void testPrimitiveDiffKeyAndDiffNamespace() {
         // verify unequal namespace and unequal key
-        assertThat(compareSkipListKeyOfPrimitive(1L, 2, 3L, 4)).isLessThan(0);
-        assertThat(compareSkipListKeyOfPrimitive(1L, 4, 3L, 2)).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfPrimitive(3L, 2, 1L, 4)).isLessThan(0);
-        assertThat(compareSkipListKeyOfPrimitive(3L, 4, 1L, 2)).isGreaterThan(0);
+        assertThat(compareSkipListKeyOfPrimitive(1L, 2, 3L, 4), lessThan(0));
+        assertThat(compareSkipListKeyOfPrimitive(1L, 4, 3L, 2), greaterThan(0));
+        assertThat(compareSkipListKeyOfPrimitive(3L, 2, 1L, 4), lessThan(0));
+        assertThat(compareSkipListKeyOfPrimitive(3L, 4, 1L, 2), greaterThan(0));
     }
 
     @Test
-    void testByteArrayEqualKeyAndEqualNamespace() {
+    public void testByteArrayEqualKeyAndEqualNamespace() {
         // verify equal namespace and key
-        assertThat(compareSkipListKeyOfByteArray("34", "25", "34", "25")).isEqualTo(0);
+        assertThat(compareSkipListKeyOfByteArray("34", "25", "34", "25"), is(0));
     }
 
     @Test
-    void testByteArrayEqualKeyAndLargerNamespace() {
+    public void testByteArrayEqualKeyAndLargerNamespace() {
         // verify larger namespace
-        assertThat(compareSkipListKeyOfByteArray("34", "27", "34", "25")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "27", "34", "25,34")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "27,28", "34", "25")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "27,28", "34", "25,34")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "27,28", "34", "27,3")).isGreaterThan(0);
+        assertThat(compareSkipListKeyOfByteArray("34", "27", "34", "25"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "27", "34", "25,34"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "27,28", "34", "25"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "27,28", "34", "25,34"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "27,28", "34", "27,3"), greaterThan(0));
     }
 
     @Test
-    void testByteArrayEqualKeyAndSmallerNamespace() {
+    public void testByteArrayEqualKeyAndSmallerNamespace() {
         // verify smaller namespace
-        assertThat(compareSkipListKeyOfByteArray("34", "25", "34", "27")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "25", "34", "27,34")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "25,28", "34", "27")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "25,28", "34", "27,34")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "25,28", "34", "25,34")).isLessThan(0);
+        assertThat(compareSkipListKeyOfByteArray("34", "25", "34", "27"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "25", "34", "27,34"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "25,28", "34", "27"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "25,28", "34", "27,34"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "25,28", "34", "25,34"), lessThan(0));
     }
 
     @Test
-    void testByteArrayLargerKeyAndEqualNamespace() {
+    public void testByteArrayLargerKeyAndEqualNamespace() {
         // verify larger key
-        assertThat(compareSkipListKeyOfByteArray("34", "25", "30", "25")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34", "25", "30,38", "25")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34,22", "25", "30", "25")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34,22", "25", "30,38", "25")).isGreaterThan(0);
-        assertThat(compareSkipListKeyOfByteArray("34,82", "25", "34,38", "25")).isGreaterThan(0);
+        assertThat(compareSkipListKeyOfByteArray("34", "25", "30", "25"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34", "25", "30,38", "25"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34,22", "25", "30", "25"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34,22", "25", "30,38", "25"), greaterThan(0));
+        assertThat(compareSkipListKeyOfByteArray("34,82", "25", "34,38", "25"), greaterThan(0));
     }
 
     @Test
-    void testByteArraySmallerKeyAndEqualNamespace() {
+    public void testByteArraySmallerKeyAndEqualNamespace() {
         // verify smaller key
-        assertThat(compareSkipListKeyOfByteArray("30", "25", "34", "25")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("30,38", "25", "34", "25")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("30", "25", "34,22", "25")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("30,38", "25", "34,22", "25")).isLessThan(0);
-        assertThat(compareSkipListKeyOfByteArray("30,38", "25", "30,72", "25")).isLessThan(0);
+        assertThat(compareSkipListKeyOfByteArray("30", "25", "34", "25"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("30,38", "25", "34", "25"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("30", "25", "34,22", "25"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("30,38", "25", "34,22", "25"), lessThan(0));
+        assertThat(compareSkipListKeyOfByteArray("30,38", "25", "30,72", "25"), lessThan(0));
     }
 
     @Test
-    void testEqualNamespace() {
+    public void testEqualNamespace() {
         // test equal namespace
-        assertThat(compareNamespace("23", "23")).isEqualTo(0);
+        assertThat(compareNamespace("23", "23"), is(0));
     }
 
     @Test
-    void testSmallerNamespace() {
+    public void testSmallerNamespace() {
         // test smaller namespace
-        assertThat(compareNamespace("23", "24")).isLessThan(0);
-        assertThat(compareNamespace("23", "24,35")).isLessThan(0);
-        assertThat(compareNamespace("23,25", "24")).isLessThan(0);
-        assertThat(compareNamespace("23,20", "24,45")).isLessThan(0);
-        assertThat(compareNamespace("23,20", "23,45")).isLessThan(0);
+        assertThat(compareNamespace("23", "24"), lessThan(0));
+        assertThat(compareNamespace("23", "24,35"), lessThan(0));
+        assertThat(compareNamespace("23,25", "24"), lessThan(0));
+        assertThat(compareNamespace("23,20", "24,45"), lessThan(0));
+        assertThat(compareNamespace("23,20", "23,45"), lessThan(0));
     }
 
     @Test
-    void testLargerNamespace() {
+    public void testLargerNamespace() {
         // test larger namespace
-        assertThat(compareNamespace("26", "14")).isGreaterThan(0);
-        assertThat(compareNamespace("26", "14,73")).isGreaterThan(0);
-        assertThat(compareNamespace("26,25", "14")).isGreaterThan(0);
-        assertThat(compareNamespace("26,20", "14,45")).isGreaterThan(0);
-        assertThat(compareNamespace("26,90", "26,45")).isGreaterThan(0);
+        assertThat(compareNamespace("26", "14"), greaterThan(0));
+        assertThat(compareNamespace("26", "14,73"), greaterThan(0));
+        assertThat(compareNamespace("26,25", "14"), greaterThan(0));
+        assertThat(compareNamespace("26,20", "14,45"), greaterThan(0));
+        assertThat(compareNamespace("26,90", "26,45"), greaterThan(0));
     }
 
     private int compareSkipListKeyOfByteArray(

@@ -73,7 +73,11 @@ public class StreamSource<OUT, SRC extends SourceFunction<OUT>>
             final OperatorChain<?, ?> operatorChain)
             throws Exception {
 
-        final TimeCharacteristic timeCharacteristic = getOperatorConfig().getTimeCharacteristic();
+        final int timeCharacteristicEnum = getExecutionConfig().getTimeCharacteristicEnum();
+        final TimeCharacteristic timeCharacteristic =
+                timeCharacteristicEnum == -1
+                        ? getOperatorConfig().getTimeCharacteristic()
+                        : getOperatorConfig().getTimeCharacteristic(timeCharacteristicEnum);
 
         final Configuration configuration =
                 this.getContainingTask().getEnvironment().getTaskManagerInfo().getConfiguration();

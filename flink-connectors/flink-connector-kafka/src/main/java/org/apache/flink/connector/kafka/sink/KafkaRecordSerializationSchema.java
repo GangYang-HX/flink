@@ -58,6 +58,10 @@ public interface KafkaRecordSerializationSchema<T> extends Serializable {
      */
     ProducerRecord<byte[], byte[]> serialize(T element, KafkaSinkContext context, Long timestamp);
 
+    default String getBrokers(T element) {
+        return null;
+    }
+
     /** Context providing information of the kafka record target location. */
     @Internal
     interface KafkaSinkContext {
@@ -84,6 +88,10 @@ public interface KafkaRecordSerializationSchema<T> extends Serializable {
          * @return the ids of the currently available partitions
          */
         int[] getPartitionsForTopic(String topic);
+
+        default int[] getPartitionsForTopic(String topic, String brokers) {
+            return null;
+        }
     }
 
     /**

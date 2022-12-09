@@ -27,7 +27,6 @@ import org.apache.flink.connectors.hive.read.HiveContinuousPartitionContext;
 import org.apache.flink.table.catalog.ObjectPath;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.http.util.Asserts;
@@ -44,7 +43,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertTrue;
 
 /** Test for {@link ContinuousHiveSplitEnumerator.PartitionMonitor}. */
 public class PartitionMonitorTest {
@@ -80,16 +80,16 @@ public class PartitionMonitorTest {
 
     private void assertPartitionEquals(
             Collection<List<String>> expected, Collection<List<String>> actual) {
-        assertThat(expected != null && actual != null && expected.size() == actual.size()).isTrue();
-        assertThat(actual.stream().map(Object::toString).sorted().toArray())
-                .isEqualTo(expected.stream().map(Object::toString).sorted().toArray());
+        assertTrue(expected != null && actual != null && expected.size() == actual.size());
+        assertArrayEquals(
+                expected.stream().map(Object::toString).sorted().toArray(),
+                actual.stream().map(Object::toString).sorted().toArray());
     }
 
     private void commitPartitionWithGivenCreateTime(
             List<String> partitionValues, Integer createTime) {
         StorageDescriptor sd = new StorageDescriptor();
         sd.setLocation("/tmp/test");
-        sd.setSerdeInfo(new SerDeInfo());
         Partition partition =
                 new Partition(
                         partitionValues, "testDb", "testTable", createTime, createTime, sd, null);
@@ -119,6 +119,11 @@ public class PartitionMonitorTest {
                             partitionColValues.put(arr[0], arr[1]);
                         }
                         return new HiveTablePartition(sd, partitionColValues, new Properties());
+                    }
+
+                    @Override
+                    public boolean getBatchLookupSourceFetchLatestPartition() {
+                        return false;
                     }
 
                     @Override
@@ -182,9 +187,10 @@ public class PartitionMonitorTest {
                         0L,
                         seenPartitionsSinceOffset,
                         tablePath,
+                        configuration.get(
+                                HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM),
                         jobConf,
                         continuousPartitionFetcher,
-                        fetcherContext,
-                        1);
+                        fetcherContext);
     }
 }

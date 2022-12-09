@@ -37,22 +37,17 @@ import org.apache.flink.runtime.state.OperatorStateHandle;
 import org.apache.flink.runtime.state.OperatorStreamStateHandle;
 import org.apache.flink.runtime.state.ResultSubpartitionStateHandle;
 import org.apache.flink.runtime.state.SharedStateRegistry;
-import org.apache.flink.runtime.state.StateHandleID;
 import org.apache.flink.runtime.state.StreamStateHandle;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.Executors;
 import org.apache.flink.util.concurrent.ManuallyTriggeredScheduledExecutor;
 
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.emptyList;
@@ -71,10 +66,6 @@ import static org.mockito.Mockito.when;
 /** Tests for failure of checkpoint coordinator. */
 public class CheckpointCoordinatorFailureTest extends TestLogger {
 
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
-
     /**
      * Tests that a failure while storing a completed checkpoint in the completed checkpoint store
      * will properly fail the originating pending checkpoint and clean upt the completed checkpoint.
@@ -89,19 +80,20 @@ public class CheckpointCoordinatorFailureTest extends TestLogger {
         ExecutionGraph testGraph =
                 new CheckpointCoordinatorTestingUtils.CheckpointExecutionGraphBuilder()
                         .addJobVertex(jobVertexId)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
 
         ExecutionVertex vertex = testGraph.getJobVertex(jobVertexId).getTaskVertices()[0];
 
         // set up the coordinator and validate the initial state
         CheckpointCoordinator coord =
                 new CheckpointCoordinatorBuilder()
+                        .setExecutionGraph(testGraph)
                         .setCompletedCheckpointStore(
                                 new FailingCompletedCheckpointStore(
                                         new Exception(
                                                 "The failing completed checkpoint store failed again... :-(")))
                         .setTimer(manuallyTriggeredScheduledExecutor)
-                        .build(testGraph);
+                        .build();
 
         coord.triggerCheckpoint(false);
 
@@ -117,9 +109,7 @@ public class CheckpointCoordinatorFailureTest extends TestLogger {
         final long checkpointId = coord.getPendingCheckpoints().keySet().iterator().next();
 
         KeyedStateHandle managedKeyedHandle = mock(KeyedStateHandle.class);
-        when(managedKeyedHandle.getStateHandleId()).thenReturn(StateHandleID.randomStateHandleId());
         KeyedStateHandle rawKeyedHandle = mock(KeyedStateHandle.class);
-        when(rawKeyedHandle.getStateHandleId()).thenReturn(StateHandleID.randomStateHandleId());
         OperatorStateHandle managedOpHandle = mock(OperatorStreamStateHandle.class);
         OperatorStateHandle rawOpHandle = mock(OperatorStreamStateHandle.class);
         InputChannelStateHandle inputChannelStateHandle =
@@ -203,7 +193,7 @@ public class CheckpointCoordinatorFailureTest extends TestLogger {
         final ExecutionGraph graph =
                 new CheckpointCoordinatorTestingUtils.CheckpointExecutionGraphBuilder()
                         .addJobVertex(jobVertexID1)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
 
         final ExecutionVertex vertex = graph.getJobVertex(jobVertexID1).getTaskVertices()[0];
         final ExecutionAttemptID attemptId = vertex.getCurrentExecutionAttempt().getAttemptId();
@@ -222,6 +212,7 @@ public class CheckpointCoordinatorFailureTest extends TestLogger {
         final AtomicInteger cleanupCallCount = new AtomicInteger(0);
         final CheckpointCoordinator checkpointCoordinator =
                 new CheckpointCoordinatorBuilder()
+                        .setExecutionGraph(graph)
                         .setCheckpointIDCounter(checkpointIDCounter)
                         .setCheckpointsCleaner(
                                 new CheckpointsCleaner() {
@@ -241,7 +232,7 @@ public class CheckpointCoordinatorFailureTest extends TestLogger {
                         .setCompletedCheckpointStore(completedCheckpointStore)
                         .setTimer(manuallyTriggeredScheduledExecutor)
                         .setCheckpointStatsTracker(statsTracker)
-                        .build(graph);
+                        .build();
         checkpointCoordinator.triggerCheckpoint(false);
         manuallyTriggeredScheduledExecutor.triggerAll();
         CheckpointMetrics expectedReportedMetrics =

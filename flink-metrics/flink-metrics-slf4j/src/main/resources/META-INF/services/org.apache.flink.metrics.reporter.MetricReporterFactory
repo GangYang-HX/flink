@@ -14,3 +14,4 @@
 # limitations under the License.
 
 org.apache.flink.metrics.slf4j.Slf4jReporterFactory
+com.bilibili.flink.metrics.slf4j.Slf4jJsonReporterFactory

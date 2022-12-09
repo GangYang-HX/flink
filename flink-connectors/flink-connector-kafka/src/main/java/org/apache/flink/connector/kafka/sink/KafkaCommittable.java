@@ -27,7 +27,7 @@ import java.util.function.Consumer;
  * This class holds the necessary information to construct a new {@link FlinkKafkaInternalProducer}
  * to commit transactions in {@link KafkaCommitter}.
  */
-class KafkaCommittable {
+public class KafkaCommittable {
 
     private final long producerId;
     private final short epoch;

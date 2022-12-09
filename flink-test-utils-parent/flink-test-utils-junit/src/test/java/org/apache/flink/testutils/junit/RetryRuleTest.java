@@ -17,20 +17,23 @@
 
 package org.apache.flink.testutils.junit;
 
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
+import org.apache.flink.util.TestLogger;
+
+import org.junit.Assert;
+import org.junit.Ignore;
+import org.junit.Test;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
 
 /** Tests for the {@link RetryRule}. */
-class RetryRuleTest {
+public class RetryRuleTest extends TestLogger {
     private static final RetryRule RETRY_RULE = new RetryRule();
 
     @Test
-    void testExpectedExceptionIgnored() throws Throwable {
+    public void testExpectedExceptionIgnored() throws Throwable {
         final int numEvaluationsToFail = 1;
 
         final Description testDescription =
@@ -43,22 +46,24 @@ class RetryRuleTest {
 
         final TestStatement statement = new TestStatement(numEvaluationsToFail);
 
-        assertThatThrownBy(() -> RETRY_RULE.apply(statement, testDescription).evaluate())
-                .withFailMessage("Should have failed.")
-                .isInstanceOf(RuntimeException.class);
+        try {
+            RETRY_RULE.apply(statement, testDescription).evaluate();
+            Assert.fail("Should have failed.");
+        } catch (RuntimeException expected) {
+        }
 
-        assertThat(statement.getNumEvaluations()).isEqualTo(numEvaluationsToFail);
+        assertThat(statement.getNumEvaluations(), is(numEvaluationsToFail));
     }
 
-    @Disabled // we don't want to actually this run as a test
+    @Ignore // we don't want to actually this run as a test
     private static class TestClassWithTestExpectingRuntimeException {
         @RetryOnFailure(times = 2)
-        @org.junit.Test(expected = RuntimeException.class)
+        @Test(expected = RuntimeException.class)
         public void test() {}
     }
 
     @Test
-    void testNoAnnotationResultsInZeroRetries() throws Throwable {
+    public void testNoAnnotationResultsInZeroRetries() throws Throwable {
         final int numEvaluationsToFail = 1;
 
         final Description testDescription =
@@ -69,21 +74,23 @@ class RetryRuleTest {
 
         final TestStatement statement = new TestStatement(numEvaluationsToFail);
 
-        assertThatThrownBy(() -> RETRY_RULE.apply(statement, testDescription).evaluate())
-                .withFailMessage("Should have failed.")
-                .isInstanceOf(RuntimeException.class);
+        try {
+            RETRY_RULE.apply(statement, testDescription).evaluate();
+            Assert.fail("Should have failed.");
+        } catch (RuntimeException expected) {
+        }
 
-        assertThat(statement.getNumEvaluations()).isEqualTo(numEvaluationsToFail);
+        assertThat(statement.getNumEvaluations(), is(numEvaluationsToFail));
     }
 
-    @Disabled // we don't want to actually this run as a test
+    @Ignore // we don't want to actually this run as a test
     private static class TestClassWithoutAnnotation {
-        @org.junit.Test
+        @Test
         public void test() {}
     }
 
     @Test
-    void testAnnotationOnClassUsedAsFallback() throws Throwable {
+    public void testAnnotationOnClassUsedAsFallback() throws Throwable {
         final int numEvaluationsToFail = 1;
 
         final Description testDescription =
@@ -96,18 +103,18 @@ class RetryRuleTest {
 
         RETRY_RULE.apply(statement, testDescription).evaluate();
 
-        assertThat(statement.getNumEvaluations()).isEqualTo(numEvaluationsToFail + 1);
+        assertThat(statement.getNumEvaluations(), is(numEvaluationsToFail + 1));
     }
 
-    @Disabled // we don't want to actually this run as a test
+    @Ignore // we don't want to actually this run as a test
     @RetryOnFailure(times = 1)
     private static class TestClassWithAnnotation {
-        @org.junit.Test
+        @Test
         public void test() {}
     }
 
     @Test
-    void testAnnotationOnMethodTakesPrecedence() throws Throwable {
+    public void testAnnotationOnMethodTakesPrecedence() throws Throwable {
         final int numEvaluationsToFail = 2;
 
         final Description testDescription =
@@ -120,14 +127,14 @@ class RetryRuleTest {
 
         RETRY_RULE.apply(statement, testDescription).evaluate();
 
-        assertThat(statement.getNumEvaluations()).isEqualTo(numEvaluationsToFail + 1);
+        assertThat(statement.getNumEvaluations(), is(numEvaluationsToFail + 1));
     }
 
-    @Disabled // we don't want to actually this run as a test
+    @Ignore // we don't want to actually this run as a test
     @RetryOnFailure(times = 1)
     private static class TestClassWithAnnotationOnMethod {
         @RetryOnFailure(times = 2)
-        @org.junit.Test
+        @Test
         public void test() {}
     }
 

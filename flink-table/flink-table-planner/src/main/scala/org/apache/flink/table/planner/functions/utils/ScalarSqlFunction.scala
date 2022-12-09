@@ -22,7 +22,8 @@ import org.apache.flink.table.functions.{BuiltInFunctionDefinitions, FunctionIde
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 import org.apache.flink.table.planner.functions.bridging.BridgingSqlFunction
 import org.apache.flink.table.planner.functions.utils.ScalarSqlFunction._
-import org.apache.flink.table.planner.functions.utils.UserDefinedFunctionUtils._
+import org.apache.flink.table.planner.functions.utils.UserDefinedFunctionUtils.{getOperandType, _}
+import org.apache.flink.table.runtime.types.ClassLogicalTypeConverter.getDefaultExternalClassForType
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromDataTypeToLogicalType
 import org.apache.flink.table.runtime.types.TypeInfoLogicalTypeConverter.fromTypeInfoToLogicalType
 import org.apache.flink.table.types.logical.LogicalType
@@ -32,6 +33,8 @@ import org.apache.calcite.sql._
 import org.apache.calcite.sql.`type`._
 import org.apache.calcite.sql.`type`.SqlOperandTypeChecker.Consistency
 import org.apache.calcite.sql.parser.SqlParserPos
+
+import scala.collection.JavaConverters._
 
 /**
  * Calcite wrapper for user-defined scalar functions.

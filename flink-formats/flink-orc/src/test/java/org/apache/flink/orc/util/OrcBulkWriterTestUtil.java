@@ -35,7 +35,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 /** Util class for the OrcBulkWriter tests. */
 public class OrcBulkWriterTestUtil {
@@ -45,30 +48,30 @@ public class OrcBulkWriterTestUtil {
 
     public static void validate(File files, List<Record> expected) throws IOException {
         final File[] buckets = files.listFiles();
-        assertThat(buckets).isNotNull();
-        assertThat(buckets).hasSize(1);
+        assertNotNull(buckets);
+        assertEquals(1, buckets.length);
 
         final File[] partFiles = buckets[0].listFiles();
-        assertThat(partFiles).isNotNull();
+        assertNotNull(partFiles);
 
         for (File partFile : partFiles) {
-            assertThat(partFile.length()).isGreaterThan(0);
+            assertTrue(partFile.length() > 0);
 
             OrcFile.ReaderOptions readerOptions = OrcFile.readerOptions(new Configuration());
             Reader reader =
                     OrcFile.createReader(
                             new org.apache.hadoop.fs.Path(partFile.toURI()), readerOptions);
 
-            assertThat(reader.getNumberOfRows()).isEqualTo(3);
-            assertThat(reader.getSchema().getFieldNames()).hasSize(2);
-            assertThat(reader.getCompressionKind()).isSameAs(CompressionKind.LZ4);
-            assertThat(reader.hasMetadataValue(USER_METADATA_KEY)).isTrue();
-            assertThat(reader.getMetadataKeys()).contains(USER_METADATA_KEY);
+            assertEquals(3, reader.getNumberOfRows());
+            assertEquals(2, reader.getSchema().getFieldNames().size());
+            assertSame(reader.getCompressionKind(), CompressionKind.LZ4);
+            assertTrue(reader.hasMetadataValue(USER_METADATA_KEY));
+            assertTrue(reader.getMetadataKeys().contains(USER_METADATA_KEY));
 
             List<Record> results = getResults(reader);
 
-            assertThat(results).hasSize(3);
-            assertThat(results).isEqualTo(expected);
+            assertEquals(3, results.size());
+            assertEquals(results, expected);
         }
     }
 

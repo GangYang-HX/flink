@@ -20,7 +20,7 @@ package org.apache.flink.formats.json.glue.schema.registry;
 
 import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDeserializationFacade;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 
@@ -33,10 +33,10 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_SECRE
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link GlueSchemaRegistryJsonSchemaCoder}. */
-class GlueSchemaRegistryJsonSchemaCoderTest {
+public class GlueSchemaRegistryJsonSchemaCoderTest {
 
     @Test
-    void testDefaultAwsCredentialsProvider() throws Exception {
+    public void testDefaultAwsCredentialsProvider() throws Exception {
         GlueSchemaRegistryJsonSchemaCoder coder =
                 new GlueSchemaRegistryJsonSchemaCoder("test", getBaseConfig());
 
@@ -48,7 +48,7 @@ class GlueSchemaRegistryJsonSchemaCoderTest {
     }
 
     @Test
-    void testAwsCredentialsProviderFromConfig() throws Exception {
+    public void testAwsCredentialsProviderFromConfig() throws Exception {
         Map<String, Object> config = new HashMap<>(getBaseConfig());
         config.put(AWS_ACCESS_KEY_ID, "ak");
         config.put(AWS_SECRET_ACCESS_KEY, "sk");

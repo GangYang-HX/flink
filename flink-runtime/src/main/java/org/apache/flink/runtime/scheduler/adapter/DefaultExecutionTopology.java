@@ -197,13 +197,13 @@ public class DefaultExecutionTopology implements SchedulingTopology {
                         .map(ExecutionJobVertex::getJobVertexId)
                         .collect(Collectors.toSet());
 
-        // any mustBePipelinedConsumed input should be from within this new set so that existing
-        // pipelined regions will not change
+        // any PIPELINED input should be from within this new set so that existing pipelined regions
+        // will not change
         newlyInitializedJobVertices.stream()
                 .map(ExecutionJobVertex::getJobVertex)
                 .flatMap(v -> v.getInputs().stream())
                 .map(JobEdge::getSource)
-                .filter(r -> r.getResultType().mustBePipelinedConsumed())
+                .filter(r -> r.getResultType().isPipelined())
                 .map(IntermediateDataSet::getProducer)
                 .map(JobVertex::getID)
                 .forEach(id -> checkState(newJobVertexIds.contains(id)));
@@ -262,7 +262,7 @@ public class DefaultExecutionTopology implements SchedulingTopology {
             List<DefaultResultPartition> producedPartitions =
                     generateProducedSchedulingResultPartition(
                             vertex.getProducedPartitions(),
-                            edgeManager::getConsumerVertexGroupsForPartition);
+                            edgeManager::getConsumerVertexGroupForPartition);
 
             producedPartitions.forEach(
                     partition -> resultPartitionsById.put(partition.getId(), partition));
@@ -285,8 +285,8 @@ public class DefaultExecutionTopology implements SchedulingTopology {
     private static List<DefaultResultPartition> generateProducedSchedulingResultPartition(
             Map<IntermediateResultPartitionID, IntermediateResultPartition>
                     producedIntermediatePartitions,
-            Function<IntermediateResultPartitionID, List<ConsumerVertexGroup>>
-                    partitionConsumerVertexGroupsRetriever) {
+            Function<IntermediateResultPartitionID, ConsumerVertexGroup>
+                    partitionConsumerVertexGroupRetriever) {
 
         List<DefaultResultPartition> producedSchedulingPartitions =
                 new ArrayList<>(producedIntermediatePartitions.size());
@@ -305,8 +305,8 @@ public class DefaultExecutionTopology implements SchedulingTopology {
                                                                 ? ResultPartitionState.CONSUMABLE
                                                                 : ResultPartitionState.CREATED,
                                                 () ->
-                                                        partitionConsumerVertexGroupsRetriever
-                                                                .apply(irp.getPartitionId()),
+                                                        partitionConsumerVertexGroupRetriever.apply(
+                                                                irp.getPartitionId()),
                                                 irp::getConsumedPartitionGroups)));
 
         return producedSchedulingPartitions;

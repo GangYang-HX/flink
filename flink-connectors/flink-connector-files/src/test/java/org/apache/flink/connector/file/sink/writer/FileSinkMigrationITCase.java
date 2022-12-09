@@ -39,13 +39,15 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
-import org.apache.flink.testutils.junit.SharedObjectsExtension;
+import org.apache.flink.testutils.junit.SharedObjects;
 import org.apache.flink.testutils.junit.SharedReference;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -56,16 +58,17 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static org.apache.flink.runtime.testutils.CommonTestUtils.waitForAllTaskRunning;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Tests migrating from {@link StreamingFileSink} to {@link FileSink}. It trigger a savepoint for
  * the {@link StreamingFileSink} job and restore the {@link FileSink} job from the savepoint taken.
  */
-class FileSinkMigrationITCase {
+public class FileSinkMigrationITCase extends TestLogger {
 
-    @RegisterExtension
-    private final SharedObjectsExtension sharedObjects = SharedObjectsExtension.create();
+    @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
+
+    @Rule public final SharedObjects sharedObjects = SharedObjects.create();
 
     private static final String SOURCE_UID = "source";
 
@@ -81,8 +84,8 @@ class FileSinkMigrationITCase {
 
     private SharedReference<CountDownLatch> finalCheckpointLatch;
 
-    @BeforeEach
-    void setup() {
+    @Before
+    public void setup() {
         // We wait for two successful checkpoints in sources before shutting down. This ensures that
         // the sink can commit its data.
         // We need to keep a "static" latch here because all sources need to be kept running
@@ -92,24 +95,23 @@ class FileSinkMigrationITCase {
     }
 
     @Test
-    void test() throws Exception {
+    public void test() throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         SharedReference<Collection<Long>> list = sharedObjects.add(new ArrayList<>());
         int n = 10000;
         env.setParallelism(100);
         env.fromSequence(0, n).map(i -> list.applySync(l -> l.add(i)));
         env.execute();
-        assertThat(list.get()).hasSize(n + 1);
-        assertThat(LongStream.rangeClosed(0, n).boxed().collect(Collectors.toList()))
-                .isEqualTo(list.get().stream().sorted().collect(Collectors.toList()));
+        assertEquals(n + 1, list.get().size());
+        assertEquals(
+                LongStream.rangeClosed(0, n).boxed().collect(Collectors.toList()),
+                list.get().stream().sorted().collect(Collectors.toList()));
     }
 
     @Test
-    void testMigration(
-            @TempDir java.nio.file.Path tmpOutputDir, @TempDir java.nio.file.Path tmpSavepointDir)
-            throws Exception {
-        String outputPath = tmpOutputDir.toString();
-        String savepointBasePath = tmpSavepointDir.toString();
+    public void testMigration() throws Exception {
+        String outputPath = TEMPORARY_FOLDER.newFolder().getAbsolutePath();
+        String savepointBasePath = TEMPORARY_FOLDER.newFolder().getAbsolutePath();
 
         final MiniClusterConfiguration cfg =
                 new MiniClusterConfiguration.Builder()

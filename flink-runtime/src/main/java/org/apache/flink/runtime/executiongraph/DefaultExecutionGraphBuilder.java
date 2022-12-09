@@ -39,6 +39,7 @@ import org.apache.flink.runtime.executiongraph.failover.flip1.partitionrelease.P
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.jsonplan.JsonPlanGenerator;
 import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguration;
 import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
@@ -57,11 +58,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Supplier;
 
-import static org.apache.flink.configuration.StateChangelogOptions.STATE_CHANGE_LOG_STORAGE;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -91,8 +92,7 @@ public class DefaultExecutionGraphBuilder {
             VertexAttemptNumberStore vertexAttemptNumberStore,
             VertexParallelismStore vertexParallelismStore,
             Supplier<CheckpointStatsTracker> checkpointStatsTrackerFactory,
-            boolean isDynamicGraph,
-            ExecutionJobVertex.Factory executionJobVertexFactory)
+            boolean isDynamicGraph)
             throws JobExecutionException, JobException {
 
         checkNotNull(jobGraph, "job graph cannot be null");
@@ -109,7 +109,7 @@ public class DefaultExecutionGraphBuilder {
                         jobGraph.getUserJarBlobKeys(),
                         jobGraph.getClasspaths());
 
-        final int executionHistorySizeLimit =
+        final int maxPriorAttemptsHistoryLength =
                 jobManagerConfig.getInteger(JobManagerOptions.MAX_ATTEMPTS_HISTORY_SIZE);
 
         final PartitionGroupReleaseStrategy.Factory partitionGroupReleaseStrategyFactory =
@@ -125,7 +125,7 @@ public class DefaultExecutionGraphBuilder {
                             futureExecutor,
                             ioExecutor,
                             rpcTimeout,
-                            executionHistorySizeLimit,
+                            maxPriorAttemptsHistoryLength,
                             classLoader,
                             blobWriter,
                             partitionGroupReleaseStrategyFactory,
@@ -137,9 +137,7 @@ public class DefaultExecutionGraphBuilder {
                             initializationTimestamp,
                             vertexAttemptNumberStore,
                             vertexParallelismStore,
-                            isDynamicGraph,
-                            executionJobVertexFactory,
-                            jobGraph.getJobStatusHooks());
+                            isDynamicGraph);
         } catch (IOException e) {
             throw new JobException("Could not create the ExecutionGraph.", e);
         }
@@ -307,18 +305,22 @@ public class DefaultExecutionGraphBuilder {
 
             final CheckpointCoordinatorConfiguration chkConfig =
                     snapshotSettings.getCheckpointCoordinatorConfiguration();
-            String changelogStorage = jobManagerConfig.getString(STATE_CHANGE_LOG_STORAGE);
+            final Map<OperatorID, String> operatorDescriptions =
+                    snapshotSettings.getOperatorDescriptions();
 
             executionGraph.enableCheckpointing(
                     chkConfig,
                     hooks,
+                    operatorDescriptions,
                     checkpointIdCounter,
                     completedCheckpointStore,
                     rootBackend,
                     rootStorage,
                     checkpointStatsTrackerFactory.get(),
-                    checkpointsCleaner,
-                    jobManagerConfig.getString(STATE_CHANGE_LOG_STORAGE));
+                    checkpointsCleaner);
+            executionGraph.setOperatorDescriptions(operatorDescriptions);
+        } else {
+            executionGraph.setOperatorDescriptions(Collections.emptyMap());
         }
 
         return executionGraph;

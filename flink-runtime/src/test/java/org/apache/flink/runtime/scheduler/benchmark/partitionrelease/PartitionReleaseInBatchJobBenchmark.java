@@ -56,11 +56,11 @@ public class PartitionReleaseInBatchJobBenchmark extends SchedulerBenchmarkBase 
 
         final TestingLogicalSlotBuilder slotBuilder = new TestingLogicalSlotBuilder();
 
-        deployTasks(executionGraph, source.getID(), slotBuilder);
+        deployTasks(executionGraph, source.getID(), slotBuilder, true);
 
         transitionTaskStatus(executionGraph, source.getID(), ExecutionState.FINISHED);
 
-        deployTasks(executionGraph, sink.getID(), slotBuilder);
+        deployTasks(executionGraph, sink.getID(), slotBuilder, true);
     }
 
     public void partitionRelease() {

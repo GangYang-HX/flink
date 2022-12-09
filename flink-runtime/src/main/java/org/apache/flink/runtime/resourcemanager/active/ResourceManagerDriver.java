@@ -41,7 +41,7 @@ public interface ResourceManagerDriver<WorkerType extends ResourceIDRetrievable>
      * @param resourceEventHandler Handler that handles resource events.
      * @param mainThreadExecutor Rpc main thread executor.
      * @param ioExecutor IO executor.
-     * @param blockedNodeRetriever To retrieve all blocked nodes
+     * @param blockedNodeRetriever to retrieve blocked nodes
      */
     void initialize(
             ResourceEventHandler<WorkerType> resourceEventHandler,

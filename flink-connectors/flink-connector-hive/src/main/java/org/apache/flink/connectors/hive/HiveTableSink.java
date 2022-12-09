@@ -22,14 +22,10 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.serialization.BulkWriter;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.connector.file.table.EmptyMetaStoreFactory;
 import org.apache.flink.connector.file.table.FileSystemConnectorOptions;
 import org.apache.flink.connector.file.table.FileSystemOutputFormat;
 import org.apache.flink.connector.file.table.FileSystemTableSink;
 import org.apache.flink.connector.file.table.FileSystemTableSink.TableBucketAssigner;
-import org.apache.flink.connector.file.table.PartitionCommitPolicy;
-import org.apache.flink.connector.file.table.PartitionCommitPolicyFactory;
-import org.apache.flink.connector.file.table.TableMetaStoreFactory;
 import org.apache.flink.connector.file.table.stream.PartitionCommitInfo;
 import org.apache.flink.connector.file.table.stream.StreamingSink;
 import org.apache.flink.connector.file.table.stream.compact.CompactReader;
@@ -51,8 +47,6 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSin
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink.BucketsBuilder;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.CheckpointRollingPolicy;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.api.ValidationException;
-import org.apache.flink.table.catalog.CatalogPropertiesUtil;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
@@ -62,7 +56,6 @@ import org.apache.flink.table.catalog.hive.client.HiveShim;
 import org.apache.flink.table.catalog.hive.client.HiveShimLoader;
 import org.apache.flink.table.catalog.hive.factories.HiveCatalogFactoryOptions;
 import org.apache.flink.table.catalog.hive.util.HiveReflectionUtils;
-import org.apache.flink.table.catalog.hive.util.HiveTableUtil;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.ProviderContext;
 import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
@@ -96,7 +89,6 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,8 +102,6 @@ import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.S
 import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.SINK_ROLLING_POLICY_ROLLOVER_INTERVAL;
 import static org.apache.flink.connector.file.table.stream.compact.CompactOperator.convertToUncompacted;
 import static org.apache.flink.table.catalog.hive.util.HiveTableUtil.checkAcidTable;
-import static org.apache.flink.table.planner.delegation.hive.HiveParserConstants.IS_INSERT_DIRECTORY;
-import static org.apache.flink.table.planner.delegation.hive.HiveParserConstants.IS_TO_LOCAL_DIRECTORY;
 
 /** Table sink to write to Hive tables. */
 public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, SupportsOverwrite {
@@ -126,13 +116,10 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
     private final TableSchema tableSchema;
     private final String hiveVersion;
     private final HiveShim hiveShim;
-    private final boolean dynamicGroupingEnabled;
 
     private LinkedHashMap<String, String> staticPartitionSpec = new LinkedHashMap<>();
     private boolean overwrite = false;
     private boolean dynamicGrouping = false;
-    private final boolean autoGatherStatistic;
-    private final int gatherStatsThreadNum;
 
     @Nullable private final Integer configuredParallelism;
 
@@ -145,9 +132,6 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
         this(
                 flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_FALLBACK_MAPRED_READER),
                 flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_FALLBACK_MAPRED_WRITER),
-                flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_DYNAMIC_GROUPING_ENABLED),
-                flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_SINK_STATISTIC_AUTO_GATHER_ENABLE),
-                flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_SINK_STATISTIC_AUTO_GATHER_THREAD_NUM),
                 jobConf,
                 identifier,
                 table,
@@ -157,18 +141,12 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
     private HiveTableSink(
             boolean fallbackMappedReader,
             boolean fallbackMappedWriter,
-            boolean dynamicGroupingEnabled,
-            boolean autoGatherStatistic,
-            int gatherStatsThreadNum,
             JobConf jobConf,
             ObjectIdentifier identifier,
             CatalogTable table,
             @Nullable Integer configuredParallelism) {
         this.fallbackMappedReader = fallbackMappedReader;
         this.fallbackMappedWriter = fallbackMappedWriter;
-        this.dynamicGroupingEnabled = dynamicGroupingEnabled;
-        this.autoGatherStatistic = autoGatherStatistic;
-        this.gatherStatsThreadNum = gatherStatsThreadNum;
         this.jobConf = jobConf;
         this.identifier = identifier;
         this.catalogTable = table;
@@ -179,46 +157,15 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
         hiveShim = HiveShimLoader.loadHiveShim(hiveVersion);
         tableSchema = TableSchemaUtils.getPhysicalSchema(table.getSchema());
         this.configuredParallelism = configuredParallelism;
-        validateAutoGatherStatistic(autoGatherStatistic, catalogTable);
     }
 
     @Override
     public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
         DataStructureConverter converter =
                 context.createDataStructureConverter(tableSchema.toRowDataType());
-        return new DataStreamSinkProvider() {
-            @Override
-            public DataStreamSink<?> consumeDataStream(
-                    ProviderContext providerContext, DataStream<RowData> dataStream) {
-                return consume(providerContext, dataStream, context.isBounded(), converter);
-            }
-        };
-    }
-
-    private void validateAutoGatherStatistic(
-            boolean autoGatherStatistic, CatalogTable catalogTable) {
-        if (autoGatherStatistic && catalogTable.isPartitioned()) {
-            // if auto gather statistic and the table is partitioned,
-            // the table's option "SINK_PARTITION_COMMIT_POLICY_KIND" should contain 'metastore'
-            org.apache.flink.configuration.Configuration flinkConf =
-                    org.apache.flink.configuration.Configuration.fromMap(catalogTable.getOptions());
-            String policyKind = flinkConf.getString(HiveOptions.SINK_PARTITION_COMMIT_POLICY_KIND);
-            String[] policyStrings = policyKind.split(",");
-            Arrays.stream(policyStrings)
-                    .filter(policy -> policy.equalsIgnoreCase(PartitionCommitPolicy.METASTORE))
-                    .findAny()
-                    .orElseThrow(
-                            () ->
-                                    new ValidationException(
-                                            String.format(
-                                                    "When %s is set to true, the option %s for the table %s should contains %s.",
-                                                    HiveOptions
-                                                            .TABLE_EXEC_HIVE_SINK_STATISTIC_AUTO_GATHER_ENABLE
-                                                            .key(),
-                                                    HiveOptions.SINK_PARTITION_COMMIT_POLICY_CLASS,
-                                                    identifier,
-                                                    PartitionCommitPolicy.METASTORE)));
-        }
+        return (DataStreamSinkProvider)
+                (providerContext, dataStream) ->
+                        consume(providerContext, dataStream, context.isBounded(), converter);
     }
 
     private DataStreamSink<?> consume(
@@ -228,46 +175,11 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
             DataStructureConverter converter) {
         checkAcidTable(catalogTable.getOptions(), identifier.toObjectPath());
 
-        StorageDescriptor sd;
-        Properties tableProps = new Properties();
-        Map<String, String> options = catalogTable.getOptions();
-        boolean isInsertDirectory =
-                Boolean.parseBoolean(
-                        options.getOrDefault(
-                                CatalogPropertiesUtil.FLINK_PROPERTY_PREFIX + IS_INSERT_DIRECTORY,
-                                "false"));
-        boolean isToLocal = false;
-        if (isInsertDirectory) {
-            isToLocal =
-                    Boolean.parseBoolean(
-                            options.getOrDefault(
-                                    CatalogPropertiesUtil.FLINK_PROPERTY_PREFIX
-                                            + IS_TO_LOCAL_DIRECTORY,
-                                    "false"));
-            sd =
-                    org.apache.hadoop.hive.ql.metadata.Table.getEmptyTable(
-                                    identifier.getDatabaseName(), identifier.getObjectName())
-                            .getSd();
-            HiveConf hiveConf = HiveConfUtils.create(jobConf);
-            HiveTableUtil.setDefaultStorageFormatForDirectory(sd, HiveConfUtils.create(jobConf));
-            HiveTableUtil.extractRowFormat(sd, catalogTable.getOptions());
-            HiveTableUtil.extractStoredAs(sd, catalogTable.getOptions(), hiveConf);
-            HiveTableUtil.extractLocation(sd, catalogTable.getOptions());
-            tableProps.putAll(sd.getSerdeInfo().getParameters());
-            tableProps.putAll(catalogTable.getOptions());
-        } else {
-            try (HiveMetastoreClientWrapper client =
-                    HiveMetastoreClientFactory.create(HiveConfUtils.create(jobConf), hiveVersion)) {
-                Table table =
-                        client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
-                sd = table.getSd();
-                tableProps = HiveReflectionUtils.getTableMetadata(hiveShim, table);
-            } catch (TException e) {
-                throw new CatalogException("Failed to query Hive metaStore", e);
-            }
-        }
+        try (HiveMetastoreClientWrapper client =
+                HiveMetastoreClientFactory.create(HiveConfUtils.create(jobConf), hiveVersion)) {
+            Table table = client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
+            StorageDescriptor sd = table.getSd();
 
-        try {
             Class hiveOutputFormatClz =
                     hiveShim.getHiveOutputFormatClass(Class.forName(sd.getOutputFormat()));
             boolean isCompressed =
@@ -279,7 +191,7 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
                             sd.getSerdeInfo(),
                             tableSchema,
                             getPartitionKeyArray(),
-                            tableProps,
+                            HiveReflectionUtils.getTableMetadata(hiveShim, table),
                             hiveShim,
                             isCompressed);
             String extension =
@@ -290,49 +202,21 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
 
             OutputFileConfig.OutputFileConfigBuilder fileNamingBuilder =
                     OutputFileConfig.builder()
-                            .withPartPrefix("part-" + UUID.randomUUID())
+                            .withPartPrefix("part-" + UUID.randomUUID().toString())
                             .withPartSuffix(extension == null ? "" : extension);
 
             final int parallelism =
                     Optional.ofNullable(configuredParallelism).orElse(dataStream.getParallelism());
             if (isBounded) {
                 OutputFileConfig fileNaming = fileNamingBuilder.build();
-                TableMetaStoreFactory msFactory =
-                        isInsertDirectory
-                                ? new EmptyMetaStoreFactory(
-                                        new org.apache.flink.core.fs.Path(sd.getLocation()))
-                                : msFactory(autoGatherStatistic);
-                // default to use the dest location as the parent directory of staging directory
-                String stagingParentDir = sd.getLocation();
-                if (isToLocal) {
-                    // it's for writing to local file system, dest location is a path in local file
-                    // system. we need to know the scratch path for
-                    // non-local file system, so that it'll first write to the scratch path and then
-                    // move to the local path
-                    Path rootScratchDirPath =
-                            new Path(
-                                    HiveConf.getVar(
-                                            HiveConfUtils.create(jobConf),
-                                            HiveConf.ConfVars.SCRATCHDIR));
-                    // TODO: may append something more meaningful than a timestamp, like query ID
-                    Path scratchDir =
-                            new Path(
-                                    rootScratchDirPath, String.valueOf(System.currentTimeMillis()));
-                    stagingParentDir = scratchDir.toUri().toString();
-                }
                 return createBatchSink(
-                        dataStream,
-                        converter,
-                        writerFactory,
-                        msFactory,
-                        fileNaming,
-                        stagingParentDir,
-                        isToLocal,
-                        parallelism);
+                        dataStream, converter, sd, writerFactory, fileNaming, parallelism);
             } else {
                 if (overwrite) {
                     throw new IllegalStateException("Streaming mode not support overwrite.");
                 }
+
+                Properties tableProps = HiveReflectionUtils.getTableMetadata(hiveShim, table);
                 return createStreamSink(
                         providerContext,
                         dataStream,
@@ -342,6 +226,8 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
                         fileNamingBuilder,
                         parallelism);
             }
+        } catch (TException e) {
+            throw new CatalogException("Failed to query Hive metaStore", e);
         } catch (IOException e) {
             throw new FlinkRuntimeException("Failed to create staging dir", e);
         } catch (ClassNotFoundException e) {
@@ -354,16 +240,11 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
     private DataStreamSink<Row> createBatchSink(
             DataStream<RowData> dataStream,
             DataStructureConverter converter,
+            StorageDescriptor sd,
             HiveWriterFactory recordWriterFactory,
-            TableMetaStoreFactory metaStoreFactory,
             OutputFileConfig fileNaming,
-            String stagingParentDir,
-            boolean isToLocal,
             final int parallelism)
             throws IOException {
-        org.apache.flink.configuration.Configuration conf =
-                new org.apache.flink.configuration.Configuration();
-        catalogTable.getOptions().forEach(conf::setString);
         FileSystemOutputFormat.Builder<Row> builder = new FileSystemOutputFormat.Builder<>();
         builder.setPartitionComputer(
                 new HiveRowPartitionComputer(
@@ -376,22 +257,14 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
         builder.setPartitionColumns(getPartitionKeyArray());
         builder.setFileSystemFactory(fsFactory());
         builder.setFormatFactory(new HiveOutputFormatFactory(recordWriterFactory));
-        builder.setMetaStoreFactory(metaStoreFactory);
+        builder.setMetaStoreFactory(msFactory());
         builder.setOverwrite(overwrite);
-        builder.setIsToLocal(isToLocal);
         builder.setStaticPartitions(staticPartitionSpec);
         builder.setTempPath(
-                new org.apache.flink.core.fs.Path(toStagingDir(stagingParentDir, jobConf)));
+                new org.apache.flink.core.fs.Path(toStagingDir(sd.getLocation(), jobConf)));
         builder.setOutputFileConfig(fileNaming);
-        builder.setIdentifier(identifier);
-        builder.setPartitionCommitPolicyFactory(
-                new PartitionCommitPolicyFactory(
-                        conf.get(HiveOptions.SINK_PARTITION_COMMIT_POLICY_KIND),
-                        conf.get(HiveOptions.SINK_PARTITION_COMMIT_POLICY_CLASS),
-                        conf.get(HiveOptions.SINK_PARTITION_COMMIT_SUCCESS_FILE_NAME)));
         return dataStream
                 .map((MapFunction<RowData, Row>) value -> (Row) converter.toExternal(value))
-                .setParallelism(parallelism)
                 .writeUsingOutputFormat(builder.build())
                 .setParallelism(parallelism);
     }
@@ -508,8 +381,7 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
                 path,
                 identifier,
                 getPartitionKeys(),
-                // todo: support gather statistic in FLINK-29027
-                msFactory(false),
+                msFactory(),
                 fsFactory(),
                 conf);
     }
@@ -526,17 +398,9 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
                 fallbackMappedReader);
     }
 
-    private HiveTableMetaStoreFactory msFactory(boolean autoGatherStatistic) {
+    private HiveTableMetaStoreFactory msFactory() {
         return new HiveTableMetaStoreFactory(
-                jobConf,
-                fsFactory(),
-                hiveVersion,
-                identifier.getDatabaseName(),
-                identifier.getObjectName(),
-                org.apache.flink.configuration.Configuration.fromMap(catalogTable.getOptions())
-                        .get(HiveOptions.SINK_PARTITION_COMMIT_SUCCESS_FILE_NAME),
-                autoGatherStatistic,
-                gatherStatsThreadNum);
+                jobConf, hiveVersion, identifier.getDatabaseName(), identifier.getObjectName());
     }
 
     private HadoopFileSystemFactory fsFactory() {
@@ -588,27 +452,24 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
 
     @Override
     public boolean requiresPartitionGrouping(boolean supportsGrouping) {
-        if (supportsGrouping && dynamicGroupingEnabled) {
-            this.dynamicGrouping = true;
-            return true;
-        } else {
-            return false;
-        }
+        this.dynamicGrouping = supportsGrouping;
+        return supportsGrouping;
     }
 
-    // get a staging dir
-    private String toStagingDir(String stagingParentDir, Configuration conf) throws IOException {
-        if (!stagingParentDir.endsWith(Path.SEPARATOR)) {
-            stagingParentDir += Path.SEPARATOR;
+    // get a staging dir associated with a final dir
+    private String toStagingDir(String finalDir, Configuration conf) throws IOException {
+        String res = finalDir;
+        if (!finalDir.endsWith(Path.SEPARATOR)) {
+            res += Path.SEPARATOR;
         }
         // TODO: may append something more meaningful than a timestamp, like query ID
-        stagingParentDir += ".staging_" + System.currentTimeMillis();
-        Path path = new Path(stagingParentDir);
+        res += ".staging_" + System.currentTimeMillis();
+        Path path = new Path(res);
         FileSystem fs = path.getFileSystem(conf);
         Preconditions.checkState(
                 fs.exists(path) || fs.mkdirs(path), "Failed to create staging dir " + path);
         fs.deleteOnExit(path);
-        return stagingParentDir;
+        return res;
     }
 
     private List<String> getPartitionKeys() {
@@ -646,9 +507,6 @@ public class HiveTableSink implements DynamicTableSink, SupportsPartitioning, Su
                 new HiveTableSink(
                         fallbackMappedReader,
                         fallbackMappedWriter,
-                        dynamicGroupingEnabled,
-                        autoGatherStatistic,
-                        gatherStatsThreadNum,
                         jobConf,
                         identifier,
                         catalogTable,

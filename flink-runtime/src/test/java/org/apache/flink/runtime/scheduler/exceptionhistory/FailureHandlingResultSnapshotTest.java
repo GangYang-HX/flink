@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.scheduler.exceptionhistory;
 
+import org.apache.flink.core.testutils.FlinkMatchers;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
@@ -34,56 +35,49 @@ import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobmaster.TestingLogicalSlotBuilder;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorExtension;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.SerializedThrowable;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.hamcrest.collection.IsIterableContainingInAnyOrder;
+import org.hamcrest.collection.IsIterableContainingInOrder;
+import org.hamcrest.core.IsInstanceOf;
+import org.junit.Before;
+import org.junit.Test;
 
-import java.util.Collection;
 import java.util.Collections;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
 
 /**
  * {@code FailureHandlingResultSnapshotTest} tests the creation of {@link
  * FailureHandlingResultSnapshot}.
  */
-class FailureHandlingResultSnapshotTest {
-
-    @RegisterExtension
-    private static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorExtension();
+public class FailureHandlingResultSnapshotTest extends TestLogger {
 
     private ExecutionGraph executionGraph;
 
-    @BeforeEach
-    void setup() throws JobException, JobExecutionException {
+    @Before
+    public void setup() throws JobException, JobExecutionException {
         final JobGraph jobGraph = JobGraphTestUtils.singleNoOpJobGraph();
         jobGraph.getVertices().forEach(v -> v.setParallelism(3));
 
         executionGraph =
-                TestingDefaultExecutionGraphBuilder.newBuilder()
-                        .setJobGraph(jobGraph)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                TestingDefaultExecutionGraphBuilder.newBuilder().setJobGraph(jobGraph).build();
         executionGraph.start(ComponentMainThreadExecutorServiceAdapter.forMainThread());
     }
 
-    @Test
-    void testRootCauseVertexNotFailed() {
+    @Test(expected = IllegalArgumentException.class)
+    public void testRootCauseVertexNotFailed() {
         final ExecutionVertex rootCauseExecutionVertex = extractExecutionVertex(0);
         final FailureHandlingResult failureHandlingResult =
                 FailureHandlingResult.restartable(
-                        rootCauseExecutionVertex.getCurrentExecutionAttempt(),
+                        rootCauseExecutionVertex.getID(),
                         new RuntimeException("Expected exception: root cause"),
                         System.currentTimeMillis(),
                         StreamSupport.stream(
@@ -94,22 +88,18 @@ class FailureHandlingResultSnapshotTest {
                         0L,
                         false);
 
-        assertThatThrownBy(
-                        () ->
-                                FailureHandlingResultSnapshot.create(
-                                        failureHandlingResult, this::getCurrentExecutions))
-                .isInstanceOf(IllegalArgumentException.class);
+        FailureHandlingResultSnapshot.create(failureHandlingResult, this::getLatestExecution);
     }
 
     @Test // see FLINK-22060/FLINK-21376
-    void testMissingThrowableHandling() {
+    public void testMissingThrowableHandling() {
         final ExecutionVertex rootCauseExecutionVertex = extractExecutionVertex(0);
 
         final long rootCauseTimestamp = triggerFailure(rootCauseExecutionVertex, null);
 
         final FailureHandlingResult failureHandlingResult =
                 FailureHandlingResult.restartable(
-                        rootCauseExecutionVertex.getCurrentExecutionAttempt(),
+                        rootCauseExecutionVertex.getID(),
                         null,
                         rootCauseTimestamp,
                         StreamSupport.stream(
@@ -122,23 +112,24 @@ class FailureHandlingResultSnapshotTest {
 
         final FailureHandlingResultSnapshot testInstance =
                 FailureHandlingResultSnapshot.create(
-                        failureHandlingResult, this::getCurrentExecutions);
+                        failureHandlingResult, this::getLatestExecution);
 
         final Throwable actualException =
                 new SerializedThrowable(testInstance.getRootCause())
                         .deserializeError(ClassLoader.getSystemClassLoader());
-
-        assertThat(actualException).isInstanceOf(FlinkException.class);
-        assertThat(actualException)
-                .hasMessageContaining(ErrorInfo.handleMissingThrowable(null).getMessage());
-        assertThat(testInstance.getTimestamp()).isEqualTo(rootCauseTimestamp);
-        assertThat(testInstance.getRootCauseExecution()).isPresent();
-        assertThat(testInstance.getRootCauseExecution().get())
-                .isSameAs(rootCauseExecutionVertex.getCurrentExecutionAttempt());
+        assertThat(actualException, IsInstanceOf.instanceOf(FlinkException.class));
+        assertThat(
+                actualException,
+                FlinkMatchers.containsMessage(ErrorInfo.handleMissingThrowable(null).getMessage()));
+        assertThat(testInstance.getTimestamp(), is(rootCauseTimestamp));
+        assertThat(testInstance.getRootCauseExecution().isPresent(), is(true));
+        assertThat(
+                testInstance.getRootCauseExecution().get(),
+                is(rootCauseExecutionVertex.getCurrentExecutionAttempt()));
     }
 
     @Test
-    void testLocalFailureHandlingResultSnapshotCreation() {
+    public void testLocalFailureHandlingResultSnapshotCreation() {
         final ExecutionVertex rootCauseExecutionVertex = extractExecutionVertex(0);
         final Throwable rootCause = new RuntimeException("Expected exception: root cause");
         final ExecutionVertex otherFailedExecutionVertex = extractExecutionVertex(1);
@@ -150,7 +141,7 @@ class FailureHandlingResultSnapshotTest {
 
         final FailureHandlingResult failureHandlingResult =
                 FailureHandlingResult.restartable(
-                        rootCauseExecutionVertex.getCurrentExecutionAttempt(),
+                        rootCauseExecutionVertex.getID(),
                         rootCause,
                         rootCauseTimestamp,
                         StreamSupport.stream(
@@ -163,33 +154,33 @@ class FailureHandlingResultSnapshotTest {
 
         final FailureHandlingResultSnapshot testInstance =
                 FailureHandlingResultSnapshot.create(
-                        failureHandlingResult, this::getCurrentExecutions);
+                        failureHandlingResult, this::getLatestExecution);
 
-        assertThat(testInstance.getRootCause()).isSameAs(rootCause);
-        assertThat(testInstance.getTimestamp()).isEqualTo(rootCauseTimestamp);
-        assertThat(testInstance.getRootCauseExecution()).isPresent();
-        assertThat(testInstance.getRootCauseExecution().get())
-                .isSameAs(rootCauseExecutionVertex.getCurrentExecutionAttempt());
-        assertThat(testInstance.getConcurrentlyFailedExecution())
-                .containsExactly(otherFailedExecutionVertex.getCurrentExecutionAttempt());
+        assertThat(testInstance.getRootCause(), is(rootCause));
+        assertThat(testInstance.getTimestamp(), is(rootCauseTimestamp));
+        assertThat(testInstance.getRootCauseExecution().isPresent(), is(true));
+        assertThat(
+                testInstance.getRootCauseExecution().get(),
+                is(rootCauseExecutionVertex.getCurrentExecutionAttempt()));
+
+        assertThat(
+                testInstance.getConcurrentlyFailedExecution(),
+                IsIterableContainingInOrder.contains(
+                        otherFailedExecutionVertex.getCurrentExecutionAttempt()));
     }
 
-    @Test
-    void testFailureHandlingWithRootCauseExecutionBeingPartOfConcurrentlyFailedExecutions() {
+    @Test(expected = IllegalArgumentException.class)
+    public void testFailureHandlingWithRootCauseExecutionBeingPartOfConcurrentlyFailedExecutions() {
         final Execution rootCauseExecution = extractExecutionVertex(0).getCurrentExecutionAttempt();
-
-        assertThatThrownBy(
-                        () ->
-                                new FailureHandlingResultSnapshot(
-                                        rootCauseExecution,
-                                        new RuntimeException("Expected exception"),
-                                        System.currentTimeMillis(),
-                                        Collections.singleton(rootCauseExecution)))
-                .isInstanceOf(IllegalArgumentException.class);
+        new FailureHandlingResultSnapshot(
+                rootCauseExecution,
+                new RuntimeException("Expected exception"),
+                System.currentTimeMillis(),
+                Collections.singleton(rootCauseExecution));
     }
 
     @Test
-    void testGlobalFailureHandlingResultSnapshotCreation() {
+    public void testGlobalFailureHandlingResultSnapshotCreation() {
         final Throwable rootCause = new FlinkException("Expected exception: root cause");
         final long timestamp = System.currentTimeMillis();
 
@@ -216,18 +207,20 @@ class FailureHandlingResultSnapshotTest {
 
         final FailureHandlingResultSnapshot testInstance =
                 FailureHandlingResultSnapshot.create(
-                        failureHandlingResult, this::getCurrentExecutions);
+                        failureHandlingResult, this::getLatestExecution);
 
-        assertThat(testInstance.getRootCause()).isSameAs(rootCause);
-        assertThat(testInstance.getTimestamp()).isEqualTo(timestamp);
-        assertThat(testInstance.getRootCauseExecution()).isNotPresent();
-        assertThat(testInstance.getConcurrentlyFailedExecution())
-                .containsExactlyInAnyOrder(
+        assertThat(testInstance.getRootCause(), is(rootCause));
+        assertThat(testInstance.getTimestamp(), is(timestamp));
+        assertThat(testInstance.getRootCauseExecution().isPresent(), is(false));
+
+        assertThat(
+                testInstance.getConcurrentlyFailedExecution(),
+                IsIterableContainingInAnyOrder.containsInAnyOrder(
                         failedExecutionVertex0.getCurrentExecutionAttempt(),
-                        failedExecutionVertex1.getCurrentExecutionAttempt());
+                        failedExecutionVertex1.getCurrentExecutionAttempt()));
     }
 
-    private Collection<Execution> getCurrentExecutions(ExecutionVertexID executionVertexId) {
+    private Execution getLatestExecution(ExecutionVertexID executionVertexId) {
         if (!executionGraph.getAllVertices().containsKey(executionVertexId.getJobVertexId())) {
             throw new IllegalArgumentException(
                     "The ExecutionJobVertex having the ID "
@@ -250,7 +243,7 @@ class FailureHandlingResultSnapshotTest {
                             + " does not exist.");
         }
 
-        return executions[executionVertexId.getSubtaskIndex()].getCurrentExecutions();
+        return executions[executionVertexId.getSubtaskIndex()].getCurrentExecutionAttempt();
     }
 
     private long triggerFailure(ExecutionVertex executionVertex, Throwable throwable) {

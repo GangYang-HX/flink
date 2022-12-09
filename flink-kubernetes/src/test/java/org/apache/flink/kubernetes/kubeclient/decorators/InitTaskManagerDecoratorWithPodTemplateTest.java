@@ -26,17 +26,20 @@ import org.apache.flink.kubernetes.kubeclient.parameters.KubernetesTaskManagerPa
 import org.apache.flink.kubernetes.utils.Constants;
 
 import io.fabric8.kubernetes.api.model.ContainerPort;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.equalToIgnoringCase;
+import static org.hamcrest.Matchers.is;
 
 /** Tests for the {@link InitTaskManagerDecorator} with pod template. */
-class InitTaskManagerDecoratorWithPodTemplateTest extends DecoratorWithPodTemplateTestBase {
+public class InitTaskManagerDecoratorWithPodTemplateTest extends DecoratorWithPodTemplateTestBase {
 
     private static final String POD_NAME = "taskmanager-" + UUID.randomUUID().toString();
 
@@ -65,27 +68,27 @@ class InitTaskManagerDecoratorWithPodTemplateTest extends DecoratorWithPodTempla
     }
 
     @Test
-    void testTaskManagerMainContainerPortsMerging() {
+    public void testTaskManagerMainContainerPortsMerging() {
         final List<String> expectedContainerPorts = new ArrayList<>();
         expectedContainerPorts.add(Constants.TASK_MANAGER_RPC_PORT_NAME);
         // Add port from pod template
         expectedContainerPorts.add("testing-port");
         assertThat(
-                        this.resultPod.getMainContainer().getPorts().stream()
-                                .map(ContainerPort::getName)
-                                .collect(Collectors.toList()))
-                .containsExactlyInAnyOrderElementsOf(expectedContainerPorts);
+                this.resultPod.getMainContainer().getPorts().stream()
+                        .map(ContainerPort::getName)
+                        .collect(Collectors.toList()),
+                containsInAnyOrder(expectedContainerPorts.toArray()));
     }
 
     @Test
-    void testTaskManagerPodRestartPolicyOverwritten() {
-        assertThat(resultPod.getPodWithoutMainContainer().getSpec().getRestartPolicy())
-                .isEqualToIgnoringCase(Constants.RESTART_POLICY_OF_NEVER);
+    public void testTaskManagerPodRestartPolicyOverwritten() {
+        assertThat(
+                resultPod.getPodWithoutMainContainer().getSpec().getRestartPolicy(),
+                is(equalToIgnoringCase(Constants.RESTART_POLICY_OF_NEVER)));
     }
 
     @Test
-    void testTaskManagerPodNameOverwritten() {
-        assertThat(resultPod.getPodWithoutMainContainer().getMetadata().getName())
-                .isEqualTo(POD_NAME);
+    public void testTaskManagerPodNameOverwritten() {
+        assertThat(resultPod.getPodWithoutMainContainer().getMetadata().getName(), is(POD_NAME));
     }
 }

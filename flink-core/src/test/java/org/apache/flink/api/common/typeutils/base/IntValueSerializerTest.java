@@ -25,7 +25,7 @@ import org.apache.flink.types.IntValue;
 import java.util.Random;
 
 /** A test for the {@link IntValueSerializer}. */
-class IntValueSerializerTest extends SerializerTestBase<IntValue> {
+public class IntValueSerializerTest extends SerializerTestBase<IntValue> {
 
     @Override
     protected TypeSerializer<IntValue> createSerializer() {

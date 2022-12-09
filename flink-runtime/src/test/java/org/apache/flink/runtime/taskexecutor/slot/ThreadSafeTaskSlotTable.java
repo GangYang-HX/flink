@@ -32,7 +32,6 @@ import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
 
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.UUID;
@@ -63,7 +62,7 @@ public class ThreadSafeTaskSlotTable<T extends TaskSlotPayload> implements TaskS
         try {
             return mainThreadExecutable
                     .callAsync(
-                            callable, Duration.ofDays(1) // practically infinite timeout
+                            callable, Time.days(1) // practically infinite timeout
                             )
                     .get();
         } catch (InterruptedException | ExecutionException e) {

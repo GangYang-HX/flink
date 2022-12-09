@@ -20,9 +20,6 @@ package org.apache.flink.runtime.state;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.StateChangelogOptions;
-import org.apache.flink.configuration.StateChangelogOptionsInternal;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.util.FileUtils;
@@ -125,9 +122,7 @@ public class TaskExecutorLocalStateStoresManager {
             @Nonnull JobID jobId,
             @Nonnull AllocationID allocationID,
             @Nonnull JobVertexID jobVertexID,
-            @Nonnegative int subtaskIndex,
-            Configuration clusterConfiguration,
-            Configuration jobConfiguration) {
+            @Nonnegative int subtaskIndex) {
 
         synchronized (lock) {
             if (closed) {
@@ -169,37 +164,22 @@ public class TaskExecutorLocalStateStoresManager {
                 LocalRecoveryConfig localRecoveryConfig =
                         new LocalRecoveryConfig(directoryProvider);
 
-                boolean changelogEnabled =
-                        jobConfiguration
-                                .getOptional(
-                                        StateChangelogOptionsInternal
-                                                .ENABLE_CHANGE_LOG_FOR_APPLICATION)
-                                .orElse(
-                                        clusterConfiguration.getBoolean(
-                                                StateChangelogOptions.ENABLE_STATE_CHANGE_LOG));
+                taskLocalStateStore =
+                        localRecoveryConfig.isLocalRecoveryEnabled()
+                                ?
 
-                if (localRecoveryConfig.isLocalRecoveryEnabled() && changelogEnabled) {
-                    taskLocalStateStore =
-                            new ChangelogTaskLocalStateStore(
-                                    jobId,
-                                    allocationID,
-                                    jobVertexID,
-                                    subtaskIndex,
-                                    localRecoveryConfig,
-                                    discardExecutor);
-                } else if (localRecoveryConfig.isLocalRecoveryEnabled()) {
-                    taskLocalStateStore =
-                            new TaskLocalStateStoreImpl(
-                                    jobId,
-                                    allocationID,
-                                    jobVertexID,
-                                    subtaskIndex,
-                                    localRecoveryConfig,
-                                    discardExecutor);
-                } else {
-                    // NOP implementation if local recovery is disabled
-                    taskLocalStateStore = new NoOpTaskLocalStateStoreImpl(localRecoveryConfig);
-                }
+                                // Real store implementation if local recovery is enabled
+                                new TaskLocalStateStoreImpl(
+                                        jobId,
+                                        allocationID,
+                                        jobVertexID,
+                                        subtaskIndex,
+                                        localRecoveryConfig,
+                                        discardExecutor)
+                                :
+
+                                // NOP implementation if local recovery is disabled
+                                new NoOpTaskLocalStateStoreImpl(localRecoveryConfig);
 
                 taskStateManagers.put(taskKey, taskLocalStateStore);
 

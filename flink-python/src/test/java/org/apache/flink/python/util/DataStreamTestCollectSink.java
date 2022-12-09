@@ -17,23 +17,15 @@
 
 package org.apache.flink.python.util;
 
-import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /** A SinkFunction for collecting results of DataStream transformations in test cases. */
 public class DataStreamTestCollectSink<IN> implements SinkFunction<IN> {
 
-    private final int id;
-
-    private static final List<Tuple2<Integer, Object>> collectedResult = new ArrayList<>();
-
-    public DataStreamTestCollectSink() {
-        id = hashCode();
-    }
+    private static List<Object> collectedResult = new ArrayList<>();
 
     /**
      * Collect the sink value into a static List so that the client side can fetch the result of
@@ -45,22 +37,17 @@ public class DataStreamTestCollectSink<IN> implements SinkFunction<IN> {
     public void invoke(IN value, Context context) throws Exception {
 
         synchronized (collectedResult) {
-            collectedResult.add(Tuple2.of(id, value));
+            collectedResult.add(value);
         }
     }
 
     public List<Object> collectAndClear(boolean isPythonObjects) {
-        List<Object> listToBeReturned;
-        synchronized (collectedResult) {
-            listToBeReturned =
-                    collectedResult.stream()
-                            .filter(e -> e.f0.equals(id))
-                            .map(e -> e.f1)
-                            .collect(Collectors.toList());
-        }
-        if (!isPythonObjects) {
-            for (int i = 0; i < listToBeReturned.size(); i++) {
-                listToBeReturned.set(i, listToBeReturned.get(i).toString());
+        List<Object> listToBeReturned = new ArrayList<>();
+        if (isPythonObjects) {
+            listToBeReturned.addAll(collectedResult);
+        } else {
+            for (Object obj : collectedResult) {
+                listToBeReturned.add(obj.toString());
             }
         }
         clear();
@@ -68,8 +55,6 @@ public class DataStreamTestCollectSink<IN> implements SinkFunction<IN> {
     }
 
     public void clear() {
-        synchronized (collectedResult) {
-            collectedResult.removeIf(e -> e.f0.equals(id));
-        }
+        collectedResult.clear();
     }
 }

@@ -19,6 +19,7 @@ package org.apache.flink.runtime.resourcemanager.slotmanager;
 
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
+import org.apache.flink.testutils.TestingUtils;
 import org.apache.flink.util.concurrent.Executors;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
 
@@ -33,13 +34,9 @@ public class TaskExecutorManagerBuilder {
     private boolean waitResultConsumedBeforeRelease = true;
     private int redundantTaskManagerNum = 0;
     private Time taskManagerTimeout = Time.seconds(5);
-    private final ScheduledExecutor scheduledExecutor;
+    private ScheduledExecutor scheduledExecutor = TestingUtils.defaultScheduledExecutor();
     private Executor mainThreadExecutor = Executors.directExecutor();
     private ResourceActions newResourceActions = new TestingResourceActionsBuilder().build();
-
-    public TaskExecutorManagerBuilder(ScheduledExecutor scheduledExecutor) {
-        this.scheduledExecutor = scheduledExecutor;
-    }
 
     public TaskExecutorManagerBuilder setDefaultWorkerResourceSpec(
             WorkerResourceSpec defaultWorkerResourceSpec) {
@@ -70,6 +67,11 @@ public class TaskExecutorManagerBuilder {
 
     public TaskExecutorManagerBuilder setTaskManagerTimeout(Time taskManagerTimeout) {
         this.taskManagerTimeout = taskManagerTimeout;
+        return this;
+    }
+
+    public TaskExecutorManagerBuilder setScheduledExecutor(ScheduledExecutor scheduledExecutor) {
+        this.scheduledExecutor = scheduledExecutor;
         return this;
     }
 

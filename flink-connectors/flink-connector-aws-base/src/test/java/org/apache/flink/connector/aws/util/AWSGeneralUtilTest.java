@@ -20,7 +20,9 @@ package org.apache.flink.connector.aws.util;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.config.AWSConfigConstants.CredentialProvider;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -53,8 +55,9 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.Credentia
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.roleArn;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.roleSessionName;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.webIdentityTokenFile;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -65,76 +68,78 @@ import static software.amazon.awssdk.http.Protocol.HTTP1_1;
 import static software.amazon.awssdk.http.Protocol.HTTP2;
 
 /** Tests for {@link AWSGeneralUtil}. */
-class AWSGeneralUtilTest {
+public class AWSGeneralUtilTest {
+    @Rule public ExpectedException exception = ExpectedException.none();
 
     @Test
-    void testGetCredentialsProviderTypeDefaultsAuto() {
-        assertThat(
-                        AWSGeneralUtil.getCredentialProviderType(
-                                new Properties(), AWS_CREDENTIALS_PROVIDER))
-                .isEqualTo(AUTO);
+    public void testGetCredentialsProviderTypeDefaultsAuto() {
+        assertEquals(
+                AUTO,
+                AWSGeneralUtil.getCredentialProviderType(
+                        new Properties(), AWS_CREDENTIALS_PROVIDER));
     }
 
     @Test
-    void testGetCredentialsProviderTypeBasic() {
+    public void testGetCredentialsProviderTypeBasic() {
         Properties testConfig =
                 TestUtil.properties(AWSConfigConstants.accessKeyId(AWS_CREDENTIALS_PROVIDER), "ak");
         testConfig.setProperty(AWSConfigConstants.secretKey(AWS_CREDENTIALS_PROVIDER), "sk");
 
-        assertThat(AWSGeneralUtil.getCredentialProviderType(testConfig, AWS_CREDENTIALS_PROVIDER))
-                .isEqualTo(BASIC);
+        assertEquals(
+                BASIC,
+                AWSGeneralUtil.getCredentialProviderType(testConfig, AWS_CREDENTIALS_PROVIDER));
     }
 
     @Test
-    void testGetCredentialsProviderTypeWebIdentityToken() {
+    public void testGetCredentialsProviderTypeWebIdentityToken() {
         Properties testConfig = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "WEB_IDENTITY_TOKEN");
 
         CredentialProvider type =
                 AWSGeneralUtil.getCredentialProviderType(testConfig, AWS_CREDENTIALS_PROVIDER);
-        assertThat(type).isEqualTo(WEB_IDENTITY_TOKEN);
+        assertEquals(WEB_IDENTITY_TOKEN, type);
     }
 
     @Test
-    void testGetCredentialsProviderTypeAssumeRole() {
+    public void testGetCredentialsProviderTypeAssumeRole() {
         Properties testConfig = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "ASSUME_ROLE");
 
         CredentialProvider type =
                 AWSGeneralUtil.getCredentialProviderType(testConfig, AWS_CREDENTIALS_PROVIDER);
-        assertThat(type).isEqualTo(ASSUME_ROLE);
+        assertEquals(ASSUME_ROLE, type);
     }
 
     @Test
-    void testGetCredentialsProviderEnvironmentVariables() {
+    public void testGetCredentialsProviderEnvironmentVariables() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "ENV_VAR");
 
         AwsCredentialsProvider credentialsProvider =
                 AWSGeneralUtil.getCredentialsProvider(properties);
 
-        assertThat(credentialsProvider).isInstanceOf(EnvironmentVariableCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof EnvironmentVariableCredentialsProvider);
     }
 
     @Test
-    void testGetCredentialsProviderSystemProperties() {
+    public void testGetCredentialsProviderSystemProperties() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "SYS_PROP");
 
         AwsCredentialsProvider credentialsProvider =
                 AWSGeneralUtil.getCredentialsProvider(properties);
 
-        assertThat(credentialsProvider).isInstanceOf(SystemPropertyCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof SystemPropertyCredentialsProvider);
     }
 
     @Test
-    void testGetCredentialsProviderWebIdentityTokenFileCredentialsProvider() {
+    public void testGetCredentialsProviderWebIdentityTokenFileCredentialsProvider() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "WEB_IDENTITY_TOKEN");
 
         AwsCredentialsProvider credentialsProvider =
                 AWSGeneralUtil.getCredentialsProvider(properties);
 
-        assertThat(credentialsProvider).isInstanceOf(WebIdentityTokenFileCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof WebIdentityTokenFileCredentialsProvider);
     }
 
     @Test
-    void testGetWebIdentityTokenFileCredentialsProvider() {
+    public void testGetWebIdentityTokenFileCredentialsProvider() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "WEB_IDENTITY_TOKEN");
         properties.setProperty(roleArn(AWS_CREDENTIALS_PROVIDER), "roleArn");
         properties.setProperty(roleSessionName(AWS_CREDENTIALS_PROVIDER), "roleSessionName");
@@ -151,7 +156,7 @@ class AWSGeneralUtilTest {
     }
 
     @Test
-    void testGetWebIdentityTokenFileCredentialsProviderWithWebIdentityFile() {
+    public void testGetWebIdentityTokenFileCredentialsProviderWithWebIdentityFile() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "WEB_IDENTITY_TOKEN");
         properties.setProperty(
                 webIdentityTokenFile(AWS_CREDENTIALS_PROVIDER), "webIdentityTokenFile");
@@ -166,33 +171,33 @@ class AWSGeneralUtilTest {
     }
 
     @Test
-    void testGetCredentialsProviderAuto() {
+    public void testGetCredentialsProviderAuto() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "AUTO");
 
         AwsCredentialsProvider credentialsProvider =
                 AWSGeneralUtil.getCredentialsProvider(properties);
 
-        assertThat(credentialsProvider).isInstanceOf(DefaultCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof DefaultCredentialsProvider);
     }
 
     @Test
-    void testGetCredentialsProviderFromMap() {
+    public void testGetCredentialsProviderFromMap() {
         Map<String, Object> config = ImmutableMap.of(AWS_CREDENTIALS_PROVIDER, "AUTO");
 
         AwsCredentialsProvider credentialsProvider = AWSGeneralUtil.getCredentialsProvider(config);
 
-        assertThat(credentialsProvider).isInstanceOf(DefaultCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof DefaultCredentialsProvider);
     }
 
     @Test
-    void testGetCredentialsProviderAssumeRole() {
+    public void testGetCredentialsProviderAssumeRole() {
         Properties properties = spy(TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "ASSUME_ROLE"));
         properties.setProperty(AWS_REGION, "eu-west-2");
 
         AwsCredentialsProvider credentialsProvider =
                 AWSGeneralUtil.getCredentialsProvider(properties);
 
-        assertThat(credentialsProvider).isInstanceOf(StsAssumeRoleCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof StsAssumeRoleCredentialsProvider);
 
         verify(properties).getProperty(AWSConfigConstants.roleArn(AWS_CREDENTIALS_PROVIDER));
         verify(properties)
@@ -202,7 +207,7 @@ class AWSGeneralUtilTest {
     }
 
     @Test
-    void testGetCredentialsProviderBasic() {
+    public void testGetCredentialsProviderBasic() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "BASIC");
         properties.setProperty(AWSConfigConstants.accessKeyId(AWS_CREDENTIALS_PROVIDER), "ak");
         properties.setProperty(AWSConfigConstants.secretKey(AWS_CREDENTIALS_PROVIDER), "sk");
@@ -210,12 +215,12 @@ class AWSGeneralUtilTest {
         AwsCredentials credentials =
                 AWSGeneralUtil.getCredentialsProvider(properties).resolveCredentials();
 
-        assertThat(credentials.accessKeyId()).isEqualTo("ak");
-        assertThat(credentials.secretAccessKey()).isEqualTo("sk");
+        assertEquals("ak", credentials.accessKeyId());
+        assertEquals("sk", credentials.secretAccessKey());
     }
 
     @Test
-    void testGetCredentialsProviderProfile() {
+    public void testGetCredentialsProviderProfile() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "PROFILE");
         properties.put(AWSConfigConstants.profileName(AWS_CREDENTIALS_PROVIDER), "default");
         properties.put(
@@ -225,16 +230,15 @@ class AWSGeneralUtilTest {
         AwsCredentialsProvider credentialsProvider =
                 AWSGeneralUtil.getCredentialsProvider(properties);
 
-        assertThat(credentialsProvider).isInstanceOf(ProfileCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof ProfileCredentialsProvider);
 
         AwsCredentials credentials = credentialsProvider.resolveCredentials();
-        assertThat(credentials.accessKeyId()).isEqualTo("11111111111111111111");
-        assertThat(credentials.secretAccessKey())
-                .isEqualTo("wJalrXUtnFEMI/K7MDENG/bPxRfiCY1111111111");
+        assertEquals("11111111111111111111", credentials.accessKeyId());
+        assertEquals("wJalrXUtnFEMI/K7MDENG/bPxRfiCY1111111111", credentials.secretAccessKey());
     }
 
     @Test
-    void testGetCredentialsProviderNamedProfile() {
+    public void testGetCredentialsProviderNamedProfile() {
         Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "PROFILE");
         properties.setProperty(AWSConfigConstants.profileName(AWS_CREDENTIALS_PROVIDER), "foo");
         properties.setProperty(
@@ -244,24 +248,23 @@ class AWSGeneralUtilTest {
         AwsCredentialsProvider credentialsProvider =
                 AWSGeneralUtil.getCredentialsProvider(properties);
 
-        assertThat(credentialsProvider).isInstanceOf(ProfileCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof ProfileCredentialsProvider);
 
         AwsCredentials credentials = credentialsProvider.resolveCredentials();
-        assertThat(credentials.accessKeyId()).isEqualTo("22222222222222222222");
-        assertThat(credentials.secretAccessKey())
-                .isEqualTo("wJalrXUtnFEMI/K7MDENG/bPxRfiCY2222222222");
+        assertEquals("22222222222222222222", credentials.accessKeyId());
+        assertEquals("wJalrXUtnFEMI/K7MDENG/bPxRfiCY2222222222", credentials.secretAccessKey());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithPropertyTcpKeepAlive() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithPropertyTcpKeepAlive() throws Exception {
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(new Properties());
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.tcpKeepAlive()).isTrue();
+        assertTrue(nettyConfiguration.tcpKeepAlive());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithPropertyMaxConcurrency() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithPropertyMaxConcurrency() throws Exception {
         int maxConnections = 45678;
         Properties properties = new Properties();
         properties.setProperty(
@@ -270,11 +273,11 @@ class AWSGeneralUtilTest {
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(properties);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.maxConnections()).isEqualTo(maxConnections);
+        assertEquals(maxConnections, nettyConfiguration.maxConnections());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithPropertyReadTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithPropertyReadTimeout() throws Exception {
         int readTimeoutMillis = 45678;
         Properties properties = new Properties();
         properties.setProperty(
@@ -284,11 +287,11 @@ class AWSGeneralUtilTest {
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(properties);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.readTimeoutMillis()).isEqualTo(readTimeoutMillis);
+        assertEquals(readTimeoutMillis, nettyConfiguration.readTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithPropertyTrustAllCertificates() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithPropertyTrustAllCertificates() throws Exception {
         boolean trustAllCerts = true;
         Properties properties = new Properties();
         properties.setProperty(
@@ -297,11 +300,11 @@ class AWSGeneralUtilTest {
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(properties);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.trustAllCertificates()).isEqualTo(trustAllCerts);
+        assertEquals(trustAllCerts, nettyConfiguration.trustAllCertificates());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithPropertyProtocol() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithPropertyProtocol() throws Exception {
         Protocol httpVersion = HTTP1_1;
         Properties properties = new Properties();
         properties.setProperty(
@@ -310,37 +313,23 @@ class AWSGeneralUtilTest {
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(properties);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.attribute(SdkHttpConfigurationOption.PROTOCOL))
-                .isEqualTo(httpVersion);
+        assertEquals(
+                httpVersion, nettyConfiguration.attribute(SdkHttpConfigurationOption.PROTOCOL));
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsConnectionAcquireTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsConnectionAcquireTimeout()
+            throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.connectionAcquireTimeoutMillis()).isEqualTo(60_000);
+        assertEquals(60_000, nettyConfiguration.connectionAcquireTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsConnectionTtl() throws Exception {
-        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
-
-        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
-        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
-
-        SdkAsyncHttpClient httpDefaultClient = NettyNioAsyncHttpClient.create();
-        NettyConfiguration nettyDefaultConfiguration =
-                TestUtil.getNettyConfiguration(httpDefaultClient);
-
-        assertThat(nettyConfiguration.connectionTtlMillis())
-                .isEqualTo(nettyDefaultConfiguration.connectionTtlMillis());
-    }
-
-    @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsConnectionTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsConnectionTtl() throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
@@ -350,12 +339,13 @@ class AWSGeneralUtilTest {
         NettyConfiguration nettyDefaultConfiguration =
                 TestUtil.getNettyConfiguration(httpDefaultClient);
 
-        assertThat(nettyDefaultConfiguration.connectTimeoutMillis())
-                .isEqualTo(nettyConfiguration.connectTimeoutMillis());
+        assertEquals(
+                nettyDefaultConfiguration.connectionTtlMillis(),
+                nettyConfiguration.connectionTtlMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsIdleTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsConnectionTimeout() throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
@@ -365,22 +355,13 @@ class AWSGeneralUtilTest {
         NettyConfiguration nettyDefaultConfiguration =
                 TestUtil.getNettyConfiguration(httpDefaultClient);
 
-        assertThat(nettyConfiguration.idleTimeoutMillis())
-                .isEqualTo(nettyDefaultConfiguration.idleTimeoutMillis());
+        assertEquals(
+                nettyDefaultConfiguration.connectTimeoutMillis(),
+                nettyConfiguration.connectTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsMaxConnections() throws Exception {
-        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
-
-        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
-        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
-
-        assertThat(nettyConfiguration.maxConnections()).isEqualTo(10_000);
-    }
-
-    @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsMaxPendingConnectionAcquires() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsIdleTimeout() throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
@@ -390,37 +371,24 @@ class AWSGeneralUtilTest {
         NettyConfiguration nettyDefaultConfiguration =
                 TestUtil.getNettyConfiguration(httpDefaultClient);
 
-        assertThat(nettyConfiguration.maxPendingConnectionAcquires())
-                .isEqualTo(nettyDefaultConfiguration.maxPendingConnectionAcquires());
+        assertEquals(
+                nettyDefaultConfiguration.idleTimeoutMillis(),
+                nettyConfiguration.idleTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsReadTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsMaxConnections() throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.readTimeoutMillis()).isEqualTo(360_000);
+        assertEquals(10_000, nettyConfiguration.maxConnections());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsReapIdleConnections() throws Exception {
-        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
-
-        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
-        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
-
-        SdkAsyncHttpClient httpDefaultClient = NettyNioAsyncHttpClient.create();
-        NettyConfiguration nettyDefaultConfiguration =
-                TestUtil.getNettyConfiguration(httpDefaultClient);
-
-        assertThat(nettyConfiguration.reapIdleConnections())
-                .isEqualTo(nettyDefaultConfiguration.reapIdleConnections());
-    }
-
-    @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsTcpKeepAlive() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsMaxPendingConnectionAcquires()
+            throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
@@ -430,12 +398,23 @@ class AWSGeneralUtilTest {
         NettyConfiguration nettyDefaultConfiguration =
                 TestUtil.getNettyConfiguration(httpDefaultClient);
 
-        assertThat(nettyConfiguration.tcpKeepAlive())
-                .isEqualTo(nettyDefaultConfiguration.tcpKeepAlive());
+        assertEquals(
+                nettyDefaultConfiguration.maxPendingConnectionAcquires(),
+                nettyConfiguration.maxPendingConnectionAcquires());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsTlsKeyManagersProvider() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsReadTimeout() throws Exception {
+        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
+
+        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
+        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
+
+        assertEquals(360_000, nettyConfiguration.readTimeoutMillis());
+    }
+
+    @Test
+    public void testCreateNettyAsyncHttpClientWithDefaultsReapIdleConnections() throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
@@ -445,12 +424,13 @@ class AWSGeneralUtilTest {
         NettyConfiguration nettyDefaultConfiguration =
                 TestUtil.getNettyConfiguration(httpDefaultClient);
 
-        assertThat(nettyConfiguration.tlsKeyManagersProvider())
-                .isEqualTo(nettyDefaultConfiguration.tlsKeyManagersProvider());
+        assertEquals(
+                nettyDefaultConfiguration.reapIdleConnections(),
+                nettyConfiguration.reapIdleConnections());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsTlsTrustManagersProvider() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsTcpKeepAlive() throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
@@ -460,22 +440,12 @@ class AWSGeneralUtilTest {
         NettyConfiguration nettyDefaultConfiguration =
                 TestUtil.getNettyConfiguration(httpDefaultClient);
 
-        assertThat(nettyConfiguration.tlsTrustManagersProvider())
-                .isEqualTo(nettyDefaultConfiguration.tlsTrustManagersProvider());
+        assertEquals(nettyDefaultConfiguration.tcpKeepAlive(), nettyConfiguration.tcpKeepAlive());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsTrustAllCertificates() throws Exception {
-        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
-
-        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
-        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
-
-        assertThat(nettyConfiguration.trustAllCertificates()).isFalse();
-    }
-
-    @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsWriteTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsTlsKeyManagersProvider()
+            throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
@@ -485,23 +455,66 @@ class AWSGeneralUtilTest {
         NettyConfiguration nettyDefaultConfiguration =
                 TestUtil.getNettyConfiguration(httpDefaultClient);
 
-        assertThat(nettyConfiguration.writeTimeoutMillis())
-                .isEqualTo(nettyDefaultConfiguration.writeTimeoutMillis());
+        assertEquals(
+                nettyDefaultConfiguration.tlsKeyManagersProvider(),
+                nettyConfiguration.tlsKeyManagersProvider());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWithDefaultsProtocol() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsTlsTrustManagersProvider()
+            throws Exception {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
         SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.attribute(SdkHttpConfigurationOption.PROTOCOL))
-                .isEqualTo(HTTP2);
+        SdkAsyncHttpClient httpDefaultClient = NettyNioAsyncHttpClient.create();
+        NettyConfiguration nettyDefaultConfiguration =
+                TestUtil.getNettyConfiguration(httpDefaultClient);
+
+        assertEquals(
+                nettyDefaultConfiguration.tlsTrustManagersProvider(),
+                nettyConfiguration.tlsTrustManagersProvider());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientReadTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWithDefaultsTrustAllCertificates() throws Exception {
+        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
+
+        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
+        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
+
+        assertEquals(false, nettyConfiguration.trustAllCertificates());
+    }
+
+    @Test
+    public void testCreateNettyAsyncHttpClientWithDefaultsWriteTimeout() throws Exception {
+        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
+
+        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
+        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
+
+        SdkAsyncHttpClient httpDefaultClient = NettyNioAsyncHttpClient.create();
+        NettyConfiguration nettyDefaultConfiguration =
+                TestUtil.getNettyConfiguration(httpDefaultClient);
+
+        assertEquals(
+                nettyDefaultConfiguration.writeTimeoutMillis(),
+                nettyConfiguration.writeTimeoutMillis());
+    }
+
+    @Test
+    public void testCreateNettyAsyncHttpClientWithDefaultsProtocol() throws Exception {
+        NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
+
+        SdkAsyncHttpClient httpClient = AWSGeneralUtil.createAsyncHttpClient(builder);
+        NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
+
+        assertEquals(HTTP2, nettyConfiguration.attribute(SdkHttpConfigurationOption.PROTOCOL));
+    }
+
+    @Test
+    public void testCreateNettyAsyncHttpClientReadTimeout() throws Exception {
         Duration readTimeout = Duration.ofMillis(1234);
 
         AttributeMap clientConfiguration =
@@ -514,11 +527,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.readTimeoutMillis()).isEqualTo(readTimeout.toMillis());
+        assertEquals(readTimeout.toMillis(), nettyConfiguration.readTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientTcpKeepAlive() throws Exception {
+    public void testCreateNettyAsyncHttpClientTcpKeepAlive() throws Exception {
         boolean tcpKeepAlive = true;
 
         AttributeMap clientConfiguration =
@@ -531,11 +544,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.tcpKeepAlive()).isEqualTo(tcpKeepAlive);
+        assertEquals(tcpKeepAlive, nettyConfiguration.tcpKeepAlive());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientConnectionTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientConnectionTimeout() throws Exception {
         Duration connectionTimeout = Duration.ofMillis(1000);
 
         AttributeMap clientConfiguration =
@@ -548,12 +561,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.connectTimeoutMillis())
-                .isEqualTo(connectionTimeout.toMillis());
+        assertEquals(connectionTimeout.toMillis(), nettyConfiguration.connectTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientMaxConcurrency() throws Exception {
+    public void testCreateNettyAsyncHttpClientMaxConcurrency() throws Exception {
         int maxConnections = 123;
 
         AttributeMap clientConfiguration =
@@ -566,11 +578,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.maxConnections()).isEqualTo(maxConnections);
+        assertEquals(maxConnections, nettyConfiguration.maxConnections());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientWriteTimeout() throws Exception {
+    public void testCreateNettyAsyncHttpClientWriteTimeout() throws Exception {
         Duration writeTimeout = Duration.ofMillis(3000);
 
         AttributeMap clientConfiguration =
@@ -583,11 +595,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.writeTimeoutMillis()).isEqualTo(writeTimeout.toMillis());
+        assertEquals(writeTimeout.toMillis(), nettyConfiguration.writeTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientConnectionMaxIdleTime() throws Exception {
+    public void testCreateNettyAsyncHttpClientConnectionMaxIdleTime() throws Exception {
         Duration maxIdleTime = Duration.ofMillis(2000);
 
         AttributeMap clientConfiguration =
@@ -600,11 +612,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.idleTimeoutMillis()).isEqualTo(maxIdleTime.toMillis());
+        assertEquals(maxIdleTime.toMillis(), nettyConfiguration.idleTimeoutMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientIdleConnectionReaper() throws Exception {
+    public void testCreateNettyAsyncHttpClientIdleConnectionReaper() throws Exception {
         boolean reapIdleConnections = false;
 
         AttributeMap clientConfiguration =
@@ -617,11 +629,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.reapIdleConnections()).isEqualTo(reapIdleConnections);
+        assertEquals(reapIdleConnections, nettyConfiguration.reapIdleConnections());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientIdleConnectionTtl() throws Exception {
+    public void testCreateNettyAsyncHttpClientIdleConnectionTtl() throws Exception {
         Duration connectionTtl = Duration.ofMillis(5000);
 
         AttributeMap clientConfiguration =
@@ -634,11 +646,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.connectionTtlMillis()).isEqualTo(connectionTtl.toMillis());
+        assertEquals(connectionTtl.toMillis(), nettyConfiguration.connectionTtlMillis());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientTrustAllCertificates() throws Exception {
+    public void testCreateNettyAsyncHttpClientTrustAllCertificates() throws Exception {
         boolean trustAllCertificates = true;
 
         AttributeMap clientConfiguration =
@@ -653,11 +665,11 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.trustAllCertificates()).isEqualTo(trustAllCertificates);
+        assertEquals(trustAllCertificates, nettyConfiguration.trustAllCertificates());
     }
 
     @Test
-    void testCreateNettyAsyncHttpClientHttpVersion() throws Exception {
+    public void testCreateNettyAsyncHttpClientHttpVersion() throws Exception {
         Protocol httpVersion = HTTP1_1;
 
         AttributeMap clientConfiguration =
@@ -670,113 +682,109 @@ class AWSGeneralUtilTest {
                 AWSGeneralUtil.createAsyncHttpClient(clientConfiguration, builder);
         NettyConfiguration nettyConfiguration = TestUtil.getNettyConfiguration(httpClient);
 
-        assertThat(nettyConfiguration.attribute(SdkHttpConfigurationOption.PROTOCOL))
-                .isEqualTo(httpVersion);
+        assertEquals(
+                httpVersion, nettyConfiguration.attribute(SdkHttpConfigurationOption.PROTOCOL));
     }
 
     @Test
-    void testGetRegion() {
+    public void testGetRegion() {
         Region region = AWSGeneralUtil.getRegion(TestUtil.properties(AWS_REGION, "eu-west-2"));
 
-        assertThat(region).isEqualTo(Region.EU_WEST_2);
+        assertEquals(Region.EU_WEST_2, region);
     }
 
     @Test
-    void testValidRegion() {
-        assertThat(AWSGeneralUtil.isValidRegion(Region.of("us-east-1"))).isTrue();
-        assertThat(AWSGeneralUtil.isValidRegion(Region.of("us-gov-west-1"))).isTrue();
-        assertThat(AWSGeneralUtil.isValidRegion(Region.of("us-isob-east-1"))).isTrue();
-        assertThat(AWSGeneralUtil.isValidRegion(Region.of("aws-global"))).isTrue();
-        assertThat(AWSGeneralUtil.isValidRegion(Region.of("aws-iso-global"))).isTrue();
-        assertThat(AWSGeneralUtil.isValidRegion(Region.of("aws-iso-b-global"))).isTrue();
+    public void testValidRegion() {
+        assertTrue(AWSGeneralUtil.isValidRegion(Region.of("us-east-1")));
     }
 
     @Test
-    void testInvalidRegion() {
-        assertThat(AWSGeneralUtil.isValidRegion(Region.of("unstructured-string"))).isFalse();
+    public void testInvalidRegion() {
+        assertFalse(AWSGeneralUtil.isValidRegion(Region.of("ur-east-1")));
     }
 
     @Test
-    void testUnrecognizableAwsRegionInConfig() {
+    public void testUnrecognizableAwsRegionInConfig() {
+        exception.expect(IllegalArgumentException.class);
+        exception.expectMessage("Invalid AWS region");
 
         Properties testConfig = TestUtil.properties(AWSConfigConstants.AWS_REGION, "wrongRegionId");
         testConfig.setProperty(AWSConfigConstants.AWS_ACCESS_KEY_ID, "accessKeyId");
         testConfig.setProperty(AWSConfigConstants.AWS_SECRET_ACCESS_KEY, "secretKey");
 
-        assertThatThrownBy(() -> AWSGeneralUtil.validateAwsConfiguration(testConfig))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid AWS region");
+        AWSGeneralUtil.validateAwsConfiguration(testConfig);
     }
 
     @Test
-    void testCredentialProviderTypeSetToBasicButNoCredentialSetInConfig() {
+    public void testCredentialProviderTypeSetToBasicButNoCredentialSetInConfig() {
+        exception.expect(IllegalArgumentException.class);
+        exception.expectMessage(
+                "Please set values for AWS Access Key ID ('"
+                        + AWSConfigConstants.AWS_ACCESS_KEY_ID
+                        + "') "
+                        + "and Secret Key ('"
+                        + AWSConfigConstants.AWS_SECRET_ACCESS_KEY
+                        + "') when using the BASIC AWS credential provider type.");
+
         Properties testConfig = TestUtil.properties(AWSConfigConstants.AWS_REGION, "us-east-1");
         testConfig.setProperty(AWSConfigConstants.AWS_CREDENTIALS_PROVIDER, "BASIC");
 
-        assertThatThrownBy(() -> AWSGeneralUtil.validateAwsConfiguration(testConfig))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(
-                        "Please set values for AWS Access Key ID ('"
-                                + AWSConfigConstants.AWS_ACCESS_KEY_ID
-                                + "') "
-                                + "and Secret Key ('"
-                                + AWSConfigConstants.AWS_SECRET_ACCESS_KEY
-                                + "') when using the BASIC AWS credential provider type.");
+        AWSGeneralUtil.validateAwsConfiguration(testConfig);
     }
 
     @Test
-    void testUnrecognizableCredentialProviderTypeInConfig() {
+    public void testUnrecognizableCredentialProviderTypeInConfig() {
+        exception.expect(IllegalArgumentException.class);
+        exception.expectMessage("Invalid AWS Credential Provider Type");
+
         Properties testConfig = TestUtil.getStandardProperties();
         testConfig.setProperty(AWSConfigConstants.AWS_CREDENTIALS_PROVIDER, "wrongProviderType");
 
-        assertThatThrownBy(() -> AWSGeneralUtil.validateAwsConfiguration(testConfig))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid AWS Credential Provider Type");
+        AWSGeneralUtil.validateAwsConfiguration(testConfig);
     }
 
     @Test
-    void testMissingWebIdentityTokenFileInCredentials() {
+    public void testMissingWebIdentityTokenFileInCredentials() {
+        exception.expect(IllegalStateException.class);
+        exception.expectMessage(
+                "Either the environment variable AWS_WEB_IDENTITY_TOKEN_FILE or the javaproperty aws.webIdentityTokenFile must be set");
         Properties properties = TestUtil.getStandardProperties();
         properties.setProperty(AWS_CREDENTIALS_PROVIDER, "WEB_IDENTITY_TOKEN");
 
-        assertThatThrownBy(() -> AWSGeneralUtil.validateAwsCredentials(properties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage(
-                        "Either the environment variable AWS_WEB_IDENTITY_TOKEN_FILE or the javaproperty aws.webIdentityTokenFile must be set.");
+        AWSGeneralUtil.validateAwsCredentials(properties);
     }
 
     @Test
-    void testMissingEnvironmentVariableCredentials() {
+    public void testMissingEnvironmentVariableCredentials() {
+        exception.expect(SdkClientException.class);
+        exception.expectMessage("Access key must be specified either via environment variable");
         Properties properties = TestUtil.getStandardProperties();
         properties.setProperty(AWS_CREDENTIALS_PROVIDER, "ENV_VAR");
 
-        assertThatThrownBy(() -> AWSGeneralUtil.validateAwsCredentials(properties))
-                .isInstanceOf(SdkClientException.class)
-                .hasMessageContaining(
-                        "Access key must be specified either via environment variable");
+        AWSGeneralUtil.validateAwsCredentials(properties);
     }
 
     @Test
-    void testFailedSystemPropertiesCredentialsValidationsOnMissingAccessKey() {
+    public void testFailedSystemPropertiesCredentialsValidationsOnMissingAccessKey() {
+        exception.expect(SdkClientException.class);
+        exception.expectMessage(
+                "Access key must be specified either via environment variable (AWS_ACCESS_KEY_ID) or system property (aws.accessKeyId)");
         Properties properties = TestUtil.getStandardProperties();
         properties.setProperty(AWS_CREDENTIALS_PROVIDER, "SYS_PROP");
 
-        assertThatThrownBy(() -> AWSGeneralUtil.validateAwsCredentials(properties))
-                .isInstanceOf(SdkClientException.class)
-                .hasMessageContaining(
-                        "Access key must be specified either via environment variable (AWS_ACCESS_KEY_ID) or system property (aws.accessKeyId)");
+        AWSGeneralUtil.validateAwsCredentials(properties);
     }
 
     @Test
-    void testFailedSystemPropertiesCredentialsValidationsOnMissingSecretKey() {
+    public void testFailedSystemPropertiesCredentialsValidationsOnMissingSecretKey() {
         System.setProperty("aws.accessKeyId", "accesKeyId");
+        exception.expect(SdkClientException.class);
+        exception.expectMessage(
+                "Secret key must be specified either via environment variable (AWS_SECRET_ACCESS_KEY) or system property (aws.secretAccessKey)");
         Properties properties = TestUtil.getStandardProperties();
         properties.setProperty(AWS_CREDENTIALS_PROVIDER, "SYS_PROP");
 
-        assertThatThrownBy(() -> AWSGeneralUtil.validateAwsCredentials(properties))
-                .isInstanceOf(SdkClientException.class)
-                .hasMessageContaining(
-                        "Secret key must be specified either via environment variable (AWS_SECRET_ACCESS_KEY) or system property (aws.secretAccessKey)");
+        AWSGeneralUtil.validateAwsCredentials(properties);
     }
 
     private WebIdentityTokenFileCredentialsProvider.Builder

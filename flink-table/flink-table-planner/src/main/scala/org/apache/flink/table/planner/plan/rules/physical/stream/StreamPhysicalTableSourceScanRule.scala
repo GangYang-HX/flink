@@ -62,7 +62,7 @@ class StreamPhysicalTableSourceScanRule
   def convert(rel: RelNode): RelNode = {
     val scan = rel.asInstanceOf[FlinkLogicalTableSourceScan]
     val traitSet: RelTraitSet = rel.getTraitSet.replace(FlinkConventions.STREAM_PHYSICAL)
-    val tableConfig = ShortcutUtils.unwrapContext(rel.getCluster).getTableConfig
+    val config = ShortcutUtils.unwrapContext(rel.getCluster).getTableConfig
     val table = scan.getTable.asInstanceOf[TableSourceTable]
 
     val newScan = new StreamPhysicalTableSourceScan(rel.getCluster, traitSet, scan.getHints, table)
@@ -70,7 +70,7 @@ class StreamPhysicalTableSourceScanRule
 
     if (
       isUpsertSource(resolvedSchema, table.tableSource) ||
-      isSourceChangeEventsDuplicate(resolvedSchema, table.tableSource, tableConfig)
+      isSourceChangeEventsDuplicate(resolvedSchema, table.tableSource, config)
     ) {
       // generate changelog normalize node
       // primary key has been validated in CatalogSourceTable

@@ -191,9 +191,4 @@ public class KubernetesTaskManagerParameters extends AbstractKubernetesParameter
     public String getNodeNameLabel() {
         return checkNotNull(flinkConfig.get(KubernetesConfigOptions.KUBERNETES_NODE_NAME_LABEL));
     }
-
-    public String getEntrypointArgs() {
-        return flinkConfig.getString(
-                KubernetesConfigOptions.KUBERNETES_TASKMANAGER_ENTRYPOINT_ARGS);
-    }
 }

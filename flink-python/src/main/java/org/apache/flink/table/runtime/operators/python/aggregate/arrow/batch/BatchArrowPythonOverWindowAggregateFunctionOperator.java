@@ -20,7 +20,7 @@ package org.apache.flink.table.runtime.operators.python.aggregate.arrow.batch;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
-import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.memory.ByteArrayOutputStreamWithPos;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
@@ -39,8 +39,8 @@ import java.util.ListIterator;
 
 import static org.apache.flink.python.PythonOptions.PYTHON_METRIC_ENABLED;
 import static org.apache.flink.python.PythonOptions.PYTHON_PROFILE_ENABLED;
-import static org.apache.flink.python.util.ProtoUtils.createOverWindowArrowTypeCoderInfoDescriptorProto;
-import static org.apache.flink.python.util.ProtoUtils.createUserDefinedFunctionProto;
+import static org.apache.flink.streaming.api.utils.ProtoUtils.createOverWindowArrowTypeCoderInfoDescriptorProto;
+import static org.apache.flink.streaming.api.utils.ProtoUtils.getUserDefinedFunctionProto;
 
 /** The Batch Arrow Python {@link AggregateFunction} Operator for Over Window Aggregation. */
 @Internal
@@ -236,9 +236,9 @@ public class BatchArrowPythonOverWindowAggregateFunctionOperator
 
     @Override
     @SuppressWarnings("ConstantConditions")
-    public void emitResult(Tuple3<String, byte[], Integer> resultTuple) throws Exception {
-        byte[] udafResult = resultTuple.f1;
-        int length = resultTuple.f2;
+    public void emitResult(Tuple2<byte[], Integer> resultTuple) throws Exception {
+        byte[] udafResult = resultTuple.f0;
+        int length = resultTuple.f1;
         bais.setBuffer(udafResult, 0, length);
         int rowCount = arrowSerializer.load();
         for (int i = 0; i < rowCount; i++) {
@@ -251,13 +251,13 @@ public class BatchArrowPythonOverWindowAggregateFunctionOperator
     }
 
     @Override
-    public FlinkFnApi.UserDefinedFunctions createUserDefinedFunctionsProto() {
+    public FlinkFnApi.UserDefinedFunctions getUserDefinedFunctionsProto() {
         FlinkFnApi.UserDefinedFunctions.Builder builder =
                 FlinkFnApi.UserDefinedFunctions.newBuilder();
         // add udaf proto
         for (int i = 0; i < pandasAggFunctions.length; i++) {
             FlinkFnApi.UserDefinedFunction.Builder functionBuilder =
-                    createUserDefinedFunctionProto(pandasAggFunctions[i]).toBuilder();
+                    getUserDefinedFunctionProto(pandasAggFunctions[i]).toBuilder();
             functionBuilder.setWindowIndex(aggWindowIndex[i]);
             builder.addUdfs(functionBuilder);
         }

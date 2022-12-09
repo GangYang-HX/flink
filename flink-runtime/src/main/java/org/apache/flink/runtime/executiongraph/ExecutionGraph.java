@@ -32,9 +32,11 @@ import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
 import org.apache.flink.runtime.checkpoint.MasterTriggerRestoreHook;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.executiongraph.failover.flip1.ResultPartitionAvailabilityChecker;
+import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguration;
 import org.apache.flink.runtime.query.KvStateLocationRegistry;
 import org.apache.flink.runtime.scheduler.InternalFailuresListener;
@@ -83,13 +85,13 @@ public interface ExecutionGraph extends AccessExecutionGraph {
     void enableCheckpointing(
             CheckpointCoordinatorConfiguration chkConfig,
             List<MasterTriggerRestoreHook<?>> masterHooks,
+            Map<OperatorID, String> operatorDescriptions,
             CheckpointIDCounter checkpointIDCounter,
             CompletedCheckpointStore checkpointStore,
             StateBackend checkpointStateBackend,
             CheckpointStorage checkpointStorage,
             CheckpointStatsTracker statsTracker,
-            CheckpointsCleaner checkpointsCleaner,
-            String changelogStorage);
+            CheckpointsCleaner checkpointsCleaner);
 
     @Nullable
     CheckpointCoordinator getCheckpointCoordinator();
@@ -191,6 +193,15 @@ public interface ExecutionGraph extends AccessExecutionGraph {
      *     not found.
      */
     boolean updateState(TaskExecutionStateTransition state);
+
+    /**
+     * Mark the data of a result partition to be available. Note that only PIPELINED partitions are
+     * accepted because it is for the case that a TM side PIPELINED result partition has data
+     * produced and notifies JM.
+     *
+     * @param partitionId specifying the result partition whose data have become available
+     */
+    void notifyPartitionDataAvailable(ResultPartitionID partitionId);
 
     Map<ExecutionAttemptID, Execution> getRegisteredExecutions();
 

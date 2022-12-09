@@ -133,7 +133,7 @@ public class ResourceManagerJobMasterTest extends TestLogger {
         }
 
         if (rpcService != null) {
-            RpcUtils.terminateRpcService(rpcService);
+            RpcUtils.terminateRpcService(rpcService, TIMEOUT);
         }
     }
 

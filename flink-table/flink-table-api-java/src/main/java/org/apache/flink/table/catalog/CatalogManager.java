@@ -20,6 +20,7 @@ package org.apache.flink.table.catalog;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.CatalogNotExistException;
 import org.apache.flink.table.api.EnvironmentSettings;
@@ -37,6 +38,7 @@ import org.apache.flink.table.expressions.resolver.ExpressionResolver.Expression
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.StringUtils;
 
+import org.apache.commons.collections.ListUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -240,7 +242,47 @@ public final class CatalogManager {
      * @return the requested catalog or empty if it does not exist
      */
     public Optional<Catalog> getCatalog(String catalogName) {
+        if (isBilibiliCatalog(catalogName)) {
+            Catalog bilibiliCatalog = catalogs.get("bilibili");
+            if (bilibiliCatalog != null) {
+                bilibiliCatalog.setCurrentDataSource(catalogName);
+                catalogs.put(catalogName, bilibiliCatalog);
+            }
+        }
         return Optional.ofNullable(catalogs.get(catalogName));
+    }
+
+    /**
+     * Gets all materializedViews.
+     *
+     * @return all materializedViews
+     */
+    public List<Tuple3<ObjectIdentifier, String, Long>> getAllMaterializedViewObjectsForRewriting(
+            Long flagTime) {
+        Optional<Catalog> curCatalog = getCatalog(getCurrentCatalog());
+
+        if (curCatalog.isPresent() && (curCatalog.get() instanceof MaterializeSupport)) {
+            MaterializeSupport catalog = (MaterializeSupport) curCatalog.get();
+            return catalog.listAllMaterializeViews(flagTime);
+        }
+
+        return ListUtils.EMPTY_LIST;
+    }
+
+    /**
+     * Gets materializedView watermark.
+     *
+     * @return materializedView watermark, e.g. "1661165759418"
+     */
+    public Optional<String> getMaterializeViewWatermark(String fullTableName) {
+        Optional<Catalog> curCatalog = getCatalog(getCurrentCatalog());
+
+        if (curCatalog.isPresent() && (curCatalog.get() instanceof MaterializeSupport)) {
+            MaterializeSupport catalog = (MaterializeSupport) curCatalog.get();
+            return catalog.getMaterializeViewWatermark(fullTableName);
+        }
+
+        return Optional.empty();
     }
 
     /**
@@ -386,7 +428,8 @@ public final class CatalogManager {
      */
     public Optional<CatalogPartition> getPartition(
             ObjectIdentifier tableIdentifier, CatalogPartitionSpec partitionSpec) {
-        Catalog catalog = catalogs.get(tableIdentifier.getCatalogName());
+        // Catalog catalog = catalogs.get(tableIdentifier.getCatalogName());
+        Catalog catalog = getCatalog(tableIdentifier.getCatalogName()).orElse(null);
         if (catalog != null) {
             try {
                 return Optional.of(
@@ -398,7 +441,8 @@ public final class CatalogManager {
     }
 
     private Optional<ContextResolvedTable> getPermanentTable(ObjectIdentifier objectIdentifier) {
-        Catalog currentCatalog = catalogs.get(objectIdentifier.getCatalogName());
+        // Catalog currentCatalog = catalogs.get(objectIdentifier.getCatalogName());
+        Catalog currentCatalog = getCatalog(objectIdentifier.getCatalogName()).orElse(null);
         ObjectPath objectPath = objectIdentifier.toObjectPath();
         if (currentCatalog != null) {
             try {
@@ -411,6 +455,7 @@ public final class CatalogManager {
                 // Ignore.
             }
         }
+        LOG.warn("no catalog, id: {}", objectIdentifier.toString());
         return Optional.empty();
     }
 
@@ -573,7 +618,8 @@ public final class CatalogManager {
      */
     public Set<String> listSchemas(String catalogName) {
         return Stream.concat(
-                        Optional.ofNullable(catalogs.get(catalogName)).map(Catalog::listDatabases)
+                        // Optional.ofNullable(catalogs.get(catalogName))
+                        getCatalog(catalogName).map(Catalog::listDatabases)
                                 .orElse(Collections.emptyList()).stream(),
                         temporaryTables.keySet().stream()
                                 .filter(i -> i.getCatalogName().equals(catalogName))
@@ -704,6 +750,24 @@ public final class CatalogManager {
                         return resolvedListenedTable;
                     }
                 });
+    }
+
+    public void createMaterializedView(
+            CatalogMaterializedView mv, ObjectIdentifier objectIdentifier, boolean ignoreIfExists) {
+        execute(
+                (catalog, path) -> {
+                    if (!(catalog instanceof MaterializeSupport)) {
+                        throw new ValidationException(
+                                String.format(
+                                        "Catalog %s does not support materialize.",
+                                        objectIdentifier.getCatalogName()));
+                    }
+                    MaterializeSupport curCatalog = (MaterializeSupport) catalog;
+                    curCatalog.createMaterializeView(mv, objectIdentifier, ignoreIfExists);
+                },
+                objectIdentifier,
+                false,
+                "CreateMaterializedView");
     }
 
     /**
@@ -948,5 +1012,19 @@ public final class CatalogManager {
         }
         final ResolvedSchema resolvedSchema = view.getUnresolvedSchema().resolve(schemaResolver);
         return new ResolvedCatalogView(view, resolvedSchema);
+    }
+
+    private boolean isBilibiliCatalog(String catalogName) {
+        return catalogName.startsWith("Hive1")
+                || catalogName.startsWith("Kafka_")
+                || catalogName.startsWith("Clickhouse_")
+                || catalogName.startsWith("Mysql_")
+                || catalogName.startsWith("Tidb_")
+                || catalogName.startsWith("Kfc_")
+                || catalogName.startsWith("Databus")
+                // || catalogName.startsWith("Hdfs")
+                // || catalogName.startsWith("Boss_")
+                // || catalogName.startsWith("Es_")
+                || catalogName.startsWith("Redis");
     }
 }

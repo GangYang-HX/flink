@@ -81,7 +81,7 @@ class GroupWindowValidationTest extends TableTestBase {
     val table = util.addDataStream[(Long, Int, String)]("T1", 'rowtime.rowtime, 'int, 'string)
 
     table
-      .window(Tumble.over($"WRONG").on($"rowtime").as("w")) // string is not a valid interval
+      .window(Tumble.over("WRONG").on('rowtime).as('w)) // string is not a valid interval
       .groupBy('w, 'string)
       .select('string, 'int.count)
   }
@@ -127,7 +127,7 @@ class GroupWindowValidationTest extends TableTestBase {
 
     table
       // field reference is not a valid interval
-      .window(Slide.over($"WRONG").every($"WRONG").on($"rowtime").as("w"))
+      .window(Slide.over("WRONG").every("WRONG").on('rowtime).as('w))
       .groupBy('w, 'string)
       .select('string, 'int.count)
   }

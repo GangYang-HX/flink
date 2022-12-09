@@ -22,10 +22,8 @@ import org.apache.flink.sql.parser.ddl.{SqlCompilePlan, SqlReset, SqlSet, SqlUse
 import org.apache.flink.sql.parser.dml.{RichSqlInsert, SqlBeginStatementSet, SqlCompileAndExecutePlan, SqlEndStatementSet, SqlExecute, SqlExecutePlan, SqlStatementSet}
 import org.apache.flink.sql.parser.dql._
 import org.apache.flink.table.api.{TableException, ValidationException}
-import org.apache.flink.table.planner.hint.JoinStrategy
 import org.apache.flink.table.planner.parse.CalciteParser
 import org.apache.flink.table.planner.plan.FlinkCalciteCatalogReader
-import org.apache.flink.table.planner.utils.JavaScalaConversionUtil
 
 import com.google.common.collect.ImmutableList
 import org.apache.calcite.config.NullCollation
@@ -35,9 +33,8 @@ import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.{RelFieldCollation, RelRoot}
 import org.apache.calcite.rel.hint.RelHint
 import org.apache.calcite.rex.{RexInputRef, RexNode}
-import org.apache.calcite.sql.{SqlCall, SqlHint, SqlKind, SqlNode, SqlNodeList, SqlOperatorTable, SqlSelect, SqlTableRef}
+import org.apache.calcite.sql.{SqlInsert, SqlKind, SqlNode, SqlOperatorTable}
 import org.apache.calcite.sql.advise.SqlAdvisorValidator
-import org.apache.calcite.sql.util.SqlShuttle
 import org.apache.calcite.sql.validate.SqlValidator
 import org.apache.calcite.sql2rel.{SqlRexConvertletTable, SqlToRelConverter}
 import org.apache.calcite.tools.{FrameworkConfig, RelConversionException}
@@ -152,14 +149,7 @@ class FlinkPlannerImpl(
       }
       sqlNode match {
         case richExplain: SqlRichExplain =>
-          val validatedStatement = richExplain.getStatement match {
-            // only validate source here
-            case insert: RichSqlInsert =>
-              validateRichSqlInsert(insert)
-            case others =>
-              validate(others)
-          }
-          richExplain.setOperand(0, validatedStatement)
+          richExplain.setOperand(0, validate(richExplain.getStatement))
           richExplain
         case statementSet: SqlStatementSet =>
           statementSet.getInserts.asScala.zipWithIndex.foreach {
@@ -170,7 +160,16 @@ class FlinkPlannerImpl(
           execute.setOperand(0, validate(execute.getStatement))
           execute
         case insert: RichSqlInsert =>
-          validateRichSqlInsert(insert)
+          // We don't support UPSERT INTO semantics (see FLINK-24225).
+          if (insert.isUpsert) {
+            throw new ValidationException(
+              "UPSERT INTO statement is not supported. Please use INSERT INTO instead.")
+          }
+          // only validate source here.
+          // ignore row type which will be verified in table environment.
+          val validatedSource = validator.validate(insert.getSource)
+          insert.setOperand(2, validatedSource)
+          insert
         case compile: SqlCompilePlan =>
           compile.setOperand(0, validate(compile.getOperandList.get(0)))
           compile
@@ -195,17 +194,6 @@ class FlinkPlannerImpl(
       assert(validatedSqlNode != null)
       val sqlToRelConverter: SqlToRelConverter = createSqlToRelConverter(sqlValidator)
 
-      // check whether this SqlNode tree contains join hints
-      val checkContainJoinHintShuttle = new CheckContainJoinHintShuttle
-      validatedSqlNode.accept(checkContainJoinHintShuttle)
-      checkContainJoinHintShuttle.containsJoinHint
-
-      // TODO currently, it is a relatively hacked way to tell converter
-      // that this SqlNode tree contains join hints
-      if (checkContainJoinHintShuttle.containsJoinHint) {
-        sqlToRelConverter.containsJoinHint()
-      }
-
       sqlToRelConverter.convertQuery(validatedSqlNode, false, true)
       // we disable automatic flattening in order to let composite types pass without modification
       // we might enable it again once Calcite has better support for structured types
@@ -217,39 +205,6 @@ class FlinkPlannerImpl(
       // root = root.withRel(RelTimeIndicatorConverter.convert(root.rel, rexBuilder))
     } catch {
       case e: RelConversionException => throw new TableException(e.getMessage)
-    }
-  }
-
-  class CheckContainJoinHintShuttle extends SqlShuttle {
-    var containsJoinHint: Boolean = false
-
-    override def visit(call: SqlCall): SqlNode = {
-      call match {
-        case select: SqlSelect =>
-          if (select.hasHints && hasJoinHint(select.getHints.getList)) {
-            containsJoinHint = true
-            return call
-          }
-        case table: SqlTableRef =>
-          val hintList = table.getOperandList.get(1).asInstanceOf[SqlNodeList]
-          if (hasJoinHint(hintList.getList)) {
-            containsJoinHint = true
-            return call
-          }
-        case _ => // ignore
-      }
-      super.visit(call)
-    }
-
-    private def hasJoinHint(hints: util.List[SqlNode]): Boolean = {
-      JavaScalaConversionUtil.toScala(hints).foreach {
-        case hint: SqlHint =>
-          val hintName = hint.getName
-          if (JoinStrategy.isJoinStrategy(hintName)) {
-            return true
-          }
-      }
-      false
     }
   }
 
@@ -272,19 +227,6 @@ class FlinkPlannerImpl(
       sqlValidator.setExpectedOutputType(sqlNode, outputType)
     }
     sqlValidator.validateParameterizedExpression(sqlNode, nameToTypeMap)
-  }
-
-  private def validateRichSqlInsert(insert: RichSqlInsert): SqlNode = {
-    // We don't support UPSERT INTO semantics (see FLINK-24225).
-    if (insert.isUpsert) {
-      throw new ValidationException(
-        "UPSERT INTO statement is not supported. Please use INSERT INTO instead.")
-    }
-    // only validate source here.
-    // ignore row type which will be verified in table environment.
-    val validatedSource = validate(insert.getSource)
-    insert.setOperand(2, validatedSource)
-    insert
   }
 
   def rex(

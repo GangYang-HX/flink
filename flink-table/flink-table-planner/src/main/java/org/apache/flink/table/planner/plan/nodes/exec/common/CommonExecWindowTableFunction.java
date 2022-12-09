@@ -18,8 +18,12 @@
 
 package org.apache.flink.table.planner.plan.nodes.exec.common;
 
+import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.dag.Transformation;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.api.config.OptimizerConfigOptions;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.delegation.PlannerBase;
 import org.apache.flink.table.planner.plan.logical.TimeAttributeWindowingStrategy;
@@ -88,6 +92,26 @@ public abstract class CommonExecWindowTableFunction extends ExecNodeBase<RowData
         WindowTableFunctionOperator windowTableFunctionOperator =
                 new WindowTableFunctionOperator(
                         windowAssigner, windowingStrategy.getTimeAttributeIndex(), shiftTimeZone);
+
+        Configuration configuration = config.getTableConfig().getConfiguration();
+
+        if (RuntimeExecutionMode.BATCH.equals(configuration.get(ExecutionOptions.RUNTIME_MODE))
+                && configuration.get(OptimizerConfigOptions.TABLE_OPTIMIZER_MATERIALIZATION_ENABLED)
+                && configuration.contains(
+                        OptimizerConfigOptions
+                                .TABLE_OPTIMIZER_MATERIALIZATION_QUERY_FLAG_START_TIME)
+                && configuration.contains(
+                        OptimizerConfigOptions
+                                .TABLE_OPTIMIZER_MATERIALIZATION_QUERY_FLAG_END_TIME)) {
+            windowTableFunctionOperator.setQueryTime(
+                    configuration.get(
+                            OptimizerConfigOptions
+                                    .TABLE_OPTIMIZER_MATERIALIZATION_QUERY_FLAG_START_TIME),
+                    configuration.get(
+                            OptimizerConfigOptions
+                                    .TABLE_OPTIMIZER_MATERIALIZATION_QUERY_FLAG_END_TIME));
+        }
+
         return ExecNodeUtil.createOneInputTransformation(
                 inputTransform,
                 createTransformationMeta(WINDOW_TRANSFORMATION, config),

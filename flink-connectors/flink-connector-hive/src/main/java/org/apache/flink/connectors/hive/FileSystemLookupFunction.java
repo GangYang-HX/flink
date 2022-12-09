@@ -23,6 +23,9 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.connector.file.table.PartitionFetcher;
 import org.apache.flink.connector.file.table.PartitionReader;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.QueryServiceMode;
+import org.apache.flink.runtime.metrics.DescriptiveStatisticsHistogram;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.FunctionContext;
@@ -32,14 +35,15 @@ import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.FlinkRuntimeException;
 
+import org.apache.flink.shaded.guava30.com.google.common.cache.Cache;
+import org.apache.flink.shaded.guava30.com.google.common.cache.CacheBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Lookup function for filesystem connector tables.
@@ -64,11 +68,10 @@ public class FileSystemLookupFunction<P> extends TableFunction<RowData> {
     private final Duration reloadInterval;
     private final TypeSerializer<RowData> serializer;
     private final RowType rowType;
+    private Histogram threadRtQuery;
 
     // cache for lookup data
-    private transient Map<RowData, List<RowData>> cache;
-    // timestamp when cache expires
-    private transient long nextLoadTime;
+    public static transient Cache<RowData, List<RowData>> cache;
 
     public FileSystemLookupFunction(
             PartitionFetcher<P> partitionFetcher,
@@ -93,9 +96,15 @@ public class FileSystemLookupFunction<P> extends TableFunction<RowData> {
     @Override
     public void open(FunctionContext context) throws Exception {
         super.open(context);
-        cache = new HashMap<>();
-        nextLoadTime = -1L;
+        cache = CacheBuilder.newBuilder().build();
         fetcherContext.open();
+        HiveLookupCacheFactory.getInstance().initCache(() -> checkCacheReload(), reloadInterval);
+
+        // add metric
+        this.threadRtQuery =
+                context.getMetricGroup()
+                        .addGroup("thread_hive", QueryServiceMode.DISABLED)
+                        .histogram("rt", new DescriptiveStatisticsHistogram(10_000));
     }
 
     @Override
@@ -104,32 +113,32 @@ public class FileSystemLookupFunction<P> extends TableFunction<RowData> {
     }
 
     public void eval(Object... values) {
-        checkCacheReload();
         RowData lookupKey = GenericRowData.of(values);
-        List<RowData> matchedRows = cache.get(lookupKey);
+        long start = System.nanoTime();
+        List<RowData> matchedRows = cache.getIfPresent(lookupKey);
         if (matchedRows != null) {
+            setQueryRtMetric(start);
             for (RowData matchedRow : matchedRows) {
                 collect(matchedRow);
             }
         }
     }
 
+    private void setQueryRtMetric(long start) {
+        this.threadRtQuery.update(System.nanoTime() - start);
+    }
+
+    /**
+     * Do not clear the cache before updating, keep the same logic as Flink-1.11, and continuously
+     * update the key.
+     */
     private void checkCacheReload() {
-        if (nextLoadTime > System.currentTimeMillis()) {
-            return;
-        }
-        if (nextLoadTime > 0) {
-            LOG.info(
-                    "Lookup join cache has expired after {} minute(s), reloading",
-                    reloadInterval.toMinutes());
-        } else {
-            LOG.info("Populating lookup join cache");
-        }
+        LOG.info("load lookup data to cache");
         int numRetry = 0;
         while (true) {
-            cache.clear();
             try {
                 long count = 0;
+                Cache<RowData, List<RowData>> currentCache = CacheBuilder.newBuilder().build();
                 GenericRowData reuse = new GenericRowData(rowType.getFieldCount());
                 partitionReader.open(partitionFetcher.fetch(fetcherContext));
                 RowData row;
@@ -137,11 +146,11 @@ public class FileSystemLookupFunction<P> extends TableFunction<RowData> {
                     count++;
                     RowData rowData = serializer.copy(row);
                     RowData key = extractLookupKey(rowData);
-                    List<RowData> rows = cache.computeIfAbsent(key, k -> new ArrayList<>());
+                    List<RowData> rows = currentCache.get(key, () -> new ArrayList<>());
                     rows.add(rowData);
                 }
+                cache = currentCache;
                 partitionReader.close();
-                nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
                 LOG.info("Loaded {} row(s) into lookup join cache", count);
                 return;
             } catch (Exception e) {

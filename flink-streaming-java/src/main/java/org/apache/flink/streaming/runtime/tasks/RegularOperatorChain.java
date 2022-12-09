@@ -198,7 +198,6 @@ public class RegularOperatorChain<OUT, OP extends StreamOperator<OUT>>
                                 storage));
             }
         }
-        sendAcknowledgeCheckpointEvent(checkpointMetaData.getCheckpointId());
     }
 
     private OperatorSnapshotFutures buildOperatorSnapshotFutures(

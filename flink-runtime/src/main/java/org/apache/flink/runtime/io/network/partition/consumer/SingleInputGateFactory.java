@@ -79,7 +79,7 @@ public class SingleInputGateFactory {
 
     private final int floatingNetworkBuffersPerGate;
 
-    private final boolean batchShuffleCompressionEnabled;
+    private final boolean blockingShuffleCompressionEnabled;
 
     private final String compressionCodec;
 
@@ -101,7 +101,8 @@ public class SingleInputGateFactory {
                 NettyShuffleUtils.getNetworkBuffersPerInputChannel(
                         networkConfig.networkBuffersPerChannel());
         this.floatingNetworkBuffersPerGate = networkConfig.floatingNetworkBuffersPerGate();
-        this.batchShuffleCompressionEnabled = networkConfig.isBatchShuffleCompressionEnabled();
+        this.blockingShuffleCompressionEnabled =
+                networkConfig.isBlockingShuffleCompressionEnabled();
         this.compressionCodec = networkConfig.getCompressionCodec();
         this.networkBufferSize = networkConfig.networkBufferSize();
         this.connectionManager = connectionManager;
@@ -121,8 +122,7 @@ public class SingleInputGateFactory {
                 createBufferPoolFactory(networkBufferPool, floatingNetworkBuffersPerGate);
 
         BufferDecompressor bufferDecompressor = null;
-        if (igdd.getConsumedPartitionType().supportCompression()
-                && batchShuffleCompressionEnabled) {
+        if (igdd.getConsumedPartitionType().isBlocking() && blockingShuffleCompressionEnabled) {
             bufferDecompressor = new BufferDecompressor(networkBufferSize, compressionCodec);
         }
 
@@ -146,7 +146,7 @@ public class SingleInputGateFactory {
                         networkBufferSize,
                         new ThroughputCalculator(SystemClock.getInstance()),
                         maybeCreateBufferDebloater(
-                                owningTaskName, gateIndex, networkInputGroup.addGroup(gateIndex)));
+                                gateIndex, networkInputGroup.addGroup(gateIndex)));
 
         InputChannelMetrics metrics =
                 new InputChannelMetrics(networkInputGroup, owner.getParentGroup());
@@ -154,12 +154,10 @@ public class SingleInputGateFactory {
         return inputGate;
     }
 
-    private BufferDebloater maybeCreateBufferDebloater(
-            String owningTaskName, int gateIndex, MetricGroup inputGroup) {
+    private BufferDebloater maybeCreateBufferDebloater(int gateIndex, MetricGroup inputGroup) {
         if (debloatConfiguration.isEnabled()) {
             final BufferDebloater bufferDebloater =
                     new BufferDebloater(
-                            owningTaskName,
                             gateIndex,
                             debloatConfiguration.getTargetTotalBufferSize().toMillis(),
                             debloatConfiguration.getMaxBufferSize(),

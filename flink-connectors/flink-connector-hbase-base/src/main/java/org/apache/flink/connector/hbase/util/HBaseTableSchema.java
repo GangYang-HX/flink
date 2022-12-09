@@ -36,7 +36,6 @@ import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 import static org.apache.flink.table.types.utils.TypeConversions.fromLogicalToDataType;
@@ -358,37 +357,5 @@ public class HBaseTableSchema implements Serializable {
             this.rowKeyType = rowKeyType;
             this.rowKeyIndex = rowKeyIndex;
         }
-
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof RowKeyInfo)) {
-                return false;
-            }
-            RowKeyInfo that = (RowKeyInfo) o;
-            return Objects.equals(rowKeyName, that.rowKeyName)
-                    && Objects.equals(rowKeyType, that.rowKeyType)
-                    && Objects.equals(rowKeyIndex, that.rowKeyIndex);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(rowKeyName, rowKeyType, rowKeyIndex);
-        }
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof HBaseTableSchema)) {
-            return false;
-        }
-        HBaseTableSchema that = (HBaseTableSchema) o;
-        return Objects.equals(familyMap, that.familyMap)
-                && Objects.equals(rowKeyInfo, that.rowKeyInfo)
-                && Objects.equals(charset, that.charset);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(familyMap, rowKeyInfo, charset);
     }
 }

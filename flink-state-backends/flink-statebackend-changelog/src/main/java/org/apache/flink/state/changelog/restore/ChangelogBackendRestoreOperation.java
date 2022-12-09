@@ -18,11 +18,8 @@
 package org.apache.flink.state.changelog.restore;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.AbstractKeyedStateBackend;
-import org.apache.flink.runtime.state.CheckpointableKeyedStateBackend;
 import org.apache.flink.runtime.state.KeyedStateHandle;
-import org.apache.flink.runtime.state.TaskStateManager;
 import org.apache.flink.runtime.state.changelog.ChangelogStateBackendHandle;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandle;
 import org.apache.flink.runtime.state.changelog.StateChange;
@@ -51,62 +48,50 @@ public class ChangelogBackendRestoreOperation {
             extends FunctionWithException<
                     Collection<KeyedStateHandle>, AbstractKeyedStateBackend<K>, Exception> {}
 
-    /** Builds {@link ChangelogRestoreTarget} from the base backend and state. */
+    /** Builds {@link ChangelogKeyedStateBackend} from the base backend and state. */
     @FunctionalInterface
-    public interface ChangelogRestoreTargetBuilder<K>
+    public interface DeltaBackendBuilder<K>
             extends BiFunctionWithException<
                     AbstractKeyedStateBackend<K>,
                     Collection<ChangelogStateBackendHandle>,
-                    ChangelogRestoreTarget<K>,
+                    ChangelogKeyedStateBackend<K>,
                     Exception> {}
 
-    public static <K> CheckpointableKeyedStateBackend<K> restore(
-            Configuration configuration,
+    public static <K, T extends ChangelogStateHandle> ChangelogKeyedStateBackend<K> restore(
+            StateChangelogHandleReader<T> changelogHandleReader,
             ClassLoader classLoader,
-            TaskStateManager taskStateManager,
             Collection<ChangelogStateBackendHandle> stateHandles,
             BaseBackendBuilder<K> baseBackendBuilder,
-            ChangelogRestoreTargetBuilder<K> changelogRestoreTargetBuilder)
+            DeltaBackendBuilder<K> changelogBackendBuilder)
             throws Exception {
         Collection<KeyedStateHandle> baseState = extractBaseState(stateHandles);
         AbstractKeyedStateBackend<K> baseBackend = baseBackendBuilder.apply(baseState);
-        ChangelogRestoreTarget<K> changelogRestoreTarget =
-                changelogRestoreTargetBuilder.apply(baseBackend, stateHandles);
+        ChangelogKeyedStateBackend<K> changelogBackend =
+                changelogBackendBuilder.apply(baseBackend, stateHandles);
 
         for (ChangelogStateBackendHandle handle : stateHandles) {
             if (handle != null) { // null is empty state (no change)
-                readBackendHandle(
-                        configuration,
-                        taskStateManager,
-                        changelogRestoreTarget,
-                        handle,
-                        classLoader);
+                readBackendHandle(changelogBackend, handle, changelogHandleReader, classLoader);
             }
         }
-        return changelogRestoreTarget.getRestoredKeyedStateBackend();
+        return changelogBackend;
     }
 
     @SuppressWarnings("unchecked")
     private static <T extends ChangelogStateHandle> void readBackendHandle(
-            Configuration configuration,
-            TaskStateManager taskStateManager,
-            ChangelogRestoreTarget<?> changelogRestoreTarget,
+            ChangelogKeyedStateBackend<?> backend,
             ChangelogStateBackendHandle backendHandle,
+            StateChangelogHandleReader<T> changelogHandleReader,
             ClassLoader classLoader)
             throws Exception {
         Map<Short, StateID> stateIds = new HashMap<>();
         for (ChangelogStateHandle changelogHandle :
                 backendHandle.getNonMaterializedStateHandles()) {
-            StateChangelogHandleReader<T> changelogHandleReader =
-                    (StateChangelogHandleReader<T>)
-                            taskStateManager
-                                    .getStateChangelogStorageView(configuration, changelogHandle)
-                                    .createReader();
             try (CloseableIterator<StateChange> changes =
                     changelogHandleReader.getChanges((T) changelogHandle)) {
                 while (changes.hasNext()) {
                     ChangelogBackendLogApplier.apply(
-                            changes.next(), changelogRestoreTarget, classLoader, stateIds);
+                            changes.next(), backend, classLoader, stateIds);
                 }
             }
         }

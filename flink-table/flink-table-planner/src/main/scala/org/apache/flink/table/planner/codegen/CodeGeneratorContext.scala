@@ -17,15 +17,15 @@
  */
 package org.apache.flink.table.planner.codegen
 
-import org.apache.flink.api.common.functions.Function
+import org.apache.flink.api.common.functions.{Function, RuntimeContext}
 import org.apache.flink.api.common.typeutils.TypeSerializer
-import org.apache.flink.configuration.ReadableConfig
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.data.GenericRowData
 import org.apache.flink.table.data.conversion.{DataStructureConverter, DataStructureConverters}
 import org.apache.flink.table.functions.{FunctionContext, UserDefinedFunction}
 import org.apache.flink.table.planner.codegen.CodeGenUtils._
 import org.apache.flink.table.planner.codegen.GenerateUtils.generateRecordStatement
-import org.apache.flink.table.planner.utils.{InternalConfigOptions, TableConfigUtils}
+import org.apache.flink.table.planner.utils.InternalConfigOptions
 import org.apache.flink.table.runtime.operators.TableStreamOperator
 import org.apache.flink.table.runtime.typeutils.{ExternalSerializer, InternalSerializers}
 import org.apache.flink.table.runtime.util.collections._
@@ -45,7 +45,7 @@ import scala.collection.mutable
  * The context for code generator, maintaining various reusable statements that could be insert into
  * different code sections in the final generated class.
  */
-class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: ClassLoader) {
+class CodeGeneratorContext(val tableConfig: TableConfig) {
 
   // holding a list of objects that could be used passed into generated class
   val references: mutable.ArrayBuffer[AnyRef] = new mutable.ArrayBuffer[AnyRef]()
@@ -142,10 +142,11 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
   def getReusableInputUnboxingExprs(inputTerm: String, index: Int): Option[GeneratedExpression] =
     reusableInputUnboxingExprs.get((inputTerm, index))
 
+  def nullCheck: Boolean = tableConfig.getNullCheck
+
   /**
    * Add a line comment to [[reusableHeaderComments]] list which will be concatenated into a single
    * class header comment.
-   *
    * @param comment
    *   The comment to add for class header
    */
@@ -159,7 +160,6 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
 
   /**
    * Starts a new local variable statements for a generated class with the given method name.
-   *
    * @param methodName
    *   the method name which the fields will be placed into if code is not split.
    */
@@ -215,7 +215,9 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
   /** @return Comment to be added as a header comment on the generated class */
   def getClassHeaderComment: String = {
     s"""
-       |// ${reusableHeaderComments.mkString("\n// ")}
+       |/*
+       | * ${reusableHeaderComments.mkString("\n * ")}
+       | */
     """.stripMargin
   }
 
@@ -475,7 +477,7 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
   def addReusableQueryLevelCurrentTimestamp(): String = {
     val fieldTerm = s"queryStartTimestamp"
 
-    val queryStartEpoch = tableConfig
+    val queryStartEpoch = tableConfig.getConfiguration
       .getOptional(InternalConfigOptions.TABLE_QUERY_START_EPOCH_TIME)
       .orElseThrow(
         new JSupplier[Throwable] {
@@ -528,7 +530,7 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
   def addReusableQueryLevelLocalDateTime(): String = {
     val fieldTerm = s"queryStartLocaltimestamp"
 
-    val queryStartLocalTimestamp = tableConfig
+    val queryStartLocalTimestamp = tableConfig.getConfiguration
       .getOptional(InternalConfigOptions.TABLE_QUERY_START_LOCAL_TIME)
       .orElseThrow(
         new JSupplier[Throwable] {
@@ -542,31 +544,6 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
                                     |private static final $TIMESTAMP_DATA $fieldTerm =
                                     |$TIMESTAMP_DATA.fromEpochMillis(${queryStartLocalTimestamp}L);
                                     |""".stripMargin)
-    fieldTerm
-  }
-
-  /**
-   * Adds a reusable query-level current database to the beginning of the SAM of the generated
-   * class.
-   *
-   * <p> The current database value is evaluated once at query-start.
-   */
-  def addReusableQueryLevelCurrentDatabase(): String = {
-    val fieldTerm = s"queryCurrentDatabase"
-
-    val queryStartCurrentDatabase = tableConfig
-      .getOptional(InternalConfigOptions.TABLE_QUERY_CURRENT_DATABASE)
-      .orElseThrow(new JSupplier[Throwable] {
-        override def get() = new CodeGenException(
-          "Try to obtain current database of query-start fail." +
-            " This is a bug, please file an issue.")
-      })
-
-    reusableMemberStatements.add(s"""
-                                    |private static final $BINARY_STRING $fieldTerm =
-                                    |$BINARY_STRING.fromString("$queryStartCurrentDatabase");
-                                    |""".stripMargin)
-
     fieldTerm
   }
 
@@ -638,7 +615,7 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
 
   /** Adds a reusable TimeZone to the member area of the generated class. */
   def addReusableSessionTimeZone(): String = {
-    val zoneID = TimeZone.getTimeZone(TableConfigUtils.getLocalTimeZone(tableConfig)).getID
+    val zoneID = TimeZone.getTimeZone(tableConfig.getLocalTimeZone).getID
     val stmt =
       s"""private static final java.util.TimeZone $DEFAULT_TIMEZONE_TERM =
          |                 java.util.TimeZone.getTimeZone("$zoneID");""".stripMargin
@@ -673,7 +650,7 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
          |""".stripMargin
 
     val fieldInit = seedExpr match {
-      case Some(s) =>
+      case Some(s) if nullCheck =>
         s"""
            |${s.code}
            |if (!${s.nullTerm}) {
@@ -682,6 +659,11 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
            |else {
            |  $fieldTerm = new java.util.Random();
            |}
+           |""".stripMargin
+      case Some(s) =>
+        s"""
+           |${s.code}
+           |$fieldTerm = new java.util.Random(${s.resultTerm});
            |""".stripMargin
       case _ =>
         s"""
@@ -729,7 +711,7 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
     // make a deep copy of the object
     val byteArray = InstantiationUtil.serializeObject(obj)
     val objCopy: AnyRef =
-      InstantiationUtil.deserializeObject(byteArray, classLoader)
+      InstantiationUtil.deserializeObject(byteArray, Thread.currentThread().getContextClassLoader)
     references += objCopy
 
     reusableMemberStatements.add(s"private transient $fieldTypeTerm $fieldTerm;")
@@ -743,23 +725,23 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
    *   [[UserDefinedFunction]] object to be instantiated during runtime
    * @param functionContextClass
    *   class of [[FunctionContext]]
-   * @param contextArgs
-   *   additional list of arguments for [[FunctionContext]]
+   * @param contextTerm
+   *   [[RuntimeContext]] term to access the [[RuntimeContext]]
    * @return
    *   member variable term
    */
   def addReusableFunction(
       function: UserDefinedFunction,
       functionContextClass: Class[_ <: FunctionContext] = classOf[FunctionContext],
-      contextArgs: Seq[String] = null): String = {
+      contextTerm: String = null): String = {
     val classQualifier = function.getClass.getName
     val fieldTerm = CodeGenUtils.udfFieldName(function)
 
     addReusableObjectInternal(function, fieldTerm, classQualifier)
 
-    val openFunction = if (contextArgs != null) {
+    val openFunction = if (contextTerm != null) {
       s"""
-         |$fieldTerm.open(new ${functionContextClass.getCanonicalName}(${contextArgs.mkString(", ")}));
+         |$fieldTerm.open(new ${functionContextClass.getCanonicalName}($contextTerm));
        """.stripMargin
     } else {
       s"""
@@ -970,7 +952,7 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
          |  throw new RuntimeException("Unsupported algorithm.");
          |}
          |""".stripMargin
-    val nullableInit =
+    val nullableInit = if (nullCheck) {
       s"""
          |${constant.code}
          |if (${constant.nullTerm}) {
@@ -979,9 +961,20 @@ class CodeGeneratorContext(val tableConfig: ReadableConfig, val classLoader: Cla
          |  $init
          |}
          |""".stripMargin
-
+    } else {
+      s"""
+         |${constant.code}
+         |$init
+         |""".stripMargin
+    }
     reusableInitStatements.add(nullableInit)
 
     fieldTerm
+  }
+}
+
+object CodeGeneratorContext {
+  def apply(tableConfig: TableConfig): CodeGeneratorContext = {
+    new CodeGeneratorContext(tableConfig)
   }
 }

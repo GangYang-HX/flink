@@ -87,4 +87,11 @@ public interface StatementSet extends Explainable<StatementSet>, Compilable, Exe
     @Override
     @Experimental
     CompiledPlan compilePlan() throws TableException;
+
+    /**
+     * execute all statements and Tables as a batch.
+     *
+     * <p>The added statements and Tables will be cleared when executing this method.
+     */
+    TableResult execute(String jobName);
 }

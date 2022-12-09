@@ -20,7 +20,6 @@ package org.apache.flink.runtime.rest.messages.json;
 
 import org.apache.flink.util.SerializedValue;
 import org.apache.flink.util.TestLogger;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JavaType;
@@ -41,7 +40,7 @@ public class SerializedValueSerializerTest extends TestLogger {
 
     @Before
     public void setUp() {
-        objectMapper = JacksonMapperFactory.createObjectMapper();
+        objectMapper = new ObjectMapper();
         final SimpleModule simpleModule = new SimpleModule();
         final JavaType serializedValueWildcardType =
                 objectMapper

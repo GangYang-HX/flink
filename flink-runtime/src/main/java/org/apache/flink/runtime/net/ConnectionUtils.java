@@ -446,7 +446,7 @@ public class ConnectionUtils {
                     }
 
                     if (targetAddress != null) {
-                        AddressDetectionState strategy = AddressDetectionState.LOOPBACK;
+                        AddressDetectionState strategy = AddressDetectionState.LOCAL_HOST;
 
                         boolean logging = elapsedTimeMillis >= startLoggingAfter.toMillis();
                         if (logging) {

@@ -63,7 +63,7 @@ def basic_operations():
     # key by
     show(ds.map(lambda data: (json.loads(data.info)['addr']['country'],
                               json.loads(data.info)['tel']))
-           .key_by(lambda data: data[0]).sum(1), env)
+           .key_by(lambda data: data[0]).reduce(lambda a, b: (a[0], a[1] + b[1])), env)
     # ('Germany', 123)
     # ('China', 135)
     # ('USA', 124)

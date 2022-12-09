@@ -65,12 +65,6 @@ public class BatchExecSink extends CommonExecSink implements BatchExecNode<Objec
                 (Transformation<RowData>) getInputEdges().get(0).translateToPlan(planner);
         final DynamicTableSink tableSink = tableSinkSpec.getTableSink(planner.getFlinkContext());
         return createSinkTransformation(
-                planner.getExecEnv(),
-                config,
-                planner.getFlinkContext().getClassLoader(),
-                inputTransform,
-                tableSink,
-                -1,
-                false);
+                planner.getExecEnv(), config, inputTransform, tableSink, -1, false);
     }
 }

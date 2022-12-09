@@ -113,7 +113,6 @@ public class BatchExecSortWindowAggregate extends ExecNodeBase<RowData>
 
         final AggregateInfoList aggInfos =
                 AggregateUtil.transformToBatchAggregateInfoList(
-                        planner.getTypeFactory(),
                         aggInputRowType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         null, // aggCallNeedRetractions
@@ -125,9 +124,8 @@ public class BatchExecSortWindowAggregate extends ExecNodeBase<RowData>
         final Tuple2<Long, Long> windowSizeAndSlideSize = WindowCodeGenerator.getWindowDef(window);
         final SortWindowCodeGenerator windowCodeGenerator =
                 new SortWindowCodeGenerator(
-                        new CodeGeneratorContext(
-                                config, planner.getFlinkContext().getClassLoader()),
-                        planner.createRelBuilder(),
+                        new CodeGeneratorContext(config.getTableConfig()),
+                        planner.getRelBuilder(),
                         window,
                         inputTimeFieldIndex,
                         inputTimeIsDate,

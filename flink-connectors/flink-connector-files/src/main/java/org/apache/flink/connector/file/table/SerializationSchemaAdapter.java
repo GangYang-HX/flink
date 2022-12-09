@@ -22,7 +22,6 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.Encoder;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.UserCodeClassLoader;
 
@@ -60,7 +59,8 @@ public class SerializationSchemaAdapter implements Encoder<RowData> {
                         new SerializationSchema.InitializationContext() {
                             @Override
                             public MetricGroup getMetricGroup() {
-                                return new UnregisteredMetricsGroup();
+                                throw new UnsupportedOperationException(
+                                        "MetricGroup is unsupported in BulkFormat.");
                             }
 
                             @Override

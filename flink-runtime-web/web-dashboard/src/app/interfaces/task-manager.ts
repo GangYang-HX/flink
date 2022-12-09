@@ -17,7 +17,7 @@
  */
 
 export interface TaskManagerList {
-  taskmanagers: TaskManagersItem[];
+  taskmanagers: TaskmanagersItem[];
 }
 
 export interface TaskManagerDetail {
@@ -30,7 +30,6 @@ export interface TaskManagerDetail {
   hardware: Hardware;
   metrics: Metrics;
   memoryConfiguration: MemoryConfiguration;
-  blocked?: boolean;
 }
 
 export interface TaskManagerLogItem {
@@ -39,12 +38,7 @@ export interface TaskManagerLogItem {
   mtime: number;
 }
 
-export interface TaskManagerLogDetail {
-  data: string;
-  url: string;
-}
-
-export interface TaskManagersItem {
+export interface TaskmanagersItem {
   id: string;
   path: string;
   dataPort: number;
@@ -52,7 +46,6 @@ export interface TaskManagersItem {
   slotsNumber: number;
   freeSlots: number;
   hardware: Hardware;
-  blocked?: boolean;
 }
 
 interface Hardware {

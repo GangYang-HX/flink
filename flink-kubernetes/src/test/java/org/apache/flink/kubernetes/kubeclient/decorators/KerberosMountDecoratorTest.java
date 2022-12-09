@@ -28,16 +28,18 @@ import org.apache.flink.kubernetes.utils.Constants;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeMount;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
 /** General tests for the {@link KerberosMountDecoratorTest}. */
-class KerberosMountDecoratorTest extends KubernetesPodTestBase {
+public class KerberosMountDecoratorTest extends KubernetesPodTestBase {
 
     private KerberosMountDecorator kerberosMountDecorator;
 
@@ -76,30 +78,30 @@ class KerberosMountDecoratorTest extends KubernetesPodTestBase {
     }
 
     @Test
-    void testWhetherPodOrContainerIsDecorated() {
+    public void testWhetherPodOrContainerIsDecorated() {
         final FlinkPod resultFlinkPod = kerberosMountDecorator.decorateFlinkPod(baseFlinkPod);
-        assertThat(resultFlinkPod.getPodWithoutMainContainer())
-                .isNotEqualTo(baseFlinkPod.getPodWithoutMainContainer());
-        assertThat(resultFlinkPod.getMainContainer()).isNotEqualTo(baseFlinkPod.getMainContainer());
+        assertNotEquals(
+                baseFlinkPod.getPodWithoutMainContainer(),
+                resultFlinkPod.getPodWithoutMainContainer());
+        assertNotEquals(baseFlinkPod.getMainContainer(), resultFlinkPod.getMainContainer());
     }
 
     @Test
-    void testConfEditWhenBuildAccompanyingKubernetesResources() throws IOException {
+    public void testConfEditWhenBuildAccompanyingKubernetesResources() throws IOException {
         kerberosMountDecorator.buildAccompanyingKubernetesResources();
 
-        assertThat(
-                        this.testingKubernetesParameters
-                                .getFlinkConfiguration()
-                                .get(SecurityOptions.KERBEROS_LOGIN_KEYTAB))
-                .isEqualTo(
-                        String.format("%s/%s", Constants.KERBEROS_KEYTAB_MOUNT_POINT, KEYTAB_FILE));
+        assertEquals(
+                String.format("%s/%s", Constants.KERBEROS_KEYTAB_MOUNT_POINT, KEYTAB_FILE),
+                this.testingKubernetesParameters
+                        .getFlinkConfiguration()
+                        .get(SecurityOptions.KERBEROS_LOGIN_KEYTAB));
     }
 
     @Test
-    void testDecoratedFlinkContainer() {
+    public void testDecoratedFlinkContainer() {
         final Container resultMainContainer =
                 kerberosMountDecorator.decorateFlinkPod(baseFlinkPod).getMainContainer();
-        assertThat(resultMainContainer.getVolumeMounts()).hasSize(2);
+        assertEquals(2, resultMainContainer.getVolumeMounts().size());
 
         final VolumeMount keytabVolumeMount =
                 resultMainContainer.getVolumeMounts().stream()
@@ -111,19 +113,19 @@ class KerberosMountDecoratorTest extends KubernetesPodTestBase {
                         .filter(x -> x.getName().equals(Constants.KERBEROS_KRB5CONF_VOLUME))
                         .collect(Collectors.toList())
                         .get(0);
-        assertThat(keytabVolumeMount).isNotNull();
-        assertThat(krb5ConfVolumeMount).isNotNull();
-        assertThat(keytabVolumeMount.getMountPath())
-                .isEqualTo(Constants.KERBEROS_KEYTAB_MOUNT_POINT);
-        assertThat(krb5ConfVolumeMount.getMountPath())
-                .isEqualTo(Constants.KERBEROS_KRB5CONF_MOUNT_DIR + "/krb5.conf");
+        assertNotNull(keytabVolumeMount);
+        assertNotNull(krb5ConfVolumeMount);
+        assertEquals(Constants.KERBEROS_KEYTAB_MOUNT_POINT, keytabVolumeMount.getMountPath());
+        assertEquals(
+                Constants.KERBEROS_KRB5CONF_MOUNT_DIR + "/krb5.conf",
+                krb5ConfVolumeMount.getMountPath());
     }
 
     @Test
-    void testDecoratedFlinkPodVolumes() {
+    public void testDecoratedFlinkPodVolumes() {
         final FlinkPod resultFlinkPod = kerberosMountDecorator.decorateFlinkPod(baseFlinkPod);
         List<Volume> volumes = resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes();
-        assertThat(volumes).hasSize(2);
+        assertEquals(2, volumes.size());
 
         final Volume keytabVolume =
                 volumes.stream()
@@ -135,21 +137,20 @@ class KerberosMountDecoratorTest extends KubernetesPodTestBase {
                         .filter(x -> x.getName().equals(Constants.KERBEROS_KRB5CONF_VOLUME))
                         .collect(Collectors.toList())
                         .get(0);
-        assertThat(keytabVolume.getSecret()).isNotNull();
-        assertThat(keytabVolume.getSecret().getSecretName())
-                .isEqualTo(
-                        KerberosMountDecorator.getKerberosKeytabSecretName(
-                                testingKubernetesParameters.getClusterId()));
+        assertNotNull(keytabVolume.getSecret());
+        assertEquals(
+                KerberosMountDecorator.getKerberosKeytabSecretName(
+                        testingKubernetesParameters.getClusterId()),
+                keytabVolume.getSecret().getSecretName());
 
-        assertThat(krb5ConfVolume.getConfigMap()).isNotNull();
-        assertThat(krb5ConfVolume.getConfigMap().getName())
-                .isEqualTo(
-                        KerberosMountDecorator.getKerberosKrb5confConfigMapName(
-                                testingKubernetesParameters.getClusterId()));
-        assertThat(krb5ConfVolume.getConfigMap().getItems()).hasSize(1);
-        assertThat(krb5ConfVolume.getConfigMap().getItems().get(0).getKey())
-                .isEqualTo(CUSTOM_KRB5_CONF_FILE);
-        assertThat(krb5ConfVolume.getConfigMap().getItems().get(0).getPath())
-                .isEqualTo(KRB5_CONF_FILE);
+        assertNotNull(krb5ConfVolume.getConfigMap());
+        assertEquals(
+                KerberosMountDecorator.getKerberosKrb5confConfigMapName(
+                        testingKubernetesParameters.getClusterId()),
+                krb5ConfVolume.getConfigMap().getName());
+        assertEquals(1, krb5ConfVolume.getConfigMap().getItems().size());
+        assertEquals(
+                CUSTOM_KRB5_CONF_FILE, krb5ConfVolume.getConfigMap().getItems().get(0).getKey());
+        assertEquals(KRB5_CONF_FILE, krb5ConfVolume.getConfigMap().getItems().get(0).getPath());
     }
 }

@@ -20,16 +20,17 @@ package org.apache.flink.table.planner.delegation
 import org.apache.flink.api.common.RuntimeExecutionMode
 import org.apache.flink.api.dag.Transformation
 import org.apache.flink.configuration.ExecutionOptions
-import org.apache.flink.table.api.{ExplainDetail, PlanReference, TableConfig, TableException}
+import org.apache.flink.table.api.{ExplainDetail, LineAgeInfo, PlanReference, TableConfig, TableException}
 import org.apache.flink.table.api.config.OptimizerConfigOptions
 import org.apache.flink.table.catalog.{CatalogManager, FunctionCatalog}
 import org.apache.flink.table.delegation.{Executor, InternalPlan}
 import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.operations.{ModifyOperation, Operation}
+import org.apache.flink.table.planner.materialize.MaterializationsRegistry
 import org.apache.flink.table.planner.plan.`trait`.FlinkRelDistributionTraitDef
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeGraph
 import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecNode
-import org.apache.flink.table.planner.plan.nodes.exec.processor.{DeadlockBreakupProcessor, DynamicFilteringDependencyProcessor, ExecNodeGraphProcessor, ForwardHashExchangeProcessor, MultipleInputNodeCreationProcessor, ResetTransformationProcessor}
+import org.apache.flink.table.planner.plan.nodes.exec.processor.{DeadlockBreakupProcessor, ExecNodeGraphProcessor, ForwardHashExchangeProcessor, MultipleInputNodeCreationProcessor}
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodePlanDumper
 import org.apache.flink.table.planner.plan.optimize.{BatchCommonSubGraphBasedOptimizer, Optimizer}
 import org.apache.flink.table.planner.plan.utils.FlinkRelOptUtil
@@ -42,23 +43,24 @@ import org.apache.calcite.sql.SqlExplainLevel
 import java.util
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable
 
 class BatchPlanner(
     executor: Executor,
     tableConfig: TableConfig,
     moduleManager: ModuleManager,
     functionCatalog: FunctionCatalog,
-    catalogManager: CatalogManager,
-    classLoader: ClassLoader)
+    catalogManager: CatalogManager)
   extends PlannerBase(
     executor,
     tableConfig,
     moduleManager,
     functionCatalog,
     catalogManager,
-    isStreamingMode = false,
-    classLoader) {
+    isStreamingMode = false) {
+
+  lazy val materializationsRegistry: MaterializationsRegistry = {
+    new MaterializationsRegistry(catalogManager, this)
+  }
 
   override protected def getTraitDefs: Array[RelTraitDef[_ <: RelTrait]] = {
     Array(
@@ -78,10 +80,6 @@ class BatchPlanner(
       processors.add(new MultipleInputNodeCreationProcessor(false))
     }
     processors.add(new ForwardHashExchangeProcessor)
-    if (getTableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_DYNAMIC_FILTERING_ENABLED)) {
-      processors.add(new DynamicFilteringDependencyProcessor)
-      processors.add(new ResetTransformationProcessor)
-    }
     processors
   }
 
@@ -97,13 +95,13 @@ class BatchPlanner(
             "This is a bug and should not happen. Please file an issue.")
     }
     afterTranslation()
-    transformations ++ planner.extraTransformations
+    transformations
   }
 
   override def explain(operations: util.List[Operation], extraDetails: ExplainDetail*): String = {
     val (sinkRelNodes, optimizedRelNodes, execGraph, streamGraph) = getExplainGraphs(operations)
 
-    val sb = new mutable.StringBuilder
+    val sb = new StringBuilder
     sb.append("== Abstract Syntax Tree ==")
     sb.append(System.lineSeparator)
     sinkRelNodes.foreach {
@@ -141,16 +139,16 @@ class BatchPlanner(
     sb.toString()
   }
 
+  override def generateLineAge(
+      operations: util.List[Operation],
+      extraDetails: ExplainDetail*): util.List[LineAgeInfo] = {
+    new util.ArrayList[LineAgeInfo]()
+  }
+
   private def createDummyPlanner(): BatchPlanner = {
     val dummyExecEnv = new DummyStreamExecutionEnvironment(getExecEnv)
     val executor = new DefaultExecutor(dummyExecEnv)
-    new BatchPlanner(
-      executor,
-      tableConfig,
-      moduleManager,
-      functionCatalog,
-      catalogManager,
-      classLoader)
+    new BatchPlanner(executor, tableConfig, moduleManager, functionCatalog, catalogManager)
   }
 
   override def loadPlan(planReference: PlanReference): InternalPlan = {
@@ -180,5 +178,9 @@ class BatchPlanner(
           "table environment. Subsequent changes are not supported. " +
           "Please instantiate a new TableEnvironment if necessary.")
     }
+  }
+
+  def close(): Unit = {
+    materializationsRegistry.close()
   }
 }

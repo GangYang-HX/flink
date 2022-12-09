@@ -39,8 +39,6 @@ import org.junit.runners.Parameterized;
 
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /** Tests for {@link Graph#groupReduceOnNeighbors} and {@link Graph#reduceOnNeighbors}. */
 @RunWith(Parameterized.class)
 public class ReduceOnNeighborMethodsITCase extends MultipleProgramsTestBase {

@@ -38,8 +38,7 @@ public final class ExpressionResolverMocks {
 
     public static ExpressionResolverBuilder forSqlExpression(SqlExpressionResolver resolver) {
         return ExpressionResolver.resolverFor(
-                TableConfig.getDefault(),
-                Thread.currentThread().getContextClassLoader(),
+                new TableConfig(),
                 name -> Optional.empty(),
                 new FunctionLookupMock(Collections.emptyMap()),
                 new DataTypeFactoryMock(),
@@ -56,8 +55,7 @@ public final class ExpressionResolverMocks {
     public static ExpressionResolverBuilder basicResolver(
             CatalogManager catalogManager, FunctionCatalog functionCatalog, Parser parser) {
         return ExpressionResolver.resolverFor(
-                TableConfig.getDefault(),
-                Thread.currentThread().getContextClassLoader(),
+                new TableConfig(),
                 name -> Optional.empty(),
                 functionCatalog.asLookup(parser::parseIdentifier),
                 catalogManager.getDataTypeFactory(),

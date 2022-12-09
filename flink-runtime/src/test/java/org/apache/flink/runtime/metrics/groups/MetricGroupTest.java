@@ -19,11 +19,13 @@
 package org.apache.flink.runtime.metrics.groups;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.CharacterFilter;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Metric;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
@@ -32,7 +34,6 @@ import org.apache.flink.runtime.metrics.MetricRegistryConfiguration;
 import org.apache.flink.runtime.metrics.MetricRegistryImpl;
 import org.apache.flink.runtime.metrics.MetricRegistryTestUtils;
 import org.apache.flink.runtime.metrics.NoOpMetricRegistry;
-import org.apache.flink.runtime.metrics.ReporterSetup;
 import org.apache.flink.runtime.metrics.dump.QueryScopeInfo;
 import org.apache.flink.runtime.metrics.scope.ScopeFormat;
 import org.apache.flink.runtime.metrics.util.DummyCharacterFilter;
@@ -43,9 +44,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
@@ -243,11 +241,14 @@ public class MetricGroupTest extends TestLogger {
     @Test
     public void testLogicalScopeShouldIgnoreValueGroupName() throws Exception {
         Configuration config = new Configuration();
+        config.setString(
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + "test."
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
+                TestReporter.class.getName());
 
         MetricRegistryImpl registry =
-                new MetricRegistryImpl(
-                        MetricRegistryTestUtils.defaultMetricRegistryConfiguration(),
-                        Arrays.asList(ReporterSetup.forReporter("test", new TestReporter())));
+                new MetricRegistryImpl(MetricRegistryTestUtils.fromConfiguration(config));
         try {
             GenericMetricGroup root =
                     new GenericMetricGroup(
@@ -336,13 +337,13 @@ public class MetricGroupTest extends TestLogger {
     public void testCreateQueryServiceMetricInfo() {
         JobID jid = new JobID();
         JobVertexID vid = new JobVertexID();
-        ExecutionAttemptID eid = createExecutionAttemptId(vid, 4, 5);
+        ExecutionAttemptID eid = new ExecutionAttemptID();
         MetricRegistryImpl registry = new MetricRegistryImpl(defaultMetricRegistryConfiguration);
         TaskManagerMetricGroup tm =
                 TaskManagerMetricGroup.createTaskManagerMetricGroup(
                         registry, "host", new ResourceID("id"));
 
-        TaskMetricGroup task = tm.addJob(jid, "jobname").addTask(eid, "taskName");
+        TaskMetricGroup task = tm.addJob(jid, "jobname").addTask(vid, eid, "taskName", 4, 5);
         GenericMetricGroup userGroup1 = new GenericMetricGroup(registry, task, "hello");
         GenericMetricGroup userGroup2 = new GenericMetricGroup(registry, userGroup1, "world");
 
@@ -361,6 +362,37 @@ public class MetricGroupTest extends TestLogger {
         assertEquals(jid.toString(), info2.jobID);
         assertEquals(vid.toString(), info2.vertexID);
         assertEquals(4, info2.subtaskIndex);
+    }
+
+    @Test
+    public void testDisableQueryServiceWhileAddingGroup() {
+        // parernt
+        GenericMetricGroup parentGroup =
+                new GenericMetricGroup(
+                        registry, new DummyAbstractMetricGroup(registry), "parentGroup");
+
+        // child1
+        MetricGroup child1Group = parentGroup.addGroup("child1", QueryServiceMode.DISABLED);
+        MetricGroup child1Child1Group =
+                child1Group.addGroup("child1_child1", QueryServiceMode.ENABLE);
+        MetricGroup child1Child2Group = child1Group.addGroup("child1_child2");
+
+        // child2
+        MetricGroup child2Group = parentGroup.addGroup("child2");
+        MetricGroup child2Child1Group = child2Group.addGroup("child2_child1");
+
+        // parent
+        assertEquals(parentGroup.getQueryServiceMode(), QueryServiceMode.ENABLE);
+        // child1
+        assertEquals(child1Group.getQueryServiceMode(), QueryServiceMode.DISABLED);
+        // child1_child1
+        assertEquals(child1Child1Group.getQueryServiceMode(), QueryServiceMode.ENABLE);
+        // child1_child2
+        assertEquals(child1Child2Group.getQueryServiceMode(), QueryServiceMode.DISABLED);
+        // child2
+        assertEquals(child2Group.getQueryServiceMode(), QueryServiceMode.ENABLE);
+        // child2_child2
+        assertEquals(child2Child1Group.getQueryServiceMode(), QueryServiceMode.ENABLE);
     }
 
     // ------------------------------------------------------------------------
@@ -401,7 +433,7 @@ public class MetricGroupTest extends TestLogger {
 
         @Override
         protected String getGroupName(CharacterFilter filter) {
-            return "foo";
+            return "";
         }
 
         @Override

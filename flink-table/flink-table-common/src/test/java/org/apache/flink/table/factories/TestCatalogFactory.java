@@ -108,6 +108,11 @@ public class TestCatalogFactory implements CatalogFactory {
         public void close() throws CatalogException {}
 
         @Override
+        public void setCurrentDataSource(String dataSource) throws CatalogException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public String getDefaultDatabase() throws CatalogException {
             throw new UnsupportedOperationException();
         }
@@ -311,27 +316,14 @@ public class TestCatalogFactory implements CatalogFactory {
 
         @Override
         public CatalogTableStatistics getPartitionStatistics(
-                ObjectPath tablePath, CatalogPartitionSpec partitionSpec) throws CatalogException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<CatalogTableStatistics> bulkGetPartitionStatistics(
-                ObjectPath tablePath, List<CatalogPartitionSpec> partitionSpecs)
-                throws CatalogException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public CatalogColumnStatistics getPartitionColumnStatistics(
                 ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
                 throws PartitionNotExistException, CatalogException {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public List<CatalogColumnStatistics> bulkGetPartitionColumnStatistics(
-                ObjectPath tablePath, List<CatalogPartitionSpec> partitionSpecs)
+        public CatalogColumnStatistics getPartitionColumnStatistics(
+                ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
                 throws PartitionNotExistException, CatalogException {
             throw new UnsupportedOperationException();
         }

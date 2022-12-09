@@ -18,69 +18,52 @@
 
 package org.apache.flink.formats.protobuf.deserialize;
 
-import org.apache.flink.formats.protobuf.PbCodegenException;
-import org.apache.flink.formats.protobuf.util.PbCodegenAppender;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.LogicalTypeRoot;
+import org.apache.flink.formats.protobuf.PbFormatConfig;
 
 import com.google.protobuf.Descriptors;
 
 /** Deserializer to convert proto simple type object to flink simple type data. */
 public class PbCodegenSimpleDeserializer implements PbCodegenDeserializer {
     private final Descriptors.FieldDescriptor fd;
-    private final LogicalType logicalType;
+    private final PbFormatConfig pbFormatConfig;
 
-    public PbCodegenSimpleDeserializer(Descriptors.FieldDescriptor fd, LogicalType logicalType) {
+    public PbCodegenSimpleDeserializer(Descriptors.FieldDescriptor fd) {
         this.fd = fd;
-        this.logicalType = logicalType;
+        this.pbFormatConfig = null;
     }
 
+    public PbCodegenSimpleDeserializer(
+            Descriptors.FieldDescriptor fd, PbFormatConfig pbFormatConfig) {
+        this.fd = fd;
+        this.pbFormatConfig = pbFormatConfig;
+    }
+
+    /** {@code pbGetStr} is primitive type and must not be null. */
     @Override
-    public String codegen(String resultVar, String pbObjectCode, int indent)
-            throws PbCodegenException {
-        // the type of pbObjectCode must not be primitive type,
+    public String codegen(String returnInternalDataVarName, String pbGetStr) {
+        // the type of messageGetStr must not be primitive type,
         // it should convert to internal flink row type like StringData.
-        PbCodegenAppender appender = new PbCodegenAppender(indent);
+        StringBuilder sb = new StringBuilder();
         switch (fd.getJavaType()) {
             case INT:
             case LONG:
             case FLOAT:
             case DOUBLE:
             case BOOLEAN:
-                appender.appendLine(resultVar + " = " + pbObjectCode);
+                sb.append(returnInternalDataVarName + " = " + pbGetStr + ";");
                 break;
             case BYTE_STRING:
-                appender.appendLine(resultVar + " = " + pbObjectCode + ".toByteArray()");
+                sb.append(returnInternalDataVarName + " = " + pbGetStr + ".toByteArray();");
                 break;
             case STRING:
-                appender.appendLine(
-                        resultVar
-                                + " = BinaryStringData.fromString("
-                                + pbObjectCode
-                                + ".toString())");
-                break;
             case ENUM:
-                if (logicalType.getTypeRoot() == LogicalTypeRoot.CHAR
-                        || logicalType.getTypeRoot() == LogicalTypeRoot.VARCHAR) {
-                    appender.appendLine(
-                            resultVar
-                                    + " = BinaryStringData.fromString("
-                                    + pbObjectCode
-                                    + ".toString())");
-                } else if (logicalType.getTypeRoot() == LogicalTypeRoot.TINYINT
-                        || logicalType.getTypeRoot() == LogicalTypeRoot.SMALLINT
-                        || logicalType.getTypeRoot() == LogicalTypeRoot.INTEGER
-                        || logicalType.getTypeRoot() == LogicalTypeRoot.BIGINT) {
-                    appender.appendLine(resultVar + " = " + pbObjectCode + ".getNumber()");
-                } else {
-                    throw new PbCodegenException(
-                            "Illegal type for protobuf enum, only char/vachar/int/bigint is supported");
-                }
+                sb.append(
+                        returnInternalDataVarName
+                                + " = BinaryStringData.fromString("
+                                + pbGetStr
+                                + ".toString());");
                 break;
-            default:
-                throw new PbCodegenException(
-                        "Unsupported protobuf simple type: " + fd.getJavaType());
         }
-        return appender.code();
+        return sb.toString();
     }
 }

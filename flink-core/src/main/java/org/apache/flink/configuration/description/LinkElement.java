@@ -18,10 +18,7 @@
 
 package org.apache.flink.configuration.description;
 
-import org.apache.flink.annotation.PublicEvolving;
-
 /** Element that represents a link in the {@link Description}. */
-@PublicEvolving
 public class LinkElement implements InlineElement {
     private final String link;
     private final String text;

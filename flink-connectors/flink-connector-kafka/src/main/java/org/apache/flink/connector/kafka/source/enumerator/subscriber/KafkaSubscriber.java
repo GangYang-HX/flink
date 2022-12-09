@@ -18,7 +18,7 @@
 
 package org.apache.flink.connector.kafka.source.enumerator.subscriber;
 
-import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.Internal;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.TopicPartition;
@@ -40,8 +40,10 @@ import java.util.regex.Pattern;
  * <p>The KafkaSubscriber provides a unified interface for the Kafka source to support all these
  * three types of subscribing mode.
  */
-@PublicEvolving
+@Internal
 public interface KafkaSubscriber extends Serializable {
+
+    Integer DO_NOT_RETRY = 0;
 
     /**
      * Get a set of subscribed {@link TopicPartition}s.
@@ -50,6 +52,8 @@ public interface KafkaSubscriber extends Serializable {
      * @return A set of subscribed {@link TopicPartition}s
      */
     Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient);
+
+    Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient, int retry);
 
     // ----------------- factory methods --------------
 

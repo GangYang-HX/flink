@@ -55,6 +55,9 @@ abstract class RexDefaultVisitor[R] extends RexVisitor[R] {
   override def visitPatternFieldRef(patternFieldRef: RexPatternFieldRef): R =
     visitNode(patternFieldRef)
 
+  override def visitWindowAttrVariable(winAttr: RexWindowAttrVariable): R =
+    visitNode(winAttr)
+
   override def visitSubQuery(subQuery: RexSubQuery): R =
     visitNode(subQuery)
 

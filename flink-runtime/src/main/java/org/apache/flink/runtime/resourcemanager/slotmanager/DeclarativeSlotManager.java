@@ -63,6 +63,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.util.Preconditions.checkNotNull;
+
 /** Implementation of {@link SlotManager} supporting declarative slot management. */
 public class DeclarativeSlotManager implements SlotManager {
     private static final Logger LOG = LoggerFactory.getLogger(DeclarativeSlotManager.class);
@@ -103,8 +105,7 @@ public class DeclarativeSlotManager implements SlotManager {
     /** The future of the requirements delay check. */
     @Nullable private CompletableFuture<Void> requirementsCheckFuture;
 
-    /** Blocked task manager checker. */
-    @Nullable private BlockedTaskManagerChecker blockedTaskManagerChecker;
+    private BlockedTaskManagerChecker blockedTaskManagerChecker;
 
     /** True iff the component has been started. */
     private boolean started;
@@ -116,16 +117,16 @@ public class DeclarativeSlotManager implements SlotManager {
             ResourceTracker resourceTracker,
             SlotTracker slotTracker) {
 
-        Preconditions.checkNotNull(slotManagerConfiguration);
+        checkNotNull(slotManagerConfiguration);
         this.taskManagerRequestTimeout = slotManagerConfiguration.getTaskManagerRequestTimeout();
-        this.slotManagerMetricGroup = Preconditions.checkNotNull(slotManagerMetricGroup);
-        this.resourceTracker = Preconditions.checkNotNull(resourceTracker);
-        this.scheduledExecutor = Preconditions.checkNotNull(scheduledExecutor);
+        this.slotManagerMetricGroup = checkNotNull(slotManagerMetricGroup);
+        this.resourceTracker = checkNotNull(resourceTracker);
+        this.scheduledExecutor = checkNotNull(scheduledExecutor);
         this.requirementsCheckDelay = slotManagerConfiguration.getRequirementCheckDelay();
 
         pendingSlotAllocations = new HashMap<>(16);
 
-        this.slotTracker = Preconditions.checkNotNull(slotTracker);
+        this.slotTracker = checkNotNull(slotTracker);
         slotTracker.registerSlotStatusUpdateListener(createSlotStatusUpdateListener());
 
         slotMatchingStrategy = slotManagerConfiguration.getSlotMatchingStrategy();
@@ -210,12 +211,12 @@ public class DeclarativeSlotManager implements SlotManager {
             BlockedTaskManagerChecker newBlockedTaskManagerChecker) {
         LOG.debug("Starting the slot manager.");
 
-        this.resourceManagerId = Preconditions.checkNotNull(newResourceManagerId);
-        mainThreadExecutor = Preconditions.checkNotNull(newMainThreadExecutor);
-        resourceActions = Preconditions.checkNotNull(newResourceActions);
+        this.resourceManagerId = checkNotNull(newResourceManagerId);
+        mainThreadExecutor = checkNotNull(newMainThreadExecutor);
+        resourceActions = checkNotNull(newResourceActions);
         taskExecutorManager =
                 taskExecutorManagerFactory.apply(newMainThreadExecutor, newResourceActions);
-        blockedTaskManagerChecker = Preconditions.checkNotNull(newBlockedTaskManagerChecker);
+        this.blockedTaskManagerChecker = checkNotNull(newBlockedTaskManagerChecker);
 
         started = true;
 
@@ -254,7 +255,6 @@ public class DeclarativeSlotManager implements SlotManager {
         taskExecutorManager = null;
         resourceManagerId = null;
         resourceActions = null;
-        blockedTaskManagerChecker = null;
         started = false;
     }
 
@@ -459,8 +459,7 @@ public class DeclarativeSlotManager implements SlotManager {
                                 mainThreadExecutor.execute(
                                         () -> {
                                             checkResourceRequirements();
-                                            Preconditions.checkNotNull(requirementsCheckFuture)
-                                                    .complete(null);
+                                            checkNotNull(requirementsCheckFuture).complete(null);
                                         }),
                         requirementsCheckDelay.toMillis(),
                         TimeUnit.MILLISECONDS);
@@ -566,6 +565,7 @@ public class DeclarativeSlotManager implements SlotManager {
     private int internalTryAllocateSlots(
             JobID jobId, String targetAddress, ResourceRequirement resourceRequirement) {
         final ResourceProfile requiredResource = resourceRequirement.getResourceProfile();
+        Collection<TaskManagerSlotInformation> freeSlots = slotTracker.getFreeSlots();
         // Use LinkedHashMap to retain the original order
         final Map<SlotID, TaskManagerSlotInformation> availableSlots = new LinkedHashMap<>();
         for (TaskManagerSlotInformation freeSlot : slotTracker.getFreeSlots()) {
@@ -595,9 +595,9 @@ public class DeclarativeSlotManager implements SlotManager {
         return numUnfulfilled;
     }
 
-    private boolean isBlockedTaskManager(ResourceID resourceID) {
-        Preconditions.checkNotNull(blockedTaskManagerChecker);
-        return blockedTaskManagerChecker.isBlockedTaskManager(resourceID);
+    private boolean isBlockedTaskManager(ResourceID resourceId) {
+        checkNotNull(blockedTaskManagerChecker);
+        return blockedTaskManagerChecker.isBlockedTaskManager(resourceId);
     }
 
     /**
@@ -842,7 +842,7 @@ public class DeclarativeSlotManager implements SlotManager {
         private MatchingResult(
                 boolean isSuccessfulMatching, ResourceCounter newAvailableResources) {
             this.isSuccessfulMatching = isSuccessfulMatching;
-            this.newAvailableResources = Preconditions.checkNotNull(newAvailableResources);
+            this.newAvailableResources = checkNotNull(newAvailableResources);
         }
 
         private ResourceCounter getNewAvailableResources() {
@@ -861,7 +861,7 @@ public class DeclarativeSlotManager implements SlotManager {
         private WorkerAllocationResult(
                 boolean isSuccessfulAllocating, ResourceCounter newAvailableResources) {
             this.isSuccessfulAllocating = isSuccessfulAllocating;
-            this.newAvailableResources = Preconditions.checkNotNull(newAvailableResources);
+            this.newAvailableResources = checkNotNull(newAvailableResources);
         }
 
         private ResourceCounter getNewAvailableResources() {

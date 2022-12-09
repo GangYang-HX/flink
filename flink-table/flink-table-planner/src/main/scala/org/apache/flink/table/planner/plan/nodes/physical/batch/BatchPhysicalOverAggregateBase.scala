@@ -22,9 +22,8 @@ import org.apache.flink.table.planner.CalcitePair
 import org.apache.flink.table.planner.plan.`trait`.{FlinkRelDistribution, FlinkRelDistributionTraitDef}
 import org.apache.flink.table.planner.plan.cost.{FlinkCost, FlinkCostFactory}
 import org.apache.flink.table.planner.plan.rules.physical.batch.BatchPhysicalJoinRuleBase
-import org.apache.flink.table.planner.plan.utils.{OverAggregateUtil, RelExplainUtil}
+import org.apache.flink.table.planner.plan.utils.{FlinkRelOptUtil, OverAggregateUtil, RelExplainUtil}
 import org.apache.flink.table.planner.plan.utils.OverAggregateUtil.splitOutOffsetOrInsensitiveGroup
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTableConfig
 
 import org.apache.calcite.plan._
 import org.apache.calcite.rel._
@@ -140,7 +139,7 @@ abstract class BatchPhysicalOverAggregateBase(
         } else {
           val isAllFieldsFromInput = requiredDistribution.getKeys.forall(_ < inputFieldCnt)
           if (isAllFieldsFromInput) {
-            val tableConfig = unwrapTableConfig(this)
+            val tableConfig = FlinkRelOptUtil.getTableConfigFromContext(this)
             if (
               tableConfig.get(
                 BatchPhysicalJoinRuleBase.TABLE_OPTIMIZER_SHUFFLE_BY_PARTIAL_KEY_ENABLED)

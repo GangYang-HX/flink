@@ -44,7 +44,7 @@ import java.util.Map;
 
 import static org.apache.flink.sql.parser.hive.ddl.SqlCreateHiveTable.IDENTIFIER;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link HiveSource}. */
 public class HiveSourceITCase {
@@ -102,9 +102,9 @@ public class HiveSourceITCase {
                                         WatermarkStrategy.noWatermarks(),
                                         "HiveSource-tbl1")
                                 .executeAndCollect());
-        assertThat(results).hasSize(2);
-        assertThat(results.get(0).getInt(0)).isEqualTo(1);
-        assertThat(results.get(1).getInt(0)).isEqualTo(2);
+        assertEquals(2, results.size());
+        assertEquals(1, results.get(0).getInt(0));
+        assertEquals(2, results.get(1).getInt(0));
         hiveCatalog.dropTable(tablePath, false);
 
         // test partitioned table
@@ -143,9 +143,9 @@ public class HiveSourceITCase {
                                         WatermarkStrategy.noWatermarks(),
                                         "HiveSource-tbl2")
                                 .executeAndCollect());
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getInt(0)).isEqualTo(1);
-        assertThat(results.get(0).getString(1).toString()).isEqualTo("a");
+        assertEquals(1, results.size());
+        assertEquals(1, results.get(0).getInt(0));
+        assertEquals("a", results.get(0).getString(1).toString());
 
         HiveTestUtils.createTextTableInserter(
                         hiveCatalog, tablePath.getDatabaseName(), tablePath.getObjectName())
@@ -178,9 +178,9 @@ public class HiveSourceITCase {
                                         WatermarkStrategy.noWatermarks(),
                                         "HiveSource-tbl2")
                                 .executeAndCollect());
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getInt(0)).isEqualTo(3);
-        assertThat(results.get(0).getString(1).toString()).isEqualTo("b");
+        assertEquals(1, results.size());
+        assertEquals(3, results.get(0).getInt(0));
+        assertEquals("b", results.get(0).getString(1).toString());
 
         hiveCatalog.dropTable(tablePath, false);
     }

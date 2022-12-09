@@ -74,8 +74,7 @@ object RankUtil {
       oriPred: RexNode,
       rankFieldIndex: Int,
       rexBuilder: RexBuilder,
-      tableConfig: TableConfig,
-      classLoader: ClassLoader): (Option[RankRange], Option[RexNode]) = {
+      tableConfig: TableConfig): (Option[RankRange], Option[RexNode]) = {
     val predicate = FlinkRexUtil.expandSearch(rexBuilder, oriPred)
     // Converts the condition to conjunctive normal form (CNF)
     val cnfNodeCount = tableConfig.get(FlinkRexUtil.TABLE_OPTIMIZER_CNF_NODES_LIMIT)
@@ -107,8 +106,7 @@ object RankUtil {
       return (None, Some(predicate))
     }
 
-    val sortBounds =
-      limitPreds.map(computeWindowBoundFromPredicate(_, rexBuilder, tableConfig, classLoader))
+    val sortBounds = limitPreds.map(computeWindowBoundFromPredicate(_, rexBuilder, tableConfig))
     val rankRange = sortBounds match {
       case Seq(Some(LowerBoundary(x)), Some(UpperBoundary(y))) =>
         new ConstantRankRange(x, y)
@@ -214,8 +212,7 @@ object RankUtil {
   private def computeWindowBoundFromPredicate(
       limitPred: LimitPredicate,
       rexBuilder: RexBuilder,
-      tableConfig: TableConfig,
-      classLoader: ClassLoader): Option[Boundary] = {
+      tableConfig: TableConfig): Option[Boundary] = {
 
     val bound: BoundDefine = limitPred.pred.getKind match {
       case SqlKind.GREATER_THAN | SqlKind.GREATER_THAN_OR_EQUAL if limitPred.rankOnLeftSide =>
@@ -241,7 +238,7 @@ object RankUtil {
       case (_: RexInputRef, Lower) => None
       case _ =>
         // reduce predicate to constants to compute bounds
-        val literal = reduceComparisonPredicate(limitPred, rexBuilder, tableConfig, classLoader)
+        val literal = reduceComparisonPredicate(limitPred, rexBuilder, tableConfig)
         if (literal.isEmpty) {
           None
         } else {
@@ -284,8 +281,7 @@ object RankUtil {
   private def reduceComparisonPredicate(
       limitPred: LimitPredicate,
       rexBuilder: RexBuilder,
-      tableConfig: TableConfig,
-      classLoader: ClassLoader): Option[Long] = {
+      tableConfig: TableConfig): Option[Long] = {
 
     val expression = if (limitPred.rankOnLeftSide) {
       limitPred.pred.operands.get(1)
@@ -298,7 +294,7 @@ object RankUtil {
     }
 
     // reduce expression to literal
-    val exprReducer = new ExpressionReducer(tableConfig, classLoader)
+    val exprReducer = new ExpressionReducer(tableConfig)
     val originList = new util.ArrayList[RexNode]()
     originList.add(expression)
     val reduceList = new util.ArrayList[RexNode]()

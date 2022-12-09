@@ -22,13 +22,12 @@ import org.apache.flink.table.catalog.{Catalog, CatalogPartitionSpec, ObjectIden
 import org.apache.flink.table.catalog.exceptions.PartitionNotExistException
 import org.apache.flink.table.expressions.Expression
 import org.apache.flink.table.plan.stats.TableStats
-import org.apache.flink.table.planner.calcite.FlinkTypeFactory
+import org.apache.flink.table.planner.calcite.{FlinkContext, FlinkTypeFactory}
 import org.apache.flink.table.planner.plan.schema.LegacyTableSourceTable
 import org.apache.flink.table.planner.plan.stats.FlinkStatistic
 import org.apache.flink.table.planner.plan.utils.{FlinkRelOptUtil, PartitionPruner, RexNodeExtractor, RexNodeToExpressionConverter}
-import org.apache.flink.table.planner.utils.{CatalogTableStatisticsConverter, TableConfigUtils}
+import org.apache.flink.table.planner.utils.CatalogTableStatisticsConverter
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil.toScala
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapContext
 import org.apache.flink.table.sources.PartitionableTableSource
 
 import org.apache.calcite.plan.{RelOptRule, RelOptRuleCall}
@@ -40,8 +39,8 @@ import org.apache.calcite.rex.{RexInputRef, RexNode, RexShuttle, RexUtil}
 import java.util
 import java.util.TimeZone
 
-import scala.collection.{mutable, JavaConversions}
 import scala.collection.JavaConversions._
+import scala.collection.mutable
 
 /**
  * Planner rule that tries to push partitions evaluated by filter condition into a
@@ -70,8 +69,8 @@ class PushPartitionIntoLegacyTableSourceScanRule
   override def onMatch(call: RelOptRuleCall): Unit = {
     val filter: Filter = call.rel(0)
     val scan: LogicalTableScan = call.rel(1)
-    val context = unwrapContext(call)
-    val tableConfig = context.getTableConfig
+    val context = call.getPlanner.getContext.unwrap(classOf[FlinkContext])
+    val config = context.getTableConfig
     val tableSourceTable = scan.getTable.unwrap(classOf[LegacyTableSourceTable[_]])
     val tableIdentifier = tableSourceTable.tableIdentifier
     val catalogOption = toScala(
@@ -139,8 +138,7 @@ class PushPartitionIntoLegacyTableSourceScanRule
         partitionPredicate
       )
       PartitionPruner.prunePartitions(
-        tableConfig,
-        context.getClassLoader,
+        config,
         partitionFieldNames,
         partitionFieldTypes,
         allPartitions,
@@ -158,7 +156,7 @@ class PushPartitionIntoLegacyTableSourceScanRule
               inputFields,
               context.getFunctionCatalog,
               context.getCatalogManager,
-              TimeZone.getTimeZone(TableConfigUtils.getLocalTimeZone(tableConfig)))
+              TimeZone.getTimeZone(config.getLocalTimeZone))
             def toExpressions: Option[Seq[Expression]] = {
               val expressions = new mutable.ArrayBuffer[Expression]()
               for (predicate <- partitionPredicates) {
@@ -205,9 +203,7 @@ class PushPartitionIntoLegacyTableSourceScanRule
                   if (stats == null) {
                     stats = currStats
                   } else {
-                    stats = stats.merge(
-                      currStats,
-                      JavaConversions.setAsJavaSet(partitionFieldNames.toSet))
+                    stats = stats.merge(currStats)
                   }
                 case None => return null
               }

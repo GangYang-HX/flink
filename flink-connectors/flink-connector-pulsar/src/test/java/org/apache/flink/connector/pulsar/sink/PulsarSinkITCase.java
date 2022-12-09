@@ -26,10 +26,8 @@ import org.apache.flink.runtime.minicluster.RpcServiceSharing;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.test.junit5.MiniClusterExtension;
-import org.apache.flink.testutils.junit.FailsOnJava11;
 import org.apache.flink.testutils.junit.SharedObjectsExtension;
 
-import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -43,7 +41,6 @@ import static org.apache.flink.connector.pulsar.sink.writer.serializer.PulsarSer
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for using PulsarSink writing to a Pulsar cluster. */
-@Category(value = {FailsOnJava11.class})
 class PulsarSinkITCase extends PulsarTestSuiteBase {
 
     private static final int PARALLELISM = 1;
@@ -64,20 +61,14 @@ class PulsarSinkITCase extends PulsarTestSuiteBase {
     @ParameterizedTest
     @EnumSource(DeliveryGuarantee.class)
     void writeRecordsToPulsar(DeliveryGuarantee guarantee) throws Exception {
-        // A random topic with partition 4.
+        // A random topic with partition 1.
         String topic = randomAlphabetic(8);
         operator().createTopic(topic, 4);
         int counts = ThreadLocalRandom.current().nextInt(100, 200);
 
         ControlSource source =
                 new ControlSource(
-                        sharedObjects,
-                        operator(),
-                        topic,
-                        guarantee,
-                        counts,
-                        Duration.ofMillis(50),
-                        Duration.ofMinutes(5));
+                        sharedObjects, operator(), topic, guarantee, counts, Duration.ofMinutes(5));
         PulsarSink<String> sink =
                 PulsarSink.builder()
                         .setServiceUrl(operator().serviceUrl())
@@ -88,11 +79,8 @@ class PulsarSinkITCase extends PulsarTestSuiteBase {
                         .build();
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
         env.setParallelism(PARALLELISM);
-        if (guarantee != DeliveryGuarantee.NONE) {
-            env.enableCheckpointing(500L);
-        }
+        env.enableCheckpointing(100L);
         env.addSource(source).sinkTo(sink);
         env.execute();
 

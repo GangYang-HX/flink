@@ -73,6 +73,8 @@ public class KafkaPartitionSplitReader
 
     private final KafkaSourceReaderMetrics kafkaSourceReaderMetrics;
 
+    private final Set<String> subscribedTopics = new HashSet<>();
+
     // Tracking empty splits that has not been added to finished splits in fetch()
     private final Set<String> emptySplits = new HashSet<>();
 
@@ -188,6 +190,7 @@ public class KafkaPartitionSplitReader
                 .forEach(
                         s -> {
                             newPartitionAssignments.add(s.getTopicPartition());
+                            subscribedTopics.add(s.getTopic());
                             parseStartingOffsets(
                                     s,
                                     partitionsStartingFromEarliest,
@@ -215,6 +218,10 @@ public class KafkaPartitionSplitReader
         removeEmptySplits();
 
         maybeLogSplitChangesHandlingResult(splitsChange);
+    }
+
+    public Set<String> getSubscribedTopics() {
+        return this.subscribedTopics;
     }
 
     @Override

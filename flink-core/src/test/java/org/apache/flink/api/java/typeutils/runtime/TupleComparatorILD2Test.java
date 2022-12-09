@@ -28,7 +28,8 @@ import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.typeutils.runtime.tuple.base.TupleComparatorTestBase;
 
-class TupleComparatorILD2Test extends TupleComparatorTestBase<Tuple3<Integer, Long, Double>> {
+public class TupleComparatorILD2Test
+        extends TupleComparatorTestBase<Tuple3<Integer, Long, Double>> {
 
     @SuppressWarnings("unchecked")
     Tuple3<Integer, Long, Double>[] dataISD =

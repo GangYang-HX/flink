@@ -37,8 +37,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.io.File;
 import java.time.Duration;
@@ -46,25 +46,28 @@ import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.flink.yarn.configuration.YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Test cases for the deployment of Yarn Flink clusters with customized file replication numbers.
  */
-class YARNFileReplicationITCase extends YarnTestBase {
+public class YARNFileReplicationITCase extends YarnTestBase {
 
     private static final Duration yarnAppTerminateTimeout = Duration.ofSeconds(10);
     private static final int sleepIntervalInMS = 100;
 
-    @BeforeAll
+    @BeforeClass
     public static void setup() {
         YARN_CONFIGURATION.set(YarnTestBase.TEST_CLUSTER_NAME_KEY, "flink-yarn-tests-per-job");
         startYARNWithConfig(YARN_CONFIGURATION, true);
     }
 
     @Test
-    void testPerJobModeWithCustomizedFileReplication() throws Exception {
+    public void testPerJobModeWithCustomizedFileReplication() throws Exception {
         final Configuration configuration = getDefaultConfiguration();
         configuration.setInteger(YarnConfigOptions.FILE_REPLICATION, 4);
 
@@ -72,7 +75,7 @@ class YARNFileReplicationITCase extends YarnTestBase {
     }
 
     @Test
-    void testPerJobModeWithDefaultFileReplication() throws Exception {
+    public void testPerJobModeWithDefaultFileReplication() throws Exception {
         runTest(() -> deployPerJob(getDefaultConfiguration(), getTestingJobGraph()));
     }
 
@@ -113,7 +116,7 @@ class YARNFileReplicationITCase extends YarnTestBase {
 
                 final JobResult jobResult = jobResultCompletableFuture.get();
 
-                assertThat(jobResult).isNotNull();
+                assertThat(jobResult, is(notNullValue()));
                 jobResult
                         .getSerializedThrowable()
                         .ifPresent(
@@ -162,10 +165,10 @@ class YARNFileReplicationITCase extends YarnTestBase {
         Path uberJarHDFSPath = new Path(fs.getHomeDirectory(), suffix);
 
         assertTrue(
-                fs.exists(uberJarHDFSPath),
                 "The Flink uber jar needs to exist. If it does not exist, then this "
                         + "indicates that the Flink cluster has already terminated and Yarn has "
-                        + "already deleted the working directory.");
+                        + "already deleted the working directory.",
+                fs.exists(uberJarHDFSPath));
 
         FileStatus fsStatus = fs.getFileStatus(uberJarHDFSPath);
 
@@ -178,6 +181,6 @@ class YARNFileReplicationITCase extends YarnTestBase {
         // If YarnConfigOptions.FILE_REPLICATION is not set. The replication number should equals to
         // yarn configuration value.
         int expectedReplication = flinkFileReplication > 0 ? flinkFileReplication : replication;
-        assertThat((int) fsStatus.getReplication()).isEqualTo(expectedReplication);
+        assertEquals(expectedReplication, fsStatus.getReplication());
     }
 }

@@ -19,16 +19,16 @@ package org.apache.flink.table.planner.plan.metadata
 
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, SqlTimeTypeInfo}
 import org.apache.flink.table.api.{DataTypes, TableConfig, TableException, TableSchema}
-import org.apache.flink.table.catalog._
+import org.apache.flink.table.catalog.{CatalogTable, Column, ContextResolvedTable, ObjectIdentifier, ResolvedCatalogTable, ResolvedSchema, UniqueConstraint}
 import org.apache.flink.table.connector.ChangelogMode
 import org.apache.flink.table.connector.source.{DynamicTableSource, ScanTableSource}
 import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.plan.stats.{ColumnStats, TableStats}
-import org.apache.flink.table.planner.calcite.{FlinkContext, FlinkContextImpl, FlinkTypeFactory}
+import org.apache.flink.table.planner.calcite.{FlinkContext, FlinkContextImpl, FlinkTypeFactory, FlinkTypeSystem}
 import org.apache.flink.table.planner.plan.schema.{FlinkPreparingTableBase, TableSourceTable}
 import org.apache.flink.table.planner.plan.stats.FlinkStatistic
 import org.apache.flink.table.runtime.types.TypeInfoLogicalTypeConverter.fromTypeInfoToLogicalType
-import org.apache.flink.table.types.logical._
+import org.apache.flink.table.types.logical.{BigIntType, DoubleType, IntType, LocalZonedTimestampType, LogicalType, TimestampKind, TimestampType, VarCharType}
 import org.apache.flink.table.utils.CatalogManagerMocks
 
 import org.apache.calcite.config.CalciteConnectionConfig
@@ -271,8 +271,7 @@ object MetadataTestUtil {
     new ModuleManager,
     null,
     CatalogManagerMocks.createEmptyCatalogManager,
-    null,
-    classOf[MockMetaTable].getClassLoader)
+    null)
 
   private def createProjectedTableSourceTable(): Table = {
     val resolvedSchema = new ResolvedSchema(
@@ -287,7 +286,7 @@ object MetadataTestUtil {
 
     val catalogTable = getCatalogTable(resolvedSchema)
 
-    val typeFactory = new FlinkTypeFactory(Thread.currentThread().getContextClassLoader)
+    val typeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
     val rowType = typeFactory.buildRelNodeRowType(
       Seq("a", "c", "d"),
       Seq(new BigIntType(false), new DoubleType(), new VarCharType(false, 100)))
@@ -329,7 +328,7 @@ object MetadataTestUtil {
       Collections.emptyList(),
       UniqueConstraint.primaryKey("PK_1", util.Arrays.asList("a", "b")))
 
-    val typeFactory = new FlinkTypeFactory(Thread.currentThread().getContextClassLoader)
+    val typeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
     val rowType = typeFactory.buildRelNodeRowType(
       Seq("a", "b", "c", "d"),
       Seq(new BigIntType(false), new IntType(), new VarCharType(false, 100), new BigIntType(false)))
@@ -358,7 +357,7 @@ object MetadataTestUtil {
 
     val catalogTable = getCatalogTable(resolvedSchema)
 
-    val typeFactory = new FlinkTypeFactory(Thread.currentThread().getContextClassLoader)
+    val typeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
     val rowType = typeFactory.buildRelNodeRowType(
       Seq("a", "b", "c", "d"),
       Seq(new BigIntType(false), new IntType(), new VarCharType(false, 100), new BigIntType(false)))
@@ -387,7 +386,7 @@ object MetadataTestUtil {
 
     val catalogTable = getCatalogTable(resolvedSchema)
 
-    val typeFactory = new FlinkTypeFactory(Thread.currentThread().getContextClassLoader)
+    val typeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
     val rowType = typeFactory.buildRelNodeRowType(
       Seq("a", "b", "c", "d"),
       Seq(new BigIntType(false), new IntType(), new VarCharType(false, 100), new BigIntType(false)))
@@ -413,7 +412,7 @@ object MetadataTestUtil {
 
     val catalogTable = getCatalogTable(resolvedSchema)
 
-    val typeFactory = new FlinkTypeFactory(Thread.currentThread().getContextClassLoader)
+    val typeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
     val rowType = typeFactory.buildRelNodeRowType(Seq("a"), Seq(new BigIntType(false)))
 
     new MockTableSourceTable(
@@ -456,7 +455,7 @@ object MetadataTestUtil {
       fieldNames: Array[String],
       fieldTypes: Array[LogicalType],
       statistic: FlinkStatistic): Table = {
-    val flinkTypeFactory = new FlinkTypeFactory(Thread.currentThread().getContextClassLoader)
+    val flinkTypeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
     val rowType = flinkTypeFactory.buildRelNodeRowType(fieldNames, fieldTypes)
     new MockMetaTable(rowType, statistic)
   }
@@ -512,8 +511,7 @@ class MockTableSourceTable(
     tableSource,
     isStreamingMode,
     contextResolvedTable,
-    flinkContext,
-    new FlinkTypeFactory(flinkContext.getClassLoader))
+    flinkContext)
   with Table {
   override def getRowType(typeFactory: RelDataTypeFactory): RelDataType = rowType
 

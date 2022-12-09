@@ -42,6 +42,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.GlobalConfiguration;
 import org.apache.flink.configuration.JobManagerOptions;
+import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.configuration.RestOptions;
 import org.apache.flink.core.execution.DefaultExecutorServiceLoader;
 import org.apache.flink.core.execution.SavepointFormatType;
@@ -57,6 +58,7 @@ import org.apache.flink.util.FlinkException;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
+import org.apache.commons.collections.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +67,7 @@ import java.io.FileNotFoundException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.text.SimpleDateFormat;
@@ -110,6 +113,10 @@ public class CliFrontend {
 
     private final Options customCommandLineOptions;
 
+    private final Duration clientTimeout;
+
+    private final int defaultParallelism;
+
     private final ClusterClientServiceLoader clusterClientServiceLoader;
 
     public CliFrontend(Configuration configuration, List<CustomCommandLine> customCommandLines) {
@@ -133,6 +140,9 @@ public class CliFrontend {
             customCommandLine.addGeneralOptions(customCommandLineOptions);
             customCommandLine.addRunOptions(customCommandLineOptions);
         }
+
+        this.clientTimeout = configuration.get(ClientOptions.CLIENT_TIMEOUT);
+        this.defaultParallelism = configuration.getInteger(CoreOptions.DEFAULT_PARALLELISM);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -333,6 +343,11 @@ public class CliFrontend {
         PackagedProgram program = null;
 
         try {
+            int parallelism = programOptions.getParallelism();
+            if (ExecutionConfig.PARALLELISM_DEFAULT == parallelism) {
+                parallelism = defaultParallelism;
+            }
+
             LOG.info("Creating program plan dump");
 
             final CustomCommandLine activeCommandLine =
@@ -346,11 +361,6 @@ public class CliFrontend {
                             getJobJarAndDependencies(programOptions));
 
             program = buildProgram(programOptions, effectiveConfiguration);
-
-            int parallelism = programOptions.getParallelism();
-            if (ExecutionConfig.PARALLELISM_DEFAULT == parallelism) {
-                parallelism = getDefaultParallelism(effectiveConfiguration);
-            }
 
             Pipeline pipeline =
                     PackagedProgramUtils.getPipelineFromProgram(
@@ -421,8 +431,7 @@ public class CliFrontend {
         runClusterAction(
                 activeCommandLine,
                 commandLine,
-                (clusterClient, effectiveConfiguration) ->
-                        listJobs(clusterClient, showRunning, showScheduled, showAll));
+                clusterClient -> listJobs(clusterClient, showRunning, showScheduled, showAll));
     }
 
     private <ClusterID> void listJobs(
@@ -564,11 +573,10 @@ public class CliFrontend {
                         + " savepoint.");
 
         final CustomCommandLine activeCommandLine = validateAndGetActiveCommandLine(commandLine);
-
         runClusterAction(
                 activeCommandLine,
                 commandLine,
-                (clusterClient, effectiveConfiguration) -> {
+                clusterClient -> {
                     final String savepointPath;
                     try {
                         savepointPath =
@@ -578,9 +586,7 @@ public class CliFrontend {
                                                 advanceToEndOfEventTime,
                                                 targetDirectory,
                                                 formatType)
-                                        .get(
-                                                getClientTimeout(effectiveConfiguration).toMillis(),
-                                                TimeUnit.MILLISECONDS);
+                                        .get(clientTimeout.toMillis(), TimeUnit.MILLISECONDS);
                     } catch (Exception e) {
                         throw new FlinkException(
                                 "Could not stop with a savepoint job \"" + jobId + "\".", e);
@@ -650,16 +656,13 @@ public class CliFrontend {
             runClusterAction(
                     activeCommandLine,
                     commandLine,
-                    (clusterClient, effectiveConfiguration) -> {
+                    clusterClient -> {
                         final String savepointPath;
                         try {
                             savepointPath =
                                     clusterClient
                                             .cancelWithSavepoint(jobId, targetDirectory, formatType)
-                                            .get(
-                                                    getClientTimeout(effectiveConfiguration)
-                                                            .toMillis(),
-                                                    TimeUnit.MILLISECONDS);
+                                            .get(clientTimeout.toMillis(), TimeUnit.MILLISECONDS);
                         } catch (Exception e) {
                             throw new FlinkException("Could not cancel job " + jobId + '.', e);
                         }
@@ -684,13 +687,11 @@ public class CliFrontend {
             runClusterAction(
                     activeCommandLine,
                     commandLine,
-                    (clusterClient, effectiveConfiguration) -> {
+                    clusterClient -> {
                         try {
                             clusterClient
                                     .cancel(jobId)
-                                    .get(
-                                            getClientTimeout(effectiveConfiguration).toMillis(),
-                                            TimeUnit.MILLISECONDS);
+                                    .get(clientTimeout.toMillis(), TimeUnit.MILLISECONDS);
                         } catch (Exception e) {
                             throw new FlinkException("Could not cancel job " + jobId + '.', e);
                         }
@@ -737,11 +738,8 @@ public class CliFrontend {
             runClusterAction(
                     activeCommandLine,
                     commandLine,
-                    (clusterClient, effectiveConfiguration) ->
-                            disposeSavepoint(
-                                    clusterClient,
-                                    savepointOptions.getSavepointPath(),
-                                    getClientTimeout(effectiveConfiguration)));
+                    clusterClient ->
+                            disposeSavepoint(clusterClient, savepointOptions.getSavepointPath()));
         } else {
             String[] cleanedArgs = savepointOptions.getArgs();
 
@@ -772,13 +770,12 @@ public class CliFrontend {
             runClusterAction(
                     activeCommandLine,
                     commandLine,
-                    (clusterClient, effectiveConfiguration) ->
+                    clusterClient ->
                             triggerSavepoint(
                                     clusterClient,
                                     jobId,
                                     savepointDirectory,
-                                    savepointOptions.getFormatType(),
-                                    getClientTimeout(effectiveConfiguration)));
+                                    savepointOptions.getFormatType()));
         }
     }
 
@@ -787,8 +784,7 @@ public class CliFrontend {
             ClusterClient<?> clusterClient,
             JobID jobId,
             String savepointDirectory,
-            SavepointFormatType formatType,
-            Duration clientTimeout)
+            SavepointFormatType formatType)
             throws FlinkException {
         logAndSysout("Triggering savepoint for job " + jobId + '.');
 
@@ -811,8 +807,7 @@ public class CliFrontend {
     }
 
     /** Sends a SavepointDisposalRequest to the job manager. */
-    private void disposeSavepoint(
-            ClusterClient<?> clusterClient, String savepointPath, Duration clientTimeout)
+    private void disposeSavepoint(ClusterClient<?> clusterClient, String savepointPath)
             throws FlinkException {
         checkNotNull(
                 savepointPath,
@@ -868,6 +863,19 @@ public class CliFrontend {
         String[] programArgs = runOptions.getProgramArgs();
         String jarFilePath = runOptions.getJarFilePath();
         List<URL> classpaths = runOptions.getClasspaths();
+
+        List<String> pipelineClasspaths = configuration.get(PipelineOptions.CLASSPATHS);
+        if (CollectionUtils.isNotEmpty(pipelineClasspaths)) {
+            try {
+                for (String classpath : pipelineClasspaths) {
+                    for (String url : classpath.split(";")) {
+                        classpaths.add(new URL(url));
+                    }
+                }
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            }
+        }
 
         // Get assembler class
         String entryPointClass = runOptions.getEntryPointClassName();
@@ -1031,7 +1039,7 @@ public class CliFrontend {
                 clusterClientFactory.createClusterDescriptor(effectiveConfiguration)) {
             try (final ClusterClient<ClusterID> clusterClient =
                     clusterDescriptor.retrieve(clusterId).getClusterClient()) {
-                clusterAction.runAction(clusterClient, effectiveConfiguration);
+                clusterAction.runAction(clusterClient);
             }
         }
     }
@@ -1049,11 +1057,9 @@ public class CliFrontend {
          * Run the cluster action with the given {@link ClusterClient}.
          *
          * @param clusterClient to run the cluster action against
-         * @param effectiveConfiguration Flink effective configuration
          * @throws FlinkException if something goes wrong
          */
-        void runAction(ClusterClient<ClusterID> clusterClient, Configuration effectiveConfiguration)
-                throws FlinkException;
+        void runAction(ClusterClient<ClusterID> clusterClient) throws FlinkException;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1297,25 +1303,5 @@ public class CliFrontend {
         Constructor<? extends CustomCommandLine> constructor = customCliClass.getConstructor(types);
 
         return constructor.newInstance(params);
-    }
-
-    /**
-     * Get client timeout from command line via effective configuration.
-     *
-     * @param effectiveConfiguration Flink effective configuration.
-     * @return client timeout with Duration type
-     */
-    private Duration getClientTimeout(Configuration effectiveConfiguration) {
-        return effectiveConfiguration.get(ClientOptions.CLIENT_TIMEOUT);
-    }
-
-    /**
-     * Get default parallelism from command line via effective configuration.
-     *
-     * @param effectiveConfiguration Flink effective configuration.
-     * @return default parallelism.
-     */
-    private int getDefaultParallelism(Configuration effectiveConfiguration) {
-        return effectiveConfiguration.get(CoreOptions.DEFAULT_PARALLELISM);
     }
 }

@@ -20,14 +20,17 @@ package org.apache.flink.runtime.rpc.akka;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.runtime.rpc.RpcSystem;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  * Tests for the {@link AkkaRpcSystemLoader}.
@@ -35,25 +38,28 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>This must be an ITCase so that it runs after the 'package' phase of maven. Otherwise the
  * flink-rpc-akka jar will not be available.
  */
-class AkkaRpcSystemLoaderITCase {
+public class AkkaRpcSystemLoaderITCase extends TestLogger {
 
     private static final AkkaRpcSystemLoader LOADER = new AkkaRpcSystemLoader();
 
+    @ClassRule public static final TemporaryFolder TMP_DIR = new TemporaryFolder();
+
     @Test
-    void testServiceLoadingWithDefaultConfig() {
+    public void testServiceLoadingWithDefaultConfig() {
         final Configuration config = new Configuration();
         try (final RpcSystem rpcSystem = LOADER.loadRpcSystem(config)) {
-            assertThat(rpcSystem).isNotNull();
+            assertThat(rpcSystem, not(nullValue()));
         }
     }
 
     @Test
-    void testServiceLoadingWithNonExistingPath(@TempDir Path tempDir) {
+    public void testServiceLoadingWithNonExistingPath() {
         final Configuration config = new Configuration();
         config.set(
-                CoreOptions.TMP_DIRS, tempDir.resolve(Paths.get("some", "directory")).toString());
+                CoreOptions.TMP_DIRS,
+                TMP_DIR.getRoot().toPath().resolve(Paths.get("some", "directory")).toString());
         try (final RpcSystem rpcSystem = LOADER.loadRpcSystem(config)) {
-            assertThat(rpcSystem).isNotNull();
+            assertThat(rpcSystem, not(nullValue()));
         }
     }
 }

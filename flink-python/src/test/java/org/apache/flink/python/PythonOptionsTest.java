@@ -20,156 +20,162 @@ package org.apache.flink.python;
 
 import org.apache.flink.configuration.Configuration;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
 
 /** Test all configurations can be set using configuration. */
-class PythonOptionsTest {
+public class PythonOptionsTest {
 
     @Test
-    void testBundleSize() {
+    public void testBundleSize() {
         final Configuration configuration = new Configuration();
         final int defaultBundleSize = configuration.getInteger(PythonOptions.MAX_BUNDLE_SIZE);
-        assertThat(defaultBundleSize).isEqualTo(PythonOptions.MAX_BUNDLE_SIZE.defaultValue());
+        assertThat(defaultBundleSize, is(equalTo(PythonOptions.MAX_BUNDLE_SIZE.defaultValue())));
 
         final int expectedBundleSize = 100;
         configuration.setInteger(PythonOptions.MAX_BUNDLE_SIZE, expectedBundleSize);
 
         final int actualBundleSize = configuration.getInteger(PythonOptions.MAX_BUNDLE_SIZE);
-        assertThat(actualBundleSize).isEqualTo(expectedBundleSize);
+        assertThat(actualBundleSize, is(equalTo(expectedBundleSize)));
     }
 
     @Test
-    void testBundleTime() {
+    public void testBundleTime() {
         final Configuration configuration = new Configuration();
         final long defaultBundleTime = configuration.getLong(PythonOptions.MAX_BUNDLE_TIME_MILLS);
-        assertThat(defaultBundleTime).isEqualTo(PythonOptions.MAX_BUNDLE_TIME_MILLS.defaultValue());
+        assertThat(
+                defaultBundleTime, is(equalTo(PythonOptions.MAX_BUNDLE_TIME_MILLS.defaultValue())));
 
         final long expectedBundleTime = 100;
         configuration.setLong(PythonOptions.MAX_BUNDLE_TIME_MILLS, expectedBundleTime);
 
         final long actualBundleSize = configuration.getLong(PythonOptions.MAX_BUNDLE_TIME_MILLS);
-        assertThat(actualBundleSize).isEqualTo(expectedBundleTime);
+        assertThat(actualBundleSize, is(equalTo(expectedBundleTime)));
     }
 
     @Test
-    void testArrowBatchSize() {
+    public void testArrowBatchSize() {
         final Configuration configuration = new Configuration();
         final int defaultArrowBatchSize =
                 configuration.getInteger(PythonOptions.MAX_ARROW_BATCH_SIZE);
-        assertThat(defaultArrowBatchSize)
-                .isEqualTo(PythonOptions.MAX_ARROW_BATCH_SIZE.defaultValue());
+        assertThat(
+                defaultArrowBatchSize,
+                is(equalTo(PythonOptions.MAX_ARROW_BATCH_SIZE.defaultValue())));
 
         final int expectedArrowBatchSize = 100;
         configuration.setInteger(PythonOptions.MAX_ARROW_BATCH_SIZE, expectedArrowBatchSize);
 
         final int actualArrowBatchSize =
                 configuration.getInteger(PythonOptions.MAX_ARROW_BATCH_SIZE);
-        assertThat(actualArrowBatchSize).isEqualTo(expectedArrowBatchSize);
+        assertThat(actualArrowBatchSize, is(equalTo(expectedArrowBatchSize)));
     }
 
     @Test
-    void testPythonMetricEnabled() {
+    public void testPythonMetricEnabled() {
         final Configuration configuration = new Configuration();
         final boolean isMetricEnabled =
                 configuration.getBoolean(PythonOptions.PYTHON_METRIC_ENABLED);
-        assertThat(isMetricEnabled).isEqualTo(PythonOptions.PYTHON_METRIC_ENABLED.defaultValue());
+        assertThat(
+                isMetricEnabled, is(equalTo(PythonOptions.PYTHON_METRIC_ENABLED.defaultValue())));
 
         final boolean expectedIsMetricEnabled = false;
         configuration.setBoolean(PythonOptions.PYTHON_METRIC_ENABLED, false);
 
         final boolean actualIsMetricEnabled =
                 configuration.getBoolean(PythonOptions.PYTHON_METRIC_ENABLED);
-        assertThat(actualIsMetricEnabled).isEqualTo(expectedIsMetricEnabled);
+        assertThat(actualIsMetricEnabled, is(equalTo(expectedIsMetricEnabled)));
     }
 
     @Test
-    void testPythonProfileEnabled() {
+    public void testPythonProfileEnabled() {
         final Configuration configuration = new Configuration();
         final boolean isProfileEnabled =
                 configuration.getBoolean(PythonOptions.PYTHON_PROFILE_ENABLED);
-        assertThat(isProfileEnabled).isEqualTo(PythonOptions.PYTHON_PROFILE_ENABLED.defaultValue());
+        assertThat(
+                isProfileEnabled, is(equalTo(PythonOptions.PYTHON_PROFILE_ENABLED.defaultValue())));
 
         final boolean expectedIsProfileEnabled = true;
         configuration.setBoolean(PythonOptions.PYTHON_PROFILE_ENABLED, true);
 
         final boolean actualIsProfileEnabled =
                 configuration.getBoolean(PythonOptions.PYTHON_PROFILE_ENABLED);
-        assertThat(actualIsProfileEnabled).isEqualTo(expectedIsProfileEnabled);
+        assertThat(actualIsProfileEnabled, is(equalTo(expectedIsProfileEnabled)));
     }
 
     @Test
-    void testPythonFiles() {
+    public void testPythonFiles() {
         final Configuration configuration = new Configuration();
         final Optional<String> defaultPythonFiles =
                 configuration.getOptional(PythonOptions.PYTHON_FILES);
-        assertThat(defaultPythonFiles).isEmpty();
+        assertThat(defaultPythonFiles, is(equalTo(Optional.empty())));
 
         final String expectedPythonFiles = "tmp_dir/test1.py,tmp_dir/test2.py";
         configuration.set(PythonOptions.PYTHON_FILES, expectedPythonFiles);
 
         final String actualPythonFiles = configuration.get(PythonOptions.PYTHON_FILES);
-        assertThat(actualPythonFiles).isEqualTo(expectedPythonFiles);
+        assertThat(actualPythonFiles, is(equalTo(expectedPythonFiles)));
     }
 
     @Test
-    void testPythonRequirements() {
+    public void testPythonRequirements() {
         final Configuration configuration = new Configuration();
         final Optional<String> defaultPythonRequirements =
                 configuration.getOptional(PythonOptions.PYTHON_REQUIREMENTS);
-        assertThat(defaultPythonRequirements).isEmpty();
+        assertThat(defaultPythonRequirements, is(equalTo(Optional.empty())));
 
         final String expectedPythonRequirements = "tmp_dir/requirements.txt#tmp_dir/cache";
         configuration.set(PythonOptions.PYTHON_REQUIREMENTS, expectedPythonRequirements);
 
         final String actualPythonRequirements =
                 configuration.get(PythonOptions.PYTHON_REQUIREMENTS);
-        assertThat(actualPythonRequirements).isEqualTo(expectedPythonRequirements);
+        assertThat(actualPythonRequirements, is(equalTo(expectedPythonRequirements)));
     }
 
     @Test
-    void testPythonArchives() {
+    public void testPythonArchives() {
         final Configuration configuration = new Configuration();
         final Optional<String> defaultPythonArchives =
                 configuration.getOptional(PythonOptions.PYTHON_ARCHIVES);
-        assertThat(defaultPythonArchives).isEmpty();
+        assertThat(defaultPythonArchives, is(equalTo(Optional.empty())));
 
         final String expectedPythonArchives = "tmp_dir/py37.zip#venv,tmp_dir/data.zip";
         configuration.set(PythonOptions.PYTHON_ARCHIVES, expectedPythonArchives);
 
         final String actualPythonArchives = configuration.get(PythonOptions.PYTHON_ARCHIVES);
-        assertThat(actualPythonArchives).isEqualTo(expectedPythonArchives);
+        assertThat(actualPythonArchives, is(equalTo(expectedPythonArchives)));
     }
 
     @Test
-    void testPythonExecutable() {
+    public void testPythonExecutable() {
         final Configuration configuration = new Configuration();
         final Optional<String> defaultPythonExecutable =
                 configuration.getOptional(PythonOptions.PYTHON_EXECUTABLE);
-        assertThat(defaultPythonExecutable).isEmpty();
+        assertThat(defaultPythonExecutable, is(equalTo(Optional.empty())));
 
         final String expectedPythonExecutable = "venv/py37/bin/python";
         configuration.set(PythonOptions.PYTHON_EXECUTABLE, expectedPythonExecutable);
 
         final String actualPythonExecutable = configuration.get(PythonOptions.PYTHON_EXECUTABLE);
-        assertThat(actualPythonExecutable).isEqualTo(expectedPythonExecutable);
+        assertThat(actualPythonExecutable, is(equalTo(expectedPythonExecutable)));
     }
 
     @Test
-    void testPythonClientExecutable() {
+    public void testPythonClientExecutable() {
         final Configuration configuration = new Configuration();
         final Optional<String> defaultPythonClientExecutable =
                 configuration.getOptional(PythonOptions.PYTHON_CLIENT_EXECUTABLE);
-        assertThat(defaultPythonClientExecutable).isEmpty();
+        assertThat(defaultPythonClientExecutable, is(equalTo(Optional.empty())));
 
         final String expectedPythonClientExecutable = "tmp_dir/test1.py,tmp_dir/test2.py";
         configuration.set(PythonOptions.PYTHON_CLIENT_EXECUTABLE, expectedPythonClientExecutable);
 
         final String actualPythonClientExecutable =
                 configuration.get(PythonOptions.PYTHON_CLIENT_EXECUTABLE);
-        assertThat(actualPythonClientExecutable).isEqualTo(expectedPythonClientExecutable);
+        assertThat(actualPythonClientExecutable, is(equalTo(expectedPythonClientExecutable)));
     }
 }

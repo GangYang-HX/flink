@@ -41,9 +41,7 @@ import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerExcept
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
-import org.apache.flink.runtime.security.token.DelegationTokenManager;
 import org.apache.flink.util.Preconditions;
-import org.apache.flink.util.TimeUtils;
 import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
 
@@ -76,7 +74,7 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
 
     protected final Configuration flinkConfig;
 
-    private final Duration startWorkerRetryInterval;
+    private final Time startWorkerRetryInterval;
 
     private final ResourceManagerDriver<WorkerType> resourceManagerDriver;
 
@@ -94,7 +92,7 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
 
     private final ThresholdMeter startWorkerFailureRater;
 
-    private final Duration workerRegistrationTimeout;
+    private final Time workerRegistrationTimeout;
 
     /**
      * Incompletion of this future indicates that the max failure rate of start worker is reached
@@ -103,12 +101,6 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
      */
     private CompletableFuture<Void> startWorkerCoolDown;
 
-    /** The future indicates whether the rm is ready to serve. */
-    private final CompletableFuture<Void> readyToServeFuture;
-
-    /** Timeout to wait for all the previous attempts workers to recover. */
-    private final Duration previousWorkerRecoverTimeout;
-
     public ActiveResourceManager(
             ResourceManagerDriver<WorkerType> resourceManagerDriver,
             Configuration flinkConfig,
@@ -116,7 +108,6 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
             UUID leaderSessionId,
             ResourceID resourceId,
             HeartbeatServices heartbeatServices,
-            DelegationTokenManager delegationTokenManager,
             SlotManager slotManager,
             ResourceManagerPartitionTrackerFactory clusterPartitionTrackerFactory,
             BlocklistHandler.Factory blocklistHandlerFactory,
@@ -127,14 +118,12 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
             ThresholdMeter startWorkerFailureRater,
             Duration retryInterval,
             Duration workerRegistrationTimeout,
-            Duration previousWorkerRecoverTimeout,
             Executor ioExecutor) {
         super(
                 rpcService,
                 leaderSessionId,
                 resourceId,
                 heartbeatServices,
-                delegationTokenManager,
                 slotManager,
                 clusterPartitionTrackerFactory,
                 blocklistHandlerFactory,
@@ -154,11 +143,10 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
         this.currentAttemptUnregisteredWorkers = new HashMap<>();
         this.previousAttemptUnregisteredWorkers = new HashSet<>();
         this.startWorkerFailureRater = checkNotNull(startWorkerFailureRater);
-        this.startWorkerRetryInterval = retryInterval;
-        this.workerRegistrationTimeout = workerRegistrationTimeout;
+        this.startWorkerRetryInterval = Time.of(retryInterval.toMillis(), TimeUnit.MILLISECONDS);
+        this.workerRegistrationTimeout =
+                Time.of(workerRegistrationTimeout.toMillis(), TimeUnit.MILLISECONDS);
         this.startWorkerCoolDown = FutureUtils.completedVoidFuture();
-        this.previousWorkerRecoverTimeout = previousWorkerRecoverTimeout;
-        this.readyToServeFuture = new CompletableFuture<>();
     }
 
     // ------------------------------------------------------------------------
@@ -222,7 +210,7 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
 
         final WorkerResourceSpec workerResourceSpec =
                 currentAttemptUnregisteredWorkers.remove(resourceId);
-        tryRemovePreviousPendingRecoveryTaskManager(resourceId);
+        previousAttemptUnregisteredWorkers.remove(resourceId);
         if (workerResourceSpec != null) {
             final int count = pendingWorkerCounter.decreaseAndGet(workerResourceSpec);
             log.info(
@@ -259,18 +247,6 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
             log.info(
                     "Worker {} recovered from previous attempt.",
                     resourceId.getStringWithMetadata());
-        }
-        if (recoveredWorkers.size() > 0 && !previousWorkerRecoverTimeout.isZero()) {
-            scheduleRunAsync(
-                    () -> {
-                        readyToServeFuture.complete(null);
-                        log.info(
-                                "Timeout to wait recovery taskmanagers, recovery future is completed.");
-                    },
-                    previousWorkerRecoverTimeout.toMillis(),
-                    TimeUnit.MILLISECONDS);
-        } else {
-            readyToServeFuture.complete(null);
         }
     }
 
@@ -388,7 +364,7 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
 
         WorkerResourceSpec workerResourceSpec =
                 currentAttemptUnregisteredWorkers.remove(resourceId);
-        tryRemovePreviousPendingRecoveryTaskManager(resourceId);
+        previousAttemptUnregisteredWorkers.remove(resourceId);
         if (workerResourceSpec != null) {
             final int count = pendingWorkerCounter.decreaseAndGet(workerResourceSpec);
             log.info(
@@ -446,27 +422,6 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
         }
     }
 
-    @Override
-    public CompletableFuture<Void> getReadyToServeFuture() {
-        return readyToServeFuture;
-    }
-
-    private void tryRemovePreviousPendingRecoveryTaskManager(ResourceID resourceID) {
-        long sizeBeforeRemove = previousAttemptUnregisteredWorkers.size();
-        if (previousAttemptUnregisteredWorkers.remove(resourceID)) {
-            log.info(
-                    "Pending recovery taskmanagers {} -> {}.{}",
-                    sizeBeforeRemove,
-                    previousAttemptUnregisteredWorkers.size(),
-                    previousAttemptUnregisteredWorkers.size() == 0
-                            ? " Resource manager is ready to serve."
-                            : "");
-        }
-        if (previousAttemptUnregisteredWorkers.size() == 0) {
-            readyToServeFuture.complete(null);
-        }
-    }
-
     /** Always execute on the current main thread executor. */
     private class GatewayMainThreadExecutor implements ScheduledExecutor {
 
@@ -505,6 +460,6 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
 
     @VisibleForTesting
     <T> CompletableFuture<T> runInMainThread(Callable<T> callable, Time timeout) {
-        return callAsync(callable, TimeUtils.toDuration(timeout));
+        return callAsync(callable, timeout);
     }
 }

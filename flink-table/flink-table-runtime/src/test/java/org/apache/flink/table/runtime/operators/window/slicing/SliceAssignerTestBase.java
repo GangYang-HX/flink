@@ -31,9 +31,9 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
-import static org.assertj.core.api.HamcrestCondition.matching;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Utilities for testing {@link SliceAssigner}s. */
 public abstract class SliceAssignerTestBase {
@@ -47,7 +47,7 @@ public abstract class SliceAssignerTestBase {
             runnable.run();
             fail("should fail.");
         } catch (Exception e) {
-            assertThat(e).satisfies(matching(containsMessage(errorMessage)));
+            assertThat(e, containsMessage(errorMessage));
         }
     }
 
@@ -96,9 +96,10 @@ public abstract class SliceAssignerTestBase {
     protected static void assertSliceStartEnd(
             String start, String end, long epochMills, SliceAssigner assigner) {
 
-        assertThat(localTimestampStr(assigner.getWindowStart(assignSliceEnd(assigner, epochMills))))
-                .isEqualTo(start);
-        assertThat(localTimestampStr(assignSliceEnd(assigner, epochMills))).isEqualTo(end);
+        assertEquals(
+                start,
+                localTimestampStr(assigner.getWindowStart(assignSliceEnd(assigner, epochMills))));
+        assertEquals(end, localTimestampStr(assignSliceEnd(assigner, epochMills)));
     }
 
     public static String localTimestampStr(long epochMills) {

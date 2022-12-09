@@ -23,17 +23,14 @@ import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.runtime.highavailability.nonha.embedded.EmbeddedLeaderService;
 import org.apache.flink.runtime.highavailability.zookeeper.CuratorFrameworkWithUnhandledErrorListener;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
-import org.apache.flink.runtime.testutils.ZooKeeperTestUtils;
 import org.apache.flink.runtime.util.TestingFatalErrorHandlerResource;
 import org.apache.flink.runtime.util.ZooKeeperUtils;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
 import org.apache.curator.test.TestingServer;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -43,7 +40,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
@@ -51,10 +47,6 @@ import static org.junit.Assert.assertThat;
 /** Tests for leader election. */
 @RunWith(Parameterized.class)
 public class LeaderElectionTest extends TestLogger {
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     @Rule
     public final TestingFatalErrorHandlerResource testingFatalErrorHandlerResource =
@@ -186,7 +178,7 @@ public class LeaderElectionTest extends TestLogger {
         @Override
         public void setup(FatalErrorHandler fatalErrorHandler) throws Exception {
             try {
-                testingServer = ZooKeeperTestUtils.createAndStartZookeeperTestingServer();
+                testingServer = new TestingServer();
             } catch (Exception e) {
                 throw new RuntimeException("Could not start ZooKeeper testing cluster.", e);
             }
@@ -209,7 +201,7 @@ public class LeaderElectionTest extends TestLogger {
             }
 
             if (testingServer != null) {
-                testingServer.close();
+                testingServer.stop();
                 testingServer = null;
             }
         }
@@ -226,7 +218,7 @@ public class LeaderElectionTest extends TestLogger {
 
         @Override
         public void setup(FatalErrorHandler fatalErrorHandler) {
-            embeddedLeaderService = new EmbeddedLeaderService(EXECUTOR_RESOURCE.getExecutor());
+            embeddedLeaderService = new EmbeddedLeaderService(TestingUtils.defaultExecutor());
         }
 
         @Override

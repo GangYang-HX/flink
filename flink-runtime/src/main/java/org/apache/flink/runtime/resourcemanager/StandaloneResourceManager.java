@@ -30,13 +30,11 @@ import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerExcept
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
-import org.apache.flink.runtime.security.token.DelegationTokenManager;
 import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
 
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
@@ -56,7 +54,6 @@ public class StandaloneResourceManager extends ResourceManager<ResourceID> {
             UUID leaderSessionId,
             ResourceID resourceId,
             HeartbeatServices heartbeatServices,
-            DelegationTokenManager delegationTokenManager,
             SlotManager slotManager,
             ResourceManagerPartitionTrackerFactory clusterPartitionTrackerFactory,
             BlocklistHandler.Factory blocklistHandlerFactory,
@@ -72,7 +69,6 @@ public class StandaloneResourceManager extends ResourceManager<ResourceID> {
                 leaderSessionId,
                 resourceId,
                 heartbeatServices,
-                delegationTokenManager,
                 slotManager,
                 clusterPartitionTrackerFactory,
                 blocklistHandlerFactory,
@@ -126,10 +122,5 @@ public class StandaloneResourceManager extends ResourceManager<ResourceID> {
                     startupPeriodMillis,
                     TimeUnit.MILLISECONDS);
         }
-    }
-
-    @Override
-    public CompletableFuture<Void> getReadyToServeFuture() {
-        return CompletableFuture.completedFuture(null);
     }
 }

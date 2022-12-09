@@ -35,7 +35,7 @@ import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeBuilder;
 import io.fabric8.kubernetes.api.model.VolumeMount;
 import io.fabric8.kubernetes.api.model.VolumeMountBuilder;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -47,10 +47,14 @@ import static org.apache.flink.configuration.GlobalConfiguration.FLINK_CONF_FILE
 import static org.apache.flink.kubernetes.kubeclient.decorators.FlinkConfMountDecorator.getFlinkConfConfigMapName;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOG4J_NAME;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOGBACK_NAME;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 /** General tests for the {@link FlinkConfMountDecorator}. */
-class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
+public class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
 
     private static final String FLINK_CONF_DIR_IN_POD = "/opt/flink/flink-conf-";
 
@@ -71,46 +75,49 @@ class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
     }
 
     @Test
-    void testWhetherPodOrContainerIsDecorated() {
+    public void testWhetherPodOrContainerIsDecorated() {
         final FlinkPod resultFlinkPod = flinkConfMountDecorator.decorateFlinkPod(baseFlinkPod);
-        assertThat(resultFlinkPod.getPodWithoutMainContainer())
-                .isNotEqualTo(baseFlinkPod.getPodWithoutMainContainer());
-        assertThat(resultFlinkPod.getMainContainer()).isNotEqualTo(baseFlinkPod.getMainContainer());
+        assertNotEquals(
+                baseFlinkPod.getPodWithoutMainContainer(),
+                resultFlinkPod.getPodWithoutMainContainer());
+        assertNotEquals(baseFlinkPod.getMainContainer(), resultFlinkPod.getMainContainer());
     }
 
     @Test
-    void testConfigMap() throws IOException {
+    public void testConfigMap() throws IOException {
         KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOG4J_NAME);
         KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOGBACK_NAME);
 
         final List<HasMetadata> additionalResources =
                 flinkConfMountDecorator.buildAccompanyingKubernetesResources();
-        assertThat(additionalResources).hasSize(1);
+        assertEquals(1, additionalResources.size());
 
         final ConfigMap resultConfigMap = (ConfigMap) additionalResources.get(0);
 
-        assertThat(resultConfigMap.getApiVersion()).isEqualTo(Constants.API_VERSION);
+        assertEquals(Constants.API_VERSION, resultConfigMap.getApiVersion());
 
-        assertThat(resultConfigMap.getMetadata().getName())
-                .isEqualTo(getFlinkConfConfigMapName(CLUSTER_ID));
-        assertThat(resultConfigMap.getMetadata().getLabels()).isEqualTo(getCommonLabels());
+        assertEquals(
+                getFlinkConfConfigMapName(CLUSTER_ID), resultConfigMap.getMetadata().getName());
+        assertEquals(getCommonLabels(), resultConfigMap.getMetadata().getLabels());
 
         Map<String, String> resultDatas = resultConfigMap.getData();
-        assertThat(resultDatas.get(CONFIG_FILE_LOGBACK_NAME)).isEqualTo("some data");
-        assertThat(resultDatas.get(CONFIG_FILE_LOG4J_NAME)).isEqualTo("some data");
+        assertEquals("some data", resultDatas.get(CONFIG_FILE_LOGBACK_NAME));
+        assertEquals("some data", resultDatas.get(CONFIG_FILE_LOG4J_NAME));
 
         final Configuration resultFlinkConfig =
                 KubernetesTestUtils.loadConfigurationFromString(
                         resultDatas.get(FLINK_CONF_FILENAME));
-        assertThat(resultFlinkConfig.get(KubernetesConfigOptions.FLINK_CONF_DIR))
-                .isEqualTo(FLINK_CONF_DIR_IN_POD);
+        assertThat(
+                resultFlinkConfig.get(KubernetesConfigOptions.FLINK_CONF_DIR),
+                is(FLINK_CONF_DIR_IN_POD));
         // The following config options should not be added to config map
-        assertThat(resultFlinkConfig.get(KubernetesConfigOptions.KUBE_CONFIG_FILE)).isNull();
-        assertThat(resultFlinkConfig.get(DeploymentOptionsInternal.CONF_DIR)).isNull();
+        assertThat(
+                resultFlinkConfig.get(KubernetesConfigOptions.KUBE_CONFIG_FILE), is(nullValue()));
+        assertThat(resultFlinkConfig.get(DeploymentOptionsInternal.CONF_DIR), is(nullValue()));
     }
 
     @Test
-    void testDecoratedFlinkPodWithoutLog4jAndLogback() {
+    public void testDecoratedFlinkPodWithoutLog4jAndLogback() {
         final FlinkPod resultFlinkPod = flinkConfMountDecorator.decorateFlinkPod(baseFlinkPod);
 
         final List<KeyToPath> expectedKeyToPaths =
@@ -128,8 +135,9 @@ class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
                                 .withItems(expectedKeyToPaths)
                                 .endConfigMap()
                                 .build());
-        assertThat(resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes())
-                .isEqualTo(expectedVolumes);
+        assertEquals(
+                expectedVolumes,
+                resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes());
 
         final List<VolumeMount> expectedVolumeMounts =
                 Collections.singletonList(
@@ -137,12 +145,11 @@ class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
                                 .withName(Constants.FLINK_CONF_VOLUME)
                                 .withMountPath(FLINK_CONF_DIR_IN_POD)
                                 .build());
-        assertThat(resultFlinkPod.getMainContainer().getVolumeMounts())
-                .isEqualTo(expectedVolumeMounts);
+        assertEquals(expectedVolumeMounts, resultFlinkPod.getMainContainer().getVolumeMounts());
     }
 
     @Test
-    void testDecoratedFlinkPodWithLog4j() throws IOException {
+    public void testDecoratedFlinkPodWithLog4j() throws IOException {
         KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOG4J_NAME);
 
         final FlinkPod resultFlinkPod = flinkConfMountDecorator.decorateFlinkPod(baseFlinkPod);
@@ -166,12 +173,13 @@ class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
                                 .withItems(expectedKeyToPaths)
                                 .endConfigMap()
                                 .build());
-        assertThat(resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes())
-                .isEqualTo(expectedVolumes);
+        assertEquals(
+                expectedVolumes,
+                resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes());
     }
 
     @Test
-    void testDecoratedFlinkPodWithLogback() throws IOException {
+    public void testDecoratedFlinkPodWithLogback() throws IOException {
         KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOGBACK_NAME);
 
         final FlinkPod resultFlinkPod = flinkConfMountDecorator.decorateFlinkPod(baseFlinkPod);
@@ -195,12 +203,13 @@ class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
                                 .withItems(expectedKeyToPaths)
                                 .endConfigMap()
                                 .build());
-        assertThat(resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes())
-                .isEqualTo(expectedVolumes);
+        assertEquals(
+                expectedVolumes,
+                resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes());
     }
 
     @Test
-    void testDecoratedFlinkPodWithLog4jAndLogback() throws IOException {
+    public void testDecoratedFlinkPodWithLog4jAndLogback() throws IOException {
         KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOG4J_NAME);
         KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOGBACK_NAME);
 
@@ -229,18 +238,19 @@ class FlinkConfMountDecoratorTest extends KubernetesJobManagerTestBase {
                                 .withItems(expectedKeyToPaths)
                                 .endConfigMap()
                                 .build());
-        assertThat(resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes())
-                .isEqualTo(expectedVolumes);
+        assertEquals(
+                expectedVolumes,
+                resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes());
     }
 
     @Test
-    void testDecoratedFlinkContainer() {
+    public void testDecoratedFlinkContainer() {
         final Container resultMainContainer =
                 flinkConfMountDecorator.decorateFlinkPod(baseFlinkPod).getMainContainer();
-        assertThat(resultMainContainer.getVolumeMounts()).hasSize(1);
+        assertEquals(1, resultMainContainer.getVolumeMounts().size());
 
         final VolumeMount volumeMount = resultMainContainer.getVolumeMounts().get(0);
-        assertThat(volumeMount.getName()).isEqualTo(Constants.FLINK_CONF_VOLUME);
-        assertThat(volumeMount.getMountPath()).isEqualTo(FLINK_CONF_DIR_IN_POD);
+        assertEquals(Constants.FLINK_CONF_VOLUME, volumeMount.getName());
+        assertEquals(FLINK_CONF_DIR_IN_POD, volumeMount.getMountPath());
     }
 }

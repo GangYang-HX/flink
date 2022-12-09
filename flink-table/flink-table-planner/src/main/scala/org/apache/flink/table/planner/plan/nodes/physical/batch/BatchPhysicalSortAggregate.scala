@@ -115,7 +115,7 @@ class BatchPhysicalSortAggregate(
           true
         } else {
           // If partialKey is enabled, try to use partial key to satisfy the required distribution
-          val tableConfig = unwrapTableConfig(this)
+          val tableConfig = FlinkRelOptUtil.getTableConfigFromContext(this)
           val partialKeyEnabled = tableConfig.get(
             BatchPhysicalJoinRuleBase.TABLE_OPTIMIZER_SHUFFLE_BY_PARTIAL_KEY_ENABLED)
           partialKeyEnabled && groupKeysList.containsAll(shuffleKeys)

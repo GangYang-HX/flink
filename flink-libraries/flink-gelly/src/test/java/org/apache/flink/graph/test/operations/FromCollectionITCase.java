@@ -34,8 +34,6 @@ import org.junit.runners.Parameterized;
 
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /** Test creating graphs from collections. */
 @RunWith(Parameterized.class)
 public class FromCollectionITCase extends MultipleProgramsTestBase {

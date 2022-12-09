@@ -45,8 +45,6 @@ import org.junit.runners.Parameterized;
 import java.util.Collection;
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /**
  * Integration tests for {@link JoinFunction}, {@link FlatJoinFunction}, and {@link
  * RichFlatJoinFunction}.

@@ -23,46 +23,34 @@ import org.apache.flink.runtime.rest.messages.EmptyMessageParameters;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.EmptyResponseBody;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
-import org.apache.flink.runtime.rest.messages.RuntimeMessageHeaders;
-import org.apache.flink.runtime.rest.versioning.RuntimeRestAPIVersion;
+import org.apache.flink.runtime.rest.versioning.RestAPIVersion;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.UUID;
 
 /**
  * A {@link MessageHeaders} for testing purpose. Its request body, response body and message
  * parameters are all empty.
  */
 public class TestEmptyMessageHeaders
-        implements RuntimeMessageHeaders<
-                EmptyRequestBody, EmptyResponseBody, EmptyMessageParameters> {
+        implements MessageHeaders<EmptyRequestBody, EmptyResponseBody, EmptyMessageParameters> {
 
     private static final String URL = "/test/empty";
     private static final String DESCRIPTION = "This is an empty testing REST API.";
 
     private final String url;
     private final String description;
-    private final String operationId;
 
     public TestEmptyMessageHeaders() {
-        this(URL, DESCRIPTION, UUID.randomUUID().toString());
+        this.url = URL;
+        this.description = DESCRIPTION;
     }
 
     public TestEmptyMessageHeaders(String url, String description) {
-        this(url, description, UUID.randomUUID().toString());
-    }
-
-    public TestEmptyMessageHeaders(String operationId) {
-        this(URL, DESCRIPTION, operationId);
-    }
-
-    private TestEmptyMessageHeaders(String url, String description, String operationId) {
         this.url = url;
         this.description = description;
-        this.operationId = operationId;
     }
 
     @Override
@@ -86,11 +74,6 @@ public class TestEmptyMessageHeaders
     }
 
     @Override
-    public String operationId() {
-        return operationId;
-    }
-
-    @Override
     public String getDescription() {
         return description;
     }
@@ -106,7 +89,7 @@ public class TestEmptyMessageHeaders
     }
 
     @Override
-    public Collection<RuntimeRestAPIVersion> getSupportedAPIVersions() {
-        return Collections.singleton(RuntimeRestAPIVersion.V0);
+    public Collection<RestAPIVersion> getSupportedAPIVersions() {
+        return Collections.singleton(RestAPIVersion.V0);
     }
 }

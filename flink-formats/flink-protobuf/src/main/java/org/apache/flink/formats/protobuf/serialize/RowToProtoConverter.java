@@ -18,14 +18,13 @@
 
 package org.apache.flink.formats.protobuf.serialize;
 
+import org.apache.flink.formats.protobuf.PbCodegenAppender;
 import org.apache.flink.formats.protobuf.PbCodegenException;
+import org.apache.flink.formats.protobuf.PbCodegenUtils;
 import org.apache.flink.formats.protobuf.PbConstant;
 import org.apache.flink.formats.protobuf.PbFormatConfig;
-import org.apache.flink.formats.protobuf.PbFormatContext;
+import org.apache.flink.formats.protobuf.PbFormatUtils;
 import org.apache.flink.formats.protobuf.deserialize.ProtoToRowConverter;
-import org.apache.flink.formats.protobuf.util.PbCodegenAppender;
-import org.apache.flink.formats.protobuf.util.PbCodegenUtils;
-import org.apache.flink.formats.protobuf.util.PbFormatUtils;
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -45,23 +44,21 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * {@link RowToProtoConverter} can convert flink row data to binary protobuf message data by codegen
- * process.
+ * {@link org.apache.flink.formats.protobuf.serialize.RowToProtoConverter} can convert flink row
+ * data to binary protobuf message data by codegen process.
  */
 public class RowToProtoConverter {
     private static final Logger LOG = LoggerFactory.getLogger(ProtoToRowConverter.class);
+
     private final Method encodeMethod;
 
     public RowToProtoConverter(RowType rowType, PbFormatConfig formatConfig)
             throws PbCodegenException {
         try {
-            String outerPrefix =
-                    PbFormatUtils.getOuterProtoPrefix(formatConfig.getMessageClassName());
-            PbFormatContext formatContext = new PbFormatContext(outerPrefix, formatConfig);
             Descriptors.Descriptor descriptor =
                     PbFormatUtils.getDescriptor(formatConfig.getMessageClassName());
 
-            PbCodegenAppender codegenAppender = new PbCodegenAppender(0);
+            PbCodegenAppender codegenAppender = new PbCodegenAppender();
             String uuid = UUID.randomUUID().toString().replaceAll("\\-", "");
             String generatedClassName = "GeneratedRowToProto_" + uuid;
             String generatedPackageName = RowToProtoConverter.class.getPackage().getName();
@@ -77,27 +74,27 @@ public class RowToProtoConverter {
             codegenAppender.appendLine("import " + Map.class.getName());
             codegenAppender.appendLine("import " + HashMap.class.getName());
 
-            codegenAppender.begin("public class " + generatedClassName + "{");
-            codegenAppender.begin(
+            codegenAppender.appendSegment("public class " + generatedClassName + "{");
+            codegenAppender.appendSegment(
                     "public static AbstractMessage "
                             + PbConstant.GENERATED_ENCODE_METHOD
                             + "(RowData rowData){");
             codegenAppender.appendLine("AbstractMessage message = null");
             PbCodegenSerializer codegenSer =
                     PbCodegenSerializeFactory.getPbCodegenTopRowSer(
-                            descriptor, rowType, formatContext);
-            String genCode =
-                    codegenSer.codegen("message", "rowData", codegenAppender.currentIndent());
+                            descriptor, rowType, formatConfig);
+            String genCode = codegenSer.codegen("message", "rowData");
             codegenAppender.appendSegment(genCode);
             codegenAppender.appendLine("return message");
-            codegenAppender.end("}");
-            codegenAppender.end("}");
+            codegenAppender.appendSegment("}");
+            codegenAppender.appendSegment("}");
 
-            String printCode = codegenAppender.printWithLineNumber();
-            LOG.debug("Protobuf encode codegen: \n" + printCode);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Protobuf encode codegen: \n" + codegenAppender.printWithLineNumber());
+            }
             Class generatedClass =
                     PbCodegenUtils.compileClass(
-                            Thread.currentThread().getContextClassLoader(),
+                            this.getClass().getClassLoader(),
                             generatedPackageName + "." + generatedClassName,
                             codegenAppender.code());
             encodeMethod =

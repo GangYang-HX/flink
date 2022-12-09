@@ -167,11 +167,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
                 } else {
                     GeneratedJoinCondition joinCondition =
                             JoinUtil.generateConditionFunction(
-                                    config,
-                                    planner.getFlinkContext().getClassLoader(),
-                                    joinSpec,
-                                    leftRowType,
-                                    rightRowType);
+                                    config.getTableConfig(), joinSpec, leftRowType, rightRowType);
                     IntervalJoinFunction joinFunction =
                             new IntervalJoinFunction(
                                     joinCondition, returnTypeInfo, joinSpec.getFilterNulls());
@@ -207,14 +203,10 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
                     // set KeyType and Selector for state
                     RowDataKeySelector leftSelect =
                             KeySelectorUtil.getRowDataSelector(
-                                    planner.getFlinkContext().getClassLoader(),
-                                    joinSpec.getLeftKeys(),
-                                    InternalTypeInfo.of(leftRowType));
+                                    joinSpec.getLeftKeys(), InternalTypeInfo.of(leftRowType));
                     RowDataKeySelector rightSelect =
                             KeySelectorUtil.getRowDataSelector(
-                                    planner.getFlinkContext().getClassLoader(),
-                                    joinSpec.getRightKeys(),
-                                    InternalTypeInfo.of(rightRowType));
+                                    joinSpec.getRightKeys(), InternalTypeInfo.of(rightRowType));
                     transform.setStateKeySelectors(leftSelect, rightSelect);
                     transform.setStateKeyType(leftSelect.getProducedType());
                     return transform;
@@ -236,7 +228,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
             int leftArity,
             int rightArity,
             InternalTypeInfo<RowData> returnTypeInfo,
-            ExecNodeConfig config) {
+            ReadableConfig config) {
         boolean shouldCreateUid =
                 config.get(ExecutionConfigOptions.TABLE_EXEC_LEGACY_TRANSFORMATION_UIDS);
 
@@ -260,7 +252,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
                         returnTypeInfo,
                         leftParallelism);
         if (shouldCreateUid) {
-            filterAllLeftStream.setUid(createTransformationUid(FILTER_LEFT_TRANSFORMATION, config));
+            filterAllLeftStream.setUid(createTransformationUid(FILTER_LEFT_TRANSFORMATION));
         }
         filterAllLeftStream.setDescription(
                 createFormattedTransformationDescription(
@@ -277,8 +269,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
                         returnTypeInfo,
                         rightParallelism);
         if (shouldCreateUid) {
-            filterAllRightStream.setUid(
-                    createTransformationUid(FILTER_RIGHT_TRANSFORMATION, config));
+            filterAllRightStream.setUid(createTransformationUid(FILTER_RIGHT_TRANSFORMATION));
         }
         filterAllRightStream.setDescription(
                 createFormattedTransformationDescription(
@@ -295,7 +286,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
                         returnTypeInfo,
                         leftParallelism);
         if (shouldCreateUid) {
-            padLeftStream.setUid(createTransformationUid(PAD_LEFT_TRANSFORMATION, config));
+            padLeftStream.setUid(createTransformationUid(PAD_LEFT_TRANSFORMATION));
         }
         padLeftStream.setDescription(
                 createFormattedTransformationDescription("pad left input transformation", config));
@@ -311,7 +302,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
                         returnTypeInfo,
                         rightParallelism);
         if (shouldCreateUid) {
-            padRightStream.setUid(createTransformationUid(PAD_RIGHT_TRANSFORMATION, config));
+            padRightStream.setUid(createTransformationUid(PAD_RIGHT_TRANSFORMATION));
         }
         padRightStream.setDescription(
                 createFormattedTransformationDescription("pad right input transformation", config));
@@ -343,7 +334,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
             IntervalJoinFunction joinFunction,
             JoinSpec joinSpec,
             IntervalJoinSpec.WindowBounds windowBounds,
-            ExecNodeConfig config) {
+            ReadableConfig config) {
         InternalTypeInfo<RowData> leftTypeInfo =
                 (InternalTypeInfo<RowData>) leftInputTransform.getOutputType();
         InternalTypeInfo<RowData> rightTypeInfo =
@@ -373,7 +364,7 @@ public class StreamExecIntervalJoin extends ExecNodeBase<RowData>
             IntervalJoinFunction joinFunction,
             JoinSpec joinSpec,
             IntervalJoinSpec.WindowBounds windowBounds,
-            ExecNodeConfig config) {
+            ReadableConfig config) {
 
         InternalTypeInfo<RowData> leftTypeInfo =
                 (InternalTypeInfo<RowData>) leftInputTransform.getOutputType();

@@ -25,16 +25,23 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
+import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcher;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
+import org.apache.flink.connector.kafka.blacklist.ConsumerBlacklistTpUtils;
+import org.apache.flink.connector.kafka.blacklist.ReportKafkaTpLagSourceEvent;
 import org.apache.flink.connector.kafka.source.KafkaSourceOptions;
 import org.apache.flink.connector.kafka.source.metrics.KafkaSourceReaderMetrics;
 import org.apache.flink.connector.kafka.source.reader.fetcher.KafkaSourceFetcherManager;
 import org.apache.flink.connector.kafka.source.split.KafkaPartitionSplit;
 import org.apache.flink.connector.kafka.source.split.KafkaPartitionSplitState;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,10 +49,15 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptions.BLACKLIST_ENABLE;
 
 /** The source reader for Kafka partitions. */
 @Internal
@@ -59,6 +71,7 @@ public class KafkaSourceReader<T>
     private final ConcurrentMap<TopicPartition, OffsetAndMetadata> offsetsOfFinishedSplits;
     private final KafkaSourceReaderMetrics kafkaSourceReaderMetrics;
     private final boolean commitOffsetsOnCheckpoint;
+    private ScheduledThreadPoolExecutor reportTopicLagScheduler;
 
     public KafkaSourceReader(
             FutureCompletingBlockingQueue<RecordsWithSplitIds<ConsumerRecord<byte[], byte[]>>>
@@ -79,6 +92,57 @@ public class KafkaSourceReader<T>
             LOG.warn(
                     "Offset commit on checkpoint is disabled. "
                             + "Consuming offset will not be reported back to Kafka cluster.");
+        }
+    }
+
+    @Override
+    public void start() {
+        if (Boolean.parseBoolean(config.get(BLACKLIST_ENABLE))) {
+            int subtaskId = context.getIndexOfSubtask();
+            reportTopicLagScheduler =
+                    new ScheduledThreadPoolExecutor(
+                            1,
+                            new ThreadFactoryBuilder()
+                                    .setNameFormat("kafka-report-lag-scheduler-" + subtaskId)
+                                    .build());
+            reportTopicLagScheduler.scheduleWithFixedDelay(
+                    () -> {
+                        try {
+                            reportLag();
+                        } catch (Exception e) {
+                            LOG.error("report topic lag error");
+                        }
+                    },
+                    60,
+                    90,
+                    TimeUnit.SECONDS);
+            ConsumerBlacklistTpUtils.printProps(subtaskId, config);
+        }
+    }
+
+    private void reportLag() {
+        Map<Integer, SplitFetcher<ConsumerRecord<byte[], byte[]>, KafkaPartitionSplit>> fetchers =
+                super.splitFetcherManager.getFetchers();
+        for (SplitFetcher<ConsumerRecord<byte[], byte[]>, KafkaPartitionSplit> fetcher :
+                fetchers.values()) {
+            KafkaPartitionSplitReader splitReader =
+                    (KafkaPartitionSplitReader) fetcher.getSplitReader();
+            KafkaConsumer<byte[], byte[]> consumer = splitReader.consumer();
+            Map<MetricName, KafkaMetric> metrics =
+                    (Map<MetricName, KafkaMetric>) consumer.metrics();
+            Map<TopicPartition, Long> tpLags =
+                    ConsumerBlacklistTpUtils.monitorTpLags(
+                            context.getIndexOfSubtask(),
+                            splitReader.getSubscribedTopics(),
+                            metrics);
+            if (!tpLags.isEmpty()) {
+                Properties blacklistMetric =
+                        ConsumerBlacklistTpUtils.generateInputProps(
+                                config, tpLags, context.getIndexOfSubtask());
+                this.context.sendSourceEventToCoordinator(
+                        new ReportKafkaTpLagSourceEvent(
+                                blacklistMetric, context.getIndexOfSubtask()));
+            }
         }
     }
 
@@ -177,6 +241,10 @@ public class KafkaSourceReader<T>
 
     @Override
     protected KafkaPartitionSplitState initializedState(KafkaPartitionSplit split) {
+        LOG.info(
+                "subTask:{},partition:{},initializedState",
+                context.getIndexOfSubtask(),
+                split.getPartition());
         return new KafkaPartitionSplitState(split);
     }
 

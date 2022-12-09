@@ -116,6 +116,12 @@ public final class TaskDeploymentDescriptor implements Serializable {
     /** The allocation ID of the slot in which the task shall be run. */
     private final AllocationID allocationId;
 
+    /** The task's index in the subtask group. */
+    private final int subtaskIndex;
+
+    /** Attempt number the task. */
+    private final int attemptNumber;
+
     /** The list of produced intermediate result partition deployment descriptors. */
     private final List<ResultPartitionDeploymentDescriptor> producedPartitions;
 
@@ -131,6 +137,8 @@ public final class TaskDeploymentDescriptor implements Serializable {
             MaybeOffloaded<TaskInformation> serializedTaskInformation,
             ExecutionAttemptID executionAttemptId,
             AllocationID allocationId,
+            int subtaskIndex,
+            int attemptNumber,
             @Nullable JobManagerTaskRestore taskRestore,
             List<ResultPartitionDeploymentDescriptor> resultPartitionDeploymentDescriptors,
             List<InputGateDeploymentDescriptor> inputGateDeploymentDescriptors) {
@@ -142,6 +150,12 @@ public final class TaskDeploymentDescriptor implements Serializable {
 
         this.executionId = Preconditions.checkNotNull(executionAttemptId);
         this.allocationId = Preconditions.checkNotNull(allocationId);
+
+        Preconditions.checkArgument(0 <= subtaskIndex, "The subtask index must be positive.");
+        this.subtaskIndex = subtaskIndex;
+
+        Preconditions.checkArgument(0 <= attemptNumber, "The attempt number must be positive.");
+        this.attemptNumber = attemptNumber;
 
         this.taskRestore = taskRestore;
 
@@ -204,12 +218,12 @@ public final class TaskDeploymentDescriptor implements Serializable {
      * @return the task's index in the subtask group
      */
     public int getSubtaskIndex() {
-        return executionId.getSubtaskIndex();
+        return subtaskIndex;
     }
 
     /** Returns the attempt number of the subtask. */
     public int getAttemptNumber() {
-        return executionId.getAttemptNumber();
+        return attemptNumber;
     }
 
     public List<ResultPartitionDeploymentDescriptor> getProducedPartitions() {
@@ -285,9 +299,10 @@ public final class TaskDeploymentDescriptor implements Serializable {
     @Override
     public String toString() {
         return String.format(
-                "TaskDeploymentDescriptor [execution id: %s, "
+                "TaskDeploymentDescriptor [execution id: %s, attempt: %d, "
                         + "produced partitions: %s, input gates: %s]",
                 executionId,
+                attemptNumber,
                 collectionToString(producedPartitions),
                 collectionToString(inputGates));
     }

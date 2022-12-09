@@ -174,7 +174,7 @@ public class RocksIncrementalSnapshotStrategyTest {
             CloseableRegistry closeableRegistry)
             throws Exception {
 
-        RocksIncrementalSnapshotStrategy.NativeRocksDBSnapshotResources snapshotResources =
+        RocksIncrementalSnapshotStrategy.IncrementalRocksDBSnapshotResources snapshotResources =
                 checkpointSnapshotStrategy.syncPrepareResources(checkpointId);
 
         return (IncrementalRemoteKeyedStateHandle)

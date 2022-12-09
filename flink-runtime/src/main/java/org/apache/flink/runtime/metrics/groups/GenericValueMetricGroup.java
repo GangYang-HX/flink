@@ -21,6 +21,7 @@ package org.apache.flink.runtime.metrics.groups;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.metrics.CharacterFilter;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.metrics.scope.ScopeFormat;
 
@@ -34,13 +35,21 @@ import java.util.Map;
  */
 @Internal
 public class GenericValueMetricGroup extends GenericMetricGroup {
-    private String key;
+    private final String key;
     private final String value;
 
-    GenericValueMetricGroup(MetricRegistry registry, GenericKeyMetricGroup parent, String value) {
-        super(registry, parent, value);
+    GenericValueMetricGroup(
+            MetricRegistry registry,
+            GenericKeyMetricGroup parent,
+            String value,
+            QueryServiceMode mode) {
+        super(registry, parent, value, mode);
         this.key = parent.getGroupName(name -> name);
         this.value = value;
+    }
+
+    GenericValueMetricGroup(MetricRegistry registry, GenericKeyMetricGroup parent, String value) {
+        this(registry, parent, value, QueryServiceMode.INHERIT);
     }
 
     // ------------------------------------------------------------------------

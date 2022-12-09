@@ -553,6 +553,9 @@ class RexNodeToExpressionConverter(
 
   override def visitPatternFieldRef(fieldRef: RexPatternFieldRef): Option[ResolvedExpression] = None
 
+  override def visitWindowAttrVariable(
+      fieldRef: RexWindowAttrVariable): Option[ResolvedExpression] = None
+
   private def lookupFunction(
       identifier: UnresolvedIdentifier,
       operands: Seq[ResolvedExpression],

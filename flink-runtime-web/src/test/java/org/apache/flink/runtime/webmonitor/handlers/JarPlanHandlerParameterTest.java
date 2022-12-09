@@ -24,32 +24,22 @@ import org.apache.flink.runtime.jobgraph.jsonplan.JsonPlanGenerator;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
 import org.apache.flink.runtime.rest.messages.JobPlanInfo;
 import org.apache.flink.runtime.webmonitor.testutils.ParameterProgram;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorExtension;
 
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.BeforeClass;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
 /** Tests for the parameter handling of the {@link JarPlanHandler}. */
-class JarPlanHandlerParameterTest
+public class JarPlanHandlerParameterTest
         extends JarHandlerParameterTest<JarPlanRequestBody, JarPlanMessageParameters> {
     private static JarPlanHandler handler;
 
-    @RegisterExtension
-    private static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_EXTENSION =
-            TestingUtils.defaultExecutorExtension();
-
-    @BeforeAll
-    static void setup(@TempDir File tempDir) throws Exception {
-        init(tempDir);
+    @BeforeClass
+    public static void setup() throws Exception {
+        init();
         handler =
                 new JarPlanHandler(
                         gatewayRetriever,
@@ -58,7 +48,7 @@ class JarPlanHandlerParameterTest
                         JarPlanGetHeaders.getInstance(),
                         jarDir,
                         new Configuration(),
-                        EXECUTOR_EXTENSION.getExecutor(),
+                        executor,
                         jobGraph -> {
                             LAST_SUBMITTED_JOB_GRAPH_REFERENCE.set(jobGraph);
                             return new JobPlanInfo(JsonPlanGenerator.generatePlan(jobGraph));

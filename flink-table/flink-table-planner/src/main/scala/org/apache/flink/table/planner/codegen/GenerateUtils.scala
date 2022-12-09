@@ -73,7 +73,7 @@ object GenerateUtils {
     val resultTerm = ctx.addReusableLocalVariable(resultTypeTerm, "result")
     val defaultValue = primitiveDefaultValue(returnType)
     val isResultNullable = resultNullable || (isReference(returnType) && !isTemporal(returnType))
-    val nullTermCode = if (isResultNullable) {
+    val nullTermCode = if (ctx.nullCheck && isResultNullable) {
       s"$nullTerm = ($resultTerm == null);"
     } else {
       ""
@@ -98,7 +98,7 @@ object GenerateUtils {
          |""".stripMargin
     }
 
-    val resultCode = if (operands.nonEmpty) {
+    val resultCode = if (ctx.nullCheck && operands.nonEmpty) {
       s"""
          |${operands.map(_.code).mkString("\n")}
          |$nullTerm = ${operands.map(_.nullTerm).mkString(" || ")};
@@ -108,12 +108,18 @@ object GenerateUtils {
          |  $nullTermCode
          |}
          |""".stripMargin
-    } else {
+    } else if (ctx.nullCheck && operands.isEmpty) {
       s"""
          |${operands.map(_.code).mkString("\n")}
          |$nullTerm = false;
          |$wrappedResultAssignment
          |$nullTermCode
+         |""".stripMargin
+    } else {
+      s"""
+         |$nullTerm = false;
+         |${operands.map(_.code).mkString("\n")}
+         |$wrappedResultAssignment
          |""".stripMargin
     }
 
@@ -149,7 +155,7 @@ object GenerateUtils {
     val nullTerm = ctx.addReusableLocalVariable("boolean", "isNull")
     val resultTerm = ctx.addReusableLocalVariable(resultTypeTerm, "result")
     val isResultNullable = resultNullable || (isReference(returnType) && !isTemporal(returnType))
-    val nullTermCode = if (isResultNullable) {
+    val nullTermCode = if (ctx.nullCheck && isResultNullable) {
       s"$nullTerm = ($resultTerm == null);"
     } else {
       s"$nullTerm = false;"
@@ -179,7 +185,7 @@ object GenerateUtils {
          |""".stripMargin
     }
 
-    val resultCode = if (resultNullable) {
+    val resultCode = if (ctx.nullCheck) {
       s"""
          |${operands.map(_.code).mkString("\n")}
          |$wrappedResultAssignment
@@ -261,7 +267,10 @@ object GenerateUtils {
       s"$recordTerm = new $typeTerm();"
   }
 
-  def generateNullLiteral(resultType: LogicalType): GeneratedExpression = {
+  def generateNullLiteral(resultType: LogicalType, nullCheck: Boolean): GeneratedExpression = {
+    if (!nullCheck) {
+      throw new CodeGenException("Null literals are not allowed if nullCheck is disabled.")
+    }
     val defaultValue = primitiveDefaultValue(resultType)
     val resultTypeTerm = primitiveTypeTermForType(resultType)
     GeneratedExpression(
@@ -297,7 +306,7 @@ object GenerateUtils {
       literalValue: Any,
       literalType: LogicalType): GeneratedExpression = {
     if (literalValue == null) {
-      return generateNullLiteral(literalType)
+      return generateNullLiteral(literalType, ctx.nullCheck)
     }
     literalType.getTypeRoot match {
       // For strings, binary and decimal, we add the literal as reusable field,
@@ -541,7 +550,7 @@ object GenerateUtils {
     val Seq(resultTerm, nullTerm) =
       ctx.addReusableLocalVariables((resultTypeTerm, "result"), ("boolean", "isNull"))
 
-    val wrappedCode =
+    val wrappedCode = if (ctx.nullCheck) {
       s"""
          |$nullTerm = $inputTerm == null;
          |$resultTerm = $defaultValue;
@@ -549,6 +558,11 @@ object GenerateUtils {
          |  $resultTerm = $inputUnboxingTerm;
          |}
          |""".stripMargin.trim
+    } else {
+      s"""
+         |$resultTerm = $inputUnboxingTerm;
+         |""".stripMargin.trim
+    }
 
     GeneratedExpression(resultTerm, nullTerm, wrappedCode, inputType)
   }
@@ -590,7 +604,7 @@ object GenerateUtils {
       val Seq(fieldTerm, nullTerm) =
         ctx.addReusableLocalVariables((resultTypeTerm, "field"), ("boolean", "isNull"))
 
-      val inputCode =
+      val inputCode = if (ctx.nullCheck) {
         s"""
            |$nullTerm = $inputTerm.isNullAt($index);
            |$fieldTerm = $defaultValue;
@@ -598,7 +612,12 @@ object GenerateUtils {
            |  $fieldTerm = $readCode;
            |}
            """.stripMargin.trim
-
+      } else {
+        s"""
+           |$nullTerm = false;
+           |$fieldTerm = $readCode;
+           """.stripMargin
+      }
       GeneratedExpression(fieldTerm, nullTerm, inputCode, fieldType)
 
     case DISTINCT_TYPE =>
@@ -631,10 +650,7 @@ object GenerateUtils {
         INTERVAL_YEAR_MONTH | INTERVAL_DAY_TIME =>
       s"($leftTerm > $rightTerm ? 1 : $leftTerm < $rightTerm ? -1 : 0)"
     case TIMESTAMP_WITH_TIME_ZONE | MULTISET | MAP =>
-      throw new UnsupportedOperationException(
-        s"Type($t) is not an orderable data type, " +
-          s"it is not supported as a ORDER_BY/GROUP_BY/JOIN_EQUAL field.")
-    // TODO support MULTISET and MAP?
+      throw new UnsupportedOperationException() // TODO support MULTISET and MAP?
     case ARRAY =>
       val at = t.asInstanceOf[ArrayType]
       val compareFunc = newName("compareArray")

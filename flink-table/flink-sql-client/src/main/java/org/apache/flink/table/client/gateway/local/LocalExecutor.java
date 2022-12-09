@@ -19,10 +19,14 @@
 package org.apache.flink.table.client.gateway.local;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.RuntimeExecutionMode;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentInternal;
 import org.apache.flink.table.api.internal.TableResultInternal;
+import org.apache.flink.table.client.config.SqlClientOptions;
 import org.apache.flink.table.client.gateway.Executor;
 import org.apache.flink.table.client.gateway.ResultDescriptor;
 import org.apache.flink.table.client.gateway.SqlExecutionException;
@@ -30,6 +34,8 @@ import org.apache.flink.table.client.gateway.TypedResult;
 import org.apache.flink.table.client.gateway.context.DefaultContext;
 import org.apache.flink.table.client.gateway.context.ExecutionContext;
 import org.apache.flink.table.client.gateway.context.SessionContext;
+import org.apache.flink.table.client.gateway.local.listener.ParserListener;
+import org.apache.flink.table.client.gateway.local.listener.ParserListenerManager;
 import org.apache.flink.table.client.gateway.local.result.ChangelogResult;
 import org.apache.flink.table.client.gateway.local.result.DynamicResult;
 import org.apache.flink.table.client.gateway.local.result.MaterializedResult;
@@ -38,12 +44,15 @@ import org.apache.flink.table.delegation.Parser;
 import org.apache.flink.table.operations.ModifyOperation;
 import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.operations.QueryOperation;
+import org.apache.flink.table.planner.delegation.ParserImpl;
 
+import org.apache.calcite.sql.SqlNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.lang.reflect.Constructor;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -69,16 +78,40 @@ public class LocalExecutor implements Executor {
     private final ResultStore resultStore;
     private final DefaultContext defaultContext;
 
+    private final ParserListenerManager parserListenerManager;
+
     /** Creates a local executor for submitting table programs and retrieving results. */
     public LocalExecutor(DefaultContext defaultContext) {
         this.contextMap = new ConcurrentHashMap<>();
         this.resultStore = new ResultStore();
         this.defaultContext = defaultContext;
+        this.parserListenerManager = new ParserListenerManager();
     }
 
     @Override
     public void start() {
         // nothing to do yet
+
+        // add listeners based on config in flink-conf
+        Configuration flinkConfig = defaultContext.getFlinkConfig();
+
+        if (flinkConfig.get(ExecutionOptions.RUNTIME_MODE).equals(RuntimeExecutionMode.BATCH)
+                && flinkConfig.contains(SqlClientOptions.PARSE_LISTENERS)) {
+            try {
+                String[] listeners =
+                        flinkConfig.getString(SqlClientOptions.PARSE_LISTENERS).split(",");
+                for (String listener : listeners) {
+                    listener = listener.trim();
+                    Class<? extends ParserListener> listenerClass =
+                            Class.forName(listener).asSubclass(ParserListener.class);
+                    Constructor<? extends ParserListener> constructor =
+                            listenerClass.getConstructor(Configuration.class);
+                    parserListenerManager.addListener(constructor.newInstance(flinkConfig));
+                }
+            } catch (Exception e) {
+                LOG.error("add listener failed in local executor.", e);
+            }
+        }
     }
 
     @Override
@@ -97,16 +130,15 @@ public class LocalExecutor implements Executor {
 
     @Override
     public void closeSession(String sessionId) throws SqlExecutionException {
-        resultStore
-                .getResults()
-                .forEach(
-                        (resultId) -> {
-                            try {
-                                cancelQuery(sessionId, resultId);
-                            } catch (Throwable t) {
-                                // ignore any throwable to keep the clean up running
-                            }
-                        });
+        List<String> resultIds = resultStore.getResultIds(sessionId);
+        resultIds.forEach(
+                (resultId) -> {
+                    try {
+                        cancelQuery(sessionId, resultId);
+                    } catch (Throwable t) {
+                        // ignore any throwable to keep the clean up running
+                    }
+                });
         // Remove the session's ExecutionContext from contextMap and close it.
         SessionContext context = this.contextMap.remove(sessionId);
         if (context != null) {
@@ -169,7 +201,24 @@ public class LocalExecutor implements Executor {
 
         List<Operation> operations;
         try {
-            operations = parser.parse(statement);
+            if (tableEnv.getConfig()
+                            .getConfiguration()
+                            .get(ExecutionOptions.RUNTIME_MODE)
+                            .equals(RuntimeExecutionMode.BATCH)
+                    && tableEnv.getConfig()
+                            .getConfiguration()
+                            .contains(SqlClientOptions.PARSE_LISTENERS)) {
+                SqlNode sqlNode = ((ParserImpl) parser).parseSqlNode(statement);
+                if (sqlNode != null) {
+                    List<Object> params =
+                            Arrays.asList(
+                                    sqlNode,
+                                    ((ParserImpl) parser).getValidatorSupplier(),
+                                    ((ParserImpl) parser).getCatalogManager());
+                    parserListenerManager.process(params.toArray());
+                }
+            }
+            operations = context.wrapClassLoader(() -> parser.parse(statement));
         } catch (Throwable t) {
             throw new SqlExecutionException("Failed to parse statement: " + statement, t);
         }
@@ -186,7 +235,10 @@ public class LocalExecutor implements Executor {
                 (TableEnvironmentInternal) context.getTableEnvironment();
 
         try {
-            return Arrays.asList(tableEnv.getParser().getCompletionHints(statement, position));
+            return context.wrapClassLoader(
+                    () ->
+                            Arrays.asList(
+                                    tableEnv.getParser().getCompletionHints(statement, position)));
         } catch (Throwable t) {
             // catch everything such that the query does not crash the executor
             if (LOG.isDebugEnabled()) {
@@ -203,7 +255,7 @@ public class LocalExecutor implements Executor {
         final TableEnvironmentInternal tEnv =
                 (TableEnvironmentInternal) context.getTableEnvironment();
         try {
-            return tEnv.executeInternal(operation);
+            return context.wrapClassLoader(() -> tEnv.executeInternal(operation));
         } catch (Throwable t) {
             throw new SqlExecutionException(MESSAGE_SQL_EXECUTION_ERROR, t);
         }
@@ -216,7 +268,7 @@ public class LocalExecutor implements Executor {
         final TableEnvironmentInternal tEnv =
                 (TableEnvironmentInternal) context.getTableEnvironment();
         try {
-            return tEnv.executeInternal(operations);
+            return context.wrapClassLoader(() -> tEnv.executeInternal(operations));
         } catch (Throwable t) {
             throw new SqlExecutionException(MESSAGE_SQL_EXECUTION_ERROR, t);
         }
@@ -232,8 +284,9 @@ public class LocalExecutor implements Executor {
         checkArgument(tableResult.getJobClient().isPresent());
         String jobId = tableResult.getJobClient().get().getJobID().toString();
         // store the result under the JobID
-        resultStore.storeResult(jobId, result);
+        resultStore.storeResult(sessionId, jobId, result);
         return new ResultDescriptor(
+                sessionId,
                 jobId,
                 tableResult.getResolvedSchema(),
                 result.isMaterialized(),
@@ -244,10 +297,14 @@ public class LocalExecutor implements Executor {
     @Override
     public TypedResult<List<RowData>> retrieveResultChanges(String sessionId, String resultId)
             throws SqlExecutionException {
-        final DynamicResult result = resultStore.getResult(resultId);
+        final DynamicResult result = resultStore.getResult(sessionId, resultId);
         if (result == null) {
             throw new SqlExecutionException(
-                    "Could not find a result with result identifier '" + resultId + "'.");
+                    "Could not find a result with session id '"
+                            + sessionId
+                            + "' result identifier '"
+                            + resultId
+                            + "'.");
         }
         if (result.isMaterialized()) {
             throw new SqlExecutionException("Invalid result retrieval mode.");
@@ -258,10 +315,14 @@ public class LocalExecutor implements Executor {
     @Override
     public TypedResult<Integer> snapshotResult(String sessionId, String resultId, int pageSize)
             throws SqlExecutionException {
-        final DynamicResult result = resultStore.getResult(resultId);
+        final DynamicResult result = resultStore.getResult(sessionId, resultId);
         if (result == null) {
             throw new SqlExecutionException(
-                    "Could not find a result with result identifier '" + resultId + "'.");
+                    "Could not find a result with session id '"
+                            + sessionId
+                            + "' result identifier '"
+                            + resultId
+                            + "'.");
         }
         if (!result.isMaterialized()) {
             throw new SqlExecutionException("Invalid result retrieval mode.");
@@ -270,12 +331,16 @@ public class LocalExecutor implements Executor {
     }
 
     @Override
-    public List<RowData> retrieveResultPage(String resultId, int page)
+    public List<RowData> retrieveResultPage(String sessionId, String resultId, int page)
             throws SqlExecutionException {
-        final DynamicResult result = resultStore.getResult(resultId);
+        final DynamicResult result = resultStore.getResult(sessionId, resultId);
         if (result == null) {
             throw new SqlExecutionException(
-                    "Could not find a result with result identifier '" + resultId + "'.");
+                    "Could not find a result with session id '"
+                            + sessionId
+                            + "' result identifier '"
+                            + resultId
+                            + "'.");
         }
         if (!result.isMaterialized()) {
             throw new SqlExecutionException("Invalid result retrieval mode.");
@@ -285,26 +350,42 @@ public class LocalExecutor implements Executor {
 
     @Override
     public void cancelQuery(String sessionId, String resultId) throws SqlExecutionException {
-        final DynamicResult result = resultStore.getResult(resultId);
+        final DynamicResult result = resultStore.getResult(sessionId, resultId);
         if (result == null) {
             throw new SqlExecutionException(
-                    "Could not find a result with result identifier '" + resultId + "'.");
+                    "Could not find a result with session id '"
+                            + sessionId
+                            + "' result identifier '"
+                            + resultId
+                            + "'.");
         }
 
         // stop retrieval and remove the result
-        LOG.info("Cancelling job {} and result retrieval.", resultId);
+        LOG.info("Cancelling job {} in session {} and result retrieval.", resultId, sessionId);
         try {
             // this operator will also stop flink job
             result.close();
         } catch (Throwable t) {
             throw new SqlExecutionException("Could not cancel the query execution", t);
         }
-        resultStore.removeResult(resultId);
+        resultStore.removeResult(sessionId, resultId);
+    }
+
+    @Override
+    public void addJar(String sessionId, String jarUrl) {
+        final SessionContext context = getSessionContext(sessionId);
+        context.addJar(jarUrl);
     }
 
     @Override
     public void removeJar(String sessionId, String jarUrl) {
         final SessionContext context = getSessionContext(sessionId);
         context.removeJar(jarUrl);
+    }
+
+    @Override
+    public List<String> listJars(String sessionId) {
+        final SessionContext context = getSessionContext(sessionId);
+        return context.listJars();
     }
 }

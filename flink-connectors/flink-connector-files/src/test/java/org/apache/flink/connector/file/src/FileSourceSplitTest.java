@@ -20,27 +20,14 @@ package org.apache.flink.connector.file.src;
 
 import org.apache.flink.core.fs.Path;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.Test;
 
 /** Unit tests for the {@link FileSourceSplit}. */
-class FileSourceSplitTest {
+public class FileSourceSplitTest {
 
-    @Test
-    void noNullHostsAllowed() {
-        assertThatThrownBy(
-                        () ->
-                                new FileSourceSplit(
-                                        "id",
-                                        new Path("file:/some/random/path"),
-                                        0,
-                                        10,
-                                        0,
-                                        10,
-                                        "host1",
-                                        null,
-                                        "host2"))
-                .isInstanceOf(IllegalArgumentException.class);
+    @Test(expected = IllegalArgumentException.class)
+    public void noNullHostsAllowed() {
+        new FileSourceSplit(
+                "id", new Path("file:/some/random/path"), 0, 10, 0, 10, "host1", null, "host2");
     }
 }

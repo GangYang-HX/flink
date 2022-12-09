@@ -121,34 +121,17 @@ class PandasConversionITTests(PandasConversionTestBase):
         self.assertEqual(self.data_type, table.get_schema().to_row_data_type())
 
         table = table.filter(table.f2 < 2)
-        sink_table_ddl = """
-            CREATE TABLE Results(
-            f1 TINYINT,
-            f2 SMALLINT,
-            f3 INT,
-            f4 BIGINT,
-            f5 BOOLEAN,
-            f6 FLOAT,
-            f7 DOUBLE,
-            f8 STRING,
-            f9 BYTES,
-            f10 DECIMAL(38, 18),
-            f11 DATE,
-            f12 TIME,
-            f13 TIMESTAMP(3),
-            f14 ARRAY<STRING>,
-            f15 ROW<a INT, b STRING, c TIMESTAMP(3), d ARRAY<INT>>)
-            WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
-
+        table_sink = source_sink_utils.TestAppendSink(
+            self.data_type.field_names(),
+            self.data_type.field_types())
+        self.t_env.register_table_sink("Results", table_sink)
         table.execute_insert("Results").wait()
         actual = source_sink_utils.results()
         self.assert_equals(actual,
                            ["+I[1, 1, 1, 1, true, 1.1, 1.2, hello, [97, 97, 97], "
                             "1000000000000000000.010000000000000000, 2014-09-13, 01:00:01, "
-                            "1970-01-01T00:00:00.123, [hello, 中文], +I[1, hello, "
-                            "1970-01-01T00:00:00.123, [1, 2]]]"])
+                            "1970-01-01 00:00:00.123, [hello, 中文], +I[1, hello, "
+                            "1970-01-01 00:00:00.123, [1, 2]]]"])
 
     def test_to_pandas(self):
         table = self.t_env.from_pandas(self.pdf, self.data_type)
@@ -173,7 +156,7 @@ class PandasConversionITTests(PandasConversionTestBase):
         import numpy as np
         assert_frame_equal(result_pdf, pd.DataFrame(data={'f2': np.int16([2])}))
 
-        result_pdf = table.group_by(table.f2).select(table.f1.max.alias('f2')).to_pandas()
+        result_pdf = table.group_by("f2").select("max(f1) as f2").to_pandas()
         assert_frame_equal(result_pdf, pd.DataFrame(data={'f2': np.int8([1, 1])}))
 
     def assert_equal_field(self, expected_field, result_field):

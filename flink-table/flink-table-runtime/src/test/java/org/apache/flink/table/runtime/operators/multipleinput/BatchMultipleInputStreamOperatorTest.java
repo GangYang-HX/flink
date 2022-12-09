@@ -43,10 +43,14 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /** Test for {@link BatchMultipleInputStreamOperator}. */
 public class BatchMultipleInputStreamOperatorTest extends MultipleInputTestBase {
@@ -69,17 +73,17 @@ public class BatchMultipleInputStreamOperatorTest extends MultipleInputTestBase 
         TestingOneInputStreamOperator aggOp2 =
                 (TestingOneInputStreamOperator) aggWrapper2.getStreamOperator();
 
-        assertThat(aggOp1.isOpened()).isFalse();
-        assertThat(aggOp2.isOpened()).isFalse();
-        assertThat(aggOp1.isOpened()).isFalse();
-        assertThat(joinOp2.isOpened()).isFalse();
+        assertFalse(aggOp1.isOpened());
+        assertFalse(aggOp2.isOpened());
+        assertFalse(aggOp1.isOpened());
+        assertFalse(joinOp2.isOpened());
 
         op.open();
 
-        assertThat(aggOp1.isOpened()).isTrue();
-        assertThat(aggOp2.isOpened()).isTrue();
-        assertThat(joinOp1.isOpened()).isTrue();
-        assertThat(joinOp2.isOpened()).isTrue();
+        assertTrue(aggOp1.isOpened());
+        assertTrue(aggOp2.isOpened());
+        assertTrue(joinOp1.isOpened());
+        assertTrue(joinOp2.isOpened());
     }
 
     @Test
@@ -100,32 +104,32 @@ public class BatchMultipleInputStreamOperatorTest extends MultipleInputTestBase 
         TestingOneInputStreamOperator aggOp2 =
                 (TestingOneInputStreamOperator) aggWrapper2.getStreamOperator();
 
-        assertThat(aggOp1.isEnd()).isFalse();
-        assertThat(aggOp2.isEnd()).isFalse();
-        assertThat(joinOp1.getEndInputs()).isEmpty();
-        assertThat(joinOp2.getEndInputs()).isEmpty();
-        assertThat(op.nextSelection()).isEqualTo(new InputSelection.Builder().select(3).build(3));
+        assertFalse(aggOp1.isEnd());
+        assertFalse(aggOp2.isEnd());
+        assertTrue(joinOp1.getEndInputs().isEmpty());
+        assertTrue(joinOp2.getEndInputs().isEmpty());
+        assertEquals(new InputSelection.Builder().select(3).build(3), op.nextSelection());
 
         op.endInput(3);
-        assertThat(aggOp1.isEnd()).isFalse();
-        assertThat(aggOp2.isEnd()).isFalse();
-        assertThat(joinOp1.getEndInputs()).isEmpty();
-        assertThat(joinOp2.getEndInputs()).containsExactly(2);
-        assertThat(op.nextSelection()).isEqualTo(new InputSelection.Builder().select(1).build(3));
+        assertFalse(aggOp1.isEnd());
+        assertFalse(aggOp2.isEnd());
+        assertTrue(joinOp1.getEndInputs().isEmpty());
+        assertEquals(Collections.singletonList(2), joinOp2.getEndInputs());
+        assertEquals(new InputSelection.Builder().select(1).build(3), op.nextSelection());
 
         op.endInput(1);
-        assertThat(aggOp1.isEnd()).isTrue();
-        assertThat(aggOp2.isEnd()).isFalse();
-        assertThat(joinOp1.getEndInputs()).containsExactly(1);
-        assertThat(joinOp2.getEndInputs()).containsExactly(2);
-        assertThat(op.nextSelection()).isEqualTo(new InputSelection.Builder().select(2).build(3));
+        assertTrue(aggOp1.isEnd());
+        assertFalse(aggOp2.isEnd());
+        assertEquals(Collections.singletonList(1), joinOp1.getEndInputs());
+        assertEquals(Collections.singletonList(2), joinOp2.getEndInputs());
+        assertEquals(new InputSelection.Builder().select(2).build(3), op.nextSelection());
 
         op.endInput(2);
-        assertThat(aggOp1.isEnd()).isTrue();
-        assertThat(aggOp2.isEnd()).isTrue();
-        assertThat(joinOp1.getEndInputs()).isEqualTo(Arrays.asList(1, 2));
-        assertThat(joinOp2.getEndInputs()).isEqualTo(Arrays.asList(2, 1));
-        assertThat(op.nextSelection()).isEqualTo(InputSelection.ALL);
+        assertTrue(aggOp1.isEnd());
+        assertTrue(aggOp2.isEnd());
+        assertEquals(Arrays.asList(1, 2), joinOp1.getEndInputs());
+        assertEquals(Arrays.asList(2, 1), joinOp2.getEndInputs());
+        assertEquals(InputSelection.ALL, op.nextSelection());
     }
 
     @Test
@@ -146,17 +150,17 @@ public class BatchMultipleInputStreamOperatorTest extends MultipleInputTestBase 
         TestingOneInputStreamOperator aggOp2 =
                 (TestingOneInputStreamOperator) aggWrapper2.getStreamOperator();
 
-        assertThat(aggOp1.isClosed()).isFalse();
-        assertThat(aggOp2.isClosed()).isFalse();
-        assertThat(aggOp1.isClosed()).isFalse();
-        assertThat(joinOp2.isClosed()).isFalse();
+        assertFalse(aggOp1.isClosed());
+        assertFalse(aggOp2.isClosed());
+        assertFalse(aggOp1.isClosed());
+        assertFalse(joinOp2.isClosed());
 
         op.close();
 
-        assertThat(aggOp1.isClosed()).isTrue();
-        assertThat(aggOp2.isClosed()).isTrue();
-        assertThat(joinOp1.isClosed()).isTrue();
-        assertThat(joinOp2.isClosed()).isTrue();
+        assertTrue(aggOp1.isClosed());
+        assertTrue(aggOp2.isClosed());
+        assertTrue(joinOp1.isClosed());
+        assertTrue(joinOp2.isClosed());
     }
 
     @Test
@@ -180,75 +184,75 @@ public class BatchMultipleInputStreamOperatorTest extends MultipleInputTestBase 
                 (TestingOneInputStreamOperator) aggWrapper2.getStreamOperator();
 
         List<Input> inputs = op.getInputs();
-        assertThat(inputs).hasSize(3);
+        assertEquals(3, inputs.size());
         Input input1 = inputs.get(0);
         Input input2 = inputs.get(1);
         Input input3 = inputs.get(2);
 
-        assertThat(input1).isInstanceOf(OneInput.class);
-        assertThat(input2).isInstanceOf(OneInput.class);
-        assertThat(input3).isInstanceOf(SecondInputOfTwoInput.class);
+        assertTrue(input1 instanceof OneInput);
+        assertTrue(input2 instanceof OneInput);
+        assertTrue(input3 instanceof SecondInputOfTwoInput);
 
-        assertThat(joinOp2.getCurrentElement1()).isNull();
-        assertThat(joinOp2.getCurrentElement2()).isNull();
+        assertNull(joinOp2.getCurrentElement1());
+        assertNull(joinOp2.getCurrentElement2());
 
-        assertThat(joinOp1.getCurrentElement1()).isNull();
-        assertThat(joinOp1.getCurrentElement2()).isNull();
+        assertNull(joinOp1.getCurrentElement1());
+        assertNull(joinOp1.getCurrentElement2());
 
-        assertThat(aggOp1.getCurrentElement()).isNull();
-        assertThat(aggOp2.getCurrentElement()).isNull();
-        assertThat(outputData).isEmpty();
+        assertNull(aggOp1.getCurrentElement());
+        assertNull(aggOp2.getCurrentElement());
+        assertTrue(outputData.isEmpty());
 
         // process first input (input id is 3)
         StreamRecord<RowData> element1 =
                 new StreamRecord<>(GenericRowData.of(StringData.fromString("123")), 456);
         input3.processElement(element1);
 
-        assertThat(joinOp2.getCurrentElement2()).isEqualTo(element1);
-        assertThat(joinOp2.getCurrentElement1()).isNull();
-        assertThat(outputData).isEmpty();
+        assertEquals(element1, joinOp2.getCurrentElement2());
+        assertNull(joinOp2.getCurrentElement1());
+        assertTrue(outputData.isEmpty());
 
         // finish first input
-        assertThat(joinOp2.getEndInputs()).isEmpty();
+        assertTrue(joinOp2.getEndInputs().isEmpty());
         op.endInput(3);
-        assertThat(outputData).isEmpty();
-        assertThat(joinOp2.getEndInputs()).containsExactly(2);
+        assertTrue(outputData.isEmpty());
+        assertEquals(Collections.singletonList(2), joinOp2.getEndInputs());
 
         // process second input (input id is 1)
         StreamRecord<RowData> element2 =
                 new StreamRecord<>(GenericRowData.of(StringData.fromString("124")), 457);
         input1.processElement(element2);
 
-        assertThat(aggOp1.getCurrentElement()).isEqualTo(element2);
-        assertThat(joinOp1.getCurrentElement1()).isNull();
-        assertThat(joinOp2.getCurrentElement1()).isNull();
-        assertThat(outputData).isEmpty();
+        assertEquals(element2, aggOp1.getCurrentElement());
+        assertNull(joinOp1.getCurrentElement1());
+        assertNull(joinOp2.getCurrentElement1());
+        assertTrue(outputData.isEmpty());
 
         // finish second input
-        assertThat(joinOp1.getEndInputs()).isEmpty();
+        assertTrue(joinOp1.getEndInputs().isEmpty());
         op.endInput(1);
-        assertThat(joinOp1.getEndInputs()).containsExactly(1);
-        assertThat(joinOp2.getEndInputs()).containsExactly(2);
-        assertThat(joinOp1.getCurrentElement1()).isEqualTo(element2);
-        assertThat(outputData).isEmpty();
+        assertEquals(Collections.singletonList(1), joinOp1.getEndInputs());
+        assertEquals(Collections.singletonList(2), joinOp2.getEndInputs());
+        assertEquals(element2, joinOp1.getCurrentElement1());
+        assertTrue(outputData.isEmpty());
 
         // process third input (input id is 2)
         StreamRecord<RowData> element3 =
                 new StreamRecord<>(GenericRowData.of(StringData.fromString("125")), 458);
         input2.processElement(element3);
 
-        assertThat(aggOp2.getCurrentElement()).isEqualTo(element3);
-        assertThat(joinOp1.getCurrentElement2()).isNull();
-        assertThat(joinOp2.getCurrentElement1()).isNull();
-        assertThat(outputData).isEmpty();
+        assertEquals(element3, aggOp2.getCurrentElement());
+        assertNull(joinOp1.getCurrentElement2());
+        assertNull(joinOp2.getCurrentElement1());
+        assertTrue(outputData.isEmpty());
 
         // finish third input
-        assertThat(joinOp1.getEndInputs()).containsExactly(1);
+        assertEquals(Collections.singletonList(1), joinOp1.getEndInputs());
         op.endInput(2);
-        assertThat(joinOp1.getEndInputs()).isEqualTo(Arrays.asList(1, 2));
-        assertThat(joinOp2.getEndInputs()).isEqualTo(Arrays.asList(2, 1));
-        assertThat(joinOp1.getCurrentElement2()).isEqualTo(element3);
-        assertThat(outputData).hasSize(3);
+        assertEquals(Arrays.asList(1, 2), joinOp1.getEndInputs());
+        assertEquals(Arrays.asList(2, 1), joinOp2.getEndInputs());
+        assertEquals(element3, joinOp1.getCurrentElement2());
+        assertEquals(3, outputData.size());
     }
 
     /**

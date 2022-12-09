@@ -21,12 +21,11 @@ import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.bridge.scala._
 import org.apache.flink.table.planner.plan.stats.FlinkStatistic
-import org.apache.flink.table.planner.runtime.utils.{StreamingWithAggTestBase, TestData, TestingRetractSink}
+import org.apache.flink.table.planner.runtime.utils.{StreamingWithAggTestBase, StreamTableEnvUtil, TestData, TestingRetractSink}
 import org.apache.flink.table.planner.runtime.utils.BatchTestBase.row
 import org.apache.flink.table.planner.runtime.utils.StreamingWithAggTestBase.AggMode
 import org.apache.flink.table.planner.runtime.utils.StreamingWithMiniBatchTestBase.MiniBatchMode
 import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.StateBackendMode
-import org.apache.flink.table.planner.utils.TableTestUtil
 import org.apache.flink.table.utils.LegacyRowResource
 import org.apache.flink.types.Row
 
@@ -302,29 +301,29 @@ class AggregateRemoveITCase(aggMode: AggMode, minibatch: MiniBatchMode, backend:
         (3, 2, "A", "Hi"),
         (5, 2, "B", "Hello"),
         (6, 3, "C", "Hello world")))
-    TableTestUtil.createTemporaryView[(Int, Int, String, String)](
+    StreamTableEnvUtil.createTemporaryViewInternal[(Int, Int, String, String)](
       tEnv,
       "T",
       ds1.javaStream,
-      Some(Array($"a", $"b", $"c", $"d")),
+      Some(Array("a", "b", "c", "d")),
       Some(Array(true, true, true, true)),
       Some(FlinkStatistic.builder().uniqueKeys(Set(Set("a").asJava).asJava).build())
     )
 
-    TableTestUtil.createTemporaryView[(Int, Long, String)](
+    StreamTableEnvUtil.createTemporaryViewInternal[(Int, Long, String)](
       tEnv,
       "MyTable",
       env.fromCollection(TestData.smallTupleData3).javaStream,
-      Some(Array($"a", $"b", $"c")),
+      Some(Array("a", "b", "c")),
       Some(Array(true, true, true)),
       Some(FlinkStatistic.builder().uniqueKeys(Set(Set("a").asJava).asJava).build())
     )
 
-    TableTestUtil.createTemporaryView[(Int, Long, Int, String, Long)](
+    StreamTableEnvUtil.createTemporaryViewInternal[(Int, Long, Int, String, Long)](
       tEnv,
       "MyTable2",
       env.fromCollection(TestData.smallTupleData5).javaStream,
-      Some(Array($"a", $"b", $"c", $"d", $"e")),
+      Some(Array("a", "b", "c", "d", "e")),
       Some(Array(true, true, true, true, true)),
       Some(FlinkStatistic.builder().uniqueKeys(Set(Set("b").asJava).asJava).build())
     )

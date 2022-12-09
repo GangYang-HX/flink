@@ -47,17 +47,28 @@ class TopicListSubscriber implements KafkaSubscriber {
 
     @Override
     public Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient) {
+        return getSubscribedTopicPartitions(adminClient, DO_NOT_RETRY);
+    }
+
+    @Override
+    public Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient, int retry) {
         LOG.debug("Fetching descriptions for topics: {}", topics);
         final Map<String, TopicDescription> topicMetadata =
-                getTopicMetadata(adminClient, new HashSet<>(topics));
-
+                getTopicMetadata(adminClient, new HashSet<>(topics), retry);
         Set<TopicPartition> subscribedPartitions = new HashSet<>();
         for (TopicDescription topic : topicMetadata.values()) {
             for (TopicPartitionInfo partition : topic.partitions()) {
-                subscribedPartitions.add(new TopicPartition(topic.name(), partition.partition()));
+                if (partition.leader() != null) {
+                    subscribedPartitions.add(
+                            new TopicPartition(topic.name(), partition.partition()));
+                } else {
+                    LOG.warn(
+                            "TopicListSubscriber#getSubscribedTopicPartitions topic:{},partition:{} encounter leader -1,please check.",
+                            topic.name(),
+                            partition.partition());
+                }
             }
         }
-
         return subscribedPartitions;
     }
 }

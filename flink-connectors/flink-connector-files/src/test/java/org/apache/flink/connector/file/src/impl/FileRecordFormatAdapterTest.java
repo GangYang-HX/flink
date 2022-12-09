@@ -33,11 +33,11 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Unit and behavior tests for the {@link FileRecordFormatAdapter}. */
 @SuppressWarnings("serial")
-class FileRecordFormatAdapterTest extends AdapterTestBase<FileRecordFormat<Integer>> {
+public class FileRecordFormatAdapterTest extends AdapterTestBase<FileRecordFormat<Integer>> {
 
     @Override
     protected FileRecordFormat<Integer> createCheckpointedFormat() {
@@ -93,7 +93,7 @@ class FileRecordFormatAdapterTest extends AdapterTestBase<FileRecordFormat<Integ
             final long fileLen = status.getLen();
             final long splitEnd = splitOffset + splitLength;
 
-            assertThat(fileLen % 4).as("invalid file length").isEqualTo(0);
+            assertEquals("invalid file length", 0, fileLen % 4);
 
             // round all positions to the next integer boundary
             // to simulate common split behavior, we round up to the next int boundary even when we
@@ -121,7 +121,7 @@ class FileRecordFormatAdapterTest extends AdapterTestBase<FileRecordFormat<Integ
             final long fileLen = status.getLen();
             final long splitEnd = splitOffset + splitLength;
 
-            assertThat(fileLen % 4).as("invalid file length").isEqualTo(0);
+            assertEquals("invalid file length", 0, fileLen % 4);
 
             // round end position to the next integer boundary
             final long end = splitEnd == fileLen ? fileLen : splitEnd + 4 - splitEnd % 4;

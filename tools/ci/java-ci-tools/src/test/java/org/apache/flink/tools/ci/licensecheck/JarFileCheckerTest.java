@@ -17,9 +17,12 @@
 
 package org.apache.flink.tools.ci.licensecheck;
 
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.apache.flink.util.TestLogger;
+
+import org.junit.ClassRule;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.net.URI;
 import java.nio.file.FileSystem;
@@ -33,7 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
 
 /**
  * Tests for the {@link JarFileChecker}.
@@ -42,209 +46,186 @@ import static org.assertj.core.api.Assertions.assertThat;
  * -DaltDeploymentRepository=snapshot-repo::default::file:/tmp/flink-deployment -DskipTests
  * -Drat.skip and add a test checking that directory.
  */
-class JarFileCheckerTest {
+public class JarFileCheckerTest extends TestLogger {
+
+    @ClassRule public static final TemporaryFolder TMP = new TemporaryFolder();
 
     private static final List<String> VALID_NOTICE_PATH = Arrays.asList("META-INF", "NOTICE");
     private static final List<String> VALID_LICENSE_PATH = Arrays.asList("META-INF", "LICENSE");
 
     @Test
-    void testValidJarAccepted(@TempDir Path tempDir) throws Exception {
+    public void testValidJarAccepted() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(
-                                                VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))))
-                .isEqualTo(0);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))),
+                is(0));
     }
 
     @Test
-    void testRejectedOnMissingNoticeFile(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnMissingNoticeFile() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(
-                                                VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))),
+                is(1));
     }
 
     @Test
-    void testRejectedOnInvalidNoticeFile(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnInvalidNoticeFile() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(INVALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(
-                                                VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(INVALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))),
+                is(1));
     }
 
     @Test
-    void testRejectedOnNoticeFileInRoot(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnNoticeFileInRoot() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                VALID_NOTICE_CONTENTS,
-                                                Arrays.asList("some_custom_notice")))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        VALID_NOTICE_CONTENTS,
+                                        Arrays.asList("some_custom_notice")))),
+                is(1));
     }
 
     @Test
-    void testRejectedOnMissingLicenseFile(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnMissingLicenseFile() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH))),
+                is(1));
     }
 
     @Test
-    void testRejectedOnInvalidLicenseFile(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnInvalidLicenseFile() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(
-                                                INVALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(INVALID_LICENSE_CONTENTS, VALID_LICENSE_PATH))),
+                is(1));
     }
 
     @Test
-    void testRejectedOnLicenseFileInRoot(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnLicenseFileInRoot() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                VALID_LICENSE_CONTENTS,
-                                                Arrays.asList("some_custom_license")))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        VALID_LICENSE_CONTENTS,
+                                        Arrays.asList("some_custom_license")))),
+                is(1));
     }
 
     @Test
-    void testRejectedOnLicenseFileInSomeDirectory(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnLicenseFileInSomeDirectory() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                VALID_LICENSE_CONTENTS,
-                                                Arrays.asList(
-                                                        "some",
-                                                        "directory",
-                                                        "some_custom_license")))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        VALID_LICENSE_CONTENTS,
+                                        Arrays.asList(
+                                                "some", "directory", "some_custom_license")))),
+                is(1));
     }
 
-    @Disabled(
+    @Ignore(
             "Currently not checked, but we may want to enforce this in the future to reduce ambiguity.")
-    void testRejectedOnAdditionalLicenseFileInMetaInf(@TempDir Path tempDir) throws Exception {
+    public void testRejectedOnAdditionalLicenseFileInMetaInf() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                VALID_LICENSE_CONTENTS,
-                                                Arrays.asList("META-INF", "LICENSE.txt")))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        VALID_LICENSE_CONTENTS,
+                                        Arrays.asList("META-INF", "LICENSE.txt")))),
+                is(1));
     }
 
     @Test
-    void testIgnoreLicenseDirectories(@TempDir Path tempDir) throws Exception {
+    public void testIgnoreLicenseDirectories() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.directoryEntry(
-                                                Arrays.asList("some", "license", "directory")))))
-                .isEqualTo(0);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.directoryEntry(
+                                        Arrays.asList("some", "license", "directory")))),
+                is(0));
     }
 
     @Test
-    void testIgnoreClassFiles(@TempDir Path tempDir) throws Exception {
+    public void testIgnoreClassFiles() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                "content",
-                                                Arrays.asList("SomeLicenseClass.class")))))
-                .isEqualTo(0);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        "content", Arrays.asList("SomeLicenseClass.class")))),
+                is(0));
     }
 
     @Test
-    void testIgnoreFtlFiles(@TempDir Path tempDir) throws Exception {
+    public void testIgnoreFtlFiles() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                "content", Arrays.asList("SomeLicenseFile.ftl")))))
-                .isEqualTo(0);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry("content", Arrays.asList("SomeLicenseFile.ftl")))),
+                is(0));
     }
 
     @Test
-    void testIgnoreWebThirdPartyLicenses(@TempDir Path tempDir) throws Exception {
+    public void testIgnoreWebThirdPartyLicenses() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                "class contents",
-                                                Arrays.asList("web", "3rdpartylicenses.txt")))))
-                .isEqualTo(0);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        "class contents",
+                                        Arrays.asList("web", "3rdpartylicenses.txt")))),
+                is(0));
     }
 
     @Test
-    void testForbiddenLGPLongTextDetected(@TempDir Path tempDir) throws Exception {
+    public void testForbiddenLGPLongTextDetected() throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                "some GNU Lesser General public License text",
-                                                Collections.singletonList("some_file.txt")))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        "some GNU Lesser General public License text",
+                                        Collections.singletonList("some_file.txt")))),
+                is(1));
     }
 
     @Test
-    void testForbiddenLGPMultiLineLongTextWithCommentAndLeadingWhitespaceDetected(
-            @TempDir Path tempDir) throws Exception {
+    public void testForbiddenLGPMultiLineLongTextWithCommentAndLeadingWhitespaceDetected()
+            throws Exception {
         assertThat(
-                        JarFileChecker.checkJar(
-                                createJar(
-                                        tempDir,
-                                        Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
-                                        Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
-                                        Entry.fileEntry(
-                                                "some GNU Lesser General public \n\t\t//#License text",
-                                                Collections.singletonList("some_file.txt")))))
-                .isEqualTo(1);
+                JarFileChecker.checkJar(
+                        createJar(
+                                Entry.fileEntry(VALID_NOTICE_CONTENTS, VALID_NOTICE_PATH),
+                                Entry.fileEntry(VALID_LICENSE_CONTENTS, VALID_LICENSE_PATH),
+                                Entry.fileEntry(
+                                        "some GNU Lesser General public \n\t\t//#License text",
+                                        Collections.singletonList("some_file.txt")))),
+                is(1));
     }
 
     private static class Entry {
@@ -267,8 +248,8 @@ class JarFileCheckerTest {
         }
     }
 
-    private static Path createJar(Path tempDir, Entry... entries) throws Exception {
-        final Path path = tempDir.resolve(UUID.randomUUID().toString() + ".jar");
+    private static Path createJar(Entry... entries) throws Exception {
+        final Path path = TMP.getRoot().toPath().resolve(UUID.randomUUID().toString() + ".jar");
 
         final URI uriWithoutScheme = path.toUri();
 

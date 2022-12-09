@@ -189,7 +189,7 @@ public class PulsarWriter<IN> implements PrecommittingSinkWriter<IN, PulsarCommi
         this.pendingMessages -= 1;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings("rawtypes")
     private TypedMessageBuilder<?> createMessageBuilder(
             String topic, Context context, PulsarMessage<?> message) {
 

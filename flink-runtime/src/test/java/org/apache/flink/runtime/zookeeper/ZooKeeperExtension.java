@@ -23,7 +23,6 @@ import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.core.testutils.CustomExtension;
 import org.apache.flink.runtime.highavailability.zookeeper.CuratorFrameworkWithUnhandledErrorListener;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
-import org.apache.flink.runtime.testutils.ZooKeeperTestUtils;
 import org.apache.flink.runtime.util.ZooKeeperUtils;
 import org.apache.flink.util.Preconditions;
 
@@ -53,7 +52,7 @@ public class ZooKeeperExtension implements CustomExtension {
     @Override
     public void before(ExtensionContext context) throws Exception {
         close();
-        zooKeeperServer = ZooKeeperTestUtils.createAndStartZookeeperTestingServer();
+        zooKeeperServer = new TestingServer(true);
     }
 
     @Override

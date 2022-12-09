@@ -25,7 +25,6 @@ import org.apache.flink.configuration.ConfigUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.configuration.PipelineOptions;
-import org.apache.flink.core.execution.CacheSupportedPipelineExecutor;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.execution.PipelineExecutor;
 import org.apache.flink.core.execution.PipelineExecutorFactory;
@@ -37,7 +36,6 @@ import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.minicluster.MiniClusterJobClient;
 import org.apache.flink.streaming.api.graph.StreamGraph;
-import org.apache.flink.util.AbstractID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +44,6 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
@@ -144,7 +141,7 @@ public class MiniClusterPipelineExecutorServiceLoader implements PipelineExecuto
         }
     }
 
-    private static class MiniClusterExecutor implements CacheSupportedPipelineExecutor {
+    private static class MiniClusterExecutor implements PipelineExecutor {
 
         private final MiniCluster miniCluster;
 
@@ -171,21 +168,6 @@ public class MiniClusterPipelineExecutorServiceLoader implements PipelineExecuto
                                             miniCluster,
                                             userCodeClassLoader,
                                             MiniClusterJobClient.JobFinalizationBehavior.NOTHING));
-        }
-
-        @Override
-        public CompletableFuture<Set<AbstractID>> listCompletedClusterDatasetIds(
-                Configuration configuration, ClassLoader userCodeClassloader) throws Exception {
-            return miniCluster.listCompletedClusterDatasetIds();
-        }
-
-        @Override
-        public CompletableFuture<Void> invalidateClusterDataset(
-                AbstractID clusterDatasetId,
-                Configuration configuration,
-                ClassLoader userCodeClassloader)
-                throws Exception {
-            return miniCluster.invalidateClusterDataset(clusterDatasetId);
         }
     }
 }

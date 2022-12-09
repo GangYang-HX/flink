@@ -18,45 +18,55 @@
 
 @import "theme";
 
-:host {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  overflow: auto;
-  padding: @padding-md;
+.wrapper {
+  margin: @margin-lg;
+}
+
+.header-icon {
+  position: relative;
+  top: 1px;
+}
+
+nz-progress {
+  display: block;
+  width: 90%;
 
   ::ng-deep {
-    .ant-table-cell {
-      font-size: @font-size-sm;
+    .ant-progress-inner {
+      border-radius: 0 !important;
     }
   }
+}
 
-  .header-icon {
-    position: relative;
-    top: 1px;
-  }
+.flink-memory-model {
+  margin-bottom: @margin-md;
 
-  nz-progress {
-    display: block;
-    width: 90%;
+  ::ng-deep {
+    table {
+      border-collapse: collapse;
+    }
 
-    ::ng-deep {
-      .ant-progress-inner {
-        border-radius: 0;
+    .ant-table-small {
+      border: none;
+
+      .ant-table-body {
+        overflow: hidden !important;
+        margin: 0;
       }
-    }
-  }
 
-  .flink-memory-model {
-    margin-bottom: @margin-md;
+      td,
+      th {
+        border-collapse: collapse;
 
-    .table-header {
-      font-weight: 500;
-    }
+        &.table-header {
+          background: @table-header-bg !important;
+          color: @table-header-color;
+          font-weight: 500;
+        }
+      }
 
-    ::ng-deep {
-      .ant-table-small {
-        tr:hover {
+      tr {
+        &:hover {
           td,
           th {
             background: transparent;
@@ -65,8 +75,8 @@
       }
     }
   }
+}
 
-  .top-margin {
-    margin-top: @margin-md;
-  }
+.top-margin {
+  margin-top: @margin-md;
 }

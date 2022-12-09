@@ -53,6 +53,7 @@ import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
+import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -69,7 +70,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test for {@link ParquetRowDataBuilder} and {@link ParquetRowDataWriter}. */
 public class ParquetRowDataWriterTest {
@@ -182,10 +183,10 @@ public class ParquetRowDataWriterTest {
         int cnt = 0;
         while (!reader.reachedEnd()) {
             Row row = CONVERTER.toExternal(reader.nextRecord());
-            assertThat(row).isEqualTo(rows.get(cnt));
+            Assert.assertEquals(rows.get(cnt), row);
             cnt++;
         }
-        assertThat(cnt).isEqualTo(number);
+        Assert.assertEquals(number, cnt);
     }
 
     public void complexTypeTest(Configuration conf, boolean utcTimestamp) throws Exception {
@@ -214,7 +215,7 @@ public class ParquetRowDataWriterTest {
 
         File file = new File(path.getPath());
         final List<Row> fileContent = readParquetFile(file);
-        assertThat(fileContent).isEqualTo(rows);
+        assertEquals(rows, fileContent);
     }
 
     private static List<Row> readParquetFile(File file) throws IOException {

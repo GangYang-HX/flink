@@ -26,17 +26,15 @@ import org.apache.flink.streaming.connectors.elasticsearch.RequestIndexer;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
+import org.junit.Assert;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * This class contains utilities and a pre-defined source function and Elasticsearch Sink function
@@ -138,14 +136,11 @@ public class SourceSinkDataTestKit {
      * @param client The client to use to connect to Elasticsearch
      * @param index The index to check
      */
-    public static void verifyProducedSinkData(RestHighLevelClient client, String index)
-            throws IOException {
+    public static void verifyProducedSinkData(Client client, String index) {
         for (int i = 0; i < NUM_ELEMENTS; i++) {
             GetResponse response =
-                    client.get(
-                            new GetRequest(index, TYPE_NAME, Integer.toString(i)),
-                            RequestOptions.DEFAULT);
-            assertThat(response.getSource().get(DATA_FIELD_NAME)).isEqualTo(DATA_PREFIX + i);
+                    client.get(new GetRequest(index, TYPE_NAME, Integer.toString(i))).actionGet();
+            Assert.assertEquals(DATA_PREFIX + i, response.getSource().get(DATA_FIELD_NAME));
         }
     }
 

@@ -19,7 +19,7 @@
 
 # Start a Flink service as a console application. Must be stopped with Ctrl-C
 # or with SIGTERM by kill or the controlling process.
-USAGE="Usage: flink-console.sh (taskexecutor|zookeeper|historyserver|standalonesession|standalonejob|kubernetes-session|kubernetes-application|kubernetes-taskmanager|sql-gateway) [args]"
+USAGE="Usage: flink-console.sh (taskexecutor|zookeeper|historyserver|standalonesession|standalonejob|kubernetes-session|kubernetes-application|kubernetes-taskmanager) [args]"
 
 SERVICE=$1
 ARGS=("${@:2}") # get remaining arguments as array
@@ -62,11 +62,6 @@ case $SERVICE in
         CLASS_TO_RUN=org.apache.flink.kubernetes.taskmanager.KubernetesTaskExecutorRunner
     ;;
 
-    (sql-gateway)
-        CLASS_TO_RUN=org.apache.flink.table.gateway.SqlGateway
-        SQL_GATEWAY_CLASSPATH=`findSqlGatewayJar`
-    ;;
-
     (*)
         echo "Unknown service '${SERVICE}'. $USAGE."
         exit 1
@@ -100,7 +95,16 @@ if [ -f "$pid" ]; then
 fi
 id=$([ -f "$pid" ] && echo $(wc -l < "$pid") || echo "0")
 
-FLINK_LOG_PREFIX="${FLINK_LOG_DIR}/flink-${FLINK_IDENT_STRING}-${SERVICE}-${id}-${HOSTNAME}"
+case $SERVICE in
+    (kubernetes-session|kubernetes-application|kubernetes-taskmanager)
+        FLINK_LOG_PREFIX="${FLINK_LOG_DIR}/${FLINK_GLOBAL_JOB_ID}/${FLINK_GLOBAL_JOB_INSTANCE_ID}/${FLINK_POD_NAME}/flink-${FLINK_IDENT_STRING}-${SERVICE}-${HOSTNAME}"
+    ;;
+
+    (*)
+        FLINK_LOG_PREFIX="${FLINK_LOG_DIR}/flink-${FLINK_IDENT_STRING}-${SERVICE}-${id}-${HOSTNAME}"
+    ;;
+esac
+
 log="${FLINK_LOG_PREFIX}.log"
 
 log_setting=("-Dlog.file=${log}" "-Dlog4j.configuration=file:${FLINK_CONF_DIR}/log4j-console.properties" "-Dlog4j.configurationFile=file:${FLINK_CONF_DIR}/log4j-console.properties" "-Dlogback.configurationFile=file:${FLINK_CONF_DIR}/logback-console.xml")
@@ -116,4 +120,4 @@ echo $$ >> "$pid" 2>/dev/null
 # Evaluate user options for local variable expansion
 FLINK_ENV_JAVA_OPTS=$(eval echo ${FLINK_ENV_JAVA_OPTS})
 
-exec "$JAVA_RUN" $JVM_ARGS ${FLINK_ENV_JAVA_OPTS} "${log_setting[@]}" -classpath "`manglePathList "$FLINK_TM_CLASSPATH:$SQL_GATEWAY_CLASSPATH:$INTERNAL_HADOOP_CLASSPATHS"`" ${CLASS_TO_RUN} "${ARGS[@]}"
+exec "$JAVA_RUN" $JVM_ARGS ${FLINK_ENV_JAVA_OPTS} "${log_setting[@]}" -classpath "`manglePathList "$FLINK_TM_CLASSPATH:$INTERNAL_HADOOP_CLASSPATHS"`" ${CLASS_TO_RUN} "${ARGS[@]}"

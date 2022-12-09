@@ -23,8 +23,8 @@ import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.CollectionUtil;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,10 +36,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test Filesystem connector with OGG Json. */
-class OggJsonFileSystemITCase extends StreamingTestBase {
+public class OggJsonFileSystemITCase extends StreamingTestBase {
 
     private static final List<String> EXPECTED =
             Arrays.asList(
@@ -74,10 +73,9 @@ class OggJsonFileSystemITCase extends StreamingTestBase {
         return Files.readAllBytes(path);
     }
 
-    private void prepareTables(boolean isPartition, Path tempSourceDir, Path tempSinkDir)
-            throws IOException {
+    private void prepareTables(boolean isPartition) throws IOException {
         byte[] bytes = readBytes("ogg-data.txt");
-        source = tempSourceDir.toFile();
+        source = TEMPORARY_FOLDER.newFolder();
         File file;
         if (isPartition) {
             File partition = new File(source, "p=1");
@@ -89,7 +87,7 @@ class OggJsonFileSystemITCase extends StreamingTestBase {
         file.createNewFile();
         Files.write(file.toPath(), bytes);
 
-        sink = tempSinkDir.toFile();
+        sink = TEMPORARY_FOLDER.newFolder();
 
         env().setParallelism(1);
     }
@@ -109,8 +107,8 @@ class OggJsonFileSystemITCase extends StreamingTestBase {
     }
 
     @Test
-    void testNonPartition(@TempDir Path tempSourceDir, @TempDir Path tempSinkDir) throws Exception {
-        prepareTables(true, tempSourceDir, tempSinkDir);
+    public void testNonPartition() throws Exception {
+        prepareTables(false);
         createTable(false, source.toURI().toString(), false);
         createTable(true, sink.toURI().toString(), false);
 
@@ -126,12 +124,12 @@ class OggJsonFileSystemITCase extends StreamingTestBase {
                         .collect(Collectors.toList());
         iter.close();
 
-        assertThat(results).isEqualTo(EXPECTED);
+        Assert.assertEquals(EXPECTED, results);
     }
 
     @Test
-    void testPartition(@TempDir Path tempSourceDir, @TempDir Path tempSinkDir) throws Exception {
-        prepareTables(true, tempSourceDir, tempSinkDir);
+    public void testPartition() throws Exception {
+        prepareTables(true);
         createTable(false, source.toURI().toString(), true);
         createTable(true, sink.toURI().toString(), true);
 
@@ -149,11 +147,11 @@ class OggJsonFileSystemITCase extends StreamingTestBase {
                         .map(Row::toString)
                         .collect(Collectors.toList());
 
-        assertThat(results).isEqualTo(EXPECTED);
+        Assert.assertEquals(EXPECTED, results);
 
         // check partition value
         for (Row row : list) {
-            assertThat(row.getField(4)).isEqualTo(1);
+            Assert.assertEquals(1, row.getField(4));
         }
     }
 }

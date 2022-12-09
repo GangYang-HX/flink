@@ -31,12 +31,17 @@ class ArrayTypeValidationTest extends ArrayTypeTestBase {
 
   @Test(expected = classOf[ValidationException])
   def testObviousInvalidIndexTableApi(): Unit = {
-    testTableApi('f2.at(0), "FAIL")
+    testTableApi('f2.at(0), "FAIL", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])
   def testEmptyArraySql(): Unit = {
     testSqlApi("ARRAY[]", "FAIL")
+  }
+
+  @Test(expected = classOf[ValidationException])
+  def testEmptyArrayTableApi(): Unit = {
+    testTableApi("FAIL", "array()", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])
@@ -50,8 +55,13 @@ class ArrayTypeValidationTest extends ArrayTypeTestBase {
   }
 
   @Test(expected = classOf[ValidationException])
+  def testDifferentTypesArrayTableApi(): Unit = {
+    testTableApi("FAIL", "array(1, true)", "FAIL")
+  }
+
+  @Test(expected = classOf[ValidationException])
   def testElementNonArray(): Unit = {
-    testTableApi('f0.element(), "FAIL")
+    testTableApi('f0.element(), "FAIL", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])
@@ -61,7 +71,7 @@ class ArrayTypeValidationTest extends ArrayTypeTestBase {
 
   @Test(expected = classOf[ValidationException])
   def testCardinalityOnNonArray(): Unit = {
-    testTableApi('f0.cardinality(), "FAIL")
+    testTableApi('f0.cardinality(), "FAIL", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])

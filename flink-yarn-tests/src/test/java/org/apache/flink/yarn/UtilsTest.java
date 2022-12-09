@@ -24,6 +24,7 @@ import org.apache.flink.core.testutils.CommonTestUtils;
 import org.apache.flink.runtime.clusterframework.ContaineredTaskManagerParameters;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessSpec;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.yarn.configuration.YarnResourceManagerDriverConfiguration;
 import org.apache.flink.yarn.util.TestUtils;
 
@@ -38,43 +39,52 @@ import org.apache.hadoop.yarn.api.records.LocalResourceType;
 import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for various utilities. */
-class UtilsTest {
+public class UtilsTest extends TestLogger {
     private static final Logger LOG = LoggerFactory.getLogger(UtilsTest.class);
 
-    @TempDir File temporaryFolder;
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
-    void testUberjarLocator() {
+    public void testUberjarLocator() {
         File dir = TestUtils.findFile("..", new TestUtils.RootDirFilenameFilter());
-        assertThat(dir).isNotNull();
-        assertThat(dir.getName()).endsWith(".jar");
+        Assert.assertNotNull(dir);
+        Assert.assertTrue(dir.getName().endsWith(".jar"));
         dir = dir.getParentFile().getParentFile(); // from uberjar to lib to root
-        assertThat(dir).exists().isDirectory();
-        assertThat(dir.list()).contains("lib", "bin", "conf");
+        Assert.assertTrue(dir.exists());
+        Assert.assertTrue(dir.isDirectory());
+        List<String> files = Arrays.asList(dir.list());
+        Assert.assertTrue(files.contains("lib"));
+        Assert.assertTrue(files.contains("bin"));
+        Assert.assertTrue(files.contains("conf"));
     }
 
     @Test
-    void testCreateTaskExecutorCredentials() throws Exception {
-        File root = temporaryFolder;
+    public void testCreateTaskExecutorCredentials() throws Exception {
+        File root = temporaryFolder.getRoot();
         File home = new File(root, "home");
         boolean created = home.mkdir();
-        assertThat(created).isTrue();
+        assertTrue(created);
 
         Configuration flinkConf = new Configuration();
         YarnConfiguration yarnConf = new YarnConfiguration();
@@ -102,8 +112,7 @@ class UtilsTest {
         final YarnResourceManagerDriverConfiguration yarnResourceManagerDriverConfiguration =
                 new YarnResourceManagerDriverConfiguration(env, "localhost", null);
 
-        File credentialFile = temporaryFolder.toPath().resolve("container_tokens").toFile();
-        credentialFile.createNewFile();
+        File credentialFile = temporaryFolder.newFile("container_tokens");
         final Text amRmTokenKind = AMRMTokenIdentifier.KIND_NAME;
         final Text hdfsDelegationTokenKind = new Text("HDFS_DELEGATION_TOKEN");
         final Text amRmTokenService = new Text("rm-ip:8030");
@@ -168,7 +177,7 @@ class UtilsTest {
                 hasHdfsDelegationToken = true;
             }
         }
-        assertThat(hasHdfsDelegationToken).isTrue();
-        assertThat(hasAmRmToken).isFalse();
+        assertTrue(hasHdfsDelegationToken);
+        assertFalse(hasAmRmToken);
     }
 }

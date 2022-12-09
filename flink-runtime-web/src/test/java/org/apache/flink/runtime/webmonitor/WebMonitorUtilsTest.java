@@ -22,22 +22,26 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.webmonitor.handlers.JarUploadHandler;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.Executors;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertThat;
 
 /** Tests for the WebMonitorUtils. */
-class WebMonitorUtilsTest {
+public class WebMonitorUtilsTest extends TestLogger {
 
     /** Tests dynamically loading of handlers such as {@link JarUploadHandler}. */
     @Test
-    void testLoadWebSubmissionExtension() throws Exception {
+    public void testLoadWebSubmissionExtension() throws Exception {
         final Configuration configuration = new Configuration();
         configuration.setString(JobManagerOptions.ADDRESS, "localhost");
         final WebMonitorExtension webMonitorExtension =
@@ -50,6 +54,6 @@ class WebMonitorUtilsTest {
                         Executors.directExecutor(),
                         configuration);
 
-        assertThat(webMonitorExtension).isNotNull();
+        assertThat(webMonitorExtension, is(not(nullValue())));
     }
 }

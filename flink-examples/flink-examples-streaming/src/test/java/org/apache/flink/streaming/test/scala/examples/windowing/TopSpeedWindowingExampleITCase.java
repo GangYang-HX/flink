@@ -23,8 +23,6 @@ import org.apache.flink.test.util.AbstractTestBase;
 
 import org.junit.Test;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultsByLinesInMemory;
-
 /** Tests for {@link TopSpeedWindowing}. */
 public class TopSpeedWindowingExampleITCase extends AbstractTestBase {
 

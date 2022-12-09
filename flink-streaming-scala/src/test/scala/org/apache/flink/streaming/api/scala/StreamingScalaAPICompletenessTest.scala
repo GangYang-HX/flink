@@ -63,14 +63,6 @@ class StreamingScalaAPICompletenessTest extends ScalaAPICompletenessTestBase {
       "org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.getTransformations",
       "org.apache.flink.streaming.api.environment.StreamExecutionEnvironment" +
         ".areExplicitEnvironmentsAllowed",
-      "org.apache.flink.streaming.api.environment.StreamExecutionEnvironment" +
-        ".registerCollectIterator",
-      "org.apache.flink.streaming.api.environment.StreamExecutionEnvironment" +
-        ".invalidateClusterDataset",
-      "org.apache.flink.streaming.api.environment.StreamExecutionEnvironment" +
-        ".listCompletedClusterDatasets",
-      "org.apache.flink.streaming.api.environment.StreamExecutionEnvironment" +
-        ".registerCacheTransformation",
 
       // TypeHints are only needed for Java API, Scala API doesn't need them
       "org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator.returns",

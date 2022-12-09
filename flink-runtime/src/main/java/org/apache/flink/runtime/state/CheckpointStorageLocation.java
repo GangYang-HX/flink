@@ -54,4 +54,10 @@ public interface CheckpointStorageLocation extends CheckpointStreamFactory {
      * simply return {@link CheckpointStorageLocationReference#getDefault()}.
      */
     CheckpointStorageLocationReference getLocationReference();
+
+    /**
+     * Gets metadata file full path in external persistence system (e.g. file system checkpoint
+     * storage or other persistence checkpoint storage), otherwise this method will return null.
+     */
+    String getMetadataFileFullPath();
 }

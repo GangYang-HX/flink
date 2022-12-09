@@ -18,17 +18,19 @@
 
 package org.apache.flink.runtime.rpc.akka;
 
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.AkkaOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.rpc.Local;
 import org.apache.flink.runtime.rpc.RpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcGateway;
 import org.apache.flink.runtime.rpc.RpcService;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.FutureUtils;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.hamcrest.core.Is;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,20 +38,22 @@ import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Tests that akka rpc invocation messages are properly serialized and errors reported. */
-class MessageSerializationTest {
+public class MessageSerializationTest extends TestLogger {
     private static RpcService akkaRpcService1;
     private static RpcService akkaRpcService2;
 
+    private static final Time timeout = Time.seconds(10L);
     private static final int maxFrameSize = 32000;
 
-    @BeforeAll
-    static void setup() throws Exception {
+    @BeforeClass
+    public static void setup() throws Exception {
         Configuration configuration = new Configuration();
         configuration.setString(AkkaOptions.FRAMESIZE, maxFrameSize + "b");
 
@@ -61,19 +65,21 @@ class MessageSerializationTest {
                         .createAndStart();
     }
 
-    @AfterAll
-    static void teardown() throws InterruptedException, ExecutionException, TimeoutException {
+    @AfterClass
+    public static void teardown()
+            throws InterruptedException, ExecutionException, TimeoutException {
         final Collection<CompletableFuture<?>> terminationFutures = new ArrayList<>(2);
 
         terminationFutures.add(akkaRpcService1.stopService());
         terminationFutures.add(akkaRpcService2.stopService());
 
-        FutureUtils.waitForAll(terminationFutures).get();
+        FutureUtils.waitForAll(terminationFutures)
+                .get(timeout.toMilliseconds(), TimeUnit.MILLISECONDS);
     }
 
     /** Tests that a local rpc call with a non serializable argument can be executed. */
     @Test
-    void testNonSerializableLocalMessageTransfer() throws Exception {
+    public void testNonSerializableLocalMessageTransfer() throws Exception {
         LinkedBlockingQueue<Object> linkedBlockingQueue = new LinkedBlockingQueue<>();
         TestEndpoint testEndpoint = new TestEndpoint(akkaRpcService1, linkedBlockingQueue);
         testEndpoint.start();
@@ -84,7 +90,7 @@ class MessageSerializationTest {
 
         testGateway.foobar(expected);
 
-        assertThat(linkedBlockingQueue.take()).isSameAs(expected);
+        assertThat(linkedBlockingQueue.take(), Is.<Object>is(expected));
     }
 
     /**
@@ -92,24 +98,8 @@ class MessageSerializationTest {
      * IOException} (or an {@link java.lang.reflect.UndeclaredThrowableException} if the method
      * declaration does not include the {@link IOException} as throwable).
      */
-    @Test
-    void testNonSerializableRemoteMessageTransfer() throws Exception {
-        LinkedBlockingQueue<Object> linkedBlockingQueue = new LinkedBlockingQueue<>();
-
-        TestEndpoint testEndpoint = new TestEndpoint(akkaRpcService1, linkedBlockingQueue);
-        testEndpoint.start();
-
-        String address = testEndpoint.getAddress();
-
-        TestGateway remoteGateway = akkaRpcService2.connect(address, TestGateway.class).get();
-
-        assertThatThrownBy(() -> remoteGateway.foobar(new Object()))
-                .isInstanceOf(IOException.class);
-    }
-
-    /** Tests that a remote rpc call with a serializable argument can be successfully executed. */
-    @Test
-    void testSerializableRemoteMessageTransfer() throws Exception {
+    @Test(expected = IOException.class)
+    public void testNonSerializableRemoteMessageTransfer() throws Exception {
         LinkedBlockingQueue<Object> linkedBlockingQueue = new LinkedBlockingQueue<>();
 
         TestEndpoint testEndpoint = new TestEndpoint(akkaRpcService1, linkedBlockingQueue);
@@ -120,18 +110,16 @@ class MessageSerializationTest {
         CompletableFuture<TestGateway> remoteGatewayFuture =
                 akkaRpcService2.connect(address, TestGateway.class);
 
-        TestGateway remoteGateway = remoteGatewayFuture.get();
+        TestGateway remoteGateway = remoteGatewayFuture.get(timeout.getSize(), timeout.getUnit());
 
-        int expected = 42;
+        remoteGateway.foobar(new Object());
 
-        remoteGateway.foobar(expected);
-
-        assertThat(linkedBlockingQueue.take()).isEqualTo(expected);
+        fail("Should have failed because Object is not serializable.");
     }
 
-    /** Tests that a message which exceeds the maximum frame size will cause timeout exception. */
+    /** Tests that a remote rpc call with a serializable argument can be successfully executed. */
     @Test
-    void testMaximumFramesizeRemoteMessageTransfer() throws Throwable {
+    public void testSerializableRemoteMessageTransfer() throws Exception {
         LinkedBlockingQueue<Object> linkedBlockingQueue = new LinkedBlockingQueue<>();
 
         TestEndpoint testEndpoint = new TestEndpoint(akkaRpcService1, linkedBlockingQueue);
@@ -139,18 +127,48 @@ class MessageSerializationTest {
 
         String address = testEndpoint.getAddress();
 
-        TestGateway remoteGateway = akkaRpcService2.connect(address, TestGateway.class).get();
+        CompletableFuture<TestGateway> remoteGatewayFuture =
+                akkaRpcService2.connect(address, TestGateway.class);
+
+        TestGateway remoteGateway = remoteGatewayFuture.get(timeout.getSize(), timeout.getUnit());
+
+        int expected = 42;
+
+        remoteGateway.foobar(expected);
+
+        assertThat(linkedBlockingQueue.take(), Is.<Object>is(expected));
+    }
+
+    /** Tests that a message which exceeds the maximum frame size will cause timeout exception. */
+    @Test(expected = TimeoutException.class)
+    public void testMaximumFramesizeRemoteMessageTransfer() throws Throwable {
+        LinkedBlockingQueue<Object> linkedBlockingQueue = new LinkedBlockingQueue<>();
+
+        TestEndpoint testEndpoint = new TestEndpoint(akkaRpcService1, linkedBlockingQueue);
+        testEndpoint.start();
+
+        String address = testEndpoint.getAddress();
+
+        CompletableFuture<TestGateway> remoteGatewayFuture =
+                akkaRpcService2.connect(address, TestGateway.class);
+
+        TestGateway remoteGateway = remoteGatewayFuture.get(timeout.getSize(), timeout.getUnit());
 
         int bufferSize = maxFrameSize + 1;
         byte[] buffer = new byte[bufferSize];
 
         CompletableFuture<Void> completableFuture = remoteGateway.foobar(buffer);
 
-        assertThatThrownBy(completableFuture::get).hasCauseInstanceOf(TimeoutException.class);
+        try {
+            completableFuture.get();
+        } catch (ExecutionException e) {
+            throw e.getCause();
+        }
+
+        fail("Should have failed due to exceeding the maximum framesize.");
     }
 
     private interface TestGateway extends RpcGateway {
-        @Local
         CompletableFuture<Void> foobar(Object object) throws IOException, InterruptedException;
     }
 

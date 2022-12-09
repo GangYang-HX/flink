@@ -180,8 +180,10 @@ public class ProgramOptions extends CommandLineOptions {
         configuration.setBoolean(DeploymentOptions.ATTACHED, !getDetachedMode());
         configuration.setBoolean(
                 DeploymentOptions.SHUTDOWN_IF_ATTACHED, isShutdownOnAttachedExit());
-        ConfigUtils.encodeCollectionToConfig(
-                configuration, PipelineOptions.CLASSPATHS, getClasspaths(), URL::toString);
+        if (getClasspaths() != null && !getClasspaths().isEmpty()) {
+            ConfigUtils.encodeCollectionToConfig(
+                    configuration, PipelineOptions.CLASSPATHS, getClasspaths(), URL::toString);
+        }
         SavepointRestoreSettings.toConfiguration(getSavepointRestoreSettings(), configuration);
     }
 

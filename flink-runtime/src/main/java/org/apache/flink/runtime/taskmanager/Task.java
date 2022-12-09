@@ -54,6 +54,7 @@ import org.apache.flink.runtime.io.network.NettyShuffleEnvironment;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
 import org.apache.flink.runtime.io.network.api.writer.ResultPartitionWriter;
 import org.apache.flink.runtime.io.network.partition.PartitionProducerStateProvider;
+import org.apache.flink.runtime.io.network.partition.ResultPartitionConsumableNotifier;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.consumer.IndexedInputGate;
 import org.apache.flink.runtime.io.network.partition.consumer.InputGate;
@@ -77,6 +78,7 @@ import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.runtime.taskexecutor.KvStateService;
 import org.apache.flink.runtime.taskexecutor.PartitionProducerStateChecker;
 import org.apache.flink.runtime.taskexecutor.slot.TaskSlotPayload;
+import org.apache.flink.runtime.util.HadoopUtils;
 import org.apache.flink.types.Either;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FatalExitExceptionHandler;
@@ -210,7 +212,7 @@ public class Task
      */
     private final SerializedValue<ExecutionConfig> serializedExecutionConfig;
 
-    private final ResultPartitionWriter[] partitionWriters;
+    private final ResultPartitionWriter[] consumableNotifyingPartitionWriters;
 
     private final IndexedInputGate[] inputGates;
 
@@ -290,6 +292,9 @@ public class Task
      */
     private UserCodeClassLoader userCodeClassLoader;
 
+    /** The key of hadoop conf dir in env. */
+    private static final String HADOOP_CONF_DIR = "HADOOP_CONF_DIR";
+
     /**
      * <b>IMPORTANT:</b> This constructor may not start any work that would need to be undone in the
      * case of a failing task deployment.
@@ -299,6 +304,8 @@ public class Task
             TaskInformation taskInformation,
             ExecutionAttemptID executionAttemptID,
             AllocationID slotAllocationId,
+            int subtaskIndex,
+            int attemptNumber,
             List<ResultPartitionDeploymentDescriptor> resultPartitionDeploymentDescriptors,
             List<InputGateDeploymentDescriptor> inputGateDeploymentDescriptors,
             MemoryManager memManager,
@@ -318,19 +325,23 @@ public class Task
             FileCache fileCache,
             TaskManagerRuntimeInfo taskManagerConfig,
             @Nonnull TaskMetricGroup metricGroup,
+            ResultPartitionConsumableNotifier resultPartitionConsumableNotifier,
             PartitionProducerStateChecker partitionProducerStateChecker,
             Executor executor) {
 
         Preconditions.checkNotNull(jobInformation);
         Preconditions.checkNotNull(taskInformation);
 
+        Preconditions.checkArgument(0 <= subtaskIndex, "The subtask index must be positive.");
+        Preconditions.checkArgument(0 <= attemptNumber, "The attempt number must be positive.");
+
         this.taskInfo =
                 new TaskInfo(
                         taskInformation.getTaskName(),
                         taskInformation.getMaxNumberOfSubtasks(),
-                        executionAttemptID.getSubtaskIndex(),
+                        subtaskIndex,
                         taskInformation.getNumberOfSubtasks(),
-                        executionAttemptID.getAttemptNumber(),
+                        attemptNumber,
                         String.valueOf(slotAllocationId));
 
         this.jobId = jobInformation.getJobId();
@@ -392,7 +403,13 @@ public class Task
                                 taskShuffleContext, resultPartitionDeploymentDescriptors)
                         .toArray(new ResultPartitionWriter[] {});
 
-        this.partitionWriters = resultPartitionWriters;
+        this.consumableNotifyingPartitionWriters =
+                ConsumableNotifyingResultPartitionWriterDecorator.decorate(
+                        resultPartitionDeploymentDescriptors,
+                        resultPartitionWriters,
+                        this,
+                        jobId,
+                        resultPartitionConsumableNotifier);
 
         // consumed intermediate result partitions
         final IndexedInputGate[] gates =
@@ -418,7 +435,18 @@ public class Task
         invokableHasBeenCanceled = new AtomicBoolean(false);
 
         // finally, create the executing thread, but do not start it
-        executingThread = new Thread(TASK_THREADS_GROUP, this, taskNameWithSubtask);
+        executingThread =
+                new Thread(TASK_THREADS_GROUP, this, taskInfo.getTaskNameWithSubtasks(true));
+
+        Map<String, String> env = System.getenv();
+        String hadoopConfDir = env.get(HADOOP_CONF_DIR);
+
+        // if hadoop is available, add CallerContext job id.
+        if (hadoopConfDir != null && !hadoopConfDir.isEmpty()) {
+            LOG.info(
+                    "Add CallerContext job id ({}) only in online environment. ", jobId.toString());
+            HadoopUtils.setCallerContextJobID(jobId.toString(), tmConfig);
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -491,13 +519,13 @@ public class Task
 
     public boolean isBackPressured() {
         if (invokable == null
-                || partitionWriters.length == 0
+                || consumableNotifyingPartitionWriters.length == 0
                 || (executionState != ExecutionState.INITIALIZING
                         && executionState != ExecutionState.RUNNING)) {
             return false;
         }
-        for (int i = 0; i < partitionWriters.length; ++i) {
-            if (!partitionWriters[i].isAvailable()) {
+        for (int i = 0; i < consumableNotifyingPartitionWriters.length; ++i) {
+            if (!consumableNotifyingPartitionWriters[i].isAvailable()) {
                 return true;
             }
         }
@@ -636,9 +664,9 @@ public class Task
 
             LOG.debug("Registering task at network: {}.", this);
 
-            setupPartitionsAndGates(partitionWriters, inputGates);
+            setupPartitionsAndGates(consumableNotifyingPartitionWriters, inputGates);
 
-            for (ResultPartitionWriter partitionWriter : partitionWriters) {
+            for (ResultPartitionWriter partitionWriter : consumableNotifyingPartitionWriters) {
                 taskEventDispatcher.registerPartition(partitionWriter.getPartitionId());
             }
 
@@ -690,7 +718,7 @@ public class Task
                             kvStateRegistry,
                             inputSplitProvider,
                             distributedCacheEntries,
-                            partitionWriters,
+                            consumableNotifyingPartitionWriters,
                             inputGates,
                             taskEventDispatcher,
                             checkpointResponder,
@@ -738,7 +766,7 @@ public class Task
             // ----------------------------------------------------------------
 
             // finish the produced partitions. if this fails, we consider the execution failed.
-            for (ResultPartitionWriter partitionWriter : partitionWriters) {
+            for (ResultPartitionWriter partitionWriter : consumableNotifyingPartitionWriters) {
                 if (partitionWriter != null) {
                     partitionWriter.finish();
                 }
@@ -963,7 +991,7 @@ public class Task
                 taskNameWithSubtask,
                 getExecutionState());
 
-        for (ResultPartitionWriter partitionWriter : partitionWriters) {
+        for (ResultPartitionWriter partitionWriter : consumableNotifyingPartitionWriters) {
             taskEventDispatcher.unregisterPartition(partitionWriter.getPartitionId());
         }
 
@@ -982,13 +1010,13 @@ public class Task
     }
 
     private void failAllResultPartitions() {
-        for (ResultPartitionWriter partitionWriter : partitionWriters) {
+        for (ResultPartitionWriter partitionWriter : consumableNotifyingPartitionWriters) {
             partitionWriter.fail(getFailureCause());
         }
     }
 
     private void closeAllResultPartitions() {
-        for (ResultPartitionWriter partitionWriter : partitionWriters) {
+        for (ResultPartitionWriter partitionWriter : consumableNotifyingPartitionWriters) {
             try {
                 partitionWriter.close();
             } catch (Throwable t) {
@@ -1623,13 +1651,13 @@ public class Task
 
         private final Logger logger;
         private final TaskInvokable invokable;
-        private final Thread executor;
+        private final Thread executer;
         private final String taskName;
 
-        TaskCanceler(Logger logger, TaskInvokable invokable, Thread executor, String taskName) {
+        TaskCanceler(Logger logger, TaskInvokable invokable, Thread executer, String taskName) {
             this.logger = logger;
             this.invokable = invokable;
-            this.executor = executor;
+            this.executer = executer;
             this.taskName = taskName;
         }
 
@@ -1656,7 +1684,7 @@ public class Task
                 failAllResultPartitions();
                 closeAllInputGates();
 
-                invokable.maybeInterruptOnCancel(executor, null, null);
+                invokable.maybeInterruptOnCancel(executer, null, null);
             } catch (Throwable t) {
                 ExceptionUtils.rethrowIfFatalError(t);
                 logger.error("Error in the task canceler for task {}.", taskName, t);
@@ -1674,7 +1702,7 @@ public class Task
         private final TaskInvokable task;
 
         /** The executing task thread that we wait for to terminate. */
-        private final Thread executorThread;
+        private final Thread executerThread;
 
         /** The name of the task, for logging purposes. */
         private final String taskName;
@@ -1685,13 +1713,13 @@ public class Task
         TaskInterrupter(
                 Logger log,
                 TaskInvokable task,
-                Thread executorThread,
+                Thread executerThread,
                 String taskName,
                 long interruptIntervalMillis) {
 
             this.log = log;
             this.task = task;
-            this.executorThread = executorThread;
+            this.executerThread = executerThread;
             this.taskName = taskName;
             this.interruptIntervalMillis = interruptIntervalMillis;
         }
@@ -1702,14 +1730,14 @@ public class Task
                 // we initially wait for one interval
                 // in most cases, the threads go away immediately (by the cancellation thread)
                 // and we need not actually do anything
-                executorThread.join(interruptIntervalMillis);
+                executerThread.join(interruptIntervalMillis);
 
                 // log stack trace where the executing thread is stuck and
                 // interrupt the running thread periodically while it is still alive
-                while (executorThread.isAlive()) {
-                    task.maybeInterruptOnCancel(executorThread, taskName, interruptIntervalMillis);
+                while (executerThread.isAlive()) {
+                    task.maybeInterruptOnCancel(executerThread, taskName, interruptIntervalMillis);
                     try {
-                        executorThread.join(interruptIntervalMillis);
+                        executerThread.join(interruptIntervalMillis);
                     } catch (InterruptedException e) {
                         // we ignore this and fall through the loop
                     }
@@ -1729,7 +1757,7 @@ public class Task
     private static class TaskCancelerWatchDog implements Runnable {
 
         /** The executing task thread that we wait for to terminate. */
-        private final Thread executorThread;
+        private final Thread executerThread;
 
         /** The TaskManager to notify if cancellation does not happen in time. */
         private final TaskManagerActions taskManager;
@@ -1741,14 +1769,14 @@ public class Task
 
         TaskCancelerWatchDog(
                 TaskInfo taskInfo,
-                Thread executorThread,
+                Thread executerThread,
                 TaskManagerActions taskManager,
                 long timeoutMillis) {
 
             checkArgument(timeoutMillis > 0);
 
             this.taskInfo = taskInfo;
-            this.executorThread = executorThread;
+            this.executerThread = executerThread;
             this.taskManager = taskManager;
             this.timeoutMillis = timeoutMillis;
         }
@@ -1757,17 +1785,17 @@ public class Task
         public void run() {
             try {
                 Deadline timeout = Deadline.fromNow(Duration.ofMillis(timeoutMillis));
-                while (executorThread.isAlive() && timeout.hasTimeLeft()) {
+                while (executerThread.isAlive() && timeout.hasTimeLeft()) {
                     try {
-                        executorThread.join(Math.max(1, timeout.timeLeft().toMillis()));
+                        executerThread.join(Math.max(1, timeout.timeLeft().toMillis()));
                     } catch (InterruptedException ignored) {
                         // we don't react to interrupted exceptions, simply fall through the loop
                     }
                 }
 
-                if (executorThread.isAlive()) {
+                if (executerThread.isAlive()) {
                     logTaskThreadStackTrace(
-                            executorThread,
+                            executerThread,
                             taskInfo.getTaskNameWithSubtasks(),
                             timeoutMillis,
                             "notifying TM");

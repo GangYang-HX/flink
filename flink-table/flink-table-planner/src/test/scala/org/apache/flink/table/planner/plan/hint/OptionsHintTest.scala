@@ -26,7 +26,6 @@ import org.apache.flink.table.planner.plan.hint.OptionsHintTest.{IS_BOUNDED, Par
 import org.apache.flink.table.planner.plan.nodes.calcite.LogicalLegacySink
 import org.apache.flink.table.planner.utils.{OptionsTableSink, TableTestBase, TableTestUtil}
 
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.hamcrest.Matchers._
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertThat}
@@ -138,12 +137,9 @@ class OptionsHintTest(param: Param) extends TableTestBase {
   def testOptionsHintOnTableApiView(): Unit = {
     val view1 = util.tableEnv.sqlQuery("select * from t1 join t2 on t1.a = t2.d")
     util.tableEnv.createTemporaryView("view1", view1)
-    // The table hints on view expect to be prohibited
+    // The table hints on view expect to be ignored.
     val sql = "select * from view1/*+ OPTIONS(k1='#v1', k2='#v2', k3='#v3', k4='#v4') */"
-    assertThatThrownBy(() => util.verifyExecPlan(sql))
-      .hasMessageContaining("View '`default_catalog`.`default_database`.`view1`' " +
-        "cannot be enriched with new options. Hints can only be applied to tables.")
-      .isInstanceOf[ValidationException]
+    util.verifyExecPlan(sql)
   }
 
   @Test
@@ -172,12 +168,9 @@ class OptionsHintTest(param: Param) extends TableTestBase {
     )
     val catalog = util.tableEnv.getCatalog(util.tableEnv.getCurrentCatalog).get()
     catalog.createTable(new ObjectPath(util.tableEnv.getCurrentDatabase, "view1"), view1, false)
-    // The table hints on view expect to be prohibited
+    // The table hints on view expect to be ignored.
     val sql = "select * from view1/*+ OPTIONS(k1='#v1', k2='#v2', k3='#v3', k4='#v4') */"
-    assertThatThrownBy(() => util.verifyExecPlan(sql))
-      .hasMessageContaining("View '`default_catalog`.`default_database`.`view1`' " +
-        "cannot be enriched with new options. Hints can only be applied to tables.")
-      .isInstanceOf[ValidationException]
+    util.verifyExecPlan(sql)
   }
 }
 

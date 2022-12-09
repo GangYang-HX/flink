@@ -38,7 +38,6 @@ import org.junit.Test;
 
 import java.util.Map;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -70,7 +69,7 @@ public class InternalOperatorGroupTest extends TestLogger {
 
         TaskMetricGroup taskGroup =
                 tmGroup.addJob(new JobID(), "myJobName")
-                        .addTask(createExecutionAttemptId(new JobVertexID(), 11, 0), "aTaskName");
+                        .addTask(new JobVertexID(), new ExecutionAttemptID(), "aTaskName", 11, 0);
         InternalOperatorMetricGroup opGroup =
                 taskGroup.getOrAddOperator(new OperatorID(), "myOpName");
 
@@ -104,7 +103,7 @@ public class InternalOperatorGroupTest extends TestLogger {
                     TaskManagerMetricGroup.createTaskManagerMetricGroup(
                                     registry, "theHostName", new ResourceID(tmID))
                             .addJob(jid, "myJobName")
-                            .addTask(createExecutionAttemptId(vertexId, 13, 2), "aTaskname")
+                            .addTask(vertexId, new ExecutionAttemptID(), "aTaskname", 13, 2)
                             .getOrAddOperator(operatorID, operatorName);
 
             assertArrayEquals(
@@ -134,7 +133,7 @@ public class InternalOperatorGroupTest extends TestLogger {
 
         TaskMetricGroup taskGroup =
                 tmGroup.addJob(new JobID(), "myJobName")
-                        .addTask(createExecutionAttemptId(new JobVertexID(), 11, 0), "aTaskName");
+                        .addTask(new JobVertexID(), new ExecutionAttemptID(), "aTaskName", 11, 0);
         InternalOperatorMetricGroup opGroup =
                 taskGroup.getOrAddOperator(new OperatorID(), "myOpName");
 
@@ -147,14 +146,15 @@ public class InternalOperatorGroupTest extends TestLogger {
     public void testVariables() {
         JobID jid = new JobID();
         JobVertexID tid = new JobVertexID();
-        ExecutionAttemptID eid = createExecutionAttemptId(tid, 11, 0);
+        ExecutionAttemptID eid = new ExecutionAttemptID();
         OperatorID oid = new OperatorID();
 
         TaskManagerMetricGroup tmGroup =
                 TaskManagerMetricGroup.createTaskManagerMetricGroup(
                         registry, "theHostName", new ResourceID("test-tm-id"));
 
-        TaskMetricGroup taskGroup = tmGroup.addJob(jid, "myJobName").addTask(eid, "aTaskName");
+        TaskMetricGroup taskGroup =
+                tmGroup.addJob(jid, "myJobName").addTask(tid, eid, "aTaskName", 11, 0);
         InternalOperatorMetricGroup opGroup = taskGroup.getOrAddOperator(oid, "myOpName");
 
         Map<String, String> variables = opGroup.getAllVariables();
@@ -183,13 +183,13 @@ public class InternalOperatorGroupTest extends TestLogger {
     public void testCreateQueryServiceMetricInfo() {
         JobID jid = new JobID();
         JobVertexID vid = new JobVertexID();
-        ExecutionAttemptID eid = createExecutionAttemptId(vid, 4, 5);
+        ExecutionAttemptID eid = new ExecutionAttemptID();
         OperatorID oid = new OperatorID();
         TaskManagerMetricGroup tm =
                 TaskManagerMetricGroup.createTaskManagerMetricGroup(
                         registry, "host", new ResourceID("id"));
 
-        TaskMetricGroup task = tm.addJob(jid, "jobname").addTask(eid, "taskName");
+        TaskMetricGroup task = tm.addJob(jid, "jobname").addTask(vid, eid, "taskName", 4, 5);
         InternalOperatorMetricGroup operator = task.getOrAddOperator(oid, "operator");
 
         QueryScopeInfo.OperatorQueryScopeInfo info =

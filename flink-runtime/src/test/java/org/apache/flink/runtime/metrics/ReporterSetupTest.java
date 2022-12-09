@@ -29,13 +29,10 @@ import org.apache.flink.metrics.reporter.MetricReporter;
 import org.apache.flink.metrics.reporter.MetricReporterFactory;
 import org.apache.flink.runtime.metrics.scope.ScopeFormat;
 import org.apache.flink.runtime.metrics.util.TestReporter;
-import org.apache.flink.testutils.junit.extensions.ContextClassLoaderExtension;
-import org.apache.flink.util.TestLoggerExtension;
+import org.apache.flink.util.TestLogger;
 
 import org.junit.Assert;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
@@ -50,34 +47,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /** Tests for the {@link ReporterSetup}. */
-@ExtendWith(TestLoggerExtension.class)
-class ReporterSetupTest {
-
-    @RegisterExtension
-    static final ContextClassLoaderExtension CONTEXT_CLASS_LOADER_EXTENSION =
-            ContextClassLoaderExtension.builder()
-                    .withServiceEntry(
-                            MetricReporterFactory.class,
-                            TestReporter1.class.getName(),
-                            TestReporter2.class.getName(),
-                            TestReporter11.class.getName(),
-                            TestReporter12.class.getName(),
-                            TestReporter13.class.getName(),
-                            TestReporterFactory.class.getName(),
-                            FailingFactory.class.getName(),
-                            InstantiationTypeTrackingTestReporterFactory.class.getName(),
-                            ConfigExposingReporterFactory.class.getName())
-                    .build();
+public class ReporterSetupTest extends TestLogger {
 
     /** TestReporter1 class only for type differentiation. */
-    public static class TestReporter1 extends TestReporter {}
+    static class TestReporter1 extends TestReporter {}
 
     /** TestReporter2 class only for type differentiation. */
-    public static class TestReporter2 extends TestReporter {}
+    static class TestReporter2 extends TestReporter {}
 
     /** Verifies that a reporter can be configured with all it's arguments being forwarded. */
     @Test
-    void testReporterArgumentForwarding() {
+    public void testReporterArgumentForwarding() {
         final Configuration config = new Configuration();
 
         configureReporter1(config);
@@ -94,7 +74,7 @@ class ReporterSetupTest {
      * Verifies that multiple reporters can be configured with all their arguments being forwarded.
      */
     @Test
-    void testSeveralReportersWithArgumentForwarding() {
+    public void testSeveralReportersWithArgumentForwarding() {
         final Configuration config = new Configuration();
 
         configureReporter1(config);
@@ -122,7 +102,7 @@ class ReporterSetupTest {
      * reporters.
      */
     @Test
-    void testActivateOneReporterAmongTwoDeclared() {
+    public void testActivateOneReporterAmongTwoDeclared() {
         final Configuration config = new Configuration();
 
         configureReporter1(config);
@@ -139,13 +119,13 @@ class ReporterSetupTest {
     }
 
     @Test
-    void testReporterSetupSupplier() throws Exception {
+    public void testReporterSetupSupplier() throws Exception {
         final Configuration config = new Configuration();
 
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "reporter1."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 TestReporter1.class.getName());
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -159,23 +139,23 @@ class ReporterSetupTest {
 
     /** Verifies that multiple reporters are instantiated correctly. */
     @Test
-    void testMultipleReporterInstantiation() throws Exception {
+    public void testMultipleReporterInstantiation() throws Exception {
         Configuration config = new Configuration();
 
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test1."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 TestReporter11.class.getName());
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test2."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 TestReporter12.class.getName());
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test3."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 TestReporter13.class.getName());
 
         List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -188,7 +168,7 @@ class ReporterSetupTest {
     }
 
     /** Reporter that exposes whether open() was called. */
-    public static class TestReporter11 extends TestReporter {
+    protected static class TestReporter11 extends TestReporter {
         public static boolean wasOpened = false;
 
         @Override
@@ -198,7 +178,7 @@ class ReporterSetupTest {
     }
 
     /** Reporter that exposes whether open() was called. */
-    public static class TestReporter12 extends TestReporter {
+    protected static class TestReporter12 extends TestReporter {
         public static boolean wasOpened = false;
 
         @Override
@@ -208,7 +188,7 @@ class ReporterSetupTest {
     }
 
     /** Reporter that exposes whether open() was called. */
-    public static class TestReporter13 extends TestReporter {
+    protected static class TestReporter13 extends TestReporter {
         public static boolean wasOpened = false;
 
         @Override
@@ -221,7 +201,7 @@ class ReporterSetupTest {
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "reporter1."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 TestReporter1.class.getName());
         config.setString(ConfigConstants.METRICS_REPORTER_PREFIX + "reporter1.arg1", "value1");
         config.setString(ConfigConstants.METRICS_REPORTER_PREFIX + "reporter1.arg2", "value2");
@@ -233,15 +213,14 @@ class ReporterSetupTest {
         Assert.assertEquals("value2", setup.getConfiguration().getString("arg2", ""));
         Assert.assertEquals(
                 ReporterSetupTest.TestReporter1.class.getName(),
-                setup.getConfiguration()
-                        .getString(MetricOptions.REPORTER_FACTORY_CLASS.key(), null));
+                setup.getConfiguration().getString("class", null));
     }
 
     private static void configureReporter2(Configuration config) {
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "reporter2."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 TestReporter2.class.getName());
         config.setString(ConfigConstants.METRICS_REPORTER_PREFIX + "reporter2.arg1", "value1");
         config.setString(ConfigConstants.METRICS_REPORTER_PREFIX + "reporter2.arg3", "value3");
@@ -252,25 +231,23 @@ class ReporterSetupTest {
         Assert.assertEquals("value1", setup.getConfiguration().getString("arg1", null));
         Assert.assertEquals("value3", setup.getConfiguration().getString("arg3", null));
         Assert.assertEquals(
-                TestReporter2.class.getName(),
-                setup.getConfiguration()
-                        .getString(MetricOptions.REPORTER_FACTORY_CLASS.key(), null));
+                TestReporter2.class.getName(), setup.getConfiguration().getString("class", null));
     }
 
     @Test
-    void testVariableExclusionParsing() throws Exception {
+    public void testVariableExclusionParsing() throws Exception {
         final String excludedVariable1 = "foo";
         final String excludedVariable2 = "foo";
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 TestReporterFactory.class.getName());
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_EXCLUDED_VARIABLES.key(),
+                        + ConfigConstants.METRICS_REPORTER_EXCLUDED_VARIABLES,
                 excludedVariable1 + ";" + excludedVariable2);
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -288,12 +265,12 @@ class ReporterSetupTest {
 
     /** Verifies that a factory configuration is correctly parsed. */
     @Test
-    void testFactoryParsing() throws Exception {
+    public void testFactoryParsing() throws Exception {
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 TestReporterFactory.class.getName());
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -310,18 +287,17 @@ class ReporterSetupTest {
      * are configured.
      */
     @Test
-    @SuppressWarnings("deprecation")
     public void testFactoryPrioritization() throws Exception {
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 InstantiationTypeTrackingTestReporterFactory.class.getName());
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 InstantiationTypeTrackingTestReporter.class.getName());
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -337,17 +313,17 @@ class ReporterSetupTest {
 
     /** Verifies that an error thrown by a factory does not affect the setup of other reporters. */
     @Test
-    void testFactoryFailureIsolation() throws Exception {
+    public void testFactoryFailureIsolation() throws Exception {
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 TestReporterFactory.class.getName());
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "fail."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 FailingFactory.class.getName());
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -357,18 +333,17 @@ class ReporterSetupTest {
 
     /** Verifies that factory/reflection approaches can be mixed freely. */
     @Test
-    @SuppressWarnings("deprecation")
     public void testMixedSetupsFactoryParsing() throws Exception {
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test1."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 InstantiationTypeTrackingTestReporterFactory.class.getName());
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test2."
-                        + MetricOptions.REPORTER_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 InstantiationTypeTrackingTestReporter.class.getName());
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -387,12 +362,12 @@ class ReporterSetupTest {
     }
 
     @Test
-    void testFactoryArgumentForwarding() throws Exception {
+    public void testFactoryArgumentForwarding() throws Exception {
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 ConfigExposingReporterFactory.class.getName());
         config.setString(ConfigConstants.METRICS_REPORTER_PREFIX + "test.arg", "hello");
 
@@ -407,13 +382,12 @@ class ReporterSetupTest {
      * InstantiateViaFactory}.
      */
     @Test
-    @SuppressWarnings("deprecation")
     public void testFactoryAnnotation() {
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 InstantiationTypeTrackingTestReporter2.class.getName());
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -432,13 +406,12 @@ class ReporterSetupTest {
      * org.apache.flink.metrics.reporter.InterceptInstantiationViaReflection}.
      */
     @Test
-    @SuppressWarnings("deprecation")
     public void testReflectionInterception() {
         final Configuration config = new Configuration();
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
                 InstantiationTypeTrackingTestReporter.class.getName());
 
         final List<ReporterSetup> reporterSetups =
@@ -461,7 +434,7 @@ class ReporterSetupTest {
     }
 
     @Test
-    void testAdditionalVariablesParsing() {
+    public void testAdditionalVariablesParsing() {
         final String tag1 = "foo";
         final String tagValue1 = "bar";
         final String tag2 = "fizz";
@@ -470,12 +443,12 @@ class ReporterSetupTest {
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 TestReporterFactory.class.getName());
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test."
-                        + MetricOptions.REPORTER_ADDITIONAL_VARIABLES.key(),
+                        + ConfigConstants.METRICS_REPORTER_ADDITIONAL_VARIABLES,
                 String.join(",", tag1 + ":" + tagValue1, tag2 + ":" + tagValue2));
 
         final List<ReporterSetup> reporterSetups = ReporterSetup.fromConfiguration(config, null);
@@ -542,7 +515,6 @@ class ReporterSetupTest {
     @InterceptInstantiationViaReflection(
             reporterClassName =
                     "org.apache.flink.runtime.metrics.ReporterSetupTest$InstantiationTypeTrackingTestReporter")
-    @SuppressWarnings("deprecation")
     public static class InterceptingInstantiationTypeTrackingTestReporterFactory
             implements MetricReporterFactory {
 
@@ -574,7 +546,6 @@ class ReporterSetupTest {
     @InstantiateViaFactory(
             factoryClassName =
                     "org.apache.flink.runtime.metrics.ReporterSetupTest$InstantiationTypeTrackingTestReporterFactory")
-    @SuppressWarnings("deprecation")
     protected static class InstantiationTypeTrackingTestReporter2
             extends InstantiationTypeTrackingTestReporter {}
 }

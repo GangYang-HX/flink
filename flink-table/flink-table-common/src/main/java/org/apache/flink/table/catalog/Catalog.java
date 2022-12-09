@@ -40,11 +40,8 @@ import org.apache.flink.table.factories.Factory;
 import org.apache.flink.table.factories.FunctionDefinitionFactory;
 import org.apache.flink.table.factories.TableFactory;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-
-import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * This interface is responsible for reading and writing metadata such as database/table/views/UDFs
@@ -109,6 +106,16 @@ public interface Catalog {
      * @throws CatalogException in case of any runtime exception
      */
     void close() throws CatalogException;
+
+    // ------ dataSources ------
+
+    /**
+     * 设置当前dataSource.
+     *
+     * @param dataSource
+     * @throws CatalogException
+     */
+    void setCurrentDataSource(String dataSource) throws CatalogException;
 
     // ------ databases ------
 
@@ -570,31 +577,6 @@ public interface Catalog {
             throws PartitionNotExistException, CatalogException;
 
     /**
-     * Get a list of statistics of given partitions.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpecs partition specs of partitions that will be used to filter out all other
-     *     unrelated statistics, i.e. the statistics fetch will be limited within the given
-     *     partitions
-     * @return list of statistics of given partitions
-     * @throws PartitionNotExistException if one partition does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    default List<CatalogTableStatistics> bulkGetPartitionStatistics(
-            ObjectPath tablePath, List<CatalogPartitionSpec> partitionSpecs)
-            throws PartitionNotExistException, CatalogException {
-
-        checkNotNull(partitionSpecs, "partitionSpecs cannot be null");
-
-        List<CatalogTableStatistics> result = new ArrayList<>(partitionSpecs.size());
-        for (CatalogPartitionSpec partitionSpec : partitionSpecs) {
-            result.add(getPartitionStatistics(tablePath, partitionSpec));
-        }
-
-        return result;
-    }
-
-    /**
      * Get the column statistics of a partition.
      *
      * @param tablePath path of the table
@@ -606,31 +588,6 @@ public interface Catalog {
     CatalogColumnStatistics getPartitionColumnStatistics(
             ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
             throws PartitionNotExistException, CatalogException;
-
-    /**
-     * Get a list of column statistics for given partitions.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpecs partition specs of partitions that will be used to filter out all other
-     *     unrelated statistics, i.e. the statistics fetch will be limited within the given
-     *     partitions
-     * @return list of column statistics for given partitions
-     * @throws PartitionNotExistException if one partition does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    default List<CatalogColumnStatistics> bulkGetPartitionColumnStatistics(
-            ObjectPath tablePath, List<CatalogPartitionSpec> partitionSpecs)
-            throws PartitionNotExistException, CatalogException {
-
-        checkNotNull(partitionSpecs, "partitionSpecs cannot be null");
-
-        List<CatalogColumnStatistics> result = new ArrayList<>(partitionSpecs.size());
-        for (CatalogPartitionSpec partitionSpec : partitionSpecs) {
-            result.add(getPartitionColumnStatistics(tablePath, partitionSpec));
-        }
-
-        return result;
-    }
 
     /**
      * Update the statistics of a table.

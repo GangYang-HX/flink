@@ -20,10 +20,8 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { Subject } from 'rxjs';
 import { mergeMap, takeUntil, tap } from 'rxjs/operators';
 
-import { JobFlameGraph, NodesItemCorrect } from '@flink-runtime-web/interfaces';
-import { JobService } from '@flink-runtime-web/services';
-
-import { JobLocalService } from '../../job-local.service';
+import { JobFlameGraph, NodesItemCorrect } from 'interfaces';
+import { JobService } from 'services';
 
 @Component({
   selector: 'flink-job-overview-drawer-flamegraph',
@@ -41,11 +39,7 @@ export class JobOverviewDrawerFlameGraphComponent implements OnInit, OnDestroy {
 
   private readonly destroy$ = new Subject<void>();
 
-  constructor(
-    private readonly jobService: JobService,
-    private readonly jobLocalService: JobLocalService,
-    private readonly cdr: ChangeDetectorRef
-  ) {}
+  constructor(private readonly jobService: JobService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit(): void {
     this.requestFlameGraph();
@@ -57,12 +51,11 @@ export class JobOverviewDrawerFlameGraphComponent implements OnInit, OnDestroy {
   }
 
   private requestFlameGraph(): void {
-    this.jobLocalService
-      .jobWithVertexChanges()
+    this.jobService.jobWithVertex$
       .pipe(
+        takeUntil(this.destroy$),
         tap(data => (this.selectedVertex = data.vertex)),
-        mergeMap(data => this.jobService.loadOperatorFlameGraph(data.job.jid, data.vertex!.id, this.graphType)),
-        takeUntil(this.destroy$)
+        mergeMap(data => this.jobService.loadOperatorFlameGraph(data.job.jid, data.vertex!.id, this.graphType))
       )
       .subscribe(
         data => {

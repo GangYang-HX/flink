@@ -30,6 +30,7 @@ import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.FutureUtils;
 
 import org.apache.commons.io.FileUtils;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -153,6 +154,7 @@ public class BlobServerGetTest extends TestLogger {
      * Retrieves a BLOB from the HA store to a {@link BlobServer} which cannot create incoming
      * files. File transfers should fail.
      */
+    @Ignore
     @Test
     public void testGetFailsIncomingForJobHa() throws IOException {
         assumeTrue(!OperatingSystem.isWindows()); // setWritable doesn't work on Windows.
@@ -225,6 +227,7 @@ public class BlobServerGetTest extends TestLogger {
      * Retrieves a BLOB from the HA store to a {@link BlobServer} which cannot create the final
      * storage file. File transfers should fail.
      */
+    @Ignore
     @Test
     public void testGetFailsStoreForJobHa() throws IOException {
         assumeTrue(!OperatingSystem.isWindows()); // setWritable doesn't work on Windows.

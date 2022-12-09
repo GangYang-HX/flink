@@ -59,18 +59,19 @@ public final class ExplicitArgumentTypeStrategy implements ArgumentTypeStrategy 
         }
         // type coercion
         if (!supportsImplicitCast(actualType, expectedType)) {
-            return callContext.fail(
-                    throwOnFailure,
-                    "Unsupported argument type. Expected type '%s' but actual type was '%s'.",
-                    expectedType,
-                    actualType);
+            if (throwOnFailure) {
+                throw callContext.newValidationError(
+                        "Unsupported argument type. Expected type '%s' but actual type was '%s'.",
+                        expectedType, actualType);
+            }
+            return Optional.empty();
         }
         return Optional.of(expectedDataType);
     }
 
     @Override
     public Argument getExpectedArgument(FunctionDefinition functionDefinition, int argumentPos) {
-        return Argument.of(expectedDataType.getLogicalType());
+        return Argument.of(expectedDataType.toString());
     }
 
     @Override

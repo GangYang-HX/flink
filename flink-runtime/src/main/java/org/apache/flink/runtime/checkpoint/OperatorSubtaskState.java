@@ -25,8 +25,6 @@ import org.apache.flink.runtime.state.KeyedStateHandle;
 import org.apache.flink.runtime.state.OperatorStateHandle;
 import org.apache.flink.runtime.state.ResultSubpartitionStateHandle;
 import org.apache.flink.runtime.state.SharedStateRegistry;
-import org.apache.flink.runtime.state.SharedStateRegistryImpl.EmptyDiscardStateObjectForRegister;
-import org.apache.flink.runtime.state.SharedStateRegistryKey;
 import org.apache.flink.runtime.state.StateObject;
 import org.apache.flink.runtime.state.StateUtil;
 
@@ -228,13 +226,6 @@ public class OperatorSubtaskState implements CompositeStateHandle {
             long checkpointID) {
         for (KeyedStateHandle stateHandle : stateHandles) {
             if (stateHandle != null) {
-                // Registering state handle to the given sharedStateRegistry serves one purpose:
-                // update the status of the checkpoint in sharedStateRegistry to which the state
-                // handle belongs.
-                sharedStateRegistry.registerReference(
-                        new SharedStateRegistryKey(stateHandle.getStateHandleId().getKeyString()),
-                        new EmptyDiscardStateObjectForRegister(stateHandle.getStateHandleId()),
-                        checkpointID);
                 stateHandle.registerSharedStates(sharedStateRegistry, checkpointID);
             }
         }

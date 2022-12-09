@@ -32,7 +32,7 @@ import org.apache.flink.table.runtime.generated.JoinCondition;
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.Projection;
 import org.apache.flink.table.runtime.generated.RecordComparator;
-import org.apache.flink.table.runtime.operators.join.Int2HashJoinOperatorTestBase.MyProjection;
+import org.apache.flink.table.runtime.operators.join.Int2HashJoinOperatorTest.MyProjection;
 import org.apache.flink.table.runtime.operators.sort.IntNormalizedKeyComputer;
 import org.apache.flink.table.runtime.operators.sort.IntRecordComparator;
 import org.apache.flink.table.runtime.util.UniformBinaryRowGenerator;
@@ -48,7 +48,7 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import static org.apache.flink.table.runtime.operators.join.Int2HashJoinOperatorTest.joinAndAssert;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.fail;
 
 /** Random test for {@link SortMergeJoinOperator}. */
 @RunWith(Parameterized.class)
@@ -211,11 +211,7 @@ public class Int2SortMergeJoinOperatorTest {
     }
 
     static StreamOperator newOperator(FlinkJoinType type, boolean leftIsSmaller) {
-        return new SortMergeJoinOperator(getJoinFunction(type, leftIsSmaller));
-    }
-
-    public static SortMergeJoinFunction getJoinFunction(FlinkJoinType type, boolean leftIsSmaller) {
-        return new SortMergeJoinFunction(
+        return new SortMergeJoinOperator(
                 0,
                 type,
                 leftIsSmaller,

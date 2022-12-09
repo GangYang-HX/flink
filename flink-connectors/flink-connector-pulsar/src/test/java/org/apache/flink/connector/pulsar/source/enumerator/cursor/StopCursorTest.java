@@ -23,6 +23,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.pulsar.source.config.SourceConfiguration;
+import org.apache.flink.connector.pulsar.source.enumerator.topic.TopicNameUtils;
 import org.apache.flink.connector.pulsar.source.enumerator.topic.TopicPartition;
 import org.apache.flink.connector.pulsar.source.reader.message.PulsarMessage;
 import org.apache.flink.connector.pulsar.source.reader.split.PulsarOrderedPartitionSplitReader;
@@ -42,13 +43,12 @@ import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSA
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_MAX_FETCH_RECORDS;
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_MAX_FETCH_TIME;
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_SUBSCRIPTION_NAME;
-import static org.apache.flink.connector.pulsar.source.enumerator.topic.TopicNameUtils.topicNameWithPartition;
 import static org.apache.flink.connector.pulsar.source.enumerator.topic.TopicRange.createFullRange;
 import static org.apache.flink.connector.pulsar.source.reader.deserializer.PulsarDeserializationSchema.flinkSchema;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test different implementation of StopCursor. */
-class StopCursorTest extends PulsarTestSuiteBase {
+public class StopCursorTest extends PulsarTestSuiteBase {
 
     @Test
     void publishTimeStopCursor() throws IOException {
@@ -64,7 +64,7 @@ class StopCursorTest extends PulsarTestSuiteBase {
         // send the first message and set the stopCursor to filter any late stopCursor
         operator()
                 .sendMessage(
-                        topicNameWithPartition(topicName, 0),
+                        TopicNameUtils.topicNameWithPartition(topicName, 0),
                         Schema.STRING,
                         randomAlphanumeric(10));
         long currentTimeStamp = System.currentTimeMillis();
@@ -85,11 +85,12 @@ class StopCursorTest extends PulsarTestSuiteBase {
         // send the second message and expect it will not be received
         operator()
                 .sendMessage(
-                        topicNameWithPartition(topicName, 0),
+                        TopicNameUtils.topicNameWithPartition(topicName, 0),
                         Schema.STRING,
                         randomAlphanumeric(10));
         RecordsWithSplitIds<PulsarMessage<String>> secondResult = splitReader.fetch();
-        assertThat(secondResult.nextSplit()).isNull();
+        assertThat(secondResult.nextSplit()).isNotNull();
+        assertThat(firstResult.nextRecordFromSplit()).isNull();
         assertThat(secondResult.finishedSplits()).isNotEmpty();
     }
 

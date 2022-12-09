@@ -65,7 +65,7 @@ run_resume_savepoint_test() {
   fi
   set_config_key "metrics.fetcher.update-interval" "2000"
 
-  setup_flink_slf4j_metric_reporter "numRecordsIn"
+  setup_flink_slf4j_metric_reporter
 
   start_cluster
 

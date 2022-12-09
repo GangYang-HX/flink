@@ -42,8 +42,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultsByLinesInMemory;
-
 /**
  * Test for the basic functionality of accumulators. We cannot test all different kinds of plans
  * here (iterative, etc.).

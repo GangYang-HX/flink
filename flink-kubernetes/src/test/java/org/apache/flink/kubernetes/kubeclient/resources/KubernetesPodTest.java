@@ -18,18 +18,21 @@
 
 package org.apache.flink.kubernetes.kubeclient.resources;
 
+import org.apache.flink.util.TestLogger;
+
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.PodStatusBuilder;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 
 /** Tests for {@link KubernetesPod}. */
-class KubernetesPodTest {
+public class KubernetesPodTest extends TestLogger {
 
     @Test
-    void testIsTerminatedShouldReturnTrueWhenPodFailed() {
+    public void testIsTerminatedShouldReturnTrueWhenPodFailed() {
         final Pod pod = new PodBuilder().build();
         pod.setStatus(
                 new PodStatusBuilder()
@@ -37,6 +40,6 @@ class KubernetesPodTest {
                         .withMessage("Pod Node didn't have enough resource")
                         .withReason("OutOfMemory")
                         .build());
-        assertThat(new KubernetesPod(pod).isTerminated()).isTrue();
+        assertThat(new KubernetesPod(pod).isTerminated(), is(true));
     }
 }

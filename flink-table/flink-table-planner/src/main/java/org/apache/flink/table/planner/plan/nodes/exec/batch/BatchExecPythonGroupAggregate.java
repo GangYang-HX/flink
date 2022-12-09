@@ -97,12 +97,7 @@ public class BatchExecPythonGroupAggregate extends ExecNodeBase<RowData>
                 CommonPythonUtil.extractPythonConfiguration(planner.getExecEnv(), config);
         OneInputTransformation<RowData, RowData> transform =
                 createPythonOneInputTransformation(
-                        inputTransform,
-                        inputRowType,
-                        outputRowType,
-                        pythonConfig,
-                        config,
-                        planner.getFlinkContext().getClassLoader());
+                        inputTransform, inputRowType, outputRowType, pythonConfig, config);
 
         if (CommonPythonUtil.isPythonWorkerUsingManagedMemory(pythonConfig)) {
             transform.declareManagedMemoryUseCaseAtSlotScope(ManagedMemoryUseCase.PYTHON);
@@ -115,8 +110,7 @@ public class BatchExecPythonGroupAggregate extends ExecNodeBase<RowData>
             RowType inputRowType,
             RowType outputRowType,
             Configuration pythonConfig,
-            ExecNodeConfig config,
-            ClassLoader classLoader) {
+            ExecNodeConfig config) {
         final Tuple2<int[], PythonFunctionInfo[]> aggInfos =
                 CommonPythonUtil.extractPythonAggregateFunctionInfosFromAggregateCall(aggCalls);
         int[] pythonUdafInputOffsets = aggInfos.f0;
@@ -124,7 +118,6 @@ public class BatchExecPythonGroupAggregate extends ExecNodeBase<RowData>
         OneInputStreamOperator<RowData, RowData> pythonOperator =
                 getPythonAggregateFunctionOperator(
                         config,
-                        classLoader,
                         pythonConfig,
                         inputRowType,
                         outputRowType,
@@ -142,7 +135,6 @@ public class BatchExecPythonGroupAggregate extends ExecNodeBase<RowData>
     @SuppressWarnings("unchecked")
     private OneInputStreamOperator<RowData, RowData> getPythonAggregateFunctionOperator(
             ExecNodeConfig config,
-            ClassLoader classLoader,
             Configuration pythonConfig,
             RowType inputRowType,
             RowType outputRowType,
@@ -176,19 +168,19 @@ public class BatchExecPythonGroupAggregate extends ExecNodeBase<RowData>
                             udfInputType,
                             udfOutputType,
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "UdafInputProjection",
                                     inputRowType,
                                     udfInputType,
                                     udafInputOffsets),
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "GroupKey",
                                     inputRowType,
                                     (RowType) Projection.of(grouping).project(inputRowType),
                                     grouping),
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "GroupSet",
                                     inputRowType,
                                     (RowType) Projection.of(auxGrouping).project(inputRowType),

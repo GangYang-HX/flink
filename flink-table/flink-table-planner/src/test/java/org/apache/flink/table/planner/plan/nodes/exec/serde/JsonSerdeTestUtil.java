@@ -21,10 +21,12 @@ package org.apache.flink.table.planner.plan.nodes.exec.serde;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.catalog.CatalogManager;
+import org.apache.flink.table.catalog.FunctionCatalog;
+import org.apache.flink.table.module.ModuleManager;
+import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
 import org.apache.flink.table.planner.catalog.CatalogManagerCalciteSchema;
 import org.apache.flink.table.planner.delegation.ParserImpl;
 import org.apache.flink.table.planner.delegation.PlannerContext;
-import org.apache.flink.table.planner.utils.PlannerMocks;
 import org.apache.flink.table.utils.CatalogManagerMocks;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonPointer;
@@ -34,6 +36,7 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectWri
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import static org.apache.calcite.jdbc.CalciteSchemaBuilder.asRootSchema;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,18 +69,24 @@ class JsonSerdeTestUtil {
 
     static SerdeContext configuredSerdeContext(
             CatalogManager catalogManager, TableConfig tableConfig) {
+        final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        final ModuleManager moduleManager = new ModuleManager();
+        final FunctionCatalog functionCatalog =
+                new FunctionCatalog(tableConfig, catalogManager, moduleManager);
         final PlannerContext plannerContext =
-                PlannerMocks.newBuilder()
-                        .withCatalogManager(catalogManager)
-                        .withTableConfig(tableConfig)
-                        .withRootSchema(
-                                asRootSchema(new CatalogManagerCalciteSchema(catalogManager, true)))
-                        .build()
-                        .getPlannerContext();
+                new PlannerContext(
+                        false,
+                        tableConfig,
+                        moduleManager,
+                        functionCatalog,
+                        catalogManager,
+                        asRootSchema(new CatalogManagerCalciteSchema(catalogManager, true)),
+                        Collections.emptyList());
         return new SerdeContext(
                 new ParserImpl(null, null, plannerContext::createCalciteParser, null),
                 plannerContext.getFlinkContext(),
-                plannerContext.getTypeFactory(),
+                classLoader,
+                FlinkTypeFactory.INSTANCE(),
                 plannerContext.createFrameworkConfig().getOperatorTable());
     }
 

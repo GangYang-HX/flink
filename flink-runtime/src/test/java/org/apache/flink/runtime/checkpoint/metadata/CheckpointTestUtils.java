@@ -311,4 +311,14 @@ public class CheckpointTestUtils {
     private static UUID createRandomUUID(Random rnd) {
         return new UUID(rnd.nextLong(), rnd.nextLong());
     }
+
+    public static Map<OperatorID, String> createOperatorDescriptions(
+            Random random, int numOperatorDescriptions) {
+        final Map<OperatorID, String> operatorDescriptions = new HashMap<>();
+        for (int i = 0; i < numOperatorDescriptions; i++) {
+            String operatorDescription = StringUtils.getRandomString(random, 5, 500);
+            operatorDescriptions.put(new OperatorID(), operatorDescription);
+        }
+        return operatorDescriptions;
+    }
 }

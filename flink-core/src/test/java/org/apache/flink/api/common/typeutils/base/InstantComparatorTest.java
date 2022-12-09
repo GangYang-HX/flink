@@ -25,7 +25,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import java.time.Instant;
 
 /** A test for the {@link InstantComparator}. */
-class InstantComparatorTest extends ComparatorTestBase<Instant> {
+public class InstantComparatorTest extends ComparatorTestBase<Instant> {
 
     @Override
     protected TypeComparator<Instant> createComparator(boolean ascending) {

@@ -132,7 +132,7 @@ public class DefaultExecutionGraphDeploymentWithSmallBlobCacheSizeLimitTest
                                 .createTestingLogicalSlot();
                 final Execution execution = ev.getCurrentExecutionAttempt();
                 execution.transitionState(ExecutionState.SCHEDULED);
-                execution.registerProducedPartitions(slot.getTaskManagerLocation()).get();
+                execution.registerProducedPartitions(slot.getTaskManagerLocation(), true).get();
                 ev.deployToSlot(slot);
                 assertEquals(ExecutionState.DEPLOYING, ev.getExecutionState());
 
@@ -176,8 +176,10 @@ public class DefaultExecutionGraphDeploymentWithSmallBlobCacheSizeLimitTest
         final DefaultExecutionGraph eg =
                 TestingDefaultExecutionGraphBuilder.newBuilder()
                         .setJobGraph(jobGraph)
+                        .setFutureExecutor(executor)
+                        .setIoExecutor(executor)
                         .setBlobWriter(blobWriter)
-                        .build(executor);
+                        .build();
 
         eg.start(ComponentMainThreadExecutorServiceAdapter.forMainThread());
 

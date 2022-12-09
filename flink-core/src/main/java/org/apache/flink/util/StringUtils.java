@@ -335,6 +335,10 @@ public final class StringUtils {
                 .collect(Collectors.joining(", ", "\"", "\""));
     }
 
+    public static String objToString(@Nullable Object obj) {
+        return obj == null ? null : obj.toString();
+    }
+
     // ------------------------------------------------------------------------
 
     /** Prevent instantiation of this utility class. */

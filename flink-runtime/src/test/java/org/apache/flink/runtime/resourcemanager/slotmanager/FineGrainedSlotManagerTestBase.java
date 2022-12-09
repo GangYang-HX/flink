@@ -35,14 +35,11 @@ import org.apache.flink.runtime.slots.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
 import org.apache.flink.runtime.taskexecutor.TestingTaskExecutorGatewayBuilder;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorExtension;
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
-import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
 import org.apache.flink.util.function.RunnableWithException;
-
-import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -50,18 +47,15 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.fail;
 
 /** Base class for the tests of {@link FineGrainedSlotManager}. */
-abstract class FineGrainedSlotManagerTestBase {
-    @RegisterExtension
-    static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorExtension();
-
+public abstract class FineGrainedSlotManagerTestBase extends TestLogger {
+    private static final Executor MAIN_THREAD_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final long FUTURE_TIMEOUT_SECOND = 5;
     private static final long FUTURE_EXPECT_TIMEOUT_MS = 50;
     static final FlinkException TEST_EXCEPTION = new FlinkException("Test exception");
@@ -130,12 +124,12 @@ abstract class FineGrainedSlotManagerTestBase {
     }
 
     static void assertFutureNotComplete(CompletableFuture<?> completableFuture) throws Exception {
-        assertThatThrownBy(
-                        () ->
-                                completableFuture.get(
-                                        FUTURE_EXPECT_TIMEOUT_MS, TimeUnit.MILLISECONDS),
-                        "Expected to fail with a timeout.")
-                .isInstanceOf(TimeoutException.class);
+        try {
+            completableFuture.get(FUTURE_EXPECT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            fail("Expected to fail with a timeout.");
+        } catch (TimeoutException e) {
+            // expected
+        }
     }
 
     /** This class provides a self-contained context for each test case. */
@@ -148,9 +142,8 @@ abstract class FineGrainedSlotManagerTestBase {
         private SlotManagerMetricGroup slotManagerMetricGroup =
                 UnregisteredMetricGroups.createUnregisteredSlotManagerMetricGroup();
         private BlockedTaskManagerChecker blockedTaskManagerChecker = resourceID -> false;
-        private final ScheduledExecutor scheduledExecutor =
-                new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor());
-        private final Executor mainThreadExecutor = EXECUTOR_RESOURCE.getExecutor();
+        private final ScheduledExecutor scheduledExecutor = TestingUtils.defaultScheduledExecutor();
+        private final Executor mainThreadExecutor = MAIN_THREAD_EXECUTOR;
         private FineGrainedSlotManager slotManager;
         private Duration requirementCheckDelay = Duration.ZERO;
 

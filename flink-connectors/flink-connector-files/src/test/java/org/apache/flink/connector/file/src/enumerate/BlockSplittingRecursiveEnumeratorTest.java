@@ -22,17 +22,17 @@ import org.apache.flink.connector.file.src.FileSourceSplit;
 import org.apache.flink.connector.file.src.testutils.TestingFileSystem;
 import org.apache.flink.core.fs.Path;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
 
 /** Unit tests for the {@link BlockSplittingRecursiveEnumerator}. */
-class BlockSplittingRecursiveEnumeratorTest extends NonSplittingRecursiveEnumeratorTest {
+public class BlockSplittingRecursiveEnumeratorTest extends NonSplittingRecursiveEnumeratorTest {
 
     @Test
     @Override
-    void testFileWithMultipleBlocks() throws Exception {
+    public void testFileWithMultipleBlocks() throws Exception {
         final Path testPath = new Path("testfs:///dir/file");
         testFs =
                 TestingFileSystem.createForFileStatus(

@@ -23,18 +23,19 @@ import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.configuration.RestOptions;
 
 import org.apache.commons.cli.CommandLine;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.time.Duration;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
 
 /** Tests for the {@link DefaultCLI}. */
-class DefaultCLITest {
+public class DefaultCLITest {
 
     /** Verifies command line options are correctly materialized. */
     @Test
-    void testCommandLineMaterialization() throws Exception {
+    public void testCommandLineMaterialization() throws Exception {
         final String hostname = "home-sweet-home";
         final int port = 1234;
         final String[] args = {"-m", hostname + ':' + port};
@@ -44,12 +45,12 @@ class DefaultCLITest {
 
         Configuration configuration = defaultCLI.toConfiguration(commandLine);
 
-        assertThat(configuration.get(RestOptions.ADDRESS)).isEqualTo(hostname);
-        assertThat(configuration.get(RestOptions.PORT)).isEqualTo(port);
+        assertThat(configuration.get(RestOptions.ADDRESS), is(hostname));
+        assertThat(configuration.get(RestOptions.PORT), is(port));
     }
 
     @Test
-    void testDynamicPropertyMaterialization() throws Exception {
+    public void testDynamicPropertyMaterialization() throws Exception {
         final String[] args = {
             "-D" + PipelineOptions.AUTO_WATERMARK_INTERVAL.key() + "=42",
             "-D" + PipelineOptions.AUTO_GENERATE_UIDS.key() + "=true"
@@ -60,8 +61,9 @@ class DefaultCLITest {
 
         Configuration configuration = defaultCLI.toConfiguration(commandLine);
 
-        assertThat(configuration.get(PipelineOptions.AUTO_WATERMARK_INTERVAL))
-                .isEqualTo(Duration.ofMillis(42L));
-        assertThat(configuration.get(PipelineOptions.AUTO_GENERATE_UIDS)).isTrue();
+        assertThat(
+                configuration.get(PipelineOptions.AUTO_WATERMARK_INTERVAL),
+                is(Duration.ofMillis(42L)));
+        assertThat(configuration.get(PipelineOptions.AUTO_GENERATE_UIDS), is(true));
     }
 }

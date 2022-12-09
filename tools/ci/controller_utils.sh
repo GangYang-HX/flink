@@ -25,7 +25,7 @@ print_system_info() {
     cat /proc/meminfo
 
     echo "Disk information"
-    df -h
+    df -hH
 
     echo "Running build as"
     whoami

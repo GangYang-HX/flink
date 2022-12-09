@@ -40,7 +40,7 @@ import java.net.URI;
 import java.util.Collections;
 import java.util.Properties;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for HiveOutputFormatFactory. */
 public class HiveOutputFormatFactoryTest {
@@ -82,8 +82,8 @@ public class HiveOutputFormatFactoryTest {
                 Progressable progress)
                 throws IOException {
             URI uri = finalOutPath.toUri();
-            assertThat(uri.getScheme()).isEqualTo(TEST_URI_SCHEME);
-            assertThat(uri.getAuthority()).isEqualTo(TEST_URI_AUTHORITY);
+            assertEquals(TEST_URI_SCHEME, uri.getScheme());
+            assertEquals(TEST_URI_AUTHORITY, uri.getAuthority());
             return null;
         }
 

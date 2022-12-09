@@ -22,11 +22,11 @@ import org.apache.flink.sql.parser.hive.impl.FlinkHiveSqlParserImpl;
 
 import org.apache.calcite.sql.parser.SqlParserImplFactory;
 import org.apache.calcite.sql.parser.SqlParserTest;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
+import org.junit.Ignore;
+import org.junit.Test;
 
 /** Tests for {@link FlinkHiveSqlParserImpl}. */
-class FlinkHiveSqlParserImplTest extends SqlParserTest {
+public class FlinkHiveSqlParserImplTest extends SqlParserTest {
 
     @Override
     protected SqlParserImplFactory parserImplFactory() {
@@ -34,36 +34,36 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     // ignore test methods that we don't support
-    @Disabled
+    @Ignore
     @Test
-    void testDescribeStatement() {}
+    public void testDescribeStatement() {}
 
-    @Disabled
+    @Ignore
     @Test
-    void testTableHintsInInsert() {}
+    public void testTableHintsInInsert() {}
 
-    @Disabled
+    @Ignore
     @Test
-    void testDescribeSchema() {}
+    public void testDescribeSchema() {}
 
     @Test
-    void testShowDatabases() {
+    public void testShowDatabases() {
         sql("show databases").ok("SHOW DATABASES");
     }
 
     @Test
-    void testShowCurrentDatabase() {
+    public void testShowCurrentDatabase() {
         sql("show current database").ok("SHOW CURRENT DATABASE");
     }
 
     @Test
-    void testUseDatabase() {
+    public void testUseDatabase() {
         // use database
         sql("use db1").ok("USE `DB1`");
     }
 
     @Test
-    void testCreateDatabase() {
+    public void testCreateDatabase() {
         sql("create database db1").ok("CREATE DATABASE `DB1`");
         sql("create database db1 comment 'comment db1' location '/path/to/db1'")
                 .ok(
@@ -79,7 +79,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testAlterDatabase() {
+    public void testAlterDatabase() {
         sql("alter database db1 set dbproperties('k1'='v1')")
                 .ok("ALTER DATABASE `DB1` SET DBPROPERTIES (\n" + "  'k1' = 'v1'\n" + ")");
         sql("alter database db1 set location '/new/path'")
@@ -91,13 +91,13 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testDropDatabase() {
+    public void testDropDatabase() {
         sql("drop schema db1").ok("DROP DATABASE `DB1` RESTRICT");
         sql("drop database db1 cascade").ok("DROP DATABASE `DB1` CASCADE");
     }
 
     @Test
-    void testDescribeDatabase() {
+    public void testDescribeDatabase() {
         sql("describe schema db1").ok("DESCRIBE DATABASE `DB1`");
         sql("describe database extended db1").ok("DESCRIBE DATABASE EXTENDED `DB1`");
 
@@ -106,13 +106,13 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testShowTables() {
+    public void testShowTables() {
         // TODO: support SHOW TABLES IN 'db_name' 'regex_pattern'
         sql("show tables").ok("SHOW TABLES");
     }
 
     @Test
-    void testDescribeTable() {
+    public void testDescribeTable() {
         // TODO: support describe partition and columns
         sql("describe tbl").ok("DESCRIBE `TBL`");
         sql("describe extended tbl").ok("DESCRIBE EXTENDED `TBL`");
@@ -124,7 +124,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testCreateTable() {
+    public void testCreateTable() {
         sql("create table tbl (x int) row format delimited fields terminated by ',' escaped by '\\' "
                         + "collection items terminated by ',' map keys terminated by ':' lines terminated by '\n' "
                         + "null defined as 'null' location '/path/to/table'")
@@ -197,7 +197,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testConstraints() {
+    public void testConstraints() {
         sql("create table tbl (x int not null enable rely, y string not null disable novalidate norely)")
                 .ok(
                         "CREATE TABLE `TBL` (\n"
@@ -223,13 +223,13 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testDropTable() {
+    public void testDropTable() {
         sql("drop table tbl").ok("DROP TABLE `TBL`");
         sql("drop table if exists cat.tbl").ok("DROP TABLE IF EXISTS `CAT`.`TBL`");
     }
 
     @Test
-    void testInsert() {
+    public void testInsert() {
         sql("insert into tbl partition(p1=1,p2,p3) select * from src")
                 .ok(
                         "INSERT INTO `TBL`\n"
@@ -243,60 +243,60 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testCreateFunction() {
+    public void testCreateFunction() {
         sql("create function func as 'class.name'").ok("CREATE FUNCTION `FUNC` AS 'class.name'");
         sql("create temporary function func as 'class.name'")
                 .ok("CREATE TEMPORARY FUNCTION `FUNC` AS 'class.name'");
     }
 
     @Test
-    void testDropFunction() {
+    public void testDropFunction() {
         sql("drop function if exists func").ok("DROP FUNCTION IF EXISTS `FUNC`");
         sql("drop temporary function func").ok("DROP TEMPORARY FUNCTION `FUNC`");
     }
 
     @Test
-    void testShowFunctions() {
+    public void testShowFunctions() {
         sql("show functions").ok("SHOW FUNCTIONS");
         sql("show user functions").ok("SHOW USER FUNCTIONS");
     }
 
     @Test
-    void testCreateCatalog() {
+    public void testCreateCatalog() {
         sql("create catalog cat").ok("CREATE CATALOG `CAT`");
         sql("create catalog cat with ('k1'='v1')")
                 .ok("CREATE CATALOG `CAT` WITH (\n" + "  'k1' = 'v1'\n" + ")");
     }
 
     @Test
-    void testShowCatalogs() {
+    public void testShowCatalogs() {
         sql("show catalogs").ok("SHOW CATALOGS");
     }
 
     @Test
-    void testShowCurrentCatalog() {
+    public void testShowCurrentCatalog() {
         sql("show current catalog").ok("SHOW CURRENT CATALOG");
     }
 
     @Test
-    void testUseCatalog() {
+    public void testUseCatalog() {
         sql("use catalog cat").ok("USE CATALOG `CAT`");
     }
 
     @Test
-    void testDescribeCatalog() {
+    public void testDescribeCatalog() {
         sql("describe catalog cat").ok("DESCRIBE CATALOG `CAT`");
 
         sql("desc catalog cat").ok("DESCRIBE CATALOG `CAT`");
     }
 
     @Test
-    void testAlterTableRename() {
+    public void testAlterTableRename() {
         sql("alter table tbl rename to tbl1").ok("ALTER TABLE `TBL` RENAME TO `TBL1`");
     }
 
     @Test
-    void testAlterTableSerDe() {
+    public void testAlterTableSerDe() {
         sql("alter table tbl set serde 'serde.class' with serdeproperties ('field.delim'='\u0001')")
                 .ok(
                         "ALTER TABLE `TBL` SET SERDE 'serde.class' WITH SERDEPROPERTIES (\n"
@@ -307,7 +307,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testAlterTableLocation() {
+    public void testAlterTableLocation() {
         sql("alter table tbl set location '/new/table/path'")
                 .ok("ALTER TABLE `TBL` SET LOCATION '/new/table/path'");
         sql("alter table tbl partition (p1=1,p2='a') set location '/new/partition/location'")
@@ -318,7 +318,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     // TODO: support ALTER CLUSTERED BY, SKEWED, STORED AS DIRECTORIES, column constraints
 
     @Test
-    void testAlterPartitionRename() {
+    public void testAlterPartitionRename() {
         sql("alter table tbl partition (p=1) rename to partition (p=2)")
                 .ok(
                         "ALTER TABLE `TBL` PARTITION (`P` = 1)\n"
@@ -327,7 +327,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testAlterTableProperties() {
+    public void testAlterTableProperties() {
         sql("alter table tbl set tblproperties('k1'='v1','k2'='v2')")
                 .ok(
                         "ALTER TABLE `TBL` SET TBLPROPERTIES (\n"
@@ -341,7 +341,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     // TODO: support (UN)ARCHIVE PARTITION
 
     @Test
-    void testAlterFileFormat() {
+    public void testAlterFileFormat() {
         sql("alter table tbl set fileformat rcfile")
                 .ok("ALTER TABLE `TBL` SET FILEFORMAT `RCFILE`");
         sql("alter table tbl partition (p=1) set fileformat sequencefile")
@@ -351,7 +351,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     // TODO: support ALTER TABLE/PARTITION TOUCH, PROTECTION, COMPACT, CONCATENATE, UPDATE COLUMNS
 
     @Test
-    void testChangeColumn() {
+    public void testChangeColumn() {
         sql("alter table tbl change c c1 struct<f0:timestamp,f1:array<char(5)>> restrict")
                 .ok(
                         "ALTER TABLE `TBL` CHANGE COLUMN `C` `C1` STRUCT< `F0` TIMESTAMP, `F1` ARRAY< CHAR(5) > > RESTRICT");
@@ -361,7 +361,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testAddReplaceColumn() {
+    public void testAddReplaceColumn() {
         sql("alter table tbl add columns (a float,b timestamp,c binary) cascade")
                 .ok(
                         "ALTER TABLE `TBL` ADD COLUMNS (\n"
@@ -379,7 +379,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testCreateView() {
+    public void testCreateView() {
         sql("create view db1.v1 as select x,y from tbl")
                 .ok("CREATE VIEW `DB1`.`V1`\n" + "AS\n" + "SELECT `X`, `Y`\n" + "FROM `TBL`");
         sql("create view if not exists v1 (c1,c2) as select * from tbl")
@@ -403,13 +403,13 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testDropView() {
+    public void testDropView() {
         sql("drop view v1").ok("DROP VIEW `V1`");
         sql("drop view if exists v1").ok("DROP VIEW IF EXISTS `V1`");
     }
 
     @Test
-    void testAlterView() {
+    public void testAlterView() {
         sql("alter view v1 rename to v2").ok("ALTER VIEW `V1` RENAME TO `V2`");
         sql("alter view v1 set tblproperties ('k1'='v1')")
                 .ok("ALTER VIEW `V1` SET TBLPROPERTIES (\n" + "  'k1' = 'v1'\n" + ")");
@@ -418,7 +418,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testAddPartition() {
+    public void testAddPartition() {
         sql("alter table tbl add partition (p1=1,p2='a') location '/part1/location'")
                 .ok(
                         "ALTER TABLE `TBL`\n"
@@ -433,7 +433,7 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testDropPartition() {
+    public void testDropPartition() {
         sql("alter table tbl drop if exists partition (p=1)")
                 .ok("ALTER TABLE `TBL`\n" + "DROP IF EXISTS\n" + "PARTITION (`P` = 1)");
         sql("alter table tbl drop partition (p1='a',p2=1), partition(p1='b',p2=2)")
@@ -454,20 +454,20 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testShowPartitions() {
+    public void testShowPartitions() {
         sql("show partitions tbl").ok("SHOW PARTITIONS `TBL`");
         sql("show partitions tbl partition (p=1)").ok("SHOW PARTITIONS `TBL` PARTITION (`P` = 1)");
     }
 
     @Test
-    void testAddJar() {
+    public void testAddJar() {
         sql("add Jar './test.sql'").ok("ADD JAR './test.sql'");
         sql("add JAR 'file:///path/to/\nwhatever'").ok("ADD JAR 'file:///path/to/\nwhatever'");
         sql("add JAR 'oss://path/helloworld.go'").ok("ADD JAR 'oss://path/helloworld.go'");
     }
 
     @Test
-    void testRemoveJar() {
+    public void testRemoveJar() {
         sql("remove Jar './test.sql'").ok("REMOVE JAR './test.sql'");
         sql("remove JAR 'file:///path/to/\nwhatever'")
                 .ok("REMOVE JAR 'file:///path/to/\nwhatever'");
@@ -475,12 +475,12 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testShowJars() {
+    public void testShowJars() {
         sql("show jars").ok("SHOW JARS");
     }
 
     @Test
-    void testLoadModule() {
+    public void testLoadModule() {
         sql("load module hive").ok("LOAD MODULE `HIVE`");
 
         sql("load module hive with ('hive-version' = '3.1.2')")
@@ -488,12 +488,12 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testUnloadModule() {
+    public void testUnloadModule() {
         sql("unload module hive").ok("UNLOAD MODULE `HIVE`");
     }
 
     @Test
-    void testUseModules() {
+    public void testUseModules() {
         sql("use modules hive").ok("USE MODULES `HIVE`");
 
         sql("use modules x, y, z").ok("USE MODULES `X`, `Y`, `Z`");
@@ -505,57 +505,57 @@ class FlinkHiveSqlParserImplTest extends SqlParserTest {
     }
 
     @Test
-    void testShowModules() {
+    public void testShowModules() {
         sql("show modules").ok("SHOW MODULES");
 
         sql("show full modules").ok("SHOW FULL MODULES");
     }
 
     @Test
-    void testExplain() {
+    public void testExplain() {
         String sql = "explain plan for select * from emps";
         String expected = "EXPLAIN SELECT *\n" + "FROM `EMPS`";
         this.sql(sql).ok(expected);
     }
 
     @Test
-    void testExplainJsonFormat() {
+    public void testExplainJsonFormat() {
         // Unsupported feature. Escape the test.
     }
 
     @Test
-    void testExplainWithImpl() {
+    public void testExplainWithImpl() {
         // Unsupported feature. Escape the test.
     }
 
     @Test
-    void testExplainWithoutImpl() {
+    public void testExplainWithoutImpl() {
         // Unsupported feature. Escape the test.
     }
 
     @Test
-    void testExplainWithType() {
+    public void testExplainWithType() {
         // Unsupported feature. Escape the test.
     }
 
     @Test
-    void testExplainAsXml() {
+    public void testExplainAsXml() {
         // Unsupported feature. Escape the test.
     }
 
     @Test
-    void testExplainAsJson() {
+    public void testExplainAsJson() {
         // TODO: FLINK-20562
     }
 
     @Test
-    void testExplainInsert() {
+    public void testExplainInsert() {
         String expected = "EXPLAIN INSERT INTO `EMPS1`\n" + "(SELECT *\n" + "FROM `EMPS2`)";
         this.sql("explain plan for insert into emps1 select * from emps2").ok(expected);
     }
 
     @Test
-    void testExplainUpsert() {
+    public void testExplainUpsert() {
         String sql = "explain plan for upsert into emps1 values (1, 2)";
         String expected = "EXPLAIN UPSERT INTO `EMPS1`\n" + "VALUES (ROW(1, 2))";
         this.sql(sql).ok(expected);

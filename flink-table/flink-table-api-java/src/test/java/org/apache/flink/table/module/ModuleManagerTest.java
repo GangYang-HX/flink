@@ -20,9 +20,10 @@ package org.apache.flink.table.module;
 
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.utils.ModuleMock;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,17 +36,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link ModuleManager}. */
-class ModuleManagerTest {
+public class ModuleManagerTest extends TestLogger {
 
     private ModuleManager manager;
 
-    @BeforeEach
+    @Before
     public void before() {
         manager = new ModuleManager();
     }
 
     @Test
-    void testLoadModuleTwice() {
+    public void testLoadModuleTwice() {
         // CoreModule is loaded by default
         assertThat(manager.getUsedModules())
                 .isEqualTo(Collections.singletonList(CoreModuleFactory.IDENTIFIER));
@@ -59,7 +60,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testLoadModuleWithoutUnusedModulesExist() {
+    public void testLoadModuleWithoutUnusedModulesExist() {
         ModuleMock x = new ModuleMock("x");
         ModuleMock y = new ModuleMock("y");
         ModuleMock z = new ModuleMock("z");
@@ -79,7 +80,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testLoadModuleWithUnusedModulesExist() {
+    public void testLoadModuleWithUnusedModulesExist() {
         ModuleMock y = new ModuleMock("y");
         ModuleMock z = new ModuleMock("z");
         manager.loadModule(y.getType(), y);
@@ -107,7 +108,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testUnloadModuleTwice() {
+    public void testUnloadModuleTwice() {
         assertThat(manager.getUsedModules()).containsSequence(CoreModuleFactory.IDENTIFIER);
 
         manager.unloadModule(CoreModuleFactory.IDENTIFIER);
@@ -120,14 +121,14 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testUseUnloadedModules() {
+    public void testUseUnloadedModules() {
         assertThatThrownBy(() -> manager.useModules(CoreModuleFactory.IDENTIFIER, "x"))
                 .isInstanceOf(ValidationException.class)
                 .hasMessage("No module with name 'x' exists");
     }
 
     @Test
-    void testUseModulesWithDuplicateModuleName() {
+    public void testUseModulesWithDuplicateModuleName() {
         assertThatThrownBy(
                         () ->
                                 manager.useModules(
@@ -137,7 +138,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testUseModules() {
+    public void testUseModules() {
         ModuleMock x = new ModuleMock("x");
         ModuleMock y = new ModuleMock("y");
         ModuleMock z = new ModuleMock("z");
@@ -162,7 +163,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testListModules() {
+    public void testListModules() {
         ModuleMock y = new ModuleMock("y");
         ModuleMock z = new ModuleMock("z");
         manager.loadModule("y", y);
@@ -173,7 +174,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testListFullModules() {
+    public void testListFullModules() {
         ModuleMock x = new ModuleMock("x");
         ModuleMock y = new ModuleMock("y");
         ModuleMock z = new ModuleMock("z");
@@ -189,7 +190,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testListFunctions() {
+    public void testListFunctions() {
         ModuleMock x = new ModuleMock("x");
         manager.loadModule(x.getType(), x);
 
@@ -204,7 +205,7 @@ class ModuleManagerTest {
     }
 
     @Test
-    void testGetFunctionDefinition() {
+    public void testGetFunctionDefinition() {
         ModuleMock x = new ModuleMock("x");
         manager.loadModule(x.getType(), x);
 

@@ -202,8 +202,6 @@ public class JobDetailsHandler
         MutableIOMetrics counts = new MutableIOMetrics();
 
         for (AccessExecutionVertex vertex : ejv.getTaskVertices()) {
-            // Here we use the metrics of one of the current attempts to represent the subtask,
-            // rather than the aggregation of all attempts.
             counts.addIOMetrics(
                     vertex.getCurrentExecutionAttempt(),
                     metricFetcher,
@@ -220,10 +218,7 @@ public class JobDetailsHandler
                         counts.getNumRecordsIn(),
                         counts.isNumRecordsInComplete(),
                         counts.getNumRecordsOut(),
-                        counts.isNumRecordsOutComplete(),
-                        counts.getAccumulateBackPressuredTime(),
-                        counts.getAccumulateIdleTime(),
-                        counts.getAccumulateBusyTime());
+                        counts.isNumRecordsOutComplete());
 
         return new JobDetailsInfo.JobVertexDetailsInfo(
                 ejv.getJobVertexId(),

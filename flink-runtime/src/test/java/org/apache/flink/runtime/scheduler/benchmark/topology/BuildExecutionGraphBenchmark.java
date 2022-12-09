@@ -54,7 +54,9 @@ public class BuildExecutionGraphBenchmark extends SchedulerBenchmarkBase {
                 TestingDefaultExecutionGraphBuilder.newBuilder()
                         .setVertexParallelismStore(parallelismStore)
                         .setJobGraph(jobGraph)
-                        .build(scheduledExecutorService);
+                        .setFutureExecutor(scheduledExecutorService)
+                        .setIoExecutor(scheduledExecutorService)
+                        .build();
     }
 
     public void buildTopology() throws Exception {

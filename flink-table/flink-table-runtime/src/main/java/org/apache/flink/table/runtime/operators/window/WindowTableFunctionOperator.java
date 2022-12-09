@@ -31,6 +31,8 @@ import org.apache.flink.table.runtime.operators.window.assigners.WindowAssigner;
 
 import java.time.ZoneId;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.toEpochMills;
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.toUtcTimestampMills;
@@ -67,6 +69,9 @@ public class WindowTableFunctionOperator extends TableStreamOperator<RowData>
     private transient JoinedRowData outRow;
     private transient GenericRowData windowProperties;
 
+    private boolean hasSetQueryTime = false;
+    private Collection<TimeWindow> elementWindows = Collections.emptyList();
+
     public WindowTableFunctionOperator(
             WindowAssigner<TimeWindow> windowAssigner, int rowtimeIndex, ZoneId shiftTimeZone) {
         checkArgument(!windowAssigner.isEventTime() || rowtimeIndex >= 0);
@@ -101,7 +106,13 @@ public class WindowTableFunctionOperator extends TableStreamOperator<RowData>
             timestamp = getProcessingTimeService().getCurrentProcessingTime();
         }
         timestamp = toUtcTimestampMills(timestamp, shiftTimeZone);
-        Collection<TimeWindow> elementWindows = windowAssigner.assignWindows(inputRow, timestamp);
+        if (!hasSetQueryTime) {
+            elementWindows = windowAssigner.assignWindows(inputRow, timestamp);
+        } else if (timestamp < elementWindows.toArray(new TimeWindow[0])[0].getStart()
+                || timestamp >= elementWindows.toArray(new TimeWindow[0])[0].getEnd()) {
+            return;
+        }
+
         for (TimeWindow window : elementWindows) {
             windowProperties.setField(0, TimestampData.fromEpochMillis(window.getStart()));
             windowProperties.setField(1, TimestampData.fromEpochMillis(window.getEnd()));
@@ -110,6 +121,33 @@ public class WindowTableFunctionOperator extends TableStreamOperator<RowData>
                     TimestampData.fromEpochMillis(
                             toEpochMills(window.maxTimestamp(), shiftTimeZone)));
             collector.collect(outRow.replace(inputRow, windowProperties));
+        }
+    }
+
+    public void setQueryTime(Long queryStartTime, Long queryEndTime) {
+        try {
+            hasSetQueryTime = true;
+            long finalQueryStartTime = toUtcTimestampMills(queryStartTime, ZoneId.systemDefault());
+            long finalQueryEndTime = toUtcTimestampMills(queryEndTime, ZoneId.systemDefault());
+            elementWindows = windowAssigner.assignWindows(null, finalQueryStartTime);
+            int size = elementWindows.size();
+            elementWindows =
+                    elementWindows.stream()
+                            .filter(timeWindow -> timeWindow.getEnd() == finalQueryEndTime)
+                            .collect(Collectors.toList());
+
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(
+                        "window collection size {} -> {}, limit by query time [{}(parsed: {}), {}(parsed: {})].",
+                        size,
+                        elementWindows.size(),
+                        queryStartTime,
+                        finalQueryStartTime,
+                        queryEndTime,
+                        finalQueryEndTime);
+            }
+        } catch (Exception e) {
+            LOG.error("set query time error.", e);
         }
     }
 }

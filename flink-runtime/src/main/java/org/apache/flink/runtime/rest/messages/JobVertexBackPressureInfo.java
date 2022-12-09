@@ -22,7 +22,6 @@ import org.apache.flink.runtime.rest.handler.job.JobVertexBackPressureHandler;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonInclude;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonInclude.Include;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonValue;
 
@@ -122,21 +121,13 @@ public class JobVertexBackPressureInfo implements ResponseBody {
     public static final class SubtaskBackPressureInfo {
 
         public static final String FIELD_NAME_SUBTASK = "subtask";
-        public static final String FIELD_NAME_ATTEMPT_NUMBER = "attempt-number";
         public static final String FIELD_NAME_BACKPRESSURE_LEVEL = "backpressure-level";
         public static final String FIELD_NAME_BACK_PRESSURED_RATIO = "ratio";
         public static final String FIELD_NAME_IDLE_RATIO = "idleRatio";
         public static final String FIELD_NAME_BUSY_RATIO = "busyRatio";
-        public static final String FIELD_NAME_OTHER_CONCURRENT_ATTEMPTS =
-                "other-concurrent-attempts";
 
         @JsonProperty(FIELD_NAME_SUBTASK)
         private final int subtask;
-
-        @JsonProperty(FIELD_NAME_ATTEMPT_NUMBER)
-        @JsonInclude(Include.NON_NULL)
-        @Nullable
-        private final Integer attemptNumber;
 
         @JsonProperty(FIELD_NAME_BACKPRESSURE_LEVEL)
         private final VertexBackPressureLevel backpressureLevel;
@@ -150,30 +141,18 @@ public class JobVertexBackPressureInfo implements ResponseBody {
         @JsonProperty(FIELD_NAME_BUSY_RATIO)
         private final double busyRatio;
 
-        @JsonProperty(FIELD_NAME_OTHER_CONCURRENT_ATTEMPTS)
-        @JsonInclude(Include.NON_EMPTY)
-        @Nullable
-        private final List<SubtaskBackPressureInfo> otherConcurrentAttempts;
-
-        // otherConcurrentAttempts and attemptNumber are Nullable since Jackson will assign null if
-        // the fields are absent while parsing
         public SubtaskBackPressureInfo(
                 @JsonProperty(FIELD_NAME_SUBTASK) int subtask,
-                @JsonProperty(FIELD_NAME_ATTEMPT_NUMBER) @Nullable Integer attemptNumber,
                 @JsonProperty(FIELD_NAME_BACKPRESSURE_LEVEL)
                         VertexBackPressureLevel backpressureLevel,
                 @JsonProperty(FIELD_NAME_BACK_PRESSURED_RATIO) double backPressuredRatio,
                 @JsonProperty(FIELD_NAME_IDLE_RATIO) double idleRatio,
-                @JsonProperty(FIELD_NAME_BUSY_RATIO) double busyRatio,
-                @JsonProperty(FIELD_NAME_OTHER_CONCURRENT_ATTEMPTS) @Nullable
-                        List<SubtaskBackPressureInfo> otherConcurrentAttempts) {
+                @JsonProperty(FIELD_NAME_BUSY_RATIO) double busyRatio) {
             this.subtask = subtask;
-            this.attemptNumber = attemptNumber;
             this.backpressureLevel = checkNotNull(backpressureLevel);
             this.backPressuredRatio = backPressuredRatio;
             this.idleRatio = idleRatio;
             this.busyRatio = busyRatio;
-            this.otherConcurrentAttempts = otherConcurrentAttempts;
         }
 
         @Override
@@ -186,24 +165,16 @@ public class JobVertexBackPressureInfo implements ResponseBody {
             }
             SubtaskBackPressureInfo that = (SubtaskBackPressureInfo) o;
             return subtask == that.subtask
-                    && Objects.equals(attemptNumber, that.attemptNumber)
                     && backPressuredRatio == that.backPressuredRatio
                     && idleRatio == that.idleRatio
                     && busyRatio == that.busyRatio
-                    && Objects.equals(backpressureLevel, that.backpressureLevel)
-                    && Objects.equals(otherConcurrentAttempts, that.otherConcurrentAttempts);
+                    && Objects.equals(backpressureLevel, that.backpressureLevel);
         }
 
         @Override
         public int hashCode() {
             return Objects.hash(
-                    subtask,
-                    attemptNumber,
-                    backpressureLevel,
-                    backPressuredRatio,
-                    idleRatio,
-                    busyRatio,
-                    otherConcurrentAttempts);
+                    subtask, backpressureLevel, backPressuredRatio, idleRatio, busyRatio);
         }
 
         public int getSubtask() {
@@ -224,16 +195,6 @@ public class JobVertexBackPressureInfo implements ResponseBody {
 
         public double getBusyRatio() {
             return busyRatio;
-        }
-
-        @Nullable
-        public Integer getAttemptNumber() {
-            return attemptNumber;
-        }
-
-        @Nullable
-        public List<SubtaskBackPressureInfo> getOtherConcurrentAttempts() {
-            return otherConcurrentAttempts;
         }
     }
 

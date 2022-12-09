@@ -211,7 +211,7 @@ public class StreamGraphHasherV2 implements StreamGraphHasher {
     }
 
     /** Generates a deterministic hash from node-local properties and input and output edges. */
-    private byte[] generateDeterministicHash(
+    protected byte[] generateDeterministicHash(
             StreamNode node,
             Hasher hasher,
             Map<Integer, byte[]> hashes,
@@ -292,7 +292,7 @@ public class StreamGraphHasherV2 implements StreamGraphHasher {
      * it is incremented in a static counter. Therefore, the IDs for identical jobs will otherwise
      * be different.
      */
-    private void generateNodeLocalHash(Hasher hasher, int id) {
+    protected void generateNodeLocalHash(Hasher hasher, int id) {
         // This resolves conflicts for otherwise identical source nodes. BUT
         // the generated hash codes depend on the ordering of the nodes in the
         // stream graph.

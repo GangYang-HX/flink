@@ -69,9 +69,4 @@ public class RescalingTriggerHeaders
     protected String getAsyncOperationDescription() {
         return "Triggers the rescaling of a job.";
     }
-
-    @Override
-    public String operationId() {
-        return "rescaleJob";
-    }
 }

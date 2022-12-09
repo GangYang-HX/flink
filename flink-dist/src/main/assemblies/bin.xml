@@ -73,7 +73,7 @@ under the License.
 
 		<!-- Scala APIs -->
 		<file>
-			<source>../flink-dist-scala/target/flink-dist-scala_${scala.binary.version}-${project.version}.jar</source>
+			<source>../flink-scala/target/flink-scala_${scala.binary.version}-${project.version}.jar</source>
 			<outputDirectory>lib/</outputDirectory>
 			<destName>flink-scala_${scala.binary.version}-${project.version}.jar</destName>
 			<fileMode>0644</fileMode>
@@ -93,9 +93,9 @@ under the License.
 			<fileMode>0644</fileMode>
 		</file>
 		<file>
-			<source>../flink-table/flink-table-planner-loader/target/flink-table-planner-loader-${project.version}.jar</source>
+			<source>../flink-table/flink-table-planner/target/flink-table-planner_${scala.binary.version}-${project.version}.jar</source>
 			<outputDirectory>lib/</outputDirectory>
-			<destName>flink-table-planner-loader-${project.version}.jar</destName>
+			<destName>flink-table-planner_${scala.binary.version}-${project.version}.jar</destName>
 			<fileMode>0644</fileMode>
 		</file>
 
@@ -114,6 +114,27 @@ under the License.
 			<destName>flink-connector-files-${project.version}.jar</destName>
 			<fileMode>0644</fileMode>
 		</file>
+
+        <file>
+            <source>../flink-connectors/flink-hadoop-compatibility/target/flink-hadoop-compatibility_${scala.binary.version}-${project.version}.jar</source>
+            <outputDirectory>lib/</outputDirectory>
+            <destName>flink-hadoop-compatibility_${scala.binary.version}-${project.version}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>../flink-connectors/flink-sql-connector-hive-2.3.6/target/flink-sql-connector-hive-2.3.6_${scala.binary.version}-${project.version}.jar</source>
+            <outputDirectory>lib/</outputDirectory>
+            <destName>flink-sql-connector-hive-2.3.6_${scala.binary.version}-${project.version}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>../flink-connectors/flink-connector-hudi/target/flink-connector-hudi-${project.version}.jar</source>
+            <outputDirectory>lib/</outputDirectory>
+            <destName>flink-connector-hudi-${project.version}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
 
 		<file>
 			<source>../flink-formats/flink-csv/target/flink-csv-${project.version}.jar</source>
@@ -168,13 +189,6 @@ under the License.
 		<!-- copy SQL client -->
 		<fileSet>
 			<directory>../flink-table/flink-sql-client/bin/</directory>
-			<outputDirectory>bin</outputDirectory>
-			<fileMode>0755</fileMode>
-		</fileSet>
-
-		<!-- copy SQL gateway -->
-		<fileSet>
-			<directory>../flink-table/flink-sql-gateway/bin/</directory>
 			<outputDirectory>bin</outputDirectory>
 			<fileMode>0755</fileMode>
 		</fileSet>

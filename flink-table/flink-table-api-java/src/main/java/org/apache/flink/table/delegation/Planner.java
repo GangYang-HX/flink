@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Experimental;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.table.api.ExplainDetail;
+import org.apache.flink.table.api.LineAgeInfo;
 import org.apache.flink.table.api.PlanReference;
 import org.apache.flink.table.operations.ModifyOperation;
 import org.apache.flink.table.operations.Operation;
@@ -63,14 +64,6 @@ public interface Planner {
     Parser getParser();
 
     /**
-     * Retrieves a {@link ExtendedOperationExecutor} that provides method for executing operation in
-     * a custom way.
-     *
-     * @return initialized {@link ExtendedOperationExecutor}
-     */
-    ExtendedOperationExecutor getExtendedOperationExecutor();
-
-    /**
      * Converts a relational tree of {@link ModifyOperation}s into a set of runnable {@link
      * Transformation}s.
      *
@@ -95,6 +88,8 @@ public interface Planner {
      *     estimated cost, changelog mode for streaming, displaying execution plan in json format
      */
     String explain(List<Operation> operations, ExplainDetail... extraDetails);
+
+    List<LineAgeInfo> generateLineAge(List<Operation> operations, ExplainDetail... extraDetails);
 
     // --- Plan compilation and restore
 

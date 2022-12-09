@@ -35,7 +35,9 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** Test for {@link DefaultExecutor}. */
 public class DefaultExecutorTest {
@@ -89,16 +91,17 @@ public class DefaultExecutorTest {
                         executor.createPipeline(
                                 dummyTransformations, configuration, "Default Name");
 
-        assertThat(streamGraph.getExecutionConfig().isObjectReuseEnabled()).isTrue();
-        assertThat(streamGraph.getExecutionConfig().getLatencyTrackingInterval()).isEqualTo(0);
-        assertThat(streamGraph.isChainingEnabled()).isTrue();
-        assertThat(streamGraph.isAllVerticesInSameSlotSharingGroupByDefault()).isFalse();
-        assertThat(streamGraph.getCheckpointConfig().isCheckpointingEnabled()).isFalse();
-        assertThat(streamGraph.getGlobalStreamExchangeMode())
-                .isEqualTo(GlobalStreamExchangeMode.ALL_EDGES_BLOCKING);
+        assertTrue(streamGraph.getExecutionConfig().isObjectReuseEnabled());
+        assertEquals(0, streamGraph.getExecutionConfig().getLatencyTrackingInterval());
+        assertTrue(streamGraph.isChainingEnabled());
+        assertFalse(streamGraph.isAllVerticesInSameSlotSharingGroupByDefault());
+        assertFalse(streamGraph.getCheckpointConfig().isCheckpointingEnabled());
+        assertEquals(
+                GlobalStreamExchangeMode.ALL_EDGES_BLOCKING,
+                streamGraph.getGlobalStreamExchangeMode());
     }
 
     private void testJobName(Pipeline pipeline, String expectedJobName) {
-        assertThat(((StreamGraph) pipeline).getJobName()).isEqualTo(expectedJobName);
+        assertEquals(expectedJobName, ((StreamGraph) pipeline).getJobName());
     }
 }

@@ -24,7 +24,8 @@ import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 
 /** Test for {@link TimerSerializer}. */
-class TimerSerializerTest extends SerializerTestBase<TimerHeapInternalTimer<Long, TimeWindow>> {
+public class TimerSerializerTest
+        extends SerializerTestBase<TimerHeapInternalTimer<Long, TimeWindow>> {
 
     private static final TypeSerializer<Long> KEY_SERIALIZER = LongSerializer.INSTANCE;
     private static final TypeSerializer<TimeWindow> NAMESPACE_SERIALIZER =

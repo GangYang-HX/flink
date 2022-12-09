@@ -28,31 +28,40 @@ import org.apache.flink.runtime.entrypoint.FlinkParseException;
 import org.apache.flink.runtime.entrypoint.parser.CommandLineParser;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Fail.fail;
+import static org.hamcrest.Matchers.arrayContaining;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasEntry;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.core.IsNull.nullValue;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for the {@link StandaloneApplicationClusterConfigurationParserFactory}. */
-class StandaloneApplicationClusterConfigurationParserFactoryTest {
+public class StandaloneApplicationClusterConfigurationParserFactoryTest extends TestLogger {
 
+    @Rule public TemporaryFolder tempFolder = new TemporaryFolder();
     private File confFile;
     private String confDirPath;
 
-    @BeforeEach
-    void createEmptyFlinkConfiguration(@TempDir Path tempFolder) throws IOException {
-        confDirPath = tempFolder.toFile().getAbsolutePath();
-        confFile = new File(tempFolder.toFile(), GlobalConfiguration.FLINK_CONF_FILENAME);
+    @Before
+    public void createEmptyFlinkConfiguration() throws IOException {
+        File confDir = tempFolder.getRoot();
+        confDirPath = confDir.getAbsolutePath();
+        confFile = new File(confDir, GlobalConfiguration.FLINK_CONF_FILENAME);
         confFile.createNewFile();
     }
 
@@ -63,7 +72,8 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
     private static final String JOB_CLASS_NAME = "foobar";
 
     @Test
-    void testEntrypointClusterConfigurationToConfigurationParsing() throws FlinkParseException {
+    public void testEntrypointClusterConfigurationToConfigurationParsing()
+            throws FlinkParseException {
         final JobID jobID = JobID.generate();
         final SavepointRestoreSettings savepointRestoreSettings =
                 SavepointRestoreSettings.forPath("/test/savepoint/path", true);
@@ -91,24 +101,25 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
 
         final StandaloneApplicationClusterConfiguration clusterConfiguration =
                 commandLineParser.parse(args);
-        assertThat(clusterConfiguration.getJobClassName()).isEqualTo(JOB_CLASS_NAME);
-        assertThat(clusterConfiguration.getArgs()).contains(arg1, arg2);
+        assertThat(clusterConfiguration.getJobClassName(), is(equalTo(JOB_CLASS_NAME)));
+        assertThat(clusterConfiguration.getArgs(), arrayContaining(arg1, arg2));
 
         final Configuration configuration =
                 StandaloneApplicationClusterEntryPoint.loadConfigurationFromClusterConfig(
                         clusterConfiguration);
 
         final String strJobId = configuration.get(PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID);
-        assertThat(JobID.fromHexString(strJobId)).isEqualTo(jobID);
-        assertThat(SavepointRestoreSettings.fromConfiguration(configuration))
-                .isEqualTo(savepointRestoreSettings);
+        assertThat(JobID.fromHexString(strJobId), is(equalTo(jobID)));
+        assertThat(
+                SavepointRestoreSettings.fromConfiguration(configuration),
+                is(equalTo(savepointRestoreSettings)));
 
-        assertThat(configuration.get(RestOptions.PORT)).isEqualTo(restPort);
-        assertThat(configuration.get(DeploymentOptions.TARGET)).isEqualTo(value);
+        assertThat(configuration.get(RestOptions.PORT), is(equalTo(restPort)));
+        assertThat(configuration.get(DeploymentOptions.TARGET), is(equalTo(value)));
     }
 
     @Test
-    void testEntrypointClusterConfigWOSavepointSettingsToConfigurationParsing()
+    public void testEntrypointClusterConfigWOSavepointSettingsToConfigurationParsing()
             throws FlinkParseException {
         final JobID jobID = JobID.generate();
         final String[] args = {"-c", confDirPath, "--job-id", jobID.toHexString()};
@@ -120,13 +131,14 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
                         clusterConfiguration);
 
         final String strJobId = configuration.get(PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID);
-        assertThat(JobID.fromHexString(strJobId)).isEqualTo(jobID);
-        assertThat(SavepointRestoreSettings.fromConfiguration(configuration))
-                .isEqualTo(SavepointRestoreSettings.none());
+        assertThat(JobID.fromHexString(strJobId), is(equalTo(jobID)));
+        assertThat(
+                SavepointRestoreSettings.fromConfiguration(configuration),
+                is(equalTo(SavepointRestoreSettings.none())));
     }
 
     @Test
-    void testEntrypointClusterConfigurationParsing() throws FlinkParseException {
+    public void testEntrypointClusterConfigurationParsing() throws FlinkParseException {
         final String key = "key";
         final String value = "value";
         final int restPort = 1234;
@@ -147,48 +159,50 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
         final StandaloneApplicationClusterConfiguration clusterConfiguration =
                 commandLineParser.parse(args);
 
-        assertThat(clusterConfiguration.getConfigDir()).isEqualTo(confDirPath);
-        assertThat(clusterConfiguration.getJobClassName()).isEqualTo(JOB_CLASS_NAME);
-        assertThat(clusterConfiguration.getRestPort()).isEqualTo(restPort);
+        assertThat(clusterConfiguration.getConfigDir(), is(equalTo(confDirPath)));
+        assertThat(clusterConfiguration.getJobClassName(), is(equalTo(JOB_CLASS_NAME)));
+        assertThat(clusterConfiguration.getRestPort(), is(equalTo(restPort)));
         final Properties dynamicProperties = clusterConfiguration.getDynamicProperties();
 
-        assertThat(dynamicProperties).containsEntry(key, value);
+        assertThat(dynamicProperties, hasEntry(key, value));
 
-        assertThat(clusterConfiguration.getArgs()).contains(arg1, arg2);
+        assertThat(clusterConfiguration.getArgs(), arrayContaining(arg1, arg2));
 
-        assertThat(clusterConfiguration.getSavepointRestoreSettings())
-                .isEqualTo(SavepointRestoreSettings.none());
+        assertThat(
+                clusterConfiguration.getSavepointRestoreSettings(),
+                is(equalTo(SavepointRestoreSettings.none())));
 
-        assertThat(clusterConfiguration.getJobId()).isNull();
+        assertThat(clusterConfiguration.getJobId(), is(nullValue()));
     }
 
     @Test
-    void testOnlyRequiredArguments() throws FlinkParseException {
+    public void testOnlyRequiredArguments() throws FlinkParseException {
         final String[] args = {"--configDir", confDirPath};
 
         final StandaloneApplicationClusterConfiguration clusterConfiguration =
                 commandLineParser.parse(args);
 
-        assertThat(clusterConfiguration.getConfigDir()).isEqualTo(confDirPath);
-        assertThat(clusterConfiguration.getDynamicProperties()).isEqualTo(new Properties());
-        assertThat(clusterConfiguration.getArgs()).isEqualTo(new String[0]);
-        assertThat(clusterConfiguration.getRestPort()).isEqualTo(-1);
-        assertThat(clusterConfiguration.getHostname()).isNull();
-        assertThat(clusterConfiguration.getSavepointRestoreSettings())
-                .isEqualTo(SavepointRestoreSettings.none());
-        assertThat(clusterConfiguration.getJobId()).isNull();
-        assertThat(clusterConfiguration.getJobClassName()).isNull();
+        assertThat(clusterConfiguration.getConfigDir(), is(equalTo(confDirPath)));
+        assertThat(clusterConfiguration.getDynamicProperties(), is(equalTo(new Properties())));
+        assertThat(clusterConfiguration.getArgs(), is(new String[0]));
+        assertThat(clusterConfiguration.getRestPort(), is(equalTo(-1)));
+        assertThat(clusterConfiguration.getHostname(), is(nullValue()));
+        assertThat(
+                clusterConfiguration.getSavepointRestoreSettings(),
+                is(equalTo(SavepointRestoreSettings.none())));
+        assertThat(clusterConfiguration.getJobId(), is(nullValue()));
+        assertThat(clusterConfiguration.getJobClassName(), is(nullValue()));
     }
 
-    @Test
-    void testMissingRequiredArgument() {
+    @Test(expected = FlinkParseException.class)
+    public void testMissingRequiredArgument() throws FlinkParseException {
         final String[] args = {};
-        assertThatThrownBy(() -> commandLineParser.parse(args))
-                .isInstanceOf(FlinkParseException.class);
+
+        commandLineParser.parse(args);
     }
 
     @Test
-    void testSavepointRestoreSettingsParsing() throws FlinkParseException {
+    public void testSavepointRestoreSettingsParsing() throws FlinkParseException {
         final String restorePath = "foobar";
         final String[] args = {"-c", confDirPath, "-j", JOB_CLASS_NAME, "-s", restorePath, "-n"};
         final StandaloneApplicationClusterConfiguration standaloneApplicationClusterConfiguration =
@@ -197,13 +211,13 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
         final SavepointRestoreSettings savepointRestoreSettings =
                 standaloneApplicationClusterConfiguration.getSavepointRestoreSettings();
 
-        assertThat(savepointRestoreSettings.restoreSavepoint()).isTrue();
-        assertThat(savepointRestoreSettings.getRestorePath()).isEqualTo(restorePath);
-        assertThat(savepointRestoreSettings.allowNonRestoredState()).isTrue();
+        assertThat(savepointRestoreSettings.restoreSavepoint(), is(true));
+        assertThat(savepointRestoreSettings.getRestorePath(), is(equalTo(restorePath)));
+        assertThat(savepointRestoreSettings.allowNonRestoredState(), is(true));
     }
 
     @Test
-    void testSetJobIdManually() throws FlinkParseException {
+    public void testSetJobIdManually() throws FlinkParseException {
         final JobID jobId = new JobID();
         final String[] args = {
             "--configDir", confDirPath, "--job-classname", "foobar", "--job-id", jobId.toString()
@@ -212,11 +226,11 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
         final StandaloneApplicationClusterConfiguration standaloneApplicationClusterConfiguration =
                 commandLineParser.parse(args);
 
-        assertThat(standaloneApplicationClusterConfiguration.getJobId()).isEqualTo(jobId);
+        assertThat(standaloneApplicationClusterConfiguration.getJobId(), is(equalTo(jobId)));
     }
 
     @Test
-    void testInvalidJobIdThrows() {
+    public void testInvalidJobIdThrows() {
         final String invalidJobId = "0xINVALID";
         final String[] args = {
             "--configDir", confDirPath, "--job-classname", "foobar", "--job-id", invalidJobId
@@ -228,13 +242,13 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
         } catch (FlinkParseException e) {
             Optional<IllegalArgumentException> cause =
                     ExceptionUtils.findThrowable(e, IllegalArgumentException.class);
-            assertThat(cause).isPresent();
-            assertThat(cause.get().getMessage()).containsSequence(invalidJobId);
+            assertTrue(cause.isPresent());
+            assertThat(cause.get().getMessage(), containsString(invalidJobId));
         }
     }
 
     @Test
-    void testShortOptions() throws FlinkParseException {
+    public void testShortOptions() throws FlinkParseException {
         final String jobClassName = "foobar";
         final JobID jobId = new JobID();
         final String savepointRestorePath = "s3://foo/bar";
@@ -250,25 +264,25 @@ class StandaloneApplicationClusterConfigurationParserFactoryTest {
         final StandaloneApplicationClusterConfiguration clusterConfiguration =
                 commandLineParser.parse(args);
 
-        assertThat(clusterConfiguration.getConfigDir()).isEqualTo(confDirPath);
-        assertThat(clusterConfiguration.getJobClassName()).isEqualTo(jobClassName);
-        assertThat(clusterConfiguration.getJobId()).isEqualTo(jobId);
+        assertThat(clusterConfiguration.getConfigDir(), is(equalTo(confDirPath)));
+        assertThat(clusterConfiguration.getJobClassName(), is(equalTo(jobClassName)));
+        assertThat(clusterConfiguration.getJobId(), is(equalTo(jobId)));
 
         final SavepointRestoreSettings savepointRestoreSettings =
                 clusterConfiguration.getSavepointRestoreSettings();
-        assertThat(savepointRestoreSettings.restoreSavepoint()).isTrue();
-        assertThat(savepointRestoreSettings.getRestorePath()).isEqualTo(savepointRestorePath);
-        assertThat(savepointRestoreSettings.allowNonRestoredState()).isTrue();
+        assertThat(savepointRestoreSettings.restoreSavepoint(), is(true));
+        assertThat(savepointRestoreSettings.getRestorePath(), is(equalTo(savepointRestorePath)));
+        assertThat(savepointRestoreSettings.allowNonRestoredState(), is(true));
     }
 
     @Test
-    void testHostOption() throws FlinkParseException {
+    public void testHostOption() throws FlinkParseException {
         final String hostName = "user-specified-hostname";
         final String[] args = {
             "--configDir", confDirPath, "--job-classname", "foobar", "--host", hostName
         };
         final StandaloneApplicationClusterConfiguration applicationClusterConfiguration =
                 commandLineParser.parse(args);
-        assertThat(applicationClusterConfiguration.getHostname()).isEqualTo(hostName);
+        assertThat(applicationClusterConfiguration.getHostname(), is(hostName));
     }
 }

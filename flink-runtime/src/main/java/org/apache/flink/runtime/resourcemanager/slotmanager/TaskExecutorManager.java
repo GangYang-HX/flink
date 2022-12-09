@@ -27,7 +27,7 @@ import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnect
 import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
-import org.apache.flink.util.FlinkExpectedException;
+import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.MathUtils;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
@@ -159,8 +159,7 @@ class TaskExecutorManager implements AutoCloseable {
                     maxSlotNum);
             resourceActions.releaseResource(
                     taskExecutorConnection.getInstanceID(),
-                    new FlinkExpectedException(
-                            "The total number of slots exceeds the max limitation."));
+                    new FlinkException("The total number of slots exceeds the max limitation."));
             return false;
         }
 
@@ -401,8 +400,7 @@ class TaskExecutorManager implements AutoCloseable {
     }
 
     private void releaseIdleTaskExecutor(InstanceID timedOutTaskManagerId) {
-        final FlinkExpectedException cause =
-                new FlinkExpectedException("TaskExecutor exceeded the idle timeout.");
+        final FlinkException cause = new FlinkException("TaskExecutor exceeded the idle timeout.");
         LOG.debug(
                 "Release TaskExecutor {} because it exceeded the idle timeout.",
                 timedOutTaskManagerId);

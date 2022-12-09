@@ -1249,6 +1249,11 @@ public class RexSimplify {
         public Boolean visitPatternFieldRef(RexPatternFieldRef fieldRef) {
             return false;
         }
+
+        @Override
+        public Boolean visitWindowAttrVariable(RexWindowAttrVariable winAttr) {
+            return false;
+        }
     }
 
     /**

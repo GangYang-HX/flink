@@ -84,6 +84,12 @@ public class PipelineOptions {
                                                     + " without discarding state.")
                                     .build());
 
+    public static final ConfigOption<Boolean> USE_STREAM_GRAPH_HASHER_V3 =
+            key("pipeline.use-stream-graph-hasher-v3")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription("Whether use StreamGraphHasherV3 as the stream graph hasher");
+
     public static final ConfigOption<Boolean> AUTO_TYPE_REGISTRATION =
             key("pipeline.auto-type-registration")
                     .booleanType()
@@ -100,6 +106,13 @@ public class PipelineOptions {
                             "The interval of the automatic watermark emission. Watermarks are used throughout"
                                     + " the streaming system to keep track of the progress of time. They are used, for example,"
                                     + " for time based windowing.");
+
+    public static final ConfigOption<Boolean> DELIVER_UPSTREAM_WATERMARK_ENABLED =
+            key("pipeline.deliver-upstream-watermark-enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "If it is set as true, it will use watermark forwarded from upstream. And watermarkGenerator will not be used.");
 
     public static final ConfigOption<ClosureCleanerLevel> CLOSURE_CLEANER_LEVEL =
             key("pipeline.closure-cleaner-level")
@@ -231,6 +244,38 @@ public class PipelineOptions {
                                                     + " sure that only tags are written.")
                                     .build());
 
+    public static final ConfigOption<Boolean> USE_SOURCE_PARTITION_AS_PARALLELISM =
+            key("pipeline.use-source-partition-as-parallelism")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription(
+                            "Use the number of source partition as source operator parallelism. "
+                                    + "Only support for Kafka and Databus Source.");
+
+    public static final ConfigOption<Boolean> FORCE_REBALANCE =
+            key("pipeline.force-rebalance")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Use rebalance between the source stream node and its next data stream, "
+                                    + "no matter whether forward can be used according to Flink's judgement.");
+
+    public static final ConfigOption<Boolean> FORCE_RESCALE =
+            key("pipeline.force-rescale")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Use rescale between the source stream node and its next data stream, "
+                                    + "when the source's parallelism is less than its next data stream.");
+
+    public static final ConfigOption<Boolean> FORCE_FORWARD =
+            key("pipeline.force-forward")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Use forward between the source stream node and its next data stream, "
+                                    + "when the source's parallelism is equals to its next data stream.");
+
     public static final ConfigOption<Boolean> OPERATOR_CHAINING =
             key("pipeline.operator-chaining")
                     .booleanType()
@@ -282,4 +327,10 @@ public class PipelineOptions {
                     .withDescription(
                             "Whether name of vertex includes topological index or not. "
                                     + "When it is true, the name will have a prefix of index of the vertex, like '[vertex-0]Source: source'. It is false by default");
+
+    public static final ConfigOption<Integer> FORCE_TIME_CHARACTERISTIC_ENUM =
+            key("pipeline.force-time-characteristic-enum")
+                    .intType()
+                    .defaultValue(-1)
+                    .withDescription("Force reset time characteristic enum to support watermark.");
 }

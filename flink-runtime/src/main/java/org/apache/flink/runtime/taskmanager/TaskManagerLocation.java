@@ -70,10 +70,10 @@ public class TaskManagerLocation implements Comparable<TaskManagerLocation>, jav
     private String stringRepresentation;
 
     /**
-     * ID of the node where the TaskManager is located on. In Yarn and Native Kubernetes mode, this
-     * value will be set by resource manager when launch this TaskManager(via the config option
-     * {@link TaskManagerOptionsInternal#TASK_MANAGER_NODE_ID}). In other modes, this value will be
-     * the external address of the TaskManager.
+     * ID of the node where the task manager is located on. In Yarn and Native Kubernetes mode, this
+     * value will be set by the resource manager when launching this task manager (via the config
+     * option {@link TaskManagerOptionsInternal#TASK_MANAGER_NODE_ID}). In other modes, this value
+     * will be the external address of the TaskManager.
      */
     private final String nodeId;
 
@@ -84,8 +84,7 @@ public class TaskManagerLocation implements Comparable<TaskManagerLocation>, jav
      * @param inetAddress the network address the instance's task manager binds its sockets to
      * @param dataPort the port instance's task manager expects to receive transfer envelopes on
      * @param hostNameSupplier the supplier for obtaining fully-qualified domain name and pure
-     *     hostname of the task manager
-     * @param nodeId the ID of node where the task manager is located on.
+     * @param nodeId the ID of the node where the task manager is located on.
      */
     @VisibleForTesting
     public TaskManagerLocation(
@@ -101,7 +100,7 @@ public class TaskManagerLocation implements Comparable<TaskManagerLocation>, jav
         this.inetAddress = checkNotNull(inetAddress);
         this.dataPort = dataPort;
         this.hostNameSupplier = checkNotNull(hostNameSupplier);
-        this.nodeId = checkNotNull(nodeId);
+        this.nodeId = nodeId;
     }
 
     /**
@@ -343,7 +342,6 @@ public class TaskManagerLocation implements Comparable<TaskManagerLocation>, jav
             return 1;
         }
 
-        // finally, decided based on node id
         return this.nodeId.compareTo(o.nodeId);
     }
 

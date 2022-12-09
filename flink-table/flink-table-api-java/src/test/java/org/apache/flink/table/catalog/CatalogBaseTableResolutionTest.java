@@ -31,7 +31,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.utils.CatalogManagerMocks;
 import org.apache.flink.table.utils.ExpressionResolverMocks;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.annotation.Nullable;
 
@@ -44,15 +44,17 @@ import java.util.Map;
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
 import static org.apache.flink.table.utils.CatalogManagerMocks.DEFAULT_CATALOG;
 import static org.apache.flink.table.utils.CatalogManagerMocks.DEFAULT_DATABASE;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
-import static org.assertj.core.api.HamcrestCondition.matching;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Tests for {@link CatalogTable} to {@link ResolvedCatalogTable} and {@link CatalogView} to {@link
  * ResolvedCatalogView} including {@link CatalogPropertiesUtil}.
  */
-class CatalogBaseTableResolutionTest {
+public class CatalogBaseTableResolutionTest {
 
     private static final ObjectIdentifier IDENTIFIER =
             ObjectIdentifier.of(DEFAULT_CATALOG, DEFAULT_DATABASE, "TestTable");
@@ -121,59 +123,55 @@ class CatalogBaseTableResolutionTest {
                     null);
 
     @Test
-    void testCatalogTableResolution() {
+    public void testCatalogTableResolution() {
         final CatalogTable table = catalogTable();
 
-        assertThat(table.getUnresolvedSchema()).isNotNull();
+        assertNotNull(table.getUnresolvedSchema());
 
         final ResolvedCatalogTable resolvedTable =
                 resolveCatalogBaseTable(ResolvedCatalogTable.class, table);
 
-        assertThat(resolvedTable.getResolvedSchema()).isEqualTo(RESOLVED_TABLE_SCHEMA);
+        assertThat(resolvedTable.getResolvedSchema(), equalTo(RESOLVED_TABLE_SCHEMA));
 
-        assertThat(resolvedTable.getSchema()).isEqualTo(LEGACY_TABLE_SCHEMA);
+        assertThat(resolvedTable.getSchema(), equalTo(LEGACY_TABLE_SCHEMA));
     }
 
     @Test
-    void testCatalogViewResolution() {
+    public void testCatalogViewResolution() {
         final CatalogView view = catalogView();
 
         final ResolvedCatalogView resolvedView =
                 resolveCatalogBaseTable(ResolvedCatalogView.class, view);
 
-        assertThat(resolvedView.getResolvedSchema()).isEqualTo(RESOLVED_VIEW_SCHEMA);
+        assertThat(resolvedView.getResolvedSchema(), equalTo(RESOLVED_VIEW_SCHEMA));
     }
 
     @Test
-    void testPropertyDeSerialization() {
+    public void testPropertyDeSerialization() {
         final CatalogTable table = CatalogTable.fromProperties(catalogTableAsProperties());
 
         final ResolvedCatalogTable resolvedTable =
                 resolveCatalogBaseTable(ResolvedCatalogTable.class, table);
 
-        assertThat(resolvedTable.toProperties()).isEqualTo(catalogTableAsProperties());
+        assertThat(resolvedTable.toProperties(), equalTo(catalogTableAsProperties()));
 
-        assertThat(resolvedTable.getResolvedSchema()).isEqualTo(RESOLVED_TABLE_SCHEMA);
+        assertThat(resolvedTable.getResolvedSchema(), equalTo(RESOLVED_TABLE_SCHEMA));
     }
 
     @Test
-    void testPropertyDeserializationError() {
+    public void testPropertyDeserializationError() {
         try {
             final Map<String, String> properties = catalogTableAsProperties();
             properties.remove("schema.4.data-type");
             CatalogTable.fromProperties(properties);
-            fail("unknown failure");
+            fail();
         } catch (Exception e) {
-            assertThat(e)
-                    .satisfies(
-                            matching(
-                                    containsMessage(
-                                            "Could not find property key 'schema.4.data-type'.")));
+            assertThat(e, containsMessage("Could not find property key 'schema.4.data-type'."));
         }
     }
 
     @Test
-    void testInvalidPartitionKeys() {
+    public void testInvalidPartitionKeys() {
         final CatalogTable catalogTable =
                 CatalogTable.of(
                         TABLE_SCHEMA,
@@ -185,13 +183,12 @@ class CatalogBaseTableResolutionTest {
             resolveCatalogBaseTable(ResolvedCatalogTable.class, catalogTable);
             fail("Invalid partition keys expected.");
         } catch (Exception e) {
-            assertThat(e)
-                    .satisfies(
-                            matching(
-                                    containsMessage(
-                                            "Invalid partition key 'countyINVALID'. A partition key must "
-                                                    + "reference a physical column in the schema. Available "
-                                                    + "columns are: [id, region, county]")));
+            assertThat(
+                    e,
+                    containsMessage(
+                            "Invalid partition key 'countyINVALID'. A partition key must "
+                                    + "reference a physical column in the schema. Available "
+                                    + "columns are: [id, region, county]"));
         }
     }
 
@@ -277,9 +274,9 @@ class CatalogBaseTableResolutionTest {
         final Catalog catalog =
                 catalogManager.getCatalog(DEFAULT_CATALOG).orElseThrow(IllegalStateException::new);
 
-        assertThat(catalog)
-                .as("GenericInMemoryCatalog expected for test")
-                .isInstanceOf(GenericInMemoryCatalog.class);
+        assertTrue(
+                "GenericInMemoryCatalog expected for test",
+                catalog instanceof GenericInMemoryCatalog);
 
         // retrieve the resolved catalog table
         final CatalogBaseTable storedTable;
@@ -289,9 +286,9 @@ class CatalogBaseTableResolutionTest {
             throw new RuntimeException(e);
         }
 
-        assertThat(expectedClass.isAssignableFrom(storedTable.getClass()))
-                .as("In-memory implies that output table equals input table.")
-                .isTrue();
+        assertTrue(
+                "In-memory implies that output table equals input table.",
+                expectedClass.isAssignableFrom(storedTable.getClass()));
 
         return expectedClass.cast(storedTable);
     }

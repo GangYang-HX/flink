@@ -84,7 +84,7 @@ import java.util.stream.Collectors;
  */
 public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
 
-    protected final Logger log = LoggerFactory.getLogger(getClass());
+    protected static final Logger LOG = LoggerFactory.getLogger(DefaultDeclarativeSlotPool.class);
 
     private final Consumer<? super Collection<ResourceRequirement>> notifyNewResourceRequirements;
 
@@ -151,7 +151,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
     private void declareResourceRequirements() {
         final Collection<ResourceRequirement> resourceRequirements = getResourceRequirements();
 
-        log.debug(
+        LOG.debug(
                 "Declare new resource requirements for job {}.{}\trequired resources: {}{}\tacquired resources: {}",
                 jobId,
                 System.lineSeparator(),
@@ -182,7 +182,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
             TaskManagerGateway taskManagerGateway,
             long currentTime) {
 
-        log.debug("Received {} slot offers from TaskExecutor {}.", offers, taskManagerLocation);
+        LOG.debug("Received {} slot offers from TaskExecutor {}.", offers, taskManagerLocation);
 
         return internalOfferSlots(
                 offers,
@@ -213,7 +213,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
                     acceptedSlotOffers.add(offer);
                     acceptedSlots.add(acceptedSlot.get());
                 } else {
-                    log.debug(
+                    LOG.debug(
                             "Could not match offer {} to any outstanding requirement.",
                             offer.getAllocationId());
                 }
@@ -223,7 +223,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
         slotPool.addSlots(acceptedSlots, currentTime);
 
         if (!acceptedSlots.isEmpty()) {
-            log.debug(
+            LOG.debug(
                     "Acquired new resources; new total acquired resources: {}",
                     fulfilledResourceRequirements);
             newSlotsListener.notifyNewSlotsAreAvailable(acceptedSlots);
@@ -246,7 +246,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
         // While this approach does have the downside of somewhat hiding this special case, it
         // does allow the slot timeouts or releases to work as if the case didn't exist at all.
 
-        log.debug("Register slots {} from TaskManager {}.", slots, taskManagerLocation);
+        LOG.debug("Register slots {} from TaskManager {}.", slots, taskManagerLocation);
         internalOfferSlots(
                 slots,
                 taskManagerLocation,
@@ -279,7 +279,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
 
         if (match.isPresent()) {
             final ResourceProfile matchedRequirement = match.get();
-            log.debug(
+            LOG.debug(
                     "Matched slot offer {} to requirement {}.",
                     slotOffer.getAllocationId(),
                     matchedRequirement);
@@ -356,7 +356,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
             // computed when the slot was offered, so we have to update the mapping
             updateSlotToRequirementProfileMapping(allocationId, requiredSlotProfile);
             if (previouslyMatchedResourceProfile == ResourceProfile.ANY) {
-                log.debug(
+                LOG.debug(
                         "Re-matched slot offer {} to requirement {}.",
                         allocationId,
                         requiredSlotProfile);
@@ -366,7 +366,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
                 // If the previous profile was ANY, then the slot was accepted without
                 // being matched against a resource requirement; thus no update is needed.
 
-                log.debug(
+                LOG.debug(
                         "Adjusting requirements because a slot was reserved for a different requirement than initially assumed. Slot={} assumedRequirement={} actualRequirement={}",
                         allocationId,
                         previouslyMatchedResourceProfile,
@@ -381,7 +381,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
     @Override
     public ResourceCounter freeReservedSlot(
             AllocationID allocationId, @Nullable Throwable cause, long currentTime) {
-        log.debug("Free reserved slot {}.", allocationId);
+        LOG.debug("Free reserved slot {}.", allocationId);
 
         final Optional<AllocatedSlot> freedSlot =
                 slotPool.freeReservedSlot(allocationId, currentTime);
@@ -523,7 +523,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
 
         releaseSlots(
                 slotsToReturnToOwner, new FlinkException("Returning idle slots to their owners."));
-        log.debug(
+        LOG.debug(
                 "Idle slots have been returned; new total acquired resources: {}",
                 fulfilledResourceRequirements);
     }
@@ -532,10 +532,10 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
         for (AllocatedSlot slotToReturn : slotsToReturnToOwner) {
             Preconditions.checkState(!slotToReturn.isUsed(), "Free slot must not be used.");
 
-            if (log.isDebugEnabled()) {
-                log.info("Releasing slot [{}].", slotToReturn.getAllocationId(), cause);
+            if (LOG.isDebugEnabled()) {
+                LOG.info("Releasing slot [{}].", slotToReturn.getAllocationId(), cause);
             } else {
-                log.info("Releasing slot [{}].", slotToReturn.getAllocationId());
+                LOG.info("Releasing slot [{}].", slotToReturn.getAllocationId());
             }
 
             final ResourceProfile matchingResourceProfile =
@@ -553,7 +553,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
                     (Acknowledge ignored, Throwable throwable) -> {
                         if (throwable != null) {
                             // The slot status will be synced to task manager in next heartbeat.
-                            log.debug(
+                            LOG.debug(
                                     "Releasing slot [{}] of registered TaskExecutor {} failed. Discarding slot.",
                                     slotToReturn.getAllocationId(),
                                     slotToReturn.getTaskManagerId(),

@@ -115,6 +115,7 @@ public class HiveMapredSplitReader implements SplitReader {
         this.recordReader =
                 mapredInputFormat.getRecordReader(
                         split.getHadoopInputSplit(), jobConf, new HadoopDummyReporter());
+        LOG.info("use recordReader: {}", this.recordReader.getClass().getCanonicalName());
         if (this.recordReader instanceof Configurable) {
             ((Configurable) this.recordReader).setConf(jobConf);
         }

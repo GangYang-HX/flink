@@ -22,8 +22,9 @@
   [ngModel]="stdout"
   [nzEditorOption]="editorOptions"
 ></nz-code-editor>
-<flink-addon-compact
-  [downloadHref]="downloadUrl"
-  [downloadName]="downloadName"
+<flink-refresh-download
+  [compactMode]="true"
+  [downloadHref]="'jobmanager/stdout'"
+  [downloadName]="'jobmanager_stdout'"
   (reload)="reload()"
-></flink-addon-compact>
+></flink-refresh-download>

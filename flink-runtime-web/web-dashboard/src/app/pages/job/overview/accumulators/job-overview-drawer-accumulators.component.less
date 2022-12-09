@@ -28,10 +28,6 @@
   }
 
   ::ng-deep {
-    .ant-table-cell {
-      font-size: @font-size-sm;
-    }
-
     .ant-tabs-content {
       height: 100%;
 
@@ -45,24 +41,18 @@
     }
 
     .ant-tabs-small > .ant-tabs-nav .ant-tabs-tab {
-      font-size: @font-size-sm;
+      font-size: 12px;
 
       &:first-of-type {
         margin: 0 0 0 @margin-md;
       }
     }
 
-    ::-webkit-scrollbar {
-      display: none;
-    }
-
-    nz-table,
-    nz-spin,
-    cdk-virtual-scroll-viewport,
-    nz-table-inner-scroll,
-    .ant-spin-container,
-    .ant-table {
-      height: 100%;
+    nz-table {
+      td,
+      th {
+        font-size: 12px;
+      }
     }
   }
 }

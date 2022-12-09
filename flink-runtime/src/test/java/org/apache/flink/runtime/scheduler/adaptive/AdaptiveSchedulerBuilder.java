@@ -44,10 +44,12 @@ import org.apache.flink.runtime.scheduler.ExecutionGraphFactory;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.SlotAllocator;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.shuffle.ShuffleTestUtils;
+import org.apache.flink.testutils.TestingUtils;
 import org.apache.flink.util.FatalExitExceptionHandler;
 
 import javax.annotation.Nullable;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 /** Builder for {@link AdaptiveScheduler}. */
@@ -58,7 +60,9 @@ public class AdaptiveSchedulerBuilder {
 
     private final ComponentMainThreadExecutor mainThreadExecutor;
 
+    private Executor ioExecutor = TestingUtils.defaultExecutor();
     private Configuration jobMasterConfiguration = new Configuration();
+    private ScheduledExecutorService futureExecutor = TestingUtils.defaultExecutor();
     private ClassLoader userCodeLoader = ClassLoader.getSystemClassLoader();
     private CheckpointsCleaner checkpointsCleaner = new CheckpointsCleaner();
     private CheckpointRecoveryFactory checkpointRecoveryFactory =
@@ -95,9 +99,20 @@ public class AdaptiveSchedulerBuilder {
                         rpcTimeout);
     }
 
+    public AdaptiveSchedulerBuilder setIoExecutor(final Executor ioExecutor) {
+        this.ioExecutor = ioExecutor;
+        return this;
+    }
+
     public AdaptiveSchedulerBuilder setJobMasterConfiguration(
             final Configuration jobMasterConfiguration) {
         this.jobMasterConfiguration = jobMasterConfiguration;
+        return this;
+    }
+
+    public AdaptiveSchedulerBuilder setFutureExecutor(
+            final ScheduledExecutorService futureExecutor) {
+        this.futureExecutor = futureExecutor;
         return this;
     }
 
@@ -177,14 +192,14 @@ public class AdaptiveSchedulerBuilder {
         return this;
     }
 
-    public AdaptiveScheduler build(ScheduledExecutorService executorService) throws Exception {
+    public AdaptiveScheduler build() throws Exception {
         final ExecutionGraphFactory executionGraphFactory =
                 new DefaultExecutionGraphFactory(
                         jobMasterConfiguration,
                         userCodeLoader,
                         new DefaultExecutionDeploymentTracker(),
-                        executorService,
-                        executorService,
+                        futureExecutor,
+                        ioExecutor,
                         rpcTimeout,
                         jobManagerJobMetricGroup,
                         blobWriter,
@@ -199,7 +214,7 @@ public class AdaptiveSchedulerBuilder {
                         ? AdaptiveSchedulerFactory.createSlotSharingSlotAllocator(
                                 declarativeSlotPool)
                         : slotAllocator,
-                executorService,
+                ioExecutor,
                 userCodeLoader,
                 checkpointsCleaner,
                 checkpointRecoveryFactory,

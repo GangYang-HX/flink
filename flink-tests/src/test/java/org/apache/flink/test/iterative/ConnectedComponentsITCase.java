@@ -31,8 +31,6 @@ import org.apache.flink.test.util.JavaProgramTestBase;
 
 import java.io.BufferedReader;
 
-import static org.apache.flink.test.util.TestBaseUtils.getResultReader;
-
 /** Delta iteration test implementing the connected components algorithm with a join. */
 public class ConnectedComponentsITCase extends JavaProgramTestBase {
 

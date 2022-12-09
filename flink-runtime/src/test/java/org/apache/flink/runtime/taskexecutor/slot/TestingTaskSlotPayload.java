@@ -25,8 +25,6 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
-
 class TestingTaskSlotPayload implements TaskSlotPayload {
     private final JobID jobId;
     private final ExecutionAttemptID executionAttemptID;
@@ -35,7 +33,7 @@ class TestingTaskSlotPayload implements TaskSlotPayload {
     private final OneShotLatch failLatch = new OneShotLatch();
 
     TestingTaskSlotPayload() {
-        this(new JobID(), createExecutionAttemptId(), new AllocationID());
+        this(new JobID(), new ExecutionAttemptID(), new AllocationID());
     }
 
     TestingTaskSlotPayload(

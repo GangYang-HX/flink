@@ -19,8 +19,10 @@
 package org.apache.flink.connector.jdbc;
 
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -30,9 +32,7 @@ import javax.annotation.Nullable;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /** Tests for all DataTypes and Dialects of JDBC connector. */
 @RunWith(Parameterized.class)
@@ -170,7 +170,7 @@ public class JdbcDataTypeTest {
     }
 
     private static TestItem createTestItem(Object... args) {
-        assertThat(args).hasSizeGreaterThanOrEqualTo(2);
+        assert args.length >= 2;
         TestItem item = TestItem.fromDialectAndType((String) args[0], (String) args[1]);
         if (args.length == 3) {
             item.withExpectError((String) args[2]);
@@ -190,8 +190,16 @@ public class JdbcDataTypeTest {
         tEnv.executeSql(sqlDDL);
 
         if (testItem.expectError != null) {
-            assertThatThrownBy(() -> tEnv.sqlQuery("SELECT * FROM T"))
-                    .satisfies(anyCauseMatches(testItem.expectError));
+            try {
+                tEnv.sqlQuery("SELECT * FROM T");
+                fail();
+            } catch (ValidationException ex) {
+                Assert.assertEquals(testItem.expectError, ex.getCause().getMessage());
+            } catch (UnsupportedOperationException ex) {
+                Assert.assertEquals(testItem.expectError, ex.getMessage());
+            } catch (Exception e) {
+                fail(e);
+            }
         } else {
             tEnv.sqlQuery("SELECT * FROM T");
         }

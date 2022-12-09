@@ -20,22 +20,30 @@ package org.apache.flink.kubernetes.kubeclient.parameters;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DeploymentOptionsInternal;
+import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.kubernetes.configuration.KubernetesConfigOptions;
+import org.apache.flink.kubernetes.configuration.KubernetesDeploymentTarget;
 import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.kubernetes.utils.KubernetesUtils;
 
+import io.fabric8.kubernetes.api.model.HostAlias;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.kubernetes.configuration.KubernetesConfigOptions.CONTAINER_IMAGE_PULL_SECRETS;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOG4J_NAME;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOGBACK_NAME;
+import static org.apache.flink.kubernetes.utils.Constants.DNS_PLOICY_DEFAULT;
+import static org.apache.flink.kubernetes.utils.Constants.DNS_PLOICY_HOSTNETWORK;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -135,6 +143,24 @@ public abstract class AbstractKubernetesParameters implements KubernetesParamete
         return Optional.ofNullable(flinkConfig.getString(KubernetesConfigOptions.FLINK_LOG_DIR));
     }
 
+    public Optional<String> getFlinkGlobalJobId() {
+        return getFlinkGlobalJobParam(Constants.GLOBAL_JOB_ID_KEY);
+    }
+
+    public Optional<String> getFlinkGlobalJobInstanceId() {
+        return getFlinkGlobalJobParam(Constants.GLOBAL_JOB_INSTANCE_ID_KEY);
+    }
+
+    private Optional<String> getFlinkGlobalJobParam(String key) {
+        String param =
+                flinkConfig
+                        .getOptional(PipelineOptions.GLOBAL_JOB_PARAMETERS)
+                        .map(HashMap::new)
+                        .orElseGet(HashMap::new)
+                        .get(key);
+        return Optional.ofNullable(param);
+    }
+
     @Override
     public String getContainerEntrypoint() {
         return flinkConfig.getString(KubernetesConfigOptions.KUBERNETES_ENTRY_PATH);
@@ -205,5 +231,30 @@ public abstract class AbstractKubernetesParameters implements KubernetesParamete
 
     public boolean isHostNetworkEnabled() {
         return flinkConfig.getBoolean(KubernetesConfigOptions.KUBERNETES_HOSTNETWORK_ENABLED);
+    }
+
+    public String getDnsPolicy() {
+        return flinkConfig
+                .getOptional(KubernetesConfigOptions.KUBERNETES_DNS_POLICY)
+                .orElse(isHostNetworkEnabled() ? DNS_PLOICY_HOSTNETWORK : DNS_PLOICY_DEFAULT);
+    }
+
+    public List<HostAlias> getHostAliases() {
+        Map<String, String> hosts =
+                flinkConfig
+                        .getOptional(KubernetesConfigOptions.KUBERNETES_HOST_ALIASES)
+                        .orElse(Collections.emptyMap());
+        return hosts.entrySet().stream()
+                .map(
+                        e -> {
+                            List<String> hostnames = new ArrayList<>();
+                            hostnames.add(e.getKey());
+                            return new HostAlias(hostnames, e.getValue());
+                        })
+                .collect(Collectors.toList());
+    }
+
+    public KubernetesDeploymentTarget getDeploymentTarget() {
+        return KubernetesDeploymentTarget.fromConfig(flinkConfig);
     }
 }

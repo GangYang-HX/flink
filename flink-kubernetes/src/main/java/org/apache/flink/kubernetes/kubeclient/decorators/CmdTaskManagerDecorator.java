@@ -73,8 +73,6 @@ public class CmdTaskManagerDecorator extends AbstractKubernetesStepDecorator {
                         + " "
                         + dynamicProperties
                         + " "
-                        + resourceArgs
-                        + " "
-                        + kubernetesTaskManagerParameters.getEntrypointArgs());
+                        + resourceArgs);
     }
 }

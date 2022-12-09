@@ -38,7 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** A specific {@link KafkaSerializationSchema} for {@link KafkaDynamicSource}. */
-class DynamicKafkaDeserializationSchema implements KafkaDeserializationSchema<RowData> {
+public class DynamicKafkaDeserializationSchema implements KafkaDeserializationSchema<RowData> {
 
     private static final long serialVersionUID = 1L;
 
@@ -56,7 +56,7 @@ class DynamicKafkaDeserializationSchema implements KafkaDeserializationSchema<Ro
 
     private final boolean upsertMode;
 
-    DynamicKafkaDeserializationSchema(
+    public DynamicKafkaDeserializationSchema(
             int physicalArity,
             @Nullable DeserializationSchema<RowData> keyDeserialization,
             int[] keyProjection,
@@ -139,7 +139,8 @@ class DynamicKafkaDeserializationSchema implements KafkaDeserializationSchema<Ro
 
     // --------------------------------------------------------------------------------------------
 
-    interface MetadataConverter extends Serializable {
+    /** MetadataConverter. */
+    public interface MetadataConverter extends Serializable {
         Object read(ConsumerRecord<?, ?> record);
     }
 

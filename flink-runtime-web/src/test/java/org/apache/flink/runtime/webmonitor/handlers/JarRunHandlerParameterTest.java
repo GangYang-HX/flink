@@ -36,17 +36,14 @@ import org.apache.flink.runtime.webmonitor.TestingDispatcherGateway;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.runtime.webmonitor.testutils.ParameterProgram;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorExtension;
 import org.apache.flink.util.ExceptionUtils;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -56,33 +53,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Tests for the parameter handling of the {@link JarRunHandler}. */
-class JarRunHandlerParameterTest
+public class JarRunHandlerParameterTest
         extends JarHandlerParameterTest<JarRunRequestBody, JarRunMessageParameters> {
     private static final boolean ALLOW_NON_RESTORED_STATE_QUERY = true;
     private static final String RESTORE_PATH = "/foo/bar";
-
-    @RegisterExtension
-    private static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_EXTENSION =
-            TestingUtils.defaultExecutorExtension();
 
     private static JarRunHandler handler;
 
     private static Path jarWithEagerSink;
 
-    @BeforeAll
-    static void setup(@TempDir File tempDir) throws Exception {
-        init(tempDir);
+    @BeforeClass
+    public static void setup() throws Exception {
+        init();
         final GatewayRetriever<TestingDispatcherGateway> gatewayRetriever =
                 () -> CompletableFuture.completedFuture(restfulGateway);
         final Time timeout = Time.seconds(10);
         final Map<String, String> responseHeaders = Collections.emptyMap();
+        final Executor executor = TestingUtils.defaultExecutor();
 
         final Path jarLocation = Paths.get(System.getProperty("targetDir"));
         final String parameterProgramWithEagerSink = "parameter-program-with-eager-sink.jar";
@@ -99,7 +99,7 @@ class JarRunHandlerParameterTest
                         JarRunHeaders.getInstance(),
                         jarDir,
                         new Configuration(),
-                        EXECUTOR_EXTENSION.getExecutor(),
+                        executor,
                         ConfigurationVerifyingDetachedApplicationRunner::new);
     }
 
@@ -115,9 +115,8 @@ class JarRunHandlerParameterTest
                 DispatcherGateway dispatcherGateway,
                 PackagedProgram program,
                 Configuration configuration) {
-            assertThat(configuration.get(DeploymentOptions.ATTACHED)).isFalse();
-            assertThat(configuration.get(DeploymentOptions.TARGET))
-                    .isEqualTo(EmbeddedExecutor.NAME);
+            assertFalse(configuration.get(DeploymentOptions.ATTACHED));
+            assertEquals(EmbeddedExecutor.NAME, configuration.get(DeploymentOptions.TARGET));
             return super.run(dispatcherGateway, program, configuration);
         }
     }
@@ -194,7 +193,7 @@ class JarRunHandlerParameterTest
     }
 
     @Test
-    void testRestHandlerExceptionThrownWithEagerSinks() throws Exception {
+    public void testRestHandlerExceptionThrownWithEagerSinks() throws Exception {
         final HandlerRequest<JarRunRequestBody> request =
                 createRequest(
                         getDefaultJarRequestBody(),
@@ -202,30 +201,30 @@ class JarRunHandlerParameterTest
                         getUnresolvedJarMessageParameters(),
                         jarWithEagerSink);
 
-        assertThatThrownBy(() -> handler.handleRequest(request, restfulGateway).get())
-                .matches(
-                        e -> {
-                            final Throwable throwable =
-                                    ExceptionUtils.stripCompletionException(e.getCause());
-                            assertThat(throwable).isInstanceOf(RestHandlerException.class);
+        try {
+            handler.handleRequest(request, restfulGateway).get();
+        } catch (final ExecutionException e) {
+            final Throwable throwable = ExceptionUtils.stripCompletionException(e.getCause());
+            assertThat(throwable, instanceOf(RestHandlerException.class));
 
-                            final RestHandlerException restHandlerException =
-                                    (RestHandlerException) throwable;
-                            assertThat(restHandlerException.getHttpResponseStatus())
-                                    .isEqualTo(HttpResponseStatus.BAD_REQUEST);
+            final RestHandlerException restHandlerException = (RestHandlerException) throwable;
+            assertThat(
+                    restHandlerException.getHttpResponseStatus(),
+                    equalTo(HttpResponseStatus.BAD_REQUEST));
 
-                            final Optional<ProgramInvocationException> invocationException =
-                                    ExceptionUtils.findThrowable(
-                                            restHandlerException, ProgramInvocationException.class);
+            final Optional<ProgramInvocationException> invocationException =
+                    ExceptionUtils.findThrowable(
+                            restHandlerException, ProgramInvocationException.class);
 
-                            assertThat(invocationException).isPresent();
+            if (!invocationException.isPresent()) {
+                fail();
+            }
 
-                            final String exceptionMsg = invocationException.get().getMessage();
-                            assertThat(exceptionMsg)
-                                    .contains("Job was submitted in detached mode.");
-
-                            return true;
-                        });
+            final String exceptionMsg = invocationException.get().getMessage();
+            assertThat(exceptionMsg, containsString("Job was submitted in detached mode."));
+            return;
+        }
+        fail("The test should have failed.");
     }
 
     @Override
@@ -238,8 +237,8 @@ class JarRunHandlerParameterTest
         JobGraph jobGraph = super.validateDefaultGraph();
         final SavepointRestoreSettings savepointRestoreSettings =
                 jobGraph.getSavepointRestoreSettings();
-        assertThat(savepointRestoreSettings.allowNonRestoredState()).isFalse();
-        assertThat(savepointRestoreSettings.getRestorePath()).isNull();
+        assertFalse(savepointRestoreSettings.allowNonRestoredState());
+        Assert.assertNull(savepointRestoreSettings.getRestorePath());
         return jobGraph;
     }
 
@@ -248,8 +247,8 @@ class JarRunHandlerParameterTest
         JobGraph jobGraph = super.validateGraph();
         final SavepointRestoreSettings savepointRestoreSettings =
                 jobGraph.getSavepointRestoreSettings();
-        assertThat(savepointRestoreSettings.allowNonRestoredState()).isTrue();
-        assertThat(savepointRestoreSettings.getRestorePath()).isEqualTo(RESTORE_PATH);
+        Assert.assertTrue(savepointRestoreSettings.allowNonRestoredState());
+        assertEquals(RESTORE_PATH, savepointRestoreSettings.getRestorePath());
         return jobGraph;
     }
 }

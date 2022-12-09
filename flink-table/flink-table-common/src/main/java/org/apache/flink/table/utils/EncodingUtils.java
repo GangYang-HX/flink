@@ -139,11 +139,6 @@ public abstract class EncodingUtils {
         }
     }
 
-    /**
-     * @deprecated Use {@link #loadClass(String, ClassLoader)} instead, in order to explicitly
-     *     provide the correct classloader.
-     */
-    @Deprecated
     public static Class<?> loadClass(String qualifiedName) {
         return loadClass(qualifiedName, Thread.currentThread().getContextClassLoader());
     }

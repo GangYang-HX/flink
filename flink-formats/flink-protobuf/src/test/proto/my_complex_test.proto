@@ -1,0 +1,73 @@
+syntax = "proto3";
+package org.apache.flink.formats.protobuf.proto;
+option java_package = "org.apache.flink.formats.protobuf.testproto";
+option java_multiple_files = false;
+
+message MyComplexTest {
+    int32 a1 = 1;
+    int64 b1 = 2;
+    string c1 = 3;
+    float d1 = 4;
+    double e1 = 5;
+    bytes f1 = 6;
+    bool g1 =7;
+    InnerMessage1 h1 = 8;
+    repeated InnerMessage1 i1 = 9;
+    map<string, InnerMessage1> j1 = 10;
+
+int32 a2 = 11;
+    int64 b2 = 12;
+    string c2 = 13;
+    float d2 = 14;
+    double e2 = 15;
+    bytes f2 = 16;
+    bool g2 =17;
+    InnerMessage1 h2 = 18;
+    repeated InnerMessage1 i2 = 19;
+    map<string, InnerMessage1> j2 = 20;
+
+    int32 a3 = 21;
+        int64 b3 = 22;
+        string c3 = 23;
+        float d3 = 24;
+        double e3 = 25;
+        bytes f3 = 26;
+        bool g3 =27;
+        InnerMessage1 h3 = 28;
+        repeated InnerMessage1 i3 = 29;
+        map<string, InnerMessage1> j3 = 30;
+
+        int32 a4 = 31;
+            int64 b4 = 32;
+            string c4 = 33;
+            float d4 = 34;
+            double e4 = 35;
+            bytes f4 = 36;
+            bool g4 =37;
+            InnerMessage1 h4 = 38;
+            repeated InnerMessage1 i4 = 39;
+            map<string, InnerMessage1> j4 = 40;
+
+            int32 a5 = 41;
+                int64 b5 = 42;
+                string c5 = 43;
+                float d5 = 44;
+                double e5 = 45;
+                bytes f5 = 46;
+                bool g5 =47;
+                InnerMessage1 h5 = 48;
+                repeated InnerMessage1 i5 = 49;
+                map<string, InnerMessage1> j5 = 50;
+
+       message InnerMessage1{
+             InnerMessage2 a = 1;
+             bool c = 2;
+             message InnerMessage2{
+                int32 a =1;
+                int64 b =2;
+             }
+       }
+
+}
+
+

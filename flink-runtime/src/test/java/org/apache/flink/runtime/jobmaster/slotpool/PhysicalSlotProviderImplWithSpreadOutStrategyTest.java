@@ -115,10 +115,8 @@ public class PhysicalSlotProviderImplWithSpreadOutStrategyTest extends TestLogge
                         .buildAndStart(physicalSlotProviderResource.getMainThreadExecutor());
         assertThat(slotPool.isBatchSlotRequestTimeoutCheckEnabled(), is(true));
 
-        final PhysicalSlotProvider slotProvider =
-                new PhysicalSlotProviderImpl(
-                        LocationPreferenceSlotSelectionStrategy.createEvenlySpreadOut(), slotPool);
-        slotProvider.disableBatchSlotRequestTimeoutCheck();
+        new PhysicalSlotProviderImpl(
+                LocationPreferenceSlotSelectionStrategy.createEvenlySpreadOut(), slotPool);
         assertThat(slotPool.isBatchSlotRequestTimeoutCheckEnabled(), is(false));
     }
 }

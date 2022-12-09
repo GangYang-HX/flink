@@ -25,13 +25,14 @@ import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * A {@link Window} that represents a time interval from {@code start} (inclusive) to {@code end}
  * (exclusive).
  */
-public class TimeWindow extends Window {
-
+public class TimeWindow extends Window implements Serializable {
+    private static final long serialVersionUID = 1L;
     private final long start;
     private final long end;
 

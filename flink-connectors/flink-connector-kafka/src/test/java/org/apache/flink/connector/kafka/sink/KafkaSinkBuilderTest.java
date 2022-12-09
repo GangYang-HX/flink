@@ -18,96 +18,33 @@
 package org.apache.flink.connector.kafka.sink;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.util.TestLogger;
+import org.apache.flink.util.TestLoggerExtension;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.function.Consumer;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /** Tests for {@link KafkaSinkBuilder}. */
-public class KafkaSinkBuilderTest extends TestLogger {
-
-    private static final String[] DEFAULT_KEYS =
-            new String[] {
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                ProducerConfig.TRANSACTION_TIMEOUT_CONFIG
-            };
+@ExtendWith(TestLoggerExtension.class)
+public class KafkaSinkBuilderTest {
 
     @Test
-    public void testPropertyHandling() {
-        validateProducerConfig(
-                getBasicBuilder(),
-                p -> {
-                    Arrays.stream(DEFAULT_KEYS).forEach(k -> assertThat(p).containsKey(k));
-                });
-
-        validateProducerConfig(
-                getBasicBuilder().setProperty("k1", "v1"),
-                p -> {
-                    Arrays.stream(DEFAULT_KEYS).forEach(k -> assertThat(p).containsKey(k));
-                    p.containsKey("k1");
-                });
-
+    public void testBootstrapServerSettingWithProperties() {
         Properties testConf = new Properties();
-        testConf.put("k1", "v1");
-        testConf.put("k2", "v2");
-
-        validateProducerConfig(
-                getBasicBuilder().setKafkaProducerConfig(testConf),
-                p -> {
-                    Arrays.stream(DEFAULT_KEYS).forEach(k -> assertThat(p).containsKey(k));
-                    testConf.forEach((k, v) -> assertThat(p.get(k)).isEqualTo(v));
-                });
-
-        validateProducerConfig(
-                getBasicBuilder()
-                        .setProperty("k1", "incorrect")
+        testConf.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "testServer");
+        KafkaSinkBuilder<String> builder =
+                new KafkaSinkBuilder<String>()
                         .setKafkaProducerConfig(testConf)
-                        .setProperty("k2", "correct"),
-                p -> {
-                    Arrays.stream(DEFAULT_KEYS).forEach(k -> assertThat(p).containsKey(k));
-                    assertThat(p).containsEntry("k1", "v1").containsEntry("k2", "correct");
-                });
-    }
+                        .setRecordSerializer(
+                                KafkaRecordSerializationSchema.builder()
+                                        .setTopic("topic")
+                                        .setValueSerializationSchema(new SimpleStringSchema())
+                                        .build());
 
-    @Test
-    public void testBootstrapServerSetting() {
-        Properties testConf1 = new Properties();
-        testConf1.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "testServer");
-
-        validateProducerConfig(
-                getNoServerBuilder().setKafkaProducerConfig(testConf1),
-                p -> assertThat(p).containsKeys(DEFAULT_KEYS));
-    }
-
-    private void validateProducerConfig(
-            KafkaSinkBuilder<?> builder, Consumer<Properties> validator) {
-        validator.accept(builder.build().getKafkaProducerConfig());
-    }
-
-    private KafkaSinkBuilder<String> getBasicBuilder() {
-        return new KafkaSinkBuilder<String>()
-                .setBootstrapServers("testServer")
-                .setRecordSerializer(
-                        KafkaRecordSerializationSchema.builder()
-                                .setTopic("topic")
-                                .setValueSerializationSchema(new SimpleStringSchema())
-                                .build());
-    }
-
-    private KafkaSinkBuilder<String> getNoServerBuilder() {
-        return new KafkaSinkBuilder<String>()
-                .setRecordSerializer(
-                        KafkaRecordSerializationSchema.builder()
-                                .setTopic("topic")
-                                .setValueSerializationSchema(new SimpleStringSchema())
-                                .build());
+        assertDoesNotThrow(builder::build);
     }
 }

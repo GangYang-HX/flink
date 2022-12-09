@@ -35,7 +35,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 abstract class AbstractChangelogState<K, N, V, S extends InternalKvState<K, N, V>>
         implements InternalKvState<K, N, V>, ChangelogState {
 
-    protected S delegatedState;
+    protected final S delegatedState;
     protected final KvStateChangeLogger<V, N> changeLogger;
     private N currentNamespace;
 
@@ -47,16 +47,6 @@ abstract class AbstractChangelogState<K, N, V, S extends InternalKvState<K, N, V
 
     public S getDelegatedState() {
         return delegatedState;
-    }
-
-    public StateChangeLogger<V, N> getStateChangeLogger() {
-        return changeLogger;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public <IS> void setDelegatedState(IS state) {
-        this.delegatedState = (S) checkNotNull(state);
     }
 
     @Override

@@ -25,21 +25,18 @@ import org.apache.flink.runtime.operators.lifecycle.validation.DrainingValidator
 import org.apache.flink.runtime.operators.lifecycle.validation.FinishingValidator;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
+import org.apache.flink.test.util.TestBaseUtils;
 import org.apache.flink.testutils.junit.SharedObjects;
-import org.apache.flink.util.TestLogger;
 
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
 import static org.apache.flink.runtime.operators.lifecycle.command.TestCommand.FINISH_SOURCES;
 import static org.apache.flink.runtime.operators.lifecycle.command.TestCommandDispatcher.TestCommandScope.ALL_SUBTASKS;
@@ -57,7 +54,7 @@ import static org.apache.flink.runtime.operators.lifecycle.validation.TestOperat
  * same.
  */
 @RunWith(Parameterized.class)
-public class BoundedSourceITCase extends TestLogger {
+public class BoundedSourceITCase extends TestBaseUtils {
 
     @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
 
@@ -72,14 +69,11 @@ public class BoundedSourceITCase extends TestLogger {
 
     @Rule public final SharedObjects sharedObjects = SharedObjects.create();
 
-    @Rule public Timeout timeoutRule = new Timeout(10, TimeUnit.MINUTES);
-
     private static Configuration configuration() {
         Configuration conf = new Configuration();
 
         try {
-            FsStateChangelogStorageFactory.configure(
-                    conf, TEMPORARY_FOLDER.newFolder(), Duration.ofMinutes(1), 10);
+            FsStateChangelogStorageFactory.configure(conf, TEMPORARY_FOLDER.newFolder());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

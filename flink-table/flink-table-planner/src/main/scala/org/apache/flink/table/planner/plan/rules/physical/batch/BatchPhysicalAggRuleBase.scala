@@ -17,8 +17,7 @@
  */
 package org.apache.flink.table.planner.plan.rules.physical.batch
 
-import org.apache.flink.configuration.ReadableConfig
-import org.apache.flink.table.api.TableException
+import org.apache.flink.table.api.{TableConfig, TableException}
 import org.apache.flink.table.data.binary.BinaryRowData
 import org.apache.flink.table.functions.{AggregateFunction, UserDefinedFunction}
 import org.apache.flink.table.planner.JArrayList
@@ -27,7 +26,7 @@ import org.apache.flink.table.planner.functions.aggfunctions.DeclarativeAggregat
 import org.apache.flink.table.planner.functions.utils.UserDefinedFunctionUtils._
 import org.apache.flink.table.planner.plan.nodes.physical.batch.{BatchPhysicalGroupAggregateBase, BatchPhysicalLocalHashAggregate, BatchPhysicalLocalSortAggregate}
 import org.apache.flink.table.planner.plan.utils.{AggregateUtil, FlinkRelOptUtil}
-import org.apache.flink.table.planner.utils.{AggregatePhaseStrategy, ShortcutUtils}
+import org.apache.flink.table.planner.utils.AggregatePhaseStrategy
 import org.apache.flink.table.planner.utils.TableConfigUtils.getAggPhaseStrategy
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromDataTypeToLogicalType
 import org.apache.flink.table.types.DataType
@@ -117,7 +116,7 @@ trait BatchPhysicalAggRuleBase {
 
   protected def isTwoPhaseAggWorkable(
       aggFunctions: Array[UserDefinedFunction],
-      tableConfig: ReadableConfig): Boolean = {
+      tableConfig: TableConfig): Boolean = {
     getAggPhaseStrategy(tableConfig) match {
       case AggregatePhaseStrategy.ONE_PHASE => false
       case _ => doAllSupportMerge(aggFunctions)
@@ -127,7 +126,7 @@ trait BatchPhysicalAggRuleBase {
   protected def isOnePhaseAggWorkable(
       agg: Aggregate,
       aggFunctions: Array[UserDefinedFunction],
-      tableConfig: ReadableConfig): Boolean = {
+      tableConfig: TableConfig): Boolean = {
     getAggPhaseStrategy(tableConfig) match {
       case AggregatePhaseStrategy.ONE_PHASE => true
       case AggregatePhaseStrategy.TWO_PHASE => !doAllSupportMerge(aggFunctions)
@@ -153,18 +152,17 @@ trait BatchPhysicalAggRuleBase {
     aggFunctions.isEmpty || supportLocalAgg
   }
 
-  protected def isEnforceOnePhaseAgg(tableConfig: ReadableConfig): Boolean = {
+  protected def isEnforceOnePhaseAgg(tableConfig: TableConfig): Boolean = {
     getAggPhaseStrategy(tableConfig) == AggregatePhaseStrategy.ONE_PHASE
   }
 
-  protected def isEnforceTwoPhaseAgg(tableConfig: ReadableConfig): Boolean = {
+  protected def isEnforceTwoPhaseAgg(tableConfig: TableConfig): Boolean = {
     getAggPhaseStrategy(tableConfig) == AggregatePhaseStrategy.TWO_PHASE
   }
 
   protected def isAggBufferFixedLength(agg: Aggregate): Boolean = {
     val (_, aggCallsWithoutAuxGroupCalls) = AggregateUtil.checkAndSplitAggCalls(agg)
     val (_, aggBufferTypes, _) = AggregateUtil.transformToBatchAggregateFunctions(
-      ShortcutUtils.unwrapTypeFactory(agg),
       FlinkTypeFactory.toLogicalRowType(agg.getInput.getRowType),
       aggCallsWithoutAuxGroupCalls)
 

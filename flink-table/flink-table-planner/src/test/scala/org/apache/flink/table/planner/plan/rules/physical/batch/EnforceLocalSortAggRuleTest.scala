@@ -18,7 +18,7 @@
 package org.apache.flink.table.planner.plan.rules.physical.batch
 
 import org.apache.flink.api.scala._
-import org.apache.flink.configuration.ReadableConfig
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.api.config.{ExecutionConfigOptions, OptimizerConfigOptions}
 import org.apache.flink.table.functions.UserDefinedFunction
 import org.apache.flink.table.planner.calcite.CalciteConfig
@@ -85,12 +85,12 @@ class EnforceLocalSortAggRuleTest extends EnforceLocalAggRuleTestBase {
 class BatchExecSortAggRuleForOnePhase extends BatchPhysicalSortAggRule {
   override protected def isTwoPhaseAggWorkable(
       aggFunctions: Array[UserDefinedFunction],
-      tableConfig: ReadableConfig): Boolean = false
+      tableConfig: TableConfig): Boolean = false
 
   override protected def isOnePhaseAggWorkable(
       agg: Aggregate,
       aggFunctions: Array[UserDefinedFunction],
-      tableConfig: ReadableConfig): Boolean = true
+      tableConfig: TableConfig): Boolean = true
 }
 
 object BatchExecSortAggRuleForOnePhase {

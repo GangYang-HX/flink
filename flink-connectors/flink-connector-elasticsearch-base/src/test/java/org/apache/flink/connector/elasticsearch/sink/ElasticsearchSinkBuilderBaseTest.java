@@ -30,8 +30,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Tests for {@link ElasticsearchSinkBuilderBase}. */
 @ExtendWith(TestLoggerExtension.class)
@@ -54,7 +54,7 @@ abstract class ElasticsearchSinkBuilderBaseTest<B extends ElasticsearchSinkBuild
         return DynamicTest.stream(
                 validBuilders,
                 ElasticsearchSinkBuilderBase::toString,
-                builder -> assertThatCode(builder::build).doesNotThrowAnyException());
+                builder -> assertDoesNotThrow(builder::build));
     }
 
     @Test
@@ -65,38 +65,36 @@ abstract class ElasticsearchSinkBuilderBaseTest<B extends ElasticsearchSinkBuild
 
     @Test
     void testThrowIfExactlyOnceConfigured() {
-        assertThatThrownBy(
-                        () ->
-                                createMinimalBuilder()
-                                        .setDeliveryGuarantee(DeliveryGuarantee.EXACTLY_ONCE))
-                .isInstanceOf(IllegalStateException.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> createMinimalBuilder().setDeliveryGuarantee(DeliveryGuarantee.EXACTLY_ONCE));
     }
 
     @Test
     void testThrowIfHostsNotSet() {
-        assertThatThrownBy(
-                        () ->
-                                createEmptyBuilder()
-                                        .setEmitter((element, indexer, context) -> {})
-                                        .build())
-                .isInstanceOf(NullPointerException.class);
+        assertThrows(
+                NullPointerException.class,
+                () -> createEmptyBuilder().setEmitter((element, indexer, context) -> {}).build());
     }
 
     @Test
     void testThrowIfEmitterNotSet() {
-        assertThatThrownBy(
-                        () -> createEmptyBuilder().setHosts(new HttpHost("localhost:3000")).build())
-                .isInstanceOf(NullPointerException.class);
+        assertThrows(
+                NullPointerException.class,
+                () -> createEmptyBuilder().setHosts(new HttpHost("localhost:3000")).build());
     }
 
     @Test
     void testThrowIfSetInvalidTimeouts() {
-        assertThatThrownBy(() -> createEmptyBuilder().setConnectionRequestTimeout(-1).build())
-                .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> createEmptyBuilder().setConnectionTimeout(-1).build())
-                .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> createEmptyBuilder().setSocketTimeout(-1).build())
-                .isInstanceOf(IllegalStateException.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> createEmptyBuilder().setConnectionRequestTimeout(-1).build());
+        assertThrows(
+                IllegalStateException.class,
+                () -> createEmptyBuilder().setConnectionTimeout(-1).build());
+        assertThrows(
+                IllegalStateException.class,
+                () -> createEmptyBuilder().setSocketTimeout(-1).build());
     }
 
     abstract B createEmptyBuilder();

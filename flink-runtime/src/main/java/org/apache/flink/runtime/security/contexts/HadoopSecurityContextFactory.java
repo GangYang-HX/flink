@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.security.contexts;
 
-import org.apache.flink.runtime.hadoop.HadoopDependency;
 import org.apache.flink.runtime.security.SecurityConfiguration;
 import org.apache.flink.runtime.security.SecurityContextInitializeException;
 import org.apache.flink.runtime.security.modules.HadoopModuleFactory;
@@ -44,13 +43,17 @@ public class HadoopSecurityContextFactory implements SecurityContextFactory {
             return false;
         }
         // not compatible if Hadoop binary not in classpath.
-        if (!HadoopDependency.isHadoopCommonOnClasspath(
-                HadoopSecurityContextFactory.class.getClassLoader())) {
+        try {
+            Class.forName(
+                    "org.apache.hadoop.security.UserGroupInformation",
+                    false,
+                    HadoopSecurityContextFactory.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
             LOG.info(
                     "Cannot install HadoopSecurityContext because Hadoop cannot be found in the Classpath.");
             return false;
         }
-        return true;
     }
 
     @Override

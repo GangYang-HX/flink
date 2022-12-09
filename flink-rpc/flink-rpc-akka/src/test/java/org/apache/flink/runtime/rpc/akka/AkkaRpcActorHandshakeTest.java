@@ -18,33 +18,41 @@
 
 package org.apache.flink.runtime.rpc.akka;
 
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.rpc.RpcGateway;
 import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.exceptions.HandshakeException;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.FutureUtils;
 
 import akka.actor.ActorSystem;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Tests for the handshake between rpc endpoints. */
-class AkkaRpcActorHandshakeTest {
+public class AkkaRpcActorHandshakeTest extends TestLogger {
+
+    private static final Time timeout = Time.seconds(10L);
 
     private static AkkaRpcService akkaRpcService1;
     private static AkkaRpcService akkaRpcService2;
     private static WrongVersionAkkaRpcService wrongVersionAkkaRpcService;
 
-    @BeforeAll
-    static void setupClass() {
+    @BeforeClass
+    public static void setupClass() {
         final ActorSystem actorSystem1 = AkkaUtils.createDefaultActorSystem();
         final ActorSystem actorSystem2 = AkkaUtils.createDefaultActorSystem();
         final ActorSystem wrongVersionActorSystem = AkkaUtils.createDefaultActorSystem();
@@ -59,19 +67,20 @@ class AkkaRpcActorHandshakeTest {
                         AkkaRpcServiceConfiguration.defaultConfiguration());
     }
 
-    @AfterAll
-    static void teardownClass() throws Exception {
+    @AfterClass
+    public static void teardownClass() throws Exception {
         final Collection<CompletableFuture<?>> terminationFutures = new ArrayList<>(3);
 
         terminationFutures.add(akkaRpcService1.stopService());
         terminationFutures.add(akkaRpcService2.stopService());
         terminationFutures.add(wrongVersionAkkaRpcService.stopService());
 
-        FutureUtils.waitForAll(terminationFutures).get();
+        FutureUtils.waitForAll(terminationFutures)
+                .get(timeout.toMilliseconds(), TimeUnit.MILLISECONDS);
     }
 
     @Test
-    void testVersionMatchBetweenRpcComponents() throws Exception {
+    public void testVersionMatchBetweenRpcComponents() throws Exception {
         AkkaRpcActorTest.DummyRpcEndpoint rpcEndpoint =
                 new AkkaRpcActorTest.DummyRpcEndpoint(akkaRpcService1);
         final int value = 42;
@@ -87,31 +96,32 @@ class AkkaRpcActorHandshakeTest {
                                     AkkaRpcActorTest.DummyRpcGateway.class)
                             .get();
 
-            assertThat(dummyRpcGateway.foobar().get()).isEqualTo(value);
+            assertThat(dummyRpcGateway.foobar().get(), equalTo(value));
         } finally {
-            RpcUtils.terminateRpcEndpoint(rpcEndpoint);
+            RpcUtils.terminateRpcEndpoint(rpcEndpoint, timeout);
         }
     }
 
     @Test
-    void testVersionMismatchBetweenRpcComponents() throws Exception {
+    public void testVersionMismatchBetweenRpcComponents() throws Exception {
         AkkaRpcActorTest.DummyRpcEndpoint rpcEndpoint =
                 new AkkaRpcActorTest.DummyRpcEndpoint(akkaRpcService1);
 
         rpcEndpoint.start();
 
         try {
-            assertThatThrownBy(
-                            () ->
-                                    wrongVersionAkkaRpcService
-                                            .connect(
-                                                    rpcEndpoint.getAddress(),
-                                                    AkkaRpcActorTest.DummyRpcGateway.class)
-                                            .get())
-                    .extracting(ExceptionUtils::stripExecutionException)
-                    .isInstanceOf(HandshakeException.class);
+            try {
+                wrongVersionAkkaRpcService
+                        .connect(rpcEndpoint.getAddress(), AkkaRpcActorTest.DummyRpcGateway.class)
+                        .get();
+                fail("Expected HandshakeException.");
+            } catch (ExecutionException ee) {
+                assertThat(
+                        ExceptionUtils.stripExecutionException(ee),
+                        instanceOf(HandshakeException.class));
+            }
         } finally {
-            RpcUtils.terminateRpcEndpoint(rpcEndpoint);
+            RpcUtils.terminateRpcEndpoint(rpcEndpoint, timeout);
         }
     }
 
@@ -120,7 +130,7 @@ class AkkaRpcActorHandshakeTest {
      * support the requested rpc gateway.
      */
     @Test
-    void testWrongGatewayEndpointConnection() throws Exception {
+    public void testWrongGatewayEndpointConnection() throws Exception {
         AkkaRpcActorTest.DummyRpcEndpoint rpcEndpoint =
                 new AkkaRpcActorTest.DummyRpcEndpoint(akkaRpcService1);
 
@@ -130,12 +140,14 @@ class AkkaRpcActorHandshakeTest {
                 akkaRpcService2.connect(rpcEndpoint.getAddress(), WrongRpcGateway.class);
 
         try {
-            assertThatThrownBy(() -> futureGateway.get())
-                    .extracting(ExceptionUtils::stripExecutionException)
-                    .isInstanceOf(HandshakeException.class);
-
+            futureGateway.get(timeout.getSize(), timeout.getUnit());
+            fail("We expected a HandshakeException.");
+        } catch (ExecutionException executionException) {
+            assertThat(
+                    ExceptionUtils.stripExecutionException(executionException),
+                    instanceOf(HandshakeException.class));
         } finally {
-            RpcUtils.terminateRpcEndpoint(rpcEndpoint);
+            RpcUtils.terminateRpcEndpoint(rpcEndpoint, timeout);
         }
     }
 

@@ -76,7 +76,7 @@ public class BatchExecBoundedStreamScan extends ExecNodeBase<RowData>
         final Transformation<?> sourceTransform = dataStream.getTransformation();
         if (needInternalConversion()) {
             return ScanUtil.convertToInternalRow(
-                    new CodeGeneratorContext(config, planner.getFlinkContext().getClassLoader()),
+                    new CodeGeneratorContext(config.getTableConfig()),
                     (Transformation<Object>) sourceTransform,
                     fieldIndexes,
                     sourceType,

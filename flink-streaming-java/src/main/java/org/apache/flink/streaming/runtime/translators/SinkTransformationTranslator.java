@@ -47,10 +47,8 @@ import javax.annotation.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -152,13 +150,11 @@ public class SinkTransformationTranslator<Input, Output>
                         false);
             }
 
-            final Set<Integer> expandedSinks = new HashSet<>();
             final List<Transformation<?>> sinkTransformations =
                     executionEnvironment
                             .getTransformations()
                             .subList(sizeBefore, executionEnvironment.getTransformations().size());
-            sinkTransformations.forEach(t -> expandedSinks.addAll(context.transform(t)));
-            context.getStreamGraph().registerExpandedSinks(expandedSinks);
+            sinkTransformations.forEach(context::transform);
 
             // Remove all added sink subtransformations to avoid duplications and allow additional
             // expansions

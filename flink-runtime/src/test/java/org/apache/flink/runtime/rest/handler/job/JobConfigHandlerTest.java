@@ -34,7 +34,6 @@ import org.apache.flink.runtime.rest.messages.JobIDPathParameter;
 import org.apache.flink.runtime.rest.messages.JobMessageParameters;
 import org.apache.flink.testutils.TestingUtils;
 import org.apache.flink.util.TestLogger;
-import org.apache.flink.util.concurrent.Executors;
 
 import org.junit.Test;
 
@@ -59,7 +58,7 @@ public class JobConfigHandlerTest extends TestLogger {
                         Collections.emptyMap(),
                         JobConfigHeaders.getInstance(),
                         new DefaultExecutionGraphCache(TestingUtils.TIMEOUT, TestingUtils.TIMEOUT),
-                        Executors.directExecutor());
+                        TestingUtils.defaultExecutor());
 
         final Map<String, String> globalJobParameters = new HashMap<>();
         globalJobParameters.put("foobar", "barfoo");

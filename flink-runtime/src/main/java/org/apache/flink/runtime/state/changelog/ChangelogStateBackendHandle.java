@@ -19,31 +19,22 @@ package org.apache.flink.runtime.state.changelog;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.core.fs.FSDataInputStream;
-import org.apache.flink.runtime.state.CheckpointBoundKeyedStateHandle;
-import org.apache.flink.runtime.state.IncrementalRemoteKeyedStateHandle;
 import org.apache.flink.runtime.state.KeyGroupRange;
-import org.apache.flink.runtime.state.KeyGroupsSavepointStateHandle;
-import org.apache.flink.runtime.state.KeyGroupsStateHandle;
 import org.apache.flink.runtime.state.KeyedStateHandle;
-import org.apache.flink.runtime.state.PhysicalStateHandleID;
 import org.apache.flink.runtime.state.SharedStateRegistry;
 import org.apache.flink.runtime.state.SharedStateRegistryKey;
 import org.apache.flink.runtime.state.StateHandleID;
 import org.apache.flink.runtime.state.StateObject;
 import org.apache.flink.runtime.state.StreamStateHandle;
-import org.apache.flink.runtime.state.filesystem.FileStateHandle;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.singletonList;
 import static java.util.Collections.unmodifiableList;
 import static org.apache.flink.util.Preconditions.checkArgument;
 
@@ -54,16 +45,12 @@ import static org.apache.flink.util.Preconditions.checkArgument;
  * can be no state or multiple states (e.g. after rescaling).
  */
 @Internal
-public interface ChangelogStateBackendHandle
-        extends KeyedStateHandle, CheckpointBoundKeyedStateHandle {
+public interface ChangelogStateBackendHandle extends KeyedStateHandle {
     List<KeyedStateHandle> getMaterializedStateHandles();
 
     List<ChangelogStateHandle> getNonMaterializedStateHandles();
 
     long getMaterializationID();
-
-    @Override
-    ChangelogStateBackendHandle rebound(long checkpointId);
 
     class ChangelogStateBackendHandleImpl implements ChangelogStateBackendHandle {
         private static final long serialVersionUID = 1L;
@@ -73,7 +60,6 @@ public interface ChangelogStateBackendHandle
         private final KeyGroupRange keyGroupRange;
 
         private final long materializationID;
-        private final long checkpointId;
         private final long persistedSizeOfThisCheckpoint;
         private final StateHandleID stateHandleID;
 
@@ -81,14 +67,12 @@ public interface ChangelogStateBackendHandle
                 List<KeyedStateHandle> materialized,
                 List<ChangelogStateHandle> nonMaterialized,
                 KeyGroupRange keyGroupRange,
-                long checkpointId,
                 long materializationID,
                 long persistedSizeOfThisCheckpoint) {
             this(
                     materialized,
                     nonMaterialized,
                     keyGroupRange,
-                    checkpointId,
                     materializationID,
                     persistedSizeOfThisCheckpoint,
                     StateHandleID.randomStateHandleId());
@@ -98,7 +82,6 @@ public interface ChangelogStateBackendHandle
                 List<KeyedStateHandle> materialized,
                 List<ChangelogStateHandle> nonMaterialized,
                 KeyGroupRange keyGroupRange,
-                long checkpointId,
                 long materializationID,
                 long persistedSizeOfThisCheckpoint,
                 StateHandleID stateHandleId) {
@@ -107,7 +90,6 @@ public interface ChangelogStateBackendHandle
             this.keyGroupRange = keyGroupRange;
             this.persistedSizeOfThisCheckpoint = persistedSizeOfThisCheckpoint;
             checkArgument(keyGroupRange.getNumberOfKeyGroups() > 0);
-            this.checkpointId = checkpointId;
             this.materializationID = materializationID;
             this.stateHandleID = stateHandleId;
         }
@@ -116,7 +98,6 @@ public interface ChangelogStateBackendHandle
                 List<KeyedStateHandle> materialized,
                 List<ChangelogStateHandle> nonMaterialized,
                 KeyGroupRange keyGroupRange,
-                long checkpointId,
                 long materializationID,
                 long persistedSizeOfThisCheckpoint,
                 StateHandleID stateHandleId) {
@@ -124,91 +105,9 @@ public interface ChangelogStateBackendHandle
                     materialized,
                     nonMaterialized,
                     keyGroupRange,
-                    checkpointId,
                     materializationID,
                     persistedSizeOfThisCheckpoint,
                     stateHandleId);
-        }
-
-        public static ChangelogStateBackendHandle getChangelogStateBackendHandle(
-                KeyedStateHandle originKeyedStateHandle) {
-            if (originKeyedStateHandle instanceof ChangelogStateBackendHandle) {
-                return (ChangelogStateBackendHandle) originKeyedStateHandle;
-            } else {
-                return new ChangelogStateBackendHandle.ChangelogStateBackendHandleImpl(
-                        singletonList(castToAbsolutePath(originKeyedStateHandle)),
-                        emptyList(),
-                        originKeyedStateHandle.getKeyGroupRange(),
-                        originKeyedStateHandle instanceof CheckpointBoundKeyedStateHandle
-                                ? ((CheckpointBoundKeyedStateHandle) originKeyedStateHandle)
-                                        .getCheckpointId()
-                                : 0L,
-                        0L,
-                        0L);
-            }
-        }
-
-        private static KeyedStateHandle castToAbsolutePath(
-                KeyedStateHandle originKeyedStateHandle) {
-            // For KeyedStateHandle, only KeyGroupsStateHandle and IncrementalKeyedStateHandle
-            // contain streamStateHandle, and both of them need to be cast
-            // as they all have state handles of private checkpoint scope.
-            if (originKeyedStateHandle instanceof KeyGroupsSavepointStateHandle) {
-                return originKeyedStateHandle;
-            }
-            if (originKeyedStateHandle instanceof KeyGroupsStateHandle) {
-                StreamStateHandle streamStateHandle =
-                        ((KeyGroupsStateHandle) originKeyedStateHandle).getDelegateStateHandle();
-
-                if (streamStateHandle instanceof FileStateHandle) {
-                    StreamStateHandle fileStateHandle = restoreFileStateHandle(streamStateHandle);
-                    return KeyGroupsStateHandle.restore(
-                            ((KeyGroupsStateHandle) originKeyedStateHandle).getGroupRangeOffsets(),
-                            fileStateHandle,
-                            originKeyedStateHandle.getStateHandleId());
-                }
-            }
-            if (originKeyedStateHandle instanceof IncrementalRemoteKeyedStateHandle) {
-                IncrementalRemoteKeyedStateHandle incrementalRemoteKeyedStateHandle =
-                        (IncrementalRemoteKeyedStateHandle) originKeyedStateHandle;
-
-                StreamStateHandle castMetaStateHandle =
-                        restoreFileStateHandle(
-                                incrementalRemoteKeyedStateHandle.getMetaStateHandle());
-                Map<StateHandleID, StreamStateHandle> castSharedStates =
-                        incrementalRemoteKeyedStateHandle.getSharedState().entrySet().stream()
-                                .collect(
-                                        Collectors.toMap(
-                                                Map.Entry::getKey,
-                                                e -> restoreFileStateHandle(e.getValue())));
-                Map<StateHandleID, StreamStateHandle> castPrivateStates =
-                        incrementalRemoteKeyedStateHandle.getPrivateState().entrySet().stream()
-                                .collect(
-                                        Collectors.toMap(
-                                                Map.Entry::getKey,
-                                                e -> restoreFileStateHandle(e.getValue())));
-
-                return IncrementalRemoteKeyedStateHandle.restore(
-                        incrementalRemoteKeyedStateHandle.getBackendIdentifier(),
-                        incrementalRemoteKeyedStateHandle.getKeyGroupRange(),
-                        incrementalRemoteKeyedStateHandle.getCheckpointId(),
-                        castSharedStates,
-                        castPrivateStates,
-                        castMetaStateHandle,
-                        incrementalRemoteKeyedStateHandle.getCheckpointedSize(),
-                        incrementalRemoteKeyedStateHandle.getStateHandleId());
-            }
-            return originKeyedStateHandle;
-        }
-
-        private static StreamStateHandle restoreFileStateHandle(
-                StreamStateHandle streamStateHandle) {
-            if (streamStateHandle instanceof FileStateHandle) {
-                return new FileStateHandle(
-                        ((FileStateHandle) streamStateHandle).getFilePath(),
-                        streamStateHandle.getStateSize());
-            }
-            return streamStateHandle;
         }
 
         @Override
@@ -220,8 +119,7 @@ public interface ChangelogStateBackendHandle
                 stateRegistry.registerReference(
                         new SharedStateRegistryKey(keyedStateHandle.getStateHandleId().toString()),
                         new StreamStateHandleWrapper(keyedStateHandle),
-                        checkpointID,
-                        true);
+                        checkpointID);
             }
             stateRegistry.registerAll(materialized, checkpointID);
             stateRegistry.registerAll(nonMaterialized, checkpointID);
@@ -265,7 +163,6 @@ public interface ChangelogStateBackendHandle
                     basePart,
                     deltaPart,
                     intersection,
-                    checkpointId,
                     materializationID,
                     persistedSizeOfThisCheckpoint);
         }
@@ -308,35 +205,6 @@ public interface ChangelogStateBackendHandle
                     keyGroupRange, materialized.size(), nonMaterialized.size());
         }
 
-        @Override
-        public long getCheckpointId() {
-            return checkpointId;
-        }
-
-        @Override
-        public ChangelogStateBackendHandleImpl rebound(long checkpointId) {
-            List<KeyedStateHandle> reboundedMaterialized =
-                    materialized.stream()
-                            .map(
-                                    keyedStateHandle ->
-                                            keyedStateHandle
-                                                            instanceof
-                                                            CheckpointBoundKeyedStateHandle
-                                                    ? ((CheckpointBoundKeyedStateHandle)
-                                                                    keyedStateHandle)
-                                                            .rebound(checkpointId)
-                                                    : keyedStateHandle)
-                            .collect(Collectors.toList());
-            return new ChangelogStateBackendHandleImpl(
-                    reboundedMaterialized,
-                    nonMaterialized,
-                    keyGroupRange,
-                    checkpointId,
-                    materializationID,
-                    persistedSizeOfThisCheckpoint,
-                    stateHandleID);
-        }
-
         /**
          * This wrapper class is introduced as current {@link SharedStateRegistry} only accept
          * StreamStateHandle to register, remove it once FLINK-25862 is resolved.
@@ -367,11 +235,6 @@ public interface ChangelogStateBackendHandle
 
             @Override
             public Optional<byte[]> asBytesIfInMemory() {
-                throw new UnsupportedOperationException("Should not call here.");
-            }
-
-            @Override
-            public PhysicalStateHandleID getStreamStateHandleID() {
                 throw new UnsupportedOperationException("Should not call here.");
             }
 

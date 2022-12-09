@@ -40,24 +40,24 @@ public class HiveGenericUDF extends HiveScalarFunction<GenericUDF> {
 
     private static final Logger LOG = LoggerFactory.getLogger(HiveGenericUDF.class);
 
-    private final HiveShim hiveShim;
-
     private transient GenericUDF.DeferredObject[] deferredObjects;
+    private HiveShim hiveShim;
 
     public HiveGenericUDF(HiveFunctionWrapper<GenericUDF> hiveFunctionWrapper, HiveShim hiveShim) {
         super(hiveFunctionWrapper);
         this.hiveShim = hiveShim;
-        LOG.info("Creating HiveGenericUDF from '{}'", hiveFunctionWrapper.getUDFClassName());
+        LOG.info("Creating HiveGenericUDF from '{}'", hiveFunctionWrapper.getClassName());
     }
 
     @Override
     public void openInternal() {
 
-        LOG.info("Open HiveGenericUDF as {}", hiveFunctionWrapper.getUDFClassName());
+        LOG.info("Open HiveGenericUDF as {}", hiveFunctionWrapper.getClassName());
 
         function = createFunction();
 
-        ObjectInspector[] argInspectors = HiveInspectors.getArgInspectors(hiveShim, arguments);
+        ObjectInspector[] argInspectors =
+                HiveInspectors.toInspectors(hiveShim, constantArguments, argTypes);
 
         try {
             returnInspector = function.initializeAndFoldConstants(argInspectors);
@@ -65,12 +65,12 @@ public class HiveGenericUDF extends HiveScalarFunction<GenericUDF> {
             throw new FlinkHiveUDFException(e);
         }
 
-        deferredObjects = new GenericUDF.DeferredObject[arguments.size()];
+        deferredObjects = new GenericUDF.DeferredObject[argTypes.length];
 
         for (int i = 0; i < deferredObjects.length; i++) {
             deferredObjects[i] =
                     new DeferredObjectAdapter(
-                            argInspectors[i], arguments.getDataType(i).getLogicalType(), hiveShim);
+                            argInspectors[i], argTypes[i].getLogicalType(), hiveShim);
         }
     }
 
@@ -93,11 +93,12 @@ public class HiveGenericUDF extends HiveScalarFunction<GenericUDF> {
     }
 
     @Override
-    public DataType inferReturnType() throws UDFArgumentException {
+    protected DataType inferReturnType() throws UDFArgumentException {
         LOG.info(
                 "Getting result type of HiveGenericUDF from {}",
-                hiveFunctionWrapper.getUDFClassName());
-        ObjectInspector[] argumentInspectors = HiveInspectors.getArgInspectors(hiveShim, arguments);
+                hiveFunctionWrapper.getClassName());
+        ObjectInspector[] argumentInspectors =
+                HiveInspectors.toInspectors(hiveShim, constantArguments, argTypes);
 
         ObjectInspector resultObjectInspector =
                 createFunction().initializeAndFoldConstants(argumentInspectors);

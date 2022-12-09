@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.jobgraph.tasks;
 
 import org.apache.flink.runtime.checkpoint.MasterTriggerRestoreHook;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.util.Preconditions;
@@ -28,6 +29,8 @@ import org.apache.flink.util.TernaryBoolean;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * The JobCheckpointingSettings are attached to a JobGraph and describe the settings for the
@@ -36,6 +39,8 @@ import java.io.Serializable;
 public class JobCheckpointingSettings implements Serializable {
 
     private static final long serialVersionUID = -2593319571078198180L;
+
+    private Map<OperatorID, String> operatorDescriptions;
 
     /** Contains configuration settings for the CheckpointCoordinator */
     private final CheckpointCoordinatorConfiguration checkpointCoordinatorConfiguration;
@@ -56,7 +61,13 @@ public class JobCheckpointingSettings implements Serializable {
             CheckpointCoordinatorConfiguration checkpointCoordinatorConfiguration,
             @Nullable SerializedValue<StateBackend> defaultStateBackend) {
 
-        this(checkpointCoordinatorConfiguration, defaultStateBackend, null, null, null);
+        this(
+                checkpointCoordinatorConfiguration,
+                defaultStateBackend,
+                null,
+                null,
+                null,
+                Collections.emptyMap());
     }
 
     public JobCheckpointingSettings(
@@ -64,7 +75,8 @@ public class JobCheckpointingSettings implements Serializable {
             @Nullable SerializedValue<StateBackend> defaultStateBackend,
             @Nullable TernaryBoolean changelogStateBackendEnabled,
             @Nullable SerializedValue<CheckpointStorage> defaultCheckpointStorage,
-            @Nullable SerializedValue<MasterTriggerRestoreHook.Factory[]> masterHooks) {
+            @Nullable SerializedValue<MasterTriggerRestoreHook.Factory[]> masterHooks,
+            Map<OperatorID, String> operatorDescriptions) {
 
         this.checkpointCoordinatorConfiguration =
                 Preconditions.checkNotNull(checkpointCoordinatorConfiguration);
@@ -75,6 +87,7 @@ public class JobCheckpointingSettings implements Serializable {
                         : changelogStateBackendEnabled;
         this.defaultCheckpointStorage = defaultCheckpointStorage;
         this.masterHooks = masterHooks;
+        this.operatorDescriptions = Preconditions.checkNotNull(operatorDescriptions);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -100,6 +113,10 @@ public class JobCheckpointingSettings implements Serializable {
     @Nullable
     public SerializedValue<MasterTriggerRestoreHook.Factory[]> getMasterHooks() {
         return masterHooks;
+    }
+
+    public Map<OperatorID, String> getOperatorDescriptions() {
+        return operatorDescriptions;
     }
 
     // --------------------------------------------------------------------------------------------

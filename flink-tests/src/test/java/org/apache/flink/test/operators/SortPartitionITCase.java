@@ -41,8 +41,6 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsText;
-
 /** Tests for {@link DataSet#sortPartition}. */
 @RunWith(Parameterized.class)
 public class SortPartitionITCase extends MultipleProgramsTestBase {

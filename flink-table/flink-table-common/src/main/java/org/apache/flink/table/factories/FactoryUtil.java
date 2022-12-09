@@ -24,8 +24,10 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DelegatingConfiguration;
+import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.FallbackKey;
 import org.apache.flink.configuration.GlobalConfiguration;
+import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.ValidationException;
@@ -40,6 +42,7 @@ import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.module.Module;
 import org.apache.flink.table.utils.EncodingUtils;
+import org.apache.flink.util.CollectionUtil;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -110,12 +113,11 @@ public final class FactoryUtil {
                                     + "By default, if this option is not defined, the planner will derive the parallelism "
                                     + "for each statement individually by also considering the global configuration.");
 
-    public static final ConfigOption<List<String>> SQL_GATEWAY_ENDPOINT_TYPE =
-            ConfigOptions.key("sql-gateway.endpoint.type")
+    public static final ConfigOption<String> BSQL_SABER_JOB_ID =
+            ConfigOptions.key("saber-job-id")
                     .stringType()
-                    .asList()
-                    .defaultValues("rest")
-                    .withDescription("Specify the endpoints that are used.");
+                    .noDefaultValue()
+                    .withDescription("saber job id");
 
     /**
      * Suffix for keys of {@link ConfigOption} in case a connector requires multiple formats (e.g.
@@ -883,9 +885,7 @@ public final class FactoryUtil {
     // Helper classes
     // --------------------------------------------------------------------------------------------
 
-    /** Base helper utility for validating all options for a {@link Factory}. */
-    @PublicEvolving
-    public static class FactoryHelper<F extends Factory> {
+    private static class FactoryHelper<F extends Factory> {
 
         protected final F factory;
 
@@ -895,7 +895,7 @@ public final class FactoryUtil {
 
         protected final Set<String> deprecatedOptionKeys;
 
-        public FactoryHelper(
+        FactoryHelper(
                 F factory, Map<String, String> configuration, ConfigOption<?>... implicitOptions) {
             this.factory = factory;
             this.allOptions = Configuration.fromMap(configuration);
@@ -998,6 +998,18 @@ public final class FactoryUtil {
                     context.getCatalogTable().getOptions(),
                     PROPERTY_VERSION,
                     CONNECTOR);
+
+            Map<String, String> customConfig =
+                    context.getConfiguration().get(PipelineOptions.GLOBAL_JOB_PARAMETERS);
+            if (!CollectionUtil.isNullOrEmpty(customConfig)) {
+                context.getCatalogTable()
+                        .getOptions()
+                        .put(
+                                BSQL_SABER_JOB_ID.key(),
+                                customConfig.get(
+                                        ExecutionOptions.CUSTOM_CALLER_CONTEXT_JOB_ID.key()));
+            }
+
             this.context = context;
             this.enrichingOptions = Configuration.fromMap(context.getEnrichmentOptions());
             this.forwardOptions();

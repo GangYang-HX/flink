@@ -22,20 +22,19 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.util.FileUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.File;
 import java.net.URL;
 import java.util.Objects;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link JsonRowSchemaConverter}. */
-class JsonRowSchemaConverterTest {
+public class JsonRowSchemaConverterTest {
 
     @Test
-    void testComplexSchema() throws Exception {
+    public void testComplexSchema() throws Exception {
         final URL url = getClass().getClassLoader().getResource("complex-schema.json");
         Objects.requireNonNull(url);
         final String schema = FileUtils.readFileUtf8(new File(url.getFile()));
@@ -67,11 +66,11 @@ class JsonRowSchemaConverterTest {
                         Types.VOID,
                         Types.ROW_NAMED(new String[] {"organizationUnit"}, Types.ROW()));
 
-        assertThat(result).isEqualTo(expected);
+        assertEquals(expected, result);
     }
 
     @Test
-    void testReferenceSchema() throws Exception {
+    public void testReferenceSchema() throws Exception {
         final URL url = getClass().getClassLoader().getResource("reference-schema.json");
         Objects.requireNonNull(url);
         final String schema = FileUtils.readFileUtf8(new File(url.getFile()));
@@ -96,57 +95,52 @@ class JsonRowSchemaConverterTest {
                                 Types.STRING,
                                 Types.STRING));
 
-        assertThat(result).isEqualTo(expected);
+        assertEquals(expected, result);
     }
 
     @Test
-    void testAtomicType() {
+    public void testAtomicType() {
         final TypeInformation<?> result = JsonRowSchemaConverter.convert("{ type: 'number' }");
 
-        assertThat(result).isEqualTo(Types.BIG_DEC);
+        assertEquals(Types.BIG_DEC, result);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testMissingType() {
+        JsonRowSchemaConverter.convert("{ }");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWrongType() {
+        JsonRowSchemaConverter.convert("{ type: 'whatever' }");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testArrayWithAdditionalItems() {
+        JsonRowSchemaConverter.convert(
+                "{ type: 'array', items: [{type: 'integer'}], additionalItems: true }");
     }
 
     @Test
-    void testMissingType() {
-        assertThatThrownBy(() -> JsonRowSchemaConverter.convert("{ }"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void testWrongType() {
-        assertThatThrownBy(() -> JsonRowSchemaConverter.convert("{ type: 'whatever' }"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void testArrayWithAdditionalItems() {
-        assertThatThrownBy(
-                        () ->
-                                JsonRowSchemaConverter.convert(
-                                        "{ type: 'array', items: [{type: 'integer'}], additionalItems: true }"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void testMissingProperties() {
+    public void testMissingProperties() {
         final TypeInformation<?> result = JsonRowSchemaConverter.convert("{ type: 'object' }");
 
-        assertThat(result).isEqualTo(Types.ROW());
+        assertEquals(Types.ROW(), result);
     }
 
     @Test
-    void testNullUnionTypes() {
+    public void testNullUnionTypes() {
         final TypeInformation<?> result =
                 JsonRowSchemaConverter.convert("{ type: ['string', 'null'] }");
 
-        assertThat(result).isEqualTo(Types.STRING);
+        assertEquals(Types.STRING, result);
     }
 
     @Test
-    void testTimestamp() {
+    public void testTimestamp() {
         final TypeInformation<?> result =
                 JsonRowSchemaConverter.convert("{ type: 'string', format: 'date-time' }");
 
-        assertThat(result).isEqualTo(Types.SQL_TIMESTAMP);
+        assertEquals(Types.SQL_TIMESTAMP, result);
     }
 }

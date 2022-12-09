@@ -60,7 +60,6 @@ class SplitPythonConditionFromJoinRule
       join.getLeft,
       join.getRight,
       newJoinCondition,
-      join.getHints,
       join.getJoinType)
 
     val rexProgram = new RexProgramBuilder(bottomJoin.getRowType, rexBuilder).getProgram

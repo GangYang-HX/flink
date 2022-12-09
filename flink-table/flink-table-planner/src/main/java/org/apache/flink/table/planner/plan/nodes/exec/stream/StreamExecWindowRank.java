@@ -209,8 +209,7 @@ public class StreamExecWindowRank extends ExecNodeBase<RowData>
         InternalTypeInfo<RowData> inputRowTypeInfo = InternalTypeInfo.of(inputType);
         int[] sortFields = sortSpec.getFieldIndices();
         RowDataKeySelector sortKeySelector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(), sortFields, inputRowTypeInfo);
+                KeySelectorUtil.getRowDataSelector(sortFields, inputRowTypeInfo);
 
         SortSpec.SortSpecBuilder builder = SortSpec.builder();
         IntStream.range(0, sortFields.length)
@@ -228,16 +227,13 @@ public class StreamExecWindowRank extends ExecNodeBase<RowData>
                         TableConfigUtils.getLocalTimeZone(config));
         GeneratedRecordComparator sortKeyComparator =
                 ComparatorCodeGenerator.gen(
-                        config,
-                        planner.getFlinkContext().getClassLoader(),
+                        config.getTableConfig(),
                         "StreamExecSortComparator",
                         RowType.of(sortSpec.getFieldTypes(inputType)),
                         sortSpecInSortKey);
         RowDataKeySelector selector =
                 KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        partitionSpec.getFieldIndices(),
-                        inputRowTypeInfo);
+                        partitionSpec.getFieldIndices(), inputRowTypeInfo);
 
         OneInputStreamOperator<RowData, RowData> operator =
                 WindowRankOperatorBuilder.builder()

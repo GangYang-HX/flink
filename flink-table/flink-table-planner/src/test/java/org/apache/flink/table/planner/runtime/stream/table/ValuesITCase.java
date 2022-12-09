@@ -39,6 +39,7 @@ import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -47,7 +48,8 @@ import java.util.stream.Stream;
 import static org.apache.flink.table.api.Expressions.call;
 import static org.apache.flink.table.api.Expressions.range;
 import static org.apache.flink.table.api.Expressions.withColumns;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
 
 /** End to end tests for {@link org.apache.flink.table.api.TableEnvironment#fromValues}. */
 public class ValuesITCase extends StreamingTestBase {
@@ -181,7 +183,7 @@ public class ValuesITCase extends StreamingTestBase {
                                         })));
 
         List<Row> actual = TestCollectionTableFactory.getResult();
-        assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(new HashSet<>(actual), equalTo(new HashSet<>(expected)));
     }
 
     @Test
@@ -265,7 +267,7 @@ public class ValuesITCase extends StreamingTestBase {
         t.executeInsert("SinkTable").await();
 
         List<Row> actual = TestCollectionTableFactory.getResult();
-        assertThat(actual).containsExactlyInAnyOrderElementsOf(data);
+        assertThat(new HashSet<>(actual), equalTo(new HashSet<>(data)));
     }
 
     @Test
@@ -323,7 +325,7 @@ public class ValuesITCase extends StreamingTestBase {
                         Row.of(
                                 "2,2,2,2,2.2,2.2,2.2,false,02:02:02,0002-02-02,0002-02-02T02:02:02.000000002,"
                                         + "1970-01-01T00:00:00.002Z,2,[2],[2.2],{2=2.2}"));
-        assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(new HashSet<>(actual), equalTo(new HashSet<>(expected)));
     }
 
     @Test
@@ -339,7 +341,7 @@ public class ValuesITCase extends StreamingTestBase {
                 CollectionUtil.iteratorToList(
                         tEnv().executeSql("select * from values_t").collect());
 
-        assertThat(results).containsExactly(row);
+        assertThat(results, equalTo(Collections.singletonList(row)));
     }
 
     /**

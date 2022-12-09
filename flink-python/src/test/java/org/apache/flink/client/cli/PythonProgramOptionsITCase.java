@@ -22,7 +22,7 @@ import org.apache.flink.client.program.PackagedProgram;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.python.PythonOptions;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,10 +35,11 @@ import java.nio.file.attribute.BasicFileAttributes;
 
 import static org.apache.flink.python.PythonOptions.PYTHON_EXECUTABLE;
 import static org.apache.flink.python.PythonOptions.PYTHON_REQUIREMENTS;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 /** ITCases for {@link PythonProgramOptions}. */
-class PythonProgramOptionsITCase {
+public class PythonProgramOptionsITCase {
 
     /**
      * It requires setting a job jar to build a {@link PackagedProgram}, and the dummy job jar used
@@ -46,7 +47,7 @@ class PythonProgramOptionsITCase {
      * ITCase.
      */
     @Test
-    void testConfigurePythonExecution() throws Exception {
+    public void testConfigurePythonExecution() throws Exception {
         final String[] args = {
             "--python", "xxx.py",
             "--pyModule", "xxx",
@@ -78,13 +79,15 @@ class PythonProgramOptionsITCase {
         Configuration configuration = new Configuration();
         ProgramOptionsUtils.configurePythonExecution(configuration, packagedProgram);
 
-        assertThat(configuration.get(PythonOptions.PYTHON_FILES))
-                .isEqualTo("/absolute/a.py,relative/b.py,relative/c.py");
-        assertThat(configuration.get(PYTHON_REQUIREMENTS)).isEqualTo("d.txt#e_dir");
-        assertThat(configuration.get(PythonOptions.PYTHON_ARCHIVES))
-                .isEqualTo("g.zip,h.zip#data,h.zip#data2");
-        assertThat(configuration.get(PYTHON_EXECUTABLE)).isEqualTo("/usr/bin/python");
-        assertThat(packagedProgram.getArguments())
-                .containsExactly("--python", "xxx.py", "--pyModule", "xxx", "userarg1", "userarg2");
+        assertEquals(
+                "/absolute/a.py,relative/b.py,relative/c.py",
+                configuration.get(PythonOptions.PYTHON_FILES));
+        assertEquals("d.txt#e_dir", configuration.get(PYTHON_REQUIREMENTS));
+        assertEquals(
+                "g.zip,h.zip#data,h.zip#data2", configuration.get(PythonOptions.PYTHON_ARCHIVES));
+        assertEquals("/usr/bin/python", configuration.get(PYTHON_EXECUTABLE));
+        assertArrayEquals(
+                new String[] {"--python", "xxx.py", "--pyModule", "xxx", "userarg1", "userarg2"},
+                packagedProgram.getArguments());
     }
 }

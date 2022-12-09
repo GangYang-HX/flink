@@ -23,8 +23,11 @@ import org.apache.flink.table.types.inference.strategies.SubsequenceInputTypeStr
 import org.apache.flink.table.types.logical.LogicalTypeFamily;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized;
 
+import java.util.List;
+
+import static java.util.Arrays.asList;
 import static org.apache.flink.table.types.inference.InputTypeStrategies.ANY;
 import static org.apache.flink.table.types.inference.InputTypeStrategies.commonType;
 import static org.apache.flink.table.types.inference.InputTypeStrategies.explicit;
@@ -32,11 +35,10 @@ import static org.apache.flink.table.types.inference.InputTypeStrategies.logical
 import static org.apache.flink.table.types.inference.InputTypeStrategies.varyingSequence;
 
 /** Tests for {@link SubsequenceInputTypeStrategy}. */
-class SubsequenceInputTypeStrategyTest extends InputTypeStrategiesTestBase {
-
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+public class SubsequenceInputTypeStrategyTest extends InputTypeStrategiesTestBase {
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return asList(
                 TestSpec.forStrategy(
                                 "A strategy used for IF ELSE with valid arguments",
                                 InputTypeStrategies.compositeSequence()

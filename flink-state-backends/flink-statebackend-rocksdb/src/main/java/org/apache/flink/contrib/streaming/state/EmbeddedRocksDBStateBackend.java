@@ -56,6 +56,7 @@ import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TernaryBoolean;
 
+import org.apache.commons.lang3.StringUtils;
 import org.rocksdb.NativeLibraryLoader;
 import org.rocksdb.RocksDB;
 import org.slf4j.Logger;
@@ -71,13 +72,13 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 
 import static org.apache.flink.configuration.description.TextElement.text;
-import static org.apache.flink.contrib.streaming.state.RocksDBConfigurableOptions.RESTORE_OVERLAP_FRACTION_THRESHOLD;
 import static org.apache.flink.contrib.streaming.state.RocksDBConfigurableOptions.WRITE_BATCH_SIZE;
 import static org.apache.flink.contrib.streaming.state.RocksDBOptions.CHECKPOINT_TRANSFER_THREAD_NUM;
 import static org.apache.flink.contrib.streaming.state.RocksDBOptions.TIMER_SERVICE_FACTORY;
@@ -113,8 +114,6 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
 
     private static final long UNDEFINED_WRITE_BATCH_SIZE = -1;
 
-    private static final double UNDEFINED_OVERLAP_FRACTION_THRESHOLD = -1;
-
     // ------------------------------------------------------------------------
 
     // -- configuration values, set in the application / configuration
@@ -147,8 +146,8 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
     /** This determines the type of priority queue state. */
     @Nullable private PriorityQueueStateType priorityQueueStateType;
 
-    /** The default rocksdb property-based metrics options. */
-    private final RocksDBNativeMetricOptions nativeMetricOptions;
+    /** The default rocksdb metrics options. */
+    private final RocksDBNativeMetricOptions defaultMetricOptions;
 
     // -- runtime values, set on TaskManager when initializing / using the backend
 
@@ -170,11 +169,6 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
      */
     private long writeBatchSize;
 
-    /**
-     * The threshold of the overlap fraction between the handle's key-group range and target
-     * key-group range.
-     */
-    private double overlapFractionThreshold;
     // ------------------------------------------------------------------------
 
     /** Creates a new {@code EmbeddedRocksDBStateBackend} for storing local state. */
@@ -199,10 +193,9 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
     public EmbeddedRocksDBStateBackend(TernaryBoolean enableIncrementalCheckpointing) {
         this.enableIncrementalCheckpointing = enableIncrementalCheckpointing;
         this.numberOfTransferThreads = UNDEFINED_NUMBER_OF_TRANSFER_THREADS;
-        this.nativeMetricOptions = new RocksDBNativeMetricOptions();
+        this.defaultMetricOptions = new RocksDBNativeMetricOptions();
         this.memoryConfiguration = new RocksDBMemoryConfiguration();
         this.writeBatchSize = UNDEFINED_WRITE_BATCH_SIZE;
-        this.overlapFractionThreshold = UNDEFINED_OVERLAP_FRACTION_THRESHOLD;
     }
 
     /**
@@ -262,8 +255,76 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
             }
         }
 
+        if (!StringUtils.isEmpty(System.getenv("_FLINK_CONTAINER_ID"))) {
+            String rocksdbLocalPaths = config.get(RocksDBOptions.LOCAL_DIRECTORIES);
+            String rocksdbDistributeMode = config.get(RocksDBOptions.DISTRIBUTE_MODE);
+
+            if ("yarn_random".equals(rocksdbDistributeMode)) {
+                String localDir = System.getenv("LOCAL_DIRS");
+                String containerId = System.getenv("_FLINK_CONTAINER_ID");
+                String[] localDirArray = localDir.split(",");
+
+                HashSet<Integer> dir = new HashSet<>();
+
+                if (localDirArray.length < 2) {
+                    throw new RuntimeException("yarn local dir size is below expected");
+                }
+                while (dir.size() < 2) {
+                    Random r = new Random(System.currentTimeMillis());
+                    dir.add(r.nextInt(localDirArray.length));
+                }
+                ArrayList<String> rocksDirList = new ArrayList<>();
+                for (Integer pathIdx : dir) {
+                    String localPath = localDirArray[pathIdx];
+                    StringBuilder stringBuilder = new StringBuilder();
+                    stringBuilder.append(localPath);
+                    stringBuilder.append("/");
+                    stringBuilder.append(containerId);
+                    stringBuilder.append("/");
+                    stringBuilder.append("state");
+                    rocksDirList.add(stringBuilder.toString());
+                }
+                rocksdbLocalPaths = StringUtils.join(rocksDirList, ",");
+            } else if ("config".equals(rocksdbDistributeMode)) {
+                rocksdbLocalPaths = config.get(RocksDBOptions.LOCAL_DIRECTORIES);
+            } else if ("yarn_zero".equals(rocksdbDistributeMode)) {
+                // todo: when storage00 is added, we can use storage00
+            } else if ("yarn".equals(rocksdbDistributeMode)) {
+                String localDir = System.getenv("LOCAL_DIRS");
+                String containerId = System.getenv("_FLINK_CONTAINER_ID");
+                String[] localDirArray = localDir.split(",");
+
+                ArrayList<String> rocksDirList = new ArrayList<>();
+                for (String localPath : localDirArray) {
+                    StringBuilder stringBuilder = new StringBuilder();
+                    stringBuilder.append(localPath);
+                    stringBuilder.append("/");
+                    stringBuilder.append(containerId);
+                    stringBuilder.append("/");
+                    stringBuilder.append("state");
+                    rocksDirList.add(stringBuilder.toString());
+                }
+                rocksdbLocalPaths = StringUtils.join(rocksDirList, ",");
+            }
+
+            if (rocksdbLocalPaths != null) {
+                String[] directories = rocksdbLocalPaths.split(",|" + File.pathSeparator);
+
+                try {
+                    setDbStoragePaths(directories);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalConfigurationException(
+                            "Invalid configuration for RocksDB state "
+                                    + "backend's local storage directories: "
+                                    + e.getMessage(),
+                            e);
+                }
+            }
+            LOG.info("rocksdb runtime load local directroy {}", localRocksDbDirectories);
+        }
+
         // configure metric options
-        this.nativeMetricOptions = RocksDBNativeMetricOptions.fromConfig(config);
+        this.defaultMetricOptions = RocksDBNativeMetricOptions.fromConfig(config);
 
         // configure RocksDB predefined options
         this.predefinedOptions =
@@ -289,15 +350,6 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
 
         // configure latency tracking
         latencyTrackingConfigBuilder = original.latencyTrackingConfigBuilder.configure(config);
-
-        // configure overlap fraction threshold
-        overlapFractionThreshold =
-                original.overlapFractionThreshold == UNDEFINED_OVERLAP_FRACTION_THRESHOLD
-                        ? config.get(RESTORE_OVERLAP_FRACTION_THRESHOLD)
-                        : original.overlapFractionThreshold;
-        checkArgument(
-                overlapFractionThreshold >= 0 && this.overlapFractionThreshold <= 1,
-                "Overlap fraction threshold of restoring should be between 0 and 1");
     }
 
     // ------------------------------------------------------------------------
@@ -465,8 +517,7 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
             LOG.info("Obtained shared RocksDB cache of size {} bytes", sharedResources.getSize());
         }
         final RocksDBResourceContainer resourceContainer =
-                createOptionsAndResourceContainer(
-                        sharedResources, nativeMetricOptions.isStatisticsEnabled());
+                createOptionsAndResourceContainer(sharedResources);
 
         ExecutionConfig executionConfig = env.getExecutionConfig();
         StreamCompressionDecorator keyGroupCompressionDecorator =
@@ -497,9 +548,8 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
                         .setEnableIncrementalCheckpointing(isIncrementalCheckpointsEnabled())
                         .setNumberOfTransferingThreads(getNumberOfTransferThreads())
                         .setNativeMetricOptions(
-                                resourceContainer.getMemoryWatcherOptions(nativeMetricOptions))
-                        .setWriteBatchSize(getWriteBatchSize())
-                        .setOverlapFractionThreshold(getOverlapFractionThreshold());
+                                resourceContainer.getMemoryWatcherOptions(defaultMetricOptions))
+                        .setWriteBatchSize(getWriteBatchSize());
         return builder.build();
     }
 
@@ -834,12 +884,6 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
         this.writeBatchSize = writeBatchSize;
     }
 
-    double getOverlapFractionThreshold() {
-        return overlapFractionThreshold == UNDEFINED_OVERLAP_FRACTION_THRESHOLD
-                ? RESTORE_OVERLAP_FRACTION_THRESHOLD.defaultValue()
-                : overlapFractionThreshold;
-    }
-
     // ------------------------------------------------------------------------
     //  utilities
     // ------------------------------------------------------------------------
@@ -864,20 +908,18 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
 
     @VisibleForTesting
     RocksDBResourceContainer createOptionsAndResourceContainer() {
-        return createOptionsAndResourceContainer(null, false);
+        return createOptionsAndResourceContainer(null);
     }
 
     @VisibleForTesting
     private RocksDBResourceContainer createOptionsAndResourceContainer(
-            @Nullable OpaqueMemoryResource<RocksDBSharedResources> sharedResources,
-            boolean enableStatistics) {
+            @Nullable OpaqueMemoryResource<RocksDBSharedResources> sharedResources) {
 
         return new RocksDBResourceContainer(
                 configurableOptions != null ? configurableOptions : new Configuration(),
                 predefinedOptions != null ? predefinedOptions : PredefinedOptions.DEFAULT,
                 rocksDbOptionsFactory,
-                sharedResources,
-                enableStatistics);
+                sharedResources);
     }
 
     @Override

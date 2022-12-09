@@ -23,14 +23,13 @@ import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.catalog.FunctionCatalog
 import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.operations.ModifyOperation
-import org.apache.flink.table.resource.ResourceManager
 import org.apache.flink.table.utils.{CatalogManagerMocks, ExecutorMock, PlannerMock}
 import org.apache.flink.types.Row
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Test
+import org.hamcrest.CoreMatchers.equalTo
+import org.junit.Assert.assertThat
+import org.junit.Test
 
-import java.net.URL
 import java.time.Duration
 import java.util.{Collections, List => JList}
 
@@ -47,8 +46,8 @@ class StreamTableEnvironmentImplTest {
     val table = tEnv.fromDataStream(elements)
     tEnv.toAppendStream[Row](table)
 
-    assertThat(tEnv.getConfig.getMinIdleStateRetentionTime).isEqualTo(retention.toMillis)
-    assertThat(tEnv.getConfig.getMaxIdleStateRetentionTime).isEqualTo(retention.toMillis * 3 / 2)
+    assertThat(tEnv.getConfig.getMinIdleStateRetentionTime, equalTo(retention.toMillis))
+    assertThat(tEnv.getConfig.getMaxIdleStateRetentionTime, equalTo(retention.toMillis * 3 / 2))
   }
 
   @Test
@@ -62,31 +61,26 @@ class StreamTableEnvironmentImplTest {
     val table = tEnv.fromDataStream(elements)
     tEnv.toRetractStream[Row](table)
 
-    assertThat(tEnv.getConfig.getMinIdleStateRetentionTime).isEqualTo(retention.toMillis)
-    assertThat(tEnv.getConfig.getMaxIdleStateRetentionTime).isEqualTo(retention.toMillis * 3 / 2)
+    assertThat(tEnv.getConfig.getMinIdleStateRetentionTime, equalTo(retention.toMillis))
+    assertThat(tEnv.getConfig.getMaxIdleStateRetentionTime, equalTo(retention.toMillis * 3 / 2))
   }
 
   private def getStreamTableEnvironment(
       env: StreamExecutionEnvironment,
       elements: DataStream[Int]) = {
-    val tableConfig = TableConfig.getDefault
+    val config = new TableConfig
     val catalogManager = CatalogManagerMocks.createEmptyCatalogManager()
     val moduleManager = new ModuleManager
-    val resourceManager = ResourceManager.createResourceManager(
-      new Array[URL](0),
-      Thread.currentThread.getContextClassLoader,
-      tableConfig.getConfiguration)
-
     new StreamTableEnvironmentImpl(
       catalogManager,
       moduleManager,
-      resourceManager,
-      new FunctionCatalog(tableConfig, resourceManager, catalogManager, moduleManager),
-      tableConfig,
+      new FunctionCatalog(config, catalogManager, moduleManager),
+      config,
       env,
       new TestPlanner(elements.javaStream.getTransformation),
       new ExecutorMock,
-      true)
+      true,
+      this.getClass.getClassLoader)
   }
 
   private class TestPlanner(transformation: Transformation[_]) extends PlannerMock {

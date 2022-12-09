@@ -29,12 +29,15 @@ import org.apache.flink.metrics.util.TestHistogram;
 import org.apache.flink.metrics.util.TestMetricGroup;
 import org.apache.flink.testutils.logging.LoggerAuditingExtension;
 
+import com.bilibili.flink.metrics.slf4j.AbstractLogReporter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.event.Level;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** Test for {@link Slf4jReporter}. */
 class Slf4jReporterTest {
@@ -142,5 +145,39 @@ class Slf4jReporterTest {
         assertThat(reporter.filterCharacters("")).isEqualTo("");
         assertThat(reporter.filterCharacters("abc")).isEqualTo("abc");
         assertThat(reporter.filterCharacters("a:b$%^::")).isEqualTo("a:b$%^::");
+    }
+
+    @org.junit.Test
+    public void testFilter() {
+        String filterStr =
+                "taskmanager_Status_JVM_CPU_Load1,"
+                        + "taskmanager_Status_JVM_Memory_NonHeap_Used,"
+                        + "taskmanager_Status_JVM_Memory_NonHeap_Max,"
+                        + "taskmanager_Status_JVM_Memory_Heap_Max,"
+                        + "taskmanager_Status_JVM_Memory_Heap_Used,"
+                        + "taskmanager_job_task_operator_thread_(\\S+)_rt,"
+                        + "taskmanager_job_task_operator_thread_(\\S+)_rpcCallbackFailure,"
+                        + "taskmanager_job_task_operator_(\\S+)_readrt,"
+                        + "taskmanager_job_task_operator_(\\S+)_writert";
+        AbstractLogReporter.Filter filter = new AbstractLogReporter.Filter(filterStr);
+
+        assertTrue(filter.containKey("taskmanager_Status_JVM_CPU_Load1"));
+        assertTrue(filter.containKey("taskmanager_Status_JVM_Memory_NonHeap_Used"));
+        assertTrue(filter.containKey("taskmanager_Status_JVM_Memory_NonHeap_Max"));
+        assertTrue(filter.containKey("taskmanager_Status_JVM_Memory_Heap_Max"));
+        assertTrue(filter.containKey("taskmanager_Status_JVM_Memory_Heap_Used"));
+
+        // new
+        assertTrue(
+                filter.containKey("taskmanager_job_task_operator_thread_kfc_rpcCallbackFailure"));
+        assertTrue(filter.containKey("taskmanager_job_task_operator_thread_kfc_rt"));
+        assertTrue(filter.containKey("taskmanager_job_task_operator_window_aggs_writert"));
+        assertTrue(filter.containKey("taskmanager_job_task_operator_accState_writert"));
+        assertTrue(filter.containKey("taskmanager_job_task_operator_window_aggs_readrt"));
+        assertTrue(filter.containKey("taskmanager_job_task_operator_accState_readrt"));
+
+        assertFalse(filter.containKey("2taskmanager_job_task_operator_window_aggs_readrt"));
+        assertFalse(filter.containKey("dove_taskmanager_job_task_operator_accState_readrt"));
+        assertFalse(filter.containKey("taskmanager_job_task_operator_accState_readrt_"));
     }
 }

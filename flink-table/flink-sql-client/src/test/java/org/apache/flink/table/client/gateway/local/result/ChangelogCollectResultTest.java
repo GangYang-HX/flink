@@ -34,7 +34,7 @@ import org.junit.Test;
 import java.util.List;
 import java.util.stream.IntStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link ChangelogCollectResult}. */
 public class ChangelogCollectResultTest {
@@ -71,6 +71,6 @@ public class ChangelogCollectResultTest {
                     throw new SqlExecutionException("Unknown result type: " + result.getType());
             }
         }
-        assertThat(count).isEqualTo(totalCount);
+        assertEquals(totalCount, count);
     }
 }

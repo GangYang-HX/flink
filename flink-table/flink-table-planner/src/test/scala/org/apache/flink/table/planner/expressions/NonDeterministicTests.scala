@@ -77,11 +77,11 @@ class NonDeterministicTests extends ExpressionTestBase {
   @Test
   def testTemporalFunctionsInBatchMode(): Unit = {
     val zoneId = ZoneId.of("Asia/Shanghai")
-    tableConfig.setLocalTimeZone(zoneId)
-    tableConfig.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH)
+    config.setLocalTimeZone(zoneId)
+    config.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH)
 
-    tableConfig.set(InternalConfigOptions.TABLE_QUERY_START_EPOCH_TIME, Long.box(1123L))
-    tableConfig.set(
+    config.set(InternalConfigOptions.TABLE_QUERY_START_EPOCH_TIME, Long.box(1123L))
+    config.set(
       InternalConfigOptions.TABLE_QUERY_START_LOCAL_TIME,
       Long.box(1123L + TimeZone.getTimeZone(zoneId).getOffset(1123L)))
 
@@ -109,7 +109,7 @@ class NonDeterministicTests extends ExpressionTestBase {
 
   @Test
   def testCurrentRowTimestampFunctionsInBatchMode(): Unit = {
-    tableConfig.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH)
+    config.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH)
     val temporalFunctions = getCodeGenFunctions(List("CURRENT_ROW_TIMESTAMP()"))
 
     val round1 = evaluateFunctionResult(temporalFunctions)
@@ -134,7 +134,7 @@ class NonDeterministicTests extends ExpressionTestBase {
   }
 
   private def testTemporalTimestamp(zoneId: ZoneId): Unit = {
-    tableConfig.setLocalTimeZone(zoneId)
+    config.setLocalTimeZone(zoneId)
     val localDateTime = LocalDateTime.now(zoneId)
 
     val formattedLocalTime = localDateTime.toLocalTime
@@ -175,7 +175,7 @@ class NonDeterministicTests extends ExpressionTestBase {
 
   @Test
   def testUUID(): Unit = {
-    testAllApis(uuid().charLength(), "CHARACTER_LENGTH(UUID())", "36")
+    testAllApis(uuid().charLength(), "uuid().charLength", "CHARACTER_LENGTH(UUID())", "36")
   }
 
   // ----------------------------------------------------------------------------------------------

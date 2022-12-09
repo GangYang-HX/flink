@@ -21,8 +21,8 @@ package org.apache.flink.connector.file.table;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.table.catalog.ObjectIdentifier;
 
+import java.io.Serializable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,37 +48,27 @@ import static org.apache.flink.connector.file.table.PartitionTempFileManager.lis
  * <p>See: {@link PartitionTempFileManager}. {@link PartitionLoader}.
  */
 @Internal
-class FileSystemCommitter {
+class FileSystemCommitter implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final FileSystemFactory factory;
     private final TableMetaStoreFactory metaStoreFactory;
     private final boolean overwrite;
-    private final boolean isToLocal;
     private final Path tmpPath;
     private final int partitionColumnSize;
-    private final ObjectIdentifier identifier;
-    private final LinkedHashMap<String, String> staticPartitions;
-    private final List<PartitionCommitPolicy> policies;
 
     FileSystemCommitter(
             FileSystemFactory factory,
             TableMetaStoreFactory metaStoreFactory,
             boolean overwrite,
             Path tmpPath,
-            int partitionColumnSize,
-            boolean isToLocal,
-            ObjectIdentifier identifier,
-            LinkedHashMap<String, String> staticPartitions,
-            List<PartitionCommitPolicy> policies) {
+            int partitionColumnSize) {
         this.factory = factory;
         this.metaStoreFactory = metaStoreFactory;
         this.overwrite = overwrite;
         this.tmpPath = tmpPath;
         this.partitionColumnSize = partitionColumnSize;
-        this.isToLocal = isToLocal;
-        this.identifier = identifier;
-        this.staticPartitions = staticPartitions;
-        this.policies = policies;
     }
 
     /** For committing job's output after successful batch job completion. */
@@ -86,19 +76,11 @@ class FileSystemCommitter {
         FileSystem fs = factory.create(tmpPath.toUri());
         List<Path> taskPaths = listTaskTemporaryPaths(fs, tmpPath);
 
-        try (PartitionLoader loader =
-                new PartitionLoader(
-                        overwrite, fs, metaStoreFactory, isToLocal, identifier, policies)) {
+        try (PartitionLoader loader = new PartitionLoader(overwrite, fs, metaStoreFactory)) {
             if (partitionColumnSize > 0) {
-                if (taskPaths.isEmpty() && !staticPartitions.isEmpty()) {
-                    if (partitionColumnSize == staticPartitions.size()) {
-                        loader.loadEmptyPartition(this.staticPartitions);
-                    }
-                } else {
-                    for (Map.Entry<LinkedHashMap<String, String>, List<Path>> entry :
-                            collectPartSpecToPaths(fs, taskPaths, partitionColumnSize).entrySet()) {
-                        loader.loadPartition(entry.getKey(), entry.getValue());
-                    }
+                for (Map.Entry<LinkedHashMap<String, String>, List<Path>> entry :
+                        collectPartSpecToPaths(fs, taskPaths, partitionColumnSize).entrySet()) {
+                    loader.loadPartition(entry.getKey(), entry.getValue());
                 }
             } else {
                 loader.loadNonPartition(taskPaths);

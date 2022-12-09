@@ -37,8 +37,6 @@ import org.junit.runners.Parameterized;
 
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /** Integration tests for aggregations. */
 @RunWith(Parameterized.class)
 public class AggregateITCase extends MultipleProgramsTestBase {

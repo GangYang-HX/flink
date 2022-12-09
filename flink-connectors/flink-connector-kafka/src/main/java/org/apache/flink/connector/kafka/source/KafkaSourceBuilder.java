@@ -101,7 +101,7 @@ public class KafkaSourceBuilder<OUT> {
     // The configurations.
     protected Properties props;
 
-    KafkaSourceBuilder() {
+    protected KafkaSourceBuilder() {
         this.subscriber = null;
         this.startingOffsetsInitializer = OffsetsInitializer.earliest();
         this.stoppingOffsetsInitializer = new NoStoppingOffsetsInitializer();
@@ -181,18 +181,6 @@ public class KafkaSourceBuilder<OUT> {
     public KafkaSourceBuilder<OUT> setPartitions(Set<TopicPartition> partitions) {
         ensureSubscriberIsNull("partitions");
         subscriber = KafkaSubscriber.getPartitionSetSubscriber(partitions);
-        return this;
-    }
-
-    /**
-     * Set a custom Kafka subscriber to use to discover new splits.
-     *
-     * @param kafkaSubscriber the {@link KafkaSubscriber} to use for split discovery.
-     * @return this KafkaSourceBuilder.
-     */
-    public KafkaSourceBuilder<OUT> setKafkaSubscriber(KafkaSubscriber kafkaSubscriber) {
-        ensureSubscriberIsNull("custom");
-        this.subscriber = checkNotNull(kafkaSubscriber);
         return this;
     }
 
@@ -455,7 +443,7 @@ public class KafkaSourceBuilder<OUT> {
         maybeOverride(
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
                 startingOffsetsInitializer.getAutoOffsetResetStrategy().name().toLowerCase(),
-                true);
+                false);
 
         // If the source is bounded, do not run periodic partition discovery.
         maybeOverride(

@@ -33,8 +33,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Tests that the partition assignment in the partition discoverer is deterministic and stable, with
@@ -97,22 +98,20 @@ public class AbstractPartitionDiscovererTest {
             partitionDiscoverer.open();
 
             List<KafkaTopicPartition> initialDiscovery = partitionDiscoverer.discoverPartitions();
-            assertThat(initialDiscovery).hasSize(1);
-            assertThat(
-                            contains(
-                                    mockGetAllPartitionsForTopicsReturn,
-                                    initialDiscovery.get(0).getPartition()))
-                    .isTrue();
-            assertThat(subtaskIndex)
-                    .isEqualTo(
-                            getExpectedSubtaskIndex(
-                                    initialDiscovery.get(0), numConsumers, numSubtasks));
+            assertEquals(1, initialDiscovery.size());
+            assertTrue(
+                    contains(
+                            mockGetAllPartitionsForTopicsReturn,
+                            initialDiscovery.get(0).getPartition()));
+            assertEquals(
+                    getExpectedSubtaskIndex(initialDiscovery.get(0), numConsumers, numSubtasks),
+                    subtaskIndex);
 
             // subsequent discoveries should not find anything
             List<KafkaTopicPartition> secondDiscovery = partitionDiscoverer.discoverPartitions();
             List<KafkaTopicPartition> thirdDiscovery = partitionDiscoverer.discoverPartitions();
-            assertThat(secondDiscovery).isEmpty();
-            assertThat(thirdDiscovery).isEmpty();
+            assertEquals(0, secondDiscovery.size());
+            assertEquals(0, thirdDiscovery.size());
         }
     }
 
@@ -158,27 +157,26 @@ public class AbstractPartitionDiscovererTest {
 
                 List<KafkaTopicPartition> initialDiscovery =
                         partitionDiscoverer.discoverPartitions();
-                assertThat(initialDiscovery)
-                        .hasSizeGreaterThanOrEqualTo(minPartitionsPerConsumer)
-                        .hasSizeLessThanOrEqualTo(maxPartitionsPerConsumer);
+                assertTrue(initialDiscovery.size() >= minPartitionsPerConsumer);
+                assertTrue(initialDiscovery.size() <= maxPartitionsPerConsumer);
 
                 for (KafkaTopicPartition p : initialDiscovery) {
                     // check that the element was actually contained
-                    assertThat(allPartitions.remove(p)).isTrue();
-                    assertThat(subtaskIndex)
-                            .isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                    assertTrue(allPartitions.remove(p));
+                    assertEquals(
+                            getExpectedSubtaskIndex(p, startIndex, numConsumers), subtaskIndex);
                 }
 
                 // subsequent discoveries should not find anything
                 List<KafkaTopicPartition> secondDiscovery =
                         partitionDiscoverer.discoverPartitions();
                 List<KafkaTopicPartition> thirdDiscovery = partitionDiscoverer.discoverPartitions();
-                assertThat(secondDiscovery).isEmpty();
-                assertThat(thirdDiscovery).isEmpty();
+                assertEquals(0, secondDiscovery.size());
+                assertEquals(0, thirdDiscovery.size());
             }
 
             // all partitions must have been assigned
-            assertThat(allPartitions).isEmpty();
+            assertTrue(allPartitions.isEmpty());
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -222,25 +220,25 @@ public class AbstractPartitionDiscovererTest {
 
                 List<KafkaTopicPartition> initialDiscovery =
                         partitionDiscoverer.discoverPartitions();
-                assertThat(initialDiscovery).hasSizeLessThanOrEqualTo(1);
+                assertTrue(initialDiscovery.size() <= 1);
 
                 for (KafkaTopicPartition p : initialDiscovery) {
                     // check that the element was actually contained
-                    assertThat(allPartitions.remove(p)).isTrue();
-                    assertThat(subtaskIndex)
-                            .isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                    assertTrue(allPartitions.remove(p));
+                    assertEquals(
+                            getExpectedSubtaskIndex(p, startIndex, numConsumers), subtaskIndex);
                 }
 
                 // subsequent discoveries should not find anything
                 List<KafkaTopicPartition> secondDiscovery =
                         partitionDiscoverer.discoverPartitions();
                 List<KafkaTopicPartition> thirdDiscovery = partitionDiscoverer.discoverPartitions();
-                assertThat(secondDiscovery).isEmpty();
-                assertThat(thirdDiscovery).isEmpty();
+                assertEquals(0, secondDiscovery.size());
+                assertEquals(0, thirdDiscovery.size());
             }
 
             // all partitions must have been assigned
-            assertThat(allPartitions).isEmpty();
+            assertTrue(allPartitions.isEmpty());
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -316,36 +314,33 @@ public class AbstractPartitionDiscovererTest {
             List<KafkaTopicPartition> initialDiscoverySubtask2 =
                     partitionDiscovererSubtask2.discoverPartitions();
 
-            assertThat(initialDiscoverySubtask0)
-                    .hasSizeGreaterThanOrEqualTo(minInitialPartitionsPerConsumer)
-                    .hasSizeLessThanOrEqualTo(maxInitialPartitionsPerConsumer);
-            assertThat(initialDiscoverySubtask1)
-                    .hasSizeGreaterThanOrEqualTo(minInitialPartitionsPerConsumer)
-                    .hasSizeLessThanOrEqualTo(maxInitialPartitionsPerConsumer);
-            assertThat(initialDiscoverySubtask2)
-                    .hasSizeGreaterThanOrEqualTo(minInitialPartitionsPerConsumer)
-                    .hasSizeLessThanOrEqualTo(maxInitialPartitionsPerConsumer);
+            assertTrue(initialDiscoverySubtask0.size() >= minInitialPartitionsPerConsumer);
+            assertTrue(initialDiscoverySubtask0.size() <= maxInitialPartitionsPerConsumer);
+            assertTrue(initialDiscoverySubtask1.size() >= minInitialPartitionsPerConsumer);
+            assertTrue(initialDiscoverySubtask1.size() <= maxInitialPartitionsPerConsumer);
+            assertTrue(initialDiscoverySubtask2.size() >= minInitialPartitionsPerConsumer);
+            assertTrue(initialDiscoverySubtask2.size() <= maxInitialPartitionsPerConsumer);
 
             for (KafkaTopicPartition p : initialDiscoverySubtask0) {
                 // check that the element was actually contained
-                assertThat(allInitialPartitions.remove(p)).isTrue();
-                assertThat(0).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allInitialPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 0);
             }
 
             for (KafkaTopicPartition p : initialDiscoverySubtask1) {
                 // check that the element was actually contained
-                assertThat(allInitialPartitions.remove(p)).isTrue();
-                assertThat(1).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allInitialPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 1);
             }
 
             for (KafkaTopicPartition p : initialDiscoverySubtask2) {
                 // check that the element was actually contained
-                assertThat(allInitialPartitions.remove(p)).isTrue();
-                assertThat(2).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allInitialPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 2);
             }
 
             // all partitions must have been assigned
-            assertThat(allInitialPartitions).isEmpty();
+            assertTrue(allInitialPartitions.isEmpty());
 
             // now, execute discover again (should find the extra new partitions)
             List<KafkaTopicPartition> secondDiscoverySubtask0 =
@@ -356,60 +351,63 @@ public class AbstractPartitionDiscovererTest {
                     partitionDiscovererSubtask2.discoverPartitions();
 
             // new discovered partitions must not have been discovered before
-            assertThat(Collections.disjoint(secondDiscoverySubtask0, initialDiscoverySubtask0))
-                    .isTrue();
-            assertThat(Collections.disjoint(secondDiscoverySubtask1, initialDiscoverySubtask1))
-                    .isTrue();
-            assertThat(Collections.disjoint(secondDiscoverySubtask2, initialDiscoverySubtask2))
-                    .isTrue();
+            assertTrue(Collections.disjoint(secondDiscoverySubtask0, initialDiscoverySubtask0));
+            assertTrue(Collections.disjoint(secondDiscoverySubtask1, initialDiscoverySubtask1));
+            assertTrue(Collections.disjoint(secondDiscoverySubtask2, initialDiscoverySubtask2));
 
-            assertThat(secondDiscoverySubtask0.size() + initialDiscoverySubtask0.size())
-                    .isGreaterThanOrEqualTo(minNewPartitionsPerConsumer);
-            assertThat(secondDiscoverySubtask0.size() + initialDiscoverySubtask0.size())
-                    .isLessThanOrEqualTo(maxNewPartitionsPerConsumer);
-            assertThat(secondDiscoverySubtask1.size() + initialDiscoverySubtask1.size())
-                    .isGreaterThanOrEqualTo(minNewPartitionsPerConsumer);
-            assertThat(secondDiscoverySubtask1.size() + initialDiscoverySubtask1.size())
-                    .isLessThanOrEqualTo(maxNewPartitionsPerConsumer);
-            assertThat(secondDiscoverySubtask2.size() + initialDiscoverySubtask2.size())
-                    .isGreaterThanOrEqualTo(minNewPartitionsPerConsumer);
-            assertThat(secondDiscoverySubtask2.size() + initialDiscoverySubtask2.size())
-                    .isLessThanOrEqualTo(maxNewPartitionsPerConsumer);
+            assertTrue(
+                    secondDiscoverySubtask0.size() + initialDiscoverySubtask0.size()
+                            >= minNewPartitionsPerConsumer);
+            assertTrue(
+                    secondDiscoverySubtask0.size() + initialDiscoverySubtask0.size()
+                            <= maxNewPartitionsPerConsumer);
+            assertTrue(
+                    secondDiscoverySubtask1.size() + initialDiscoverySubtask1.size()
+                            >= minNewPartitionsPerConsumer);
+            assertTrue(
+                    secondDiscoverySubtask1.size() + initialDiscoverySubtask1.size()
+                            <= maxNewPartitionsPerConsumer);
+            assertTrue(
+                    secondDiscoverySubtask2.size() + initialDiscoverySubtask2.size()
+                            >= minNewPartitionsPerConsumer);
+            assertTrue(
+                    secondDiscoverySubtask2.size() + initialDiscoverySubtask2.size()
+                            <= maxNewPartitionsPerConsumer);
 
             // check that the two discoveries combined form all partitions
 
             for (KafkaTopicPartition p : initialDiscoverySubtask0) {
-                assertThat(allNewPartitions.remove(p)).isTrue();
-                assertThat(0).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allNewPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 0);
             }
 
             for (KafkaTopicPartition p : initialDiscoverySubtask1) {
-                assertThat(allNewPartitions.remove(p)).isTrue();
-                assertThat(1).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allNewPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 1);
             }
 
             for (KafkaTopicPartition p : initialDiscoverySubtask2) {
-                assertThat(allNewPartitions.remove(p)).isTrue();
-                assertThat(2).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allNewPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 2);
             }
 
             for (KafkaTopicPartition p : secondDiscoverySubtask0) {
-                assertThat(allNewPartitions.remove(p)).isTrue();
-                assertThat(0).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allNewPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 0);
             }
 
             for (KafkaTopicPartition p : secondDiscoverySubtask1) {
-                assertThat(allNewPartitions.remove(p)).isTrue();
-                assertThat(1).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allNewPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 1);
             }
 
             for (KafkaTopicPartition p : secondDiscoverySubtask2) {
-                assertThat(allNewPartitions.remove(p)).isTrue();
-                assertThat(2).isEqualTo(getExpectedSubtaskIndex(p, startIndex, numConsumers));
+                assertTrue(allNewPartitions.remove(p));
+                assertEquals(getExpectedSubtaskIndex(p, startIndex, numConsumers), 2);
             }
 
             // all partitions must have been assigned
-            assertThat(allNewPartitions).isEmpty();
+            assertTrue(allNewPartitions.isEmpty());
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -473,7 +471,7 @@ public class AbstractPartitionDiscovererTest {
             // ordering
             Collections.sort(discoveredPartitions, new KafkaTopicPartition.Comparator());
             Collections.sort(discoveredPartitionsOutOfOrder, new KafkaTopicPartition.Comparator());
-            assertThat(discoveredPartitionsOutOfOrder).isEqualTo(discoveredPartitions);
+            assertEquals(discoveredPartitions, discoveredPartitionsOutOfOrder);
         }
     }
 
@@ -509,19 +507,15 @@ public class AbstractPartitionDiscovererTest {
         partitionDiscoverer.open();
 
         List<KafkaTopicPartition> discoveredPartitions1 = partitionDiscoverer.discoverPartitions();
-        assertThat(discoveredPartitions1)
-                .hasSize(2)
-                .contains(
-                        new KafkaTopicPartition("test-topic", 1),
-                        new KafkaTopicPartition("test-topic", 4));
+        assertEquals(2, discoveredPartitions1.size());
+        assertTrue(discoveredPartitions1.contains(new KafkaTopicPartition("test-topic", 1)));
+        assertTrue(discoveredPartitions1.contains(new KafkaTopicPartition("test-topic", 4)));
 
         List<KafkaTopicPartition> discoveredPartitions2 = partitionDiscoverer.discoverPartitions();
-        assertThat(discoveredPartitions2)
-                .hasSize(3)
-                .contains(
-                        new KafkaTopicPartition("test-topic", 0),
-                        new KafkaTopicPartition("test-topic", 2),
-                        new KafkaTopicPartition("test-topic", 3));
+        assertEquals(3, discoveredPartitions2.size());
+        assertTrue(discoveredPartitions2.contains(new KafkaTopicPartition("test-topic", 0)));
+        assertTrue(discoveredPartitions2.contains(new KafkaTopicPartition("test-topic", 2)));
+        assertTrue(discoveredPartitions2.contains(new KafkaTopicPartition("test-topic", 3)));
     }
 
     private boolean contains(List<KafkaTopicPartition> partitions, int partition) {

@@ -62,6 +62,23 @@ public class TumblingWindowAssigner extends WindowAssigner<TimeWindow>
     }
 
     @Override
+    public Collection<TimeWindow> matchWindows(long timestamp, boolean alignStart) {
+        long start = getWindowStartWithOffset(timestamp, offset, size);
+        if (start != timestamp) {
+            return Collections.emptyList();
+        }
+        if (alignStart) {
+            return Collections.singletonList(new TimeWindow(start, start + size));
+        } else {
+            if (start - size >= 0) {
+                return Collections.singletonList(new TimeWindow(start - size, start));
+            }
+        }
+
+        return Collections.emptyList();
+    }
+
+    @Override
     public TypeSerializer<TimeWindow> getWindowSerializer(ExecutionConfig executionConfig) {
         return new TimeWindow.Serializer();
     }

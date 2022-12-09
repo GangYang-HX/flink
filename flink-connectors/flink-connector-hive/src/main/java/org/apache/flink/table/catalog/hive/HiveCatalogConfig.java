@@ -24,6 +24,8 @@ public class HiveCatalogConfig {
     // Table related configs
     public static final String COMMENT = "comment";
     public static final String DEFAULT_LIST_COLUMN_TYPES_SEPARATOR = ":";
+    public static final String INPUT_FORMAT = "inputFormat";
+    public static final String LOCATION = "location";
 
     // Partition related configs
     public static final String PARTITION_LOCATION = "partition.location";

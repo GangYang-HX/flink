@@ -29,11 +29,17 @@ import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.kubernetes.KubernetesClusterDescriptor;
 import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.kubernetes.utils.KubernetesUtils;
-import org.apache.flink.runtime.jobmanager.HighAvailabilityMode;
 import org.apache.flink.util.Preconditions;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** This class contains utility methods for the {@link KubernetesSessionClusterEntrypoint}. */
 class KubernetesEntrypointUtils {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KubernetesEntrypointUtils.class);
+
+    private KubernetesEntrypointUtils() {}
 
     /**
      * For non-HA cluster, {@link JobManagerOptions#ADDRESS} has be set to Kubernetes service name
@@ -61,8 +67,7 @@ class KubernetesEntrypointUtils {
             configuration.setString(HighAvailabilityOptions.HA_JOB_MANAGER_PORT_RANGE, "0");
             configuration.setString(TaskManagerOptions.RPC_PORT, "0");
         }
-
-        if (HighAvailabilityMode.isHighAvailabilityModeActivated(configuration)) {
+        if (KubernetesUtils.isHostNetwork(configuration)) {
             final String ipAddress = System.getenv().get(Constants.ENV_FLINK_POD_IP_ADDRESS);
             Preconditions.checkState(
                     ipAddress != null,
@@ -74,6 +79,4 @@ class KubernetesEntrypointUtils {
 
         return configuration;
     }
-
-    private KubernetesEntrypointUtils() {}
 }

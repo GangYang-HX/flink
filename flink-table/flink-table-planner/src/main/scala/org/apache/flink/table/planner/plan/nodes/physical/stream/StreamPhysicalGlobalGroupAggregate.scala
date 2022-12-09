@@ -22,7 +22,7 @@ import org.apache.flink.table.planner.plan.PartialFinalType
 import org.apache.flink.table.planner.plan.nodes.exec.{ExecNode, InputProperty}
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecGlobalGroupAggregate
 import org.apache.flink.table.planner.plan.utils._
-import org.apache.flink.table.planner.utils.ShortcutUtils.{unwrapTableConfig, unwrapTypeFactory}
+import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTableConfig
 
 import org.apache.calcite.plan.{RelOptCluster, RelTraitSet}
 import org.apache.calcite.rel.`type`.RelDataType
@@ -40,20 +40,19 @@ class StreamPhysicalGlobalGroupAggregate(
     traitSet: RelTraitSet,
     inputRel: RelNode,
     outputRowType: RelDataType,
-    grouping: Array[Int],
-    aggCalls: Seq[AggregateCall],
+    val grouping: Array[Int],
+    val aggCalls: Seq[AggregateCall],
     val aggCallNeedRetractions: Array[Boolean],
     val localAggInputRowType: RelDataType,
     val needRetraction: Boolean,
     val partialFinalType: PartialFinalType,
     indexOfCountStar: Option[Int] = Option.empty)
-  extends StreamPhysicalGroupAggregateBase(cluster, traitSet, inputRel, grouping, aggCalls) {
+  extends StreamPhysicalGroupAggregateBase(cluster, traitSet, inputRel) {
 
   // if the indexOfCountStar is valid, the needRetraction should be true
   require(indexOfCountStar.isEmpty || indexOfCountStar.get >= 0 && needRetraction)
 
   lazy val localAggInfoList: AggregateInfoList = AggregateUtil.transformToStreamAggregateInfoList(
-    unwrapTypeFactory(inputRel),
     FlinkTypeFactory.toLogicalRowType(localAggInputRowType),
     aggCalls,
     aggCallNeedRetractions,
@@ -64,7 +63,6 @@ class StreamPhysicalGlobalGroupAggregate(
   )
 
   lazy val globalAggInfoList: AggregateInfoList = AggregateUtil.transformToStreamAggregateInfoList(
-    unwrapTypeFactory(inputRel),
     FlinkTypeFactory.toLogicalRowType(localAggInputRowType),
     aggCalls,
     aggCallNeedRetractions,

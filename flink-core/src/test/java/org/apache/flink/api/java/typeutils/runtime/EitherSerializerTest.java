@@ -33,7 +33,8 @@ import org.apache.flink.types.Either;
 import org.apache.flink.types.LongValue;
 import org.apache.flink.types.StringValue;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Ignore;
+import org.junit.Test;
 
 import java.io.IOException;
 
@@ -43,11 +44,11 @@ import static org.apache.flink.types.Either.Right;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
-class EitherSerializerTest {
+public class EitherSerializerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    void testStringDoubleEither() {
+    public void testStringDoubleEither() {
 
         Either<String, Double>[] testData =
                 new Either[] {
@@ -72,7 +73,7 @@ class EitherSerializerTest {
     }
 
     @Test
-    void testStringValueDoubleValueEither() {
+    public void testStringValueDoubleValueEither() {
         @SuppressWarnings("unchecked")
         Either<StringValue, DoubleValue>[] testData =
                 new Either[] {
@@ -98,7 +99,7 @@ class EitherSerializerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    void testEitherWithTuple() {
+    public void testEitherWithTuple() {
 
         Either<Tuple2<Long, Long>, Double>[] testData =
                 new Either[] {
@@ -125,7 +126,7 @@ class EitherSerializerTest {
     }
 
     @Test
-    void testEitherWithTupleValues() {
+    public void testEitherWithTupleValues() {
         @SuppressWarnings("unchecked")
         Either<Tuple2<LongValue, LongValue>, DoubleValue>[] testData =
                 new Either[] {
@@ -154,7 +155,7 @@ class EitherSerializerTest {
     }
 
     @Test
-    void testEitherWithObjectReuse() {
+    public void testEitherWithObjectReuse() {
         EitherTypeInfo<LongValue, DoubleValue> eitherTypeInfo =
                 new EitherTypeInfo<>(
                         ValueTypeInfo.LONG_VALUE_TYPE_INFO, ValueTypeInfo.DOUBLE_VALUE_TYPE_INFO);
@@ -185,7 +186,7 @@ class EitherSerializerTest {
     }
 
     @Test
-    void testSerializeIndividually() throws IOException {
+    public void testSerializeIndividually() throws IOException {
         EitherTypeInfo<LongValue, DoubleValue> eitherTypeInfo =
                 new EitherTypeInfo<>(
                         ValueTypeInfo.LONG_VALUE_TYPE_INFO, ValueTypeInfo.DOUBLE_VALUE_TYPE_INFO);
@@ -226,6 +227,7 @@ class EitherSerializerTest {
      * that the type of the created instance is the same as the type class parameter. Since we
      * arbitrarily create always create a Left instance we override this test.
      */
+    @Ignore("Prevents this class from being considered a test class by JUnit.")
     private class EitherSerializerTestInstance<T> extends SerializerTestInstance<T> {
 
         public EitherSerializerTestInstance(
@@ -235,7 +237,7 @@ class EitherSerializerTest {
 
         @Override
         @Test
-        protected void testInstantiate() {
+        public void testInstantiate() {
             try {
                 TypeSerializer<T> serializer = getSerializer();
 

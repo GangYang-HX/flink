@@ -21,7 +21,6 @@ package org.apache.flink.runtime.webmonitor.threadinfo;
 import org.apache.flink.runtime.messages.ThreadInfoSample;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -75,8 +74,7 @@ public class JobVertexFlameGraphFactory {
     private static JobVertexFlameGraph createFlameGraphFromSample(
             JobVertexThreadInfoStats sample, Set<Thread.State> threadStates) {
         final NodeBuilder root = new NodeBuilder("root");
-        for (Collection<ThreadInfoSample> threadInfoSubSamples :
-                sample.getSamplesBySubtask().values()) {
+        for (List<ThreadInfoSample> threadInfoSubSamples : sample.getSamplesBySubtask().values()) {
             for (ThreadInfoSample threadInfo : threadInfoSubSamples) {
                 if (threadStates.contains(threadInfo.getThreadState())) {
                     StackTraceElement[] traces = threadInfo.getStackTrace();

@@ -24,13 +24,13 @@ import org.apache.flink.python.PythonOptions;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.functions.python.PythonFunctionInfo;
-import org.apache.flink.table.runtime.operators.join.FlinkJoinType;
 import org.apache.flink.table.runtime.operators.python.scalar.PythonScalarFunctionOperatorTestBase;
 import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 
-import org.junit.jupiter.api.Test;
+import org.apache.calcite.rel.core.JoinRelType;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -48,12 +48,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * @param <IN> Type of the input elements.
  * @param <OUT> Type of the output elements.
  */
-abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
+public abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
 
     @Test
-    void testRetractionFieldKept() throws Exception {
+    public void testRetractionFieldKept() throws Exception {
         OneInputStreamOperatorTestHarness<IN, OUT> testHarness =
-                getTestHarness(new Configuration(), FlinkJoinType.INNER);
+                getTestHarness(new Configuration(), JoinRelType.INNER);
         long initialTime = 0L;
         ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<>();
 
@@ -75,11 +75,11 @@ abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
     }
 
     @Test
-    void testFinishBundleTriggeredOnCheckpoint() throws Exception {
+    public void testFinishBundleTriggeredOnCheckpoint() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         OneInputStreamOperatorTestHarness<IN, OUT> testHarness =
-                getTestHarness(conf, FlinkJoinType.INNER);
+                getTestHarness(conf, JoinRelType.INNER);
 
         long initialTime = 0L;
         ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<>();
@@ -100,11 +100,11 @@ abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
     }
 
     @Test
-    void testFinishBundleTriggeredByCount() throws Exception {
+    public void testFinishBundleTriggeredByCount() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 2);
         OneInputStreamOperatorTestHarness<IN, OUT> testHarness =
-                getTestHarness(conf, FlinkJoinType.INNER);
+                getTestHarness(conf, JoinRelType.INNER);
 
         long initialTime = 0L;
         ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<>();
@@ -127,12 +127,12 @@ abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
     }
 
     @Test
-    void testFinishBundleTriggeredByTime() throws Exception {
+    public void testFinishBundleTriggeredByTime() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         conf.setLong(PythonOptions.MAX_BUNDLE_TIME_MILLS, 1000L);
         OneInputStreamOperatorTestHarness<IN, OUT> testHarness =
-                getTestHarness(conf, FlinkJoinType.INNER);
+                getTestHarness(conf, JoinRelType.INNER);
 
         long initialTime = 0L;
         ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<>();
@@ -152,9 +152,9 @@ abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
     }
 
     @Test
-    void testLeftJoin() throws Exception {
+    public void testLeftJoin() throws Exception {
         OneInputStreamOperatorTestHarness<IN, OUT> testHarness =
-                getTestHarness(new Configuration(), FlinkJoinType.LEFT);
+                getTestHarness(new Configuration(), JoinRelType.LEFT);
         long initialTime = 0L;
         ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<>();
 
@@ -191,7 +191,7 @@ abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
     }
 
     private OneInputStreamOperatorTestHarness<IN, OUT> getTestHarness(
-            Configuration config, FlinkJoinType joinType) throws Exception {
+            Configuration config, JoinRelType joinRelType) throws Exception {
         RowType inputType =
                 new RowType(
                         Arrays.asList(
@@ -214,7 +214,7 @@ abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
                         inputType,
                         outputType,
                         new int[] {2},
-                        joinType);
+                        joinRelType);
 
         OneInputStreamOperatorTestHarness<IN, OUT> testHarness =
                 new OneInputStreamOperatorTestHarness(operator);
@@ -235,5 +235,5 @@ abstract class PythonTableFunctionOperatorTestBase<IN, OUT> {
             RowType inputType,
             RowType outputType,
             int[] udfInputOffsets,
-            FlinkJoinType joinType);
+            JoinRelType joinRelType);
 }

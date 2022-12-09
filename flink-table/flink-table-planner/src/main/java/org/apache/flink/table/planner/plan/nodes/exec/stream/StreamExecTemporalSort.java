@@ -119,11 +119,9 @@ public class StreamExecTemporalSort extends ExecNodeBase<RowData>
         RowType inputType = (RowType) inputEdge.getOutputType();
         LogicalType timeType = inputType.getTypeAt(sortSpec.getFieldSpec(0).getFieldIndex());
         if (isRowtimeAttribute(timeType)) {
-            return createSortRowTime(
-                    inputType, inputTransform, config, planner.getFlinkContext().getClassLoader());
+            return createSortRowTime(inputType, inputTransform, config);
         } else if (isProctimeAttribute(timeType)) {
-            return createSortProcTime(
-                    inputType, inputTransform, config, planner.getFlinkContext().getClassLoader());
+            return createSortProcTime(inputType, inputTransform, config);
         } else {
             throw new TableException(
                     String.format(
@@ -135,10 +133,7 @@ public class StreamExecTemporalSort extends ExecNodeBase<RowData>
 
     /** Create Sort logic based on processing time. */
     private Transformation<RowData> createSortProcTime(
-            RowType inputType,
-            Transformation<RowData> inputTransform,
-            ExecNodeConfig config,
-            ClassLoader classLoader) {
+            RowType inputType, Transformation<RowData> inputTransform, ExecNodeConfig config) {
         // if the order has secondary sorting fields in addition to the proctime
         if (sortSpec.getFieldSize() > 1) {
             // skip the first field which is the proctime field and would be ordered by timer.
@@ -146,8 +141,7 @@ public class StreamExecTemporalSort extends ExecNodeBase<RowData>
 
             GeneratedRecordComparator rowComparator =
                     ComparatorCodeGenerator.gen(
-                            config,
-                            classLoader,
+                            config.getTableConfig(),
                             "ProcTimeSortComparator",
                             inputType,
                             specExcludeTime);
@@ -180,18 +174,14 @@ public class StreamExecTemporalSort extends ExecNodeBase<RowData>
 
     /** Create Sort logic based on row time. */
     private Transformation<RowData> createSortRowTime(
-            RowType inputType,
-            Transformation<RowData> inputTransform,
-            ExecNodeConfig config,
-            ClassLoader classLoader) {
+            RowType inputType, Transformation<RowData> inputTransform, ExecNodeConfig config) {
         GeneratedRecordComparator rowComparator = null;
         if (sortSpec.getFieldSize() > 1) {
             // skip the first field which is the rowtime field and would be ordered by timer.
             SortSpec specExcludeTime = sortSpec.createSubSortSpec(1);
             rowComparator =
                     ComparatorCodeGenerator.gen(
-                            config,
-                            classLoader,
+                            config.getTableConfig(),
                             "RowTimeSortComparator",
                             inputType,
                             specExcludeTime);

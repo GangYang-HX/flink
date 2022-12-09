@@ -40,9 +40,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
@@ -52,22 +53,28 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.flink.yarn.configuration.YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Test cases for the deployment of Yarn Flink clusters. */
-class YARNITCase extends YarnTestBase {
+public class YARNITCase extends YarnTestBase {
 
     private static final Duration yarnAppTerminateTimeout = Duration.ofSeconds(10);
     private static final int sleepIntervalInMS = 100;
 
-    @BeforeAll
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    @BeforeClass
     public static void setup() {
         YARN_CONFIGURATION.set(YarnTestBase.TEST_CLUSTER_NAME_KEY, "flink-yarn-tests-per-job");
         startYARNWithConfig(YARN_CONFIGURATION, true);
     }
 
     @Test
-    void testPerJobModeWithEnableSystemClassPathIncludeUserJar() throws Exception {
+    public void testPerJobModeWithEnableSystemClassPathIncludeUserJar() throws Exception {
         runTest(
                 () ->
                         deployPerJob(
@@ -78,7 +85,7 @@ class YARNITCase extends YarnTestBase {
     }
 
     @Test
-    void testPerJobModeWithDisableSystemClassPathIncludeUserJar() throws Exception {
+    public void testPerJobModeWithDisableSystemClassPathIncludeUserJar() throws Exception {
         runTest(
                 () ->
                         deployPerJob(
@@ -89,18 +96,18 @@ class YARNITCase extends YarnTestBase {
     }
 
     @Test
-    void testPerJobModeWithDistributedCache(@TempDir File tempDir) throws Exception {
+    public void testPerJobModeWithDistributedCache() throws Exception {
         runTest(
                 () ->
                         deployPerJob(
                                 createDefaultConfiguration(
                                         YarnConfigOptions.UserJarInclusion.DISABLED),
-                                YarnTestCacheJob.getDistributedCacheJobGraph(tempDir),
+                                YarnTestCacheJob.getDistributedCacheJobGraph(tmp.newFolder()),
                                 true));
     }
 
     @Test
-    void testPerJobWithProvidedLibDirs() throws Exception {
+    public void testPerJobWithProvidedLibDirs() throws Exception {
         final Path remoteLib =
                 new Path(
                         miniDFSCluster.getFileSystem().getUri().toString() + "/flink-provided-lib");
@@ -118,11 +125,11 @@ class YARNITCase extends YarnTestBase {
     }
 
     @Test
-    void testPerJobWithArchive(@TempDir File tempDir) throws Exception {
+    public void testPerJobWithArchive() throws Exception {
         final Configuration flinkConfig =
                 createDefaultConfiguration(YarnConfigOptions.UserJarInclusion.DISABLED);
         final JobGraph archiveJobGraph =
-                YarnTestArchiveJob.getArchiveJobGraph(tempDir, flinkConfig);
+                YarnTestArchiveJob.getArchiveJobGraph(tmp.newFolder(), flinkConfig);
         runTest(() -> deployPerJob(flinkConfig, archiveJobGraph, true));
     }
 
@@ -157,7 +164,11 @@ class YARNITCase extends YarnTestBase {
 
                 for (DistributedCache.DistributedCacheEntry entry :
                         jobGraph.getUserArtifacts().values()) {
-                    assertThat(Utils.isRemotePath(entry.filePath)).isTrue();
+                    assertTrue(
+                            String.format(
+                                    "The user artifacts(%s) should be remote or uploaded to remote filesystem.",
+                                    entry.filePath),
+                            Utils.isRemotePath(entry.filePath));
                 }
 
                 ApplicationId applicationId = clusterClient.getClusterId();
@@ -167,8 +178,8 @@ class YARNITCase extends YarnTestBase {
 
                 final JobResult jobResult = jobResultCompletableFuture.get();
 
-                assertThat(jobResult).isNotNull();
-                assertThat(jobResult.getSerializedThrowable()).isNotPresent();
+                assertThat(jobResult, is(notNullValue()));
+                assertThat(jobResult.getSerializedThrowable().isPresent(), is(false));
 
                 checkStagingDirectory(configuration, applicationId);
 
@@ -191,11 +202,13 @@ class YARNITCase extends YarnTestBase {
             final Path stagingDirectory =
                     new Path(fs.getHomeDirectory(), ".flink/" + appId.toString());
             if (isProvidedLibDirsConfigured) {
-                assertThat(fs.exists(new Path(stagingDirectory, flinkLibFolder.getName())))
-                        .isFalse();
+                assertFalse(
+                        "The provided lib dirs is set, so the lib directory should not be uploaded to staging directory.",
+                        fs.exists(new Path(stagingDirectory, flinkLibFolder.getName())));
             } else {
-                assertThat(fs.exists(new Path(stagingDirectory, flinkLibFolder.getName())))
-                        .isTrue();
+                assertTrue(
+                        "The lib directory should be uploaded to staging directory.",
+                        fs.exists(new Path(stagingDirectory, flinkLibFolder.getName())));
             }
         }
     }

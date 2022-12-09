@@ -49,7 +49,7 @@ import static org.apache.flink.table.api.config.ExecutionConfigOptions.TABLE_EXE
  * PushWatermarkIntoTableSourceScanRule}.
  */
 public class PushWatermarkIntoTableSourceScanRuleTest extends TableTestBase {
-    private final StreamTableTestUtil util = streamTestUtil(TableConfig.getDefault());
+    private final StreamTableTestUtil util = streamTestUtil(new TableConfig());
 
     @Before
     public void setup() {

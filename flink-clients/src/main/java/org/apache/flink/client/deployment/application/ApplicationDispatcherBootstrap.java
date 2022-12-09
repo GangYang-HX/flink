@@ -29,7 +29,6 @@ import org.apache.flink.client.deployment.application.executors.EmbeddedExecutor
 import org.apache.flink.client.program.PackagedProgram;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DeploymentOptions;
-import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.configuration.PipelineOptionsInternal;
 import org.apache.flink.core.execution.PipelineExecutorServiceLoader;
 import org.apache.flink.runtime.client.DuplicateJobSubmissionException;
@@ -43,7 +42,6 @@ import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.util.ExceptionUtils;
-import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
 
@@ -81,6 +79,8 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  */
 @Internal
 public class ApplicationDispatcherBootstrap implements DispatcherBootstrap {
+
+    public static final JobID ZERO_JOB_ID = new JobID(0, 0);
 
     @VisibleForTesting static final String FAILED_JOB_NAME = "(application driver)";
 
@@ -216,18 +216,13 @@ public class ApplicationDispatcherBootstrap implements DispatcherBootstrap {
                     dispatcherGateway, scheduledExecutor, false, submitFailedJobOnApplicationError);
         }
         if (!configuredJobId.isPresent()) {
-            // In HA mode, we only support single-execute jobs at the moment. Here, we manually
-            // generate the job id, if not configured, from the cluster id to keep it consistent
-            // across failover.
-            configuration.set(
-                    PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID,
-                    new JobID(
-                                    Preconditions.checkNotNull(
-                                                    configuration.get(
-                                                            HighAvailabilityOptions.HA_CLUSTER_ID))
-                                            .hashCode(),
-                                    0)
-                            .toHexString());
+            // only permit submitting one job on application mode with HA, and in this case
+            // we can set jobId to random hex string instead of 00000000000000000000000000000000
+            if (recoveredJobIds.size() > 0) {
+                JobID jobID = recoveredJobIds.stream().findFirst().get();
+                configuration.set(
+                        PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID, jobID.toHexString());
+            }
         }
         return runApplicationAsync(
                 dispatcherGateway, scheduledExecutor, true, submitFailedJobOnApplicationError);

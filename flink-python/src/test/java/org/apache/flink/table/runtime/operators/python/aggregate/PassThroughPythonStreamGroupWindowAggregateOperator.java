@@ -18,7 +18,6 @@
 
 package org.apache.flink.table.runtime.operators.python.aggregate;
 
-import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.memory.ByteArrayOutputStreamWithPos;
 import org.apache.flink.core.memory.DataInputDeserializer;
@@ -29,6 +28,7 @@ import org.apache.flink.python.PythonFunctionRunner;
 import org.apache.flink.streaming.api.operators.InternalTimer;
 import org.apache.flink.streaming.api.operators.InternalTimerServiceImpl;
 import org.apache.flink.streaming.api.operators.Triggerable;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -69,7 +69,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.python.Constants.OUTPUT_COLLECTION_ID;
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.toEpochMillsForTimer;
 
 /** PassThroughPythonStreamGroupWindowAggregateOperator. */
@@ -87,7 +86,7 @@ public class PassThroughPythonStreamGroupWindowAggregateOperator<K>
 
     private transient UpdatableRowData reusePythonTimerRowData;
     private transient UpdatableRowData reusePythonTimerData;
-    private transient LinkedBlockingQueue<Tuple2<String, byte[]>> resultBuffer;
+    private transient LinkedBlockingQueue<byte[]> resultBuffer;
     private Projection<RowData, BinaryRowData> groupKeyProjection;
     private Function<RowData, RowData> aggExtracter;
     private Function<TimeWindow, RowData> windowExtractor;
@@ -296,7 +295,7 @@ public class PassThroughPythonStreamGroupWindowAggregateOperator<K>
         }
     }
 
-    public void setResultBuffer(LinkedBlockingQueue<Tuple2<String, byte[]>> resultBuffer) {
+    public void setResultBuffer(LinkedBlockingQueue<byte[]> resultBuffer) {
         this.resultBuffer = resultBuffer;
     }
 
@@ -344,7 +343,7 @@ public class PassThroughPythonStreamGroupWindowAggregateOperator<K>
                     reuseJoinedRow.replace(windowAggResult, windowProperty);
                     reusePythonRowData.setField(1, reuseJoinedRow);
                     udfOutputTypeSerializer.serialize(reusePythonRowData, output);
-                    resultBuffer.add(Tuple2.of(OUTPUT_COLLECTION_ID, output.getCopyOfBuffer()));
+                    resultBuffer.add(output.getCopyOfBuffer());
                     break;
                 }
             }
@@ -376,9 +375,7 @@ public class PassThroughPythonStreamGroupWindowAggregateOperator<K>
                                 .collect(Collectors.toList()));
         final GeneratedProjection generatedProjection =
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         name,
                         inputType,
                         forwardedFieldType,
@@ -429,7 +426,7 @@ public class PassThroughPythonStreamGroupWindowAggregateOperator<K>
         windowBaos.reset();
         DataOutputSerializer output = new DataOutputSerializer(1);
         udfOutputTypeSerializer.serialize(reusePythonTimerRowData, output);
-        resultBuffer.add(Tuple2.of(OUTPUT_COLLECTION_ID, output.getCopyOfBuffer()));
+        resultBuffer.add(output.getCopyOfBuffer());
     }
 
     private void cleanWindowIfNeeded(RowData key, TimeWindow window, long currentTime)
@@ -450,7 +447,7 @@ public class PassThroughPythonStreamGroupWindowAggregateOperator<K>
             reuseJoinedRow.replace(windowAggResult, windowProperty);
             reusePythonRowData.setField(1, reuseJoinedRow);
             udfOutputTypeSerializer.serialize(reusePythonRowData, output);
-            resultBuffer.add(Tuple2.of(OUTPUT_COLLECTION_ID, output.getCopyOfBuffer()));
+            resultBuffer.add(output.getCopyOfBuffer());
             // 2. delete window timer
             if (windowAssigner.isEventTime()) {
                 deleteEventTimeTimer(key, window);

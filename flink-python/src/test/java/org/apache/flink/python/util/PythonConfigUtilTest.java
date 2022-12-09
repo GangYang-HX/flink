@@ -23,17 +23,17 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
 import org.apache.flink.streaming.api.graph.StreamGraph;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Collections;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** A test class to test PythonConfigUtil getting executionEnvironment correctly. */
-class PythonConfigUtilTest {
+public class PythonConfigUtilTest {
 
     @Test
-    void testJobName() {
+    public void testJobName() {
         String jobName = "MyTestJob";
         Configuration config = new Configuration();
         config.set(PipelineOptions.NAME, jobName);
@@ -41,6 +41,6 @@ class PythonConfigUtilTest {
 
         env.fromCollection(Collections.singletonList("test")).addSink(new DiscardingSink<>());
         StreamGraph streamGraph = env.getStreamGraph(true);
-        assertThat(streamGraph.getJobName()).isEqualTo(jobName);
+        assertEquals(jobName, streamGraph.getJobName());
     }
 }

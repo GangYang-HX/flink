@@ -24,8 +24,7 @@ import org.apache.flink.runtime.testutils.DirectScheduledExecutorService;
 import org.apache.flink.util.function.RunnableWithException;
 import org.apache.flink.util.function.ThrowingConsumer;
 
-import org.assertj.core.data.Percentage;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -45,11 +44,11 @@ import java.util.stream.IntStream;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 import static org.apache.flink.changelog.fs.UnregisteredChangelogStorageMetricGroup.createUnregisteredChangelogStorageMetricGroup;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 /** {@link RetryingExecutor} test. */
-class RetryingExecutorTest {
+public class RetryingExecutorTest {
 
     private static final ThrowingConsumer<Integer, Exception> FAILING_TASK =
             attempt -> {
@@ -57,17 +56,17 @@ class RetryingExecutorTest {
             };
 
     @Test
-    void testNoRetries() throws Exception {
+    public void testNoRetries() throws Exception {
         testPolicy(1, RetryPolicy.NONE, FAILING_TASK);
     }
 
     @Test
-    void testFixedRetryLimit() throws Exception {
+    public void testFixedRetryLimit() throws Exception {
         testPolicy(5, RetryPolicy.fixed(5, 0, 0), FAILING_TASK);
     }
 
     @Test
-    void testDiscardOnTimeout() throws Exception {
+    public void testDiscardOnTimeout() throws Exception {
         int timeoutMs = 5;
         int numAttempts = 7;
         int successfulAttempt = numAttempts - 1;
@@ -75,12 +74,10 @@ class RetryingExecutorTest {
         List<Integer> discarded = new CopyOnWriteArrayList<>();
         AtomicBoolean executionBlocked = new AtomicBoolean(true);
         Deadline deadline = Deadline.fromNow(Duration.ofMinutes(5));
-        ChangelogStorageMetricGroup metrics = createUnregisteredChangelogStorageMetricGroup();
         try (RetryingExecutor executor =
                 new RetryingExecutor(
                         numAttempts,
-                        metrics.getAttemptsPerUpload(),
-                        metrics.getTotalAttemptsPerUpload())) {
+                        createUnregisteredChangelogStorageMetricGroup().getAttemptsPerUpload())) {
             executor.execute(
                     RetryPolicy.fixed(numAttempts, timeoutMs, 0),
                     new RetriableAction<Integer>() {
@@ -118,13 +115,14 @@ class RetryingExecutorTest {
                 Thread.sleep(10);
             }
         }
-        assertThat(singletonList(successfulAttempt)).isEqualTo(completed);
-        assertThat(IntStream.range(0, successfulAttempt).boxed().collect(toList()))
-                .isEqualTo(discarded.stream().sorted().collect(toList()));
+        assertEquals(singletonList(successfulAttempt), completed);
+        assertEquals(
+                IntStream.range(0, successfulAttempt).boxed().collect(toList()),
+                discarded.stream().sorted().collect(toList()));
     }
 
     @Test
-    void testFixedRetrySuccess() throws Exception {
+    public void testFixedRetrySuccess() throws Exception {
         int successfulAttempt = 3;
         int maxAttempts = successfulAttempt * 2;
         testPolicy(
@@ -138,7 +136,7 @@ class RetryingExecutorTest {
     }
 
     @Test
-    void testNonRetryableException() throws Exception {
+    public void testNonRetryableException() throws Exception {
         testPolicy(
                 1,
                 RetryPolicy.fixed(Integer.MAX_VALUE, 0, 0),
@@ -148,7 +146,7 @@ class RetryingExecutorTest {
     }
 
     @Test
-    void testRetryDelay() throws Exception {
+    public void testRetryDelay() throws Exception {
         int delayAfterFailure = 123;
         int numAttempts = 2;
         testPolicy(
@@ -163,7 +161,7 @@ class RetryingExecutorTest {
                     @Override
                     public ScheduledFuture<?> schedule(
                             Runnable command, long delay, TimeUnit unit) {
-                        assertThat(delay).isEqualTo(delayAfterFailure);
+                        assertEquals(delayAfterFailure, delay);
                         command.run();
                         return CompletedScheduledFuture.create(null);
                     }
@@ -171,7 +169,7 @@ class RetryingExecutorTest {
     }
 
     @Test
-    void testNoRetryDelayIfTimeout() throws Exception {
+    public void testNoRetryDelayIfTimeout() throws Exception {
         int delayAfterFailure = 123;
         int numAttempts = 2;
         testPolicy(
@@ -193,7 +191,7 @@ class RetryingExecutorTest {
     }
 
     @Test
-    void testTimeout() throws Exception {
+    public void testTimeout() throws Exception {
         int numAttempts = 2;
         int timeout = 500;
         CompletableFuture<Long> firstStart = new CompletableFuture<>();
@@ -211,9 +209,11 @@ class RetryingExecutorTest {
                     }
                 },
                 Executors.newScheduledThreadPool(2));
-        /* future completion can be delayed arbitrarily causing start delta be less than timeout */
-        assertThat(((double) secondStart.get() - firstStart.get()) / 1_000_000)
-                .isCloseTo(timeout, Percentage.withPercentage(75));
+        assertEquals(
+                timeout,
+                ((double) secondStart.get() - firstStart.get()) / 1_000_000,
+                timeout
+                        * 0.75d /* future completion can be delayed arbitrarily causing start delta be less than timeout */);
     }
 
     private void testPolicy(
@@ -230,12 +230,10 @@ class RetryingExecutorTest {
             throws Exception {
         AtomicInteger attemptsMade = new AtomicInteger(0);
         CountDownLatch firstAttemptCompletedLatch = new CountDownLatch(1);
-        ChangelogStorageMetricGroup metrics = createUnregisteredChangelogStorageMetricGroup();
         try (RetryingExecutor executor =
                 new RetryingExecutor(
                         scheduler,
-                        metrics.getAttemptsPerUpload(),
-                        metrics.getTotalAttemptsPerUpload())) {
+                        createUnregisteredChangelogStorageMetricGroup().getAttemptsPerUpload())) {
             executor.execute(
                     policy,
                     runnableToAction(
@@ -248,7 +246,7 @@ class RetryingExecutorTest {
                             }));
             firstAttemptCompletedLatch.await(); // before closing executor
         }
-        assertThat(attemptsMade.get()).isEqualTo(expectedAttempts);
+        assertEquals(expectedAttempts, attemptsMade.get());
     }
 
     private static RetriableAction<?> runnableToAction(RunnableWithException action) {

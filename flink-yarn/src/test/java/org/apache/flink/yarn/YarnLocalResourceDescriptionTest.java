@@ -19,17 +19,19 @@
 package org.apache.flink.yarn;
 
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.yarn.api.records.LocalResourceType;
 import org.apache.hadoop.yarn.api.records.LocalResourceVisibility;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.apache.flink.core.testutils.CommonTestUtils.assertThrows;
+import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertThat;
 
 /** Tests for the {@link YarnLocalResourceDescriptor}. */
-class YarnLocalResourceDescriptionTest {
+public class YarnLocalResourceDescriptionTest extends TestLogger {
 
     private final String key = "flink.jar";
     private final Path path = new Path("hdfs://nn/tmp/flink.jar");
@@ -37,7 +39,7 @@ class YarnLocalResourceDescriptionTest {
     private final long ts = System.currentTimeMillis();
 
     @Test
-    void testFromString() throws Exception {
+    public void testFromString() throws Exception {
         final YarnLocalResourceDescriptor localResourceDesc =
                 new YarnLocalResourceDescriptor(
                         key,
@@ -50,22 +52,23 @@ class YarnLocalResourceDescriptionTest {
         final String desc = localResourceDesc.toString();
         YarnLocalResourceDescriptor newLocalResourceDesc =
                 YarnLocalResourceDescriptor.fromString(desc);
-        assertThat(newLocalResourceDesc.getResourceKey()).isEqualTo(key);
-        assertThat(newLocalResourceDesc.getPath()).isEqualTo(path);
-        assertThat(newLocalResourceDesc.getSize()).isEqualTo(size);
-        assertThat(newLocalResourceDesc.getModificationTime()).isEqualTo(ts);
-        assertThat(newLocalResourceDesc.getVisibility()).isEqualTo(LocalResourceVisibility.PUBLIC);
-        assertThat(newLocalResourceDesc.getResourceType()).isEqualTo(LocalResourceType.FILE);
+        assertThat(newLocalResourceDesc.getResourceKey(), is(key));
+        assertThat(newLocalResourceDesc.getPath(), is(path));
+        assertThat(newLocalResourceDesc.getSize(), is(size));
+        assertThat(newLocalResourceDesc.getModificationTime(), is(ts));
+        assertThat(newLocalResourceDesc.getVisibility(), is(LocalResourceVisibility.PUBLIC));
+        assertThat(newLocalResourceDesc.getResourceType(), is(LocalResourceType.FILE));
     }
 
     @Test
-    void testFromStringMalformed() {
+    public void testFromStringMalformed() {
         final String desc =
                 String.format(
                         "YarnLocalResourceDescriptor{key=%s path=%s size=%d modTime=%d visibility=%s}",
-                        key, path, size, ts, LocalResourceVisibility.PUBLIC);
-        assertThatThrownBy(() -> YarnLocalResourceDescriptor.fromString(desc))
-                .isInstanceOf(FlinkException.class)
-                .hasMessageContaining("Error to parse YarnLocalResourceDescriptor from " + desc);
+                        key, path.toString(), size, ts, LocalResourceVisibility.PUBLIC);
+        assertThrows(
+                "Error to parse YarnLocalResourceDescriptor from " + desc,
+                FlinkException.class,
+                () -> YarnLocalResourceDescriptor.fromString(desc));
     }
 }

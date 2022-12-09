@@ -21,23 +21,27 @@ package org.apache.flink.kubernetes.kubeclient.services;
 import org.apache.flink.kubernetes.KubernetesClientTestBase;
 import org.apache.flink.kubernetes.configuration.KubernetesConfigOptions;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 
 /** Tests for {@link ServiceType}. */
-class ServiceTypeTest extends KubernetesClientTestBase {
+public class ServiceTypeTest extends KubernetesClientTestBase {
 
     @Test
-    void testServiceClassify() {
-        assertThat(ServiceType.classify(buildExternalServiceWithClusterIP()))
-                .isEqualByComparingTo(KubernetesConfigOptions.ServiceExposedType.ClusterIP);
-        assertThat(ServiceType.classify(buildExternalServiceWithHeadlessClusterIP()))
-                .isEqualByComparingTo(
-                        KubernetesConfigOptions.ServiceExposedType.Headless_ClusterIP);
-        assertThat(ServiceType.classify(buildExternalServiceWithNodePort()))
-                .isEqualByComparingTo(KubernetesConfigOptions.ServiceExposedType.NodePort);
-        assertThat(ServiceType.classify(buildExternalServiceWithLoadBalancer("", "")))
-                .isEqualByComparingTo(KubernetesConfigOptions.ServiceExposedType.LoadBalancer);
+    public void testServiceClassify() {
+        assertThat(
+                ServiceType.classify(buildExternalServiceWithClusterIP()),
+                is(KubernetesConfigOptions.ServiceExposedType.ClusterIP));
+        assertThat(
+                ServiceType.classify(buildExternalServiceWithHeadlessClusterIP()),
+                is(KubernetesConfigOptions.ServiceExposedType.Headless_ClusterIP));
+        assertThat(
+                ServiceType.classify(buildExternalServiceWithNodePort()),
+                is(KubernetesConfigOptions.ServiceExposedType.NodePort));
+        assertThat(
+                ServiceType.classify(buildExternalServiceWithLoadBalancer("", "")),
+                is(KubernetesConfigOptions.ServiceExposedType.LoadBalancer));
     }
 }

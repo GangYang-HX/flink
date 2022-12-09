@@ -176,7 +176,7 @@ public class BootstrapToolsTest extends TestLogger {
         final String basicArgs = "--configDir ./conf";
         final String mainArgs = "-Djobmanager.rpc.address=host1 -Dkey.a=v1";
         final String args = dynamicConfigs + " " + basicArgs + " " + mainArgs;
-        final String redirects = "1> ./logs/taskmanager.out 2> ./logs/taskmanager.err";
+        final String redirects = "1> /dev/null 2> /dev/null";
 
         assertEquals(
                 java

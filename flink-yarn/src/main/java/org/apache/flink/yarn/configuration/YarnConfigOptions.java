@@ -31,7 +31,7 @@ import static org.apache.flink.configuration.ConfigOptions.key;
 import static org.apache.flink.configuration.description.LinkElement.link;
 import static org.apache.flink.configuration.description.TextElement.code;
 import static org.apache.flink.configuration.description.TextElement.text;
-import static org.apache.flink.yarn.configuration.YarnConfigOptions.UserJarInclusion.ORDER;
+import static org.apache.flink.yarn.configuration.YarnConfigOptions.UserJarInclusion.DISABLED;
 
 /**
  * This class holds configuration constants used by Flink's YARN runners.
@@ -57,7 +57,7 @@ public class YarnConfigOptions {
     public static final ConfigOption<UserJarInclusion> CLASSPATH_INCLUDE_USER_JAR =
             key("yarn.classpath.include-user-jar")
                     .enumType(UserJarInclusion.class)
-                    .defaultValue(ORDER)
+                    .defaultValue(DISABLED)
                     .withDeprecatedKeys("yarn.per-job-cluster.include-user-jar")
                     .withDescription(
                             "Defines whether user-jars are included in the system class path "
@@ -116,7 +116,7 @@ public class YarnConfigOptions {
                                                     + "Set this value to -1 in order to count globally. "
                                                     + "See %s for more information.",
                                             link(
-                                                    "https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/ResourceManagerRest.html#Cluster_Application_Attempts_API",
+                                                    "https://hortonworks.com/blog/apache-hadoop-yarn-hdp-2-2-fault-tolerance-features-long-running-services/",
                                                     "here"))
                                     .build());
 
@@ -340,20 +340,13 @@ public class YarnConfigOptions {
                                     + "they doesn't need to be downloaded every time for each application. An example could be "
                                     + "hdfs://$namenode_address/path/of/flink/lib");
 
-    /**
-     * Allows users to directly utilize usrlib directory in HDFS for YARN application mode. The
-     * classloader for loading jars under the usrlib will be controlled by {@link
-     * YarnConfigOptions#CLASSPATH_INCLUDE_USER_JAR}.
-     */
-    public static final ConfigOption<String> PROVIDED_USRLIB_DIR =
-            key("yarn.provided.usrlib.dir")
+    public static final ConfigOption<List<String>> YARN_ACCESS =
+            key("yarn.security.kerberos.additionalFileSystems")
                     .stringType()
+                    .asList()
                     .noDefaultValue()
                     .withDescription(
-                            "The provided usrlib directory in remote. It should be pre-uploaded and "
-                                    + "world-readable. Flink will use it to exclude the local usrlib directory(i.e. usrlib/ under the parent directory of FLINK_LIB_DIR)."
-                                    + " Unlike yarn.provided.lib.dirs, YARN will not cache it on the nodes as it is for each application. An example could be "
-                                    + "hdfs://$namenode_address/path/of/flink/usrlib");
+                            "A comma-separated list of additional Kerberos-secured Hadoop filesystems Flink is going to access. For example, yarn.security.kerberos.additionalFileSystems=hdfs://namenode2:9002,hdfs://namenode3:9003. The client submitting to YARN needs to have access to these file systems to retrieve the security tokens.");
 
     @SuppressWarnings("unused")
     public static final ConfigOption<String> HADOOP_CONFIG_KEY =

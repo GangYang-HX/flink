@@ -27,61 +27,66 @@ import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.UnresolvedUserDefinedType;
+import org.apache.flink.util.ExceptionUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link PythonTypeUtils}. */
-class PythonTypeUtilsTest {
+public class PythonTypeUtilsTest {
 
     @Test
-    void testLogicalTypetoInternalSerializer() {
+    public void testLogicalTypetoInternalSerializer() {
         List<RowType.RowField> rowFields = new ArrayList<>();
         rowFields.add(new RowType.RowField("f1", new BigIntType()));
         RowType rowType = new RowType(rowFields);
         TypeSerializer baseSerializer = PythonTypeUtils.toInternalSerializer(rowType);
-        assertThat(baseSerializer).isInstanceOf(RowDataSerializer.class);
+        assertTrue(baseSerializer instanceof RowDataSerializer);
 
-        assertThat(((RowDataSerializer) baseSerializer).getArity()).isEqualTo(1);
+        assertEquals(1, ((RowDataSerializer) baseSerializer).getArity());
     }
 
     @Test
-    void testLogicalTypeToProto() {
+    public void testLogicalTypeToProto() {
         List<RowType.RowField> rowFields = new ArrayList<>();
         rowFields.add(new RowType.RowField("f1", new BigIntType()));
         RowType rowType = new RowType(rowFields);
         FlinkFnApi.Schema.FieldType protoType =
                 rowType.accept(new PythonTypeUtils.LogicalTypeToProtoTypeConverter());
         FlinkFnApi.Schema schema = protoType.getRowSchema();
-        assertThat(schema.getFieldsCount()).isEqualTo(1);
-        assertThat(schema.getFields(0).getName()).isEqualTo("f1");
-        assertThat(schema.getFields(0).getType().getTypeName())
-                .isEqualTo(FlinkFnApi.Schema.TypeName.BIGINT);
+        assertEquals(1, schema.getFieldsCount());
+        assertEquals("f1", schema.getFields(0).getName());
+        assertEquals(
+                FlinkFnApi.Schema.TypeName.BIGINT, schema.getFields(0).getType().getTypeName());
     }
 
     @Test
-    void testLogicalTypeToDataConverter() {
+    public void testLogicalTypeToDataConverter() {
         PythonTypeUtils.DataConverter converter = PythonTypeUtils.toDataConverter(new IntType());
 
         GenericRowData data = new GenericRowData(1);
         data.setField(0, 10);
         Object externalData = converter.toExternal(data, 0);
-        assertThat(externalData).isInstanceOf(Long.class);
-        assertThat(externalData).isEqualTo(10L);
+        assertTrue(externalData instanceof Long);
+        assertEquals(externalData, 10L);
     }
 
     @Test
-    void testUnsupportedTypeSerializer() {
+    public void testUnsupportedTypeSerializer() {
         LogicalType logicalType =
                 new UnresolvedUserDefinedType(UnresolvedIdentifier.of("cat", "db", "MyType"));
         String expectedTestException =
                 "Python UDF doesn't support logical type `cat`.`db`.`MyType` currently.";
-        assertThatThrownBy(() -> PythonTypeUtils.toInternalSerializer(logicalType))
-                .hasStackTraceContaining(expectedTestException);
+        try {
+            PythonTypeUtils.toInternalSerializer(logicalType);
+        } catch (Exception e) {
+            assertTrue(
+                    ExceptionUtils.findThrowableWithMessage(e, expectedTestException).isPresent());
+        }
     }
 }

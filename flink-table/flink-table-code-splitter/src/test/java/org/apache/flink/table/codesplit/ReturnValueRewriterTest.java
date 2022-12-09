@@ -17,32 +17,32 @@
 
 package org.apache.flink.table.codesplit;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 /** Tests for {@link ReturnValueRewriter}. */
-class ReturnValueRewriterTest extends CodeRewriterTestBase<ReturnValueRewriter> {
+public class ReturnValueRewriterTest extends CodeRewriterTestBase<ReturnValueRewriter> {
 
     public ReturnValueRewriterTest() {
         super("return", code -> new ReturnValueRewriter(code, 50));
     }
 
     @Test
-    void testRewriteReturnValue() {
+    public void testRewriteReturnValue() {
         runTest("TestRewriteReturnValue");
     }
 
     @Test
-    void testRewriteInnerClass() {
+    public void testRewriteInnerClass() {
         runTest("TestRewriteInnerClass");
     }
 
     @Test
-    void testNotRewrite() {
+    public void testNotRewrite() {
         runTest("TestNotRewrite");
     }
 
     @Test
-    void testSkipAnonymousClassAndLambda() {
+    public void testSkipAnonymousClassAndLambda() {
         runTest("TestSkipAnonymousClassAndLambda");
     }
 }

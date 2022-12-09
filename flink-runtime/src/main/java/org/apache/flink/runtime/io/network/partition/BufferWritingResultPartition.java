@@ -19,7 +19,6 @@
 package org.apache.flink.runtime.io.network.partition;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.runtime.checkpoint.CheckpointException;
 import org.apache.flink.runtime.event.AbstractEvent;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.BufferBuilder;
@@ -94,7 +93,9 @@ public abstract class BufferWritingResultPartition extends ResultPartition {
     }
 
     @Override
-    protected void setupInternal() throws IOException {
+    public void setup() throws IOException {
+        super.setup();
+
         checkState(
                 bufferPool.getNumberOfRequiredMemorySegments() >= getNumberOfSubpartitions(),
                 "Bug in result partition setup logic: Buffer pool has not enough guaranteed buffers for"
@@ -202,20 +203,6 @@ public abstract class BufferWritingResultPartition extends ResultPartition {
                 // Retain the buffer so that it can be recycled by each channel of targetPartition
                 subpartition.add(eventBufferConsumer.copy(), 0);
             }
-        }
-    }
-
-    @Override
-    public void alignedBarrierTimeout(long checkpointId) throws IOException {
-        for (ResultSubpartition subpartition : subpartitions) {
-            subpartition.alignedBarrierTimeout(checkpointId);
-        }
-    }
-
-    @Override
-    public void abortCheckpoint(long checkpointId, CheckpointException cause) {
-        for (ResultSubpartition subpartition : subpartitions) {
-            subpartition.abortCheckpoint(checkpointId, cause);
         }
     }
 

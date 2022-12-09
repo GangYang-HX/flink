@@ -21,8 +21,9 @@ import org.apache.flink.table.expressions.ApiExpressionUtils.unwrapFromApi
 import org.apache.flink.table.expressions.Expression
 import org.apache.flink.types.Row
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Test
+import org.hamcrest.CoreMatchers.equalTo
+import org.junit.Assert.assertThat
+import org.junit.Test
 
 /** Tests for conversion between objects and [[Expression]]s used in Expression DSL. */
 class ImplicitConversionsTest extends ImplicitExpressionConversions {
@@ -84,6 +85,6 @@ class ImplicitConversionsTest extends ImplicitExpressionConversions {
   }
 
   private def assertThatEquals(actual: Expression, expected: Expression): Unit = {
-    assertThat(unwrapFromApi(actual)).isEqualTo(unwrapFromApi(expected))
+    assertThat(unwrapFromApi(actual), equalTo(unwrapFromApi(expected)))
   }
 }

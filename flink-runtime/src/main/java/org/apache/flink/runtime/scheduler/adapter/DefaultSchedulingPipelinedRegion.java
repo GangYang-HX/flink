@@ -40,9 +40,7 @@ public class DefaultSchedulingPipelinedRegion implements SchedulingPipelinedRegi
 
     private final Map<ExecutionVertexID, DefaultExecutionVertex> executionVertices;
 
-    private Set<ConsumedPartitionGroup> nonPipelinedConsumedPartitionGroups;
-
-    private Set<ConsumedPartitionGroup> releaseBySchedulerConsumedPartitionGroups;
+    private Set<ConsumedPartitionGroup> blockingConsumedPartitionGroups;
 
     private final Function<IntermediateResultPartitionID, DefaultResultPartition>
             resultPartitionRetriever;
@@ -77,45 +75,30 @@ public class DefaultSchedulingPipelinedRegion implements SchedulingPipelinedRegi
         return executionVertex;
     }
 
-    private void initializeConsumedPartitionGroups() {
-        final Set<ConsumedPartitionGroup> nonPipelinedConsumedPartitionGroupSet = new HashSet<>();
-        final Set<ConsumedPartitionGroup> releaseBySchedulerConsumedPartitionGroupSet =
-                new HashSet<>();
+    private void initializeAllBlockingConsumedPartitionGroups() {
+        final Set<ConsumedPartitionGroup> consumedPartitionGroupSet = new HashSet<>();
         for (DefaultExecutionVertex executionVertex : executionVertices.values()) {
             for (ConsumedPartitionGroup consumedPartitionGroup :
                     executionVertex.getConsumedPartitionGroups()) {
                 SchedulingResultPartition consumedPartition =
                         resultPartitionRetriever.apply(consumedPartitionGroup.getFirst());
 
-                if (!consumedPartition.getResultType().mustBePipelinedConsumed()) {
-                    nonPipelinedConsumedPartitionGroupSet.add(consumedPartitionGroup);
-                }
-                if (consumedPartition.getResultType().isReleaseByScheduler()) {
-                    releaseBySchedulerConsumedPartitionGroupSet.add(consumedPartitionGroup);
+                if (consumedPartition.getResultType().isBlocking()) {
+                    consumedPartitionGroupSet.add(consumedPartitionGroup);
                 }
             }
         }
 
-        this.nonPipelinedConsumedPartitionGroups =
-                Collections.unmodifiableSet(nonPipelinedConsumedPartitionGroupSet);
-        this.releaseBySchedulerConsumedPartitionGroups =
-                Collections.unmodifiableSet(releaseBySchedulerConsumedPartitionGroupSet);
+        this.blockingConsumedPartitionGroups =
+                Collections.unmodifiableSet(consumedPartitionGroupSet);
     }
 
     @Override
-    public Iterable<ConsumedPartitionGroup> getAllNonPipelinedConsumedPartitionGroups() {
-        if (nonPipelinedConsumedPartitionGroups == null) {
-            initializeConsumedPartitionGroups();
+    public Iterable<ConsumedPartitionGroup> getAllBlockingConsumedPartitionGroups() {
+        if (blockingConsumedPartitionGroups == null) {
+            initializeAllBlockingConsumedPartitionGroups();
         }
-        return nonPipelinedConsumedPartitionGroups;
-    }
-
-    @Override
-    public Iterable<ConsumedPartitionGroup> getAllReleaseBySchedulerConsumedPartitionGroups() {
-        if (releaseBySchedulerConsumedPartitionGroups == null) {
-            initializeConsumedPartitionGroups();
-        }
-        return releaseBySchedulerConsumedPartitionGroups;
+        return blockingConsumedPartitionGroups;
     }
 
     @Override

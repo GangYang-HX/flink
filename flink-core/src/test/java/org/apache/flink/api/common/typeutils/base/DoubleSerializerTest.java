@@ -24,7 +24,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import java.util.Random;
 
 /** A test for the {@link DoubleSerializer}. */
-class DoubleSerializerTest extends SerializerTestBase<Double> {
+public class DoubleSerializerTest extends SerializerTestBase<Double> {
 
     @Override
     protected TypeSerializer<Double> createSerializer() {

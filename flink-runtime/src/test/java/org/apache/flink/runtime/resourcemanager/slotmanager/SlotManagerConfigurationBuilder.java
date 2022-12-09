@@ -76,12 +76,6 @@ public class SlotManagerConfigurationBuilder {
         return this;
     }
 
-    public SlotManagerConfigurationBuilder setRequirementCheckDelay(
-            Duration requirementCheckDelay) {
-        this.requirementCheckDelay = requirementCheckDelay;
-        return this;
-    }
-
     public SlotManagerConfigurationBuilder setWaitResultConsumedBeforeRelease(
             boolean waitResultConsumedBeforeRelease) {
         this.waitResultConsumedBeforeRelease = waitResultConsumedBeforeRelease;
@@ -116,6 +110,12 @@ public class SlotManagerConfigurationBuilder {
 
     public SlotManagerConfigurationBuilder setRedundantTaskManagerNum(int redundantTaskManagerNum) {
         this.redundantTaskManagerNum = redundantTaskManagerNum;
+        return this;
+    }
+
+    public SlotManagerConfigurationBuilder setRequirementCheckDelay(
+            Duration requirementCheckDelay) {
+        this.requirementCheckDelay = requirementCheckDelay;
         return this;
     }
 

@@ -43,6 +43,11 @@ class PartitionSetSubscriber implements KafkaSubscriber {
 
     @Override
     public Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient) {
+        return getSubscribedTopicPartitions(adminClient, DO_NOT_RETRY);
+    }
+
+    @Override
+    public Set<TopicPartition> getSubscribedTopicPartitions(AdminClient adminClient, int retry) {
         final Set<String> topicNames =
                 subscribedPartitions.stream()
                         .map(TopicPartition::topic)
@@ -50,7 +55,7 @@ class PartitionSetSubscriber implements KafkaSubscriber {
 
         LOG.debug("Fetching descriptions for topics: {}", topicNames);
         final Map<String, TopicDescription> topicMetadata =
-                getTopicMetadata(adminClient, topicNames);
+                getTopicMetadata(adminClient, topicNames, retry);
 
         Set<TopicPartition> existingSubscribedPartitions = new HashSet<>();
 

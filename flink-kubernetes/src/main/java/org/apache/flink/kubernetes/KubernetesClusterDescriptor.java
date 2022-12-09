@@ -42,9 +42,9 @@ import org.apache.flink.kubernetes.kubeclient.Endpoint;
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClient;
 import org.apache.flink.kubernetes.kubeclient.FlinkPod;
 import org.apache.flink.kubernetes.kubeclient.KubernetesJobManagerSpecification;
-import org.apache.flink.kubernetes.kubeclient.decorators.ExternalServiceDecorator;
 import org.apache.flink.kubernetes.kubeclient.factory.KubernetesJobManagerFactory;
 import org.apache.flink.kubernetes.kubeclient.parameters.KubernetesJobManagerParameters;
+import org.apache.flink.kubernetes.kubeclient.resources.KubernetesService;
 import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.kubernetes.utils.KubernetesUtils;
 import org.apache.flink.runtime.entrypoint.ClusterEntrypoint;
@@ -59,7 +59,7 @@ import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 
@@ -67,6 +67,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** Kubernetes specific {@link ClusterDescriptor} implementation. */
 public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
+
     private static final Logger LOG = LoggerFactory.getLogger(KubernetesClusterDescriptor.class);
 
     private static final String CLUSTER_DESCRIPTION = "Kubernetes cluster";
@@ -161,7 +162,6 @@ public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
                         KubernetesSessionClusterEntrypoint.class.getName(),
                         clusterSpecification,
                         false);
-
         try (ClusterClient<String> clusterClient = clusterClientProvider.getClusterClient()) {
             LOG.info(
                     "Create flink session cluster {} successfully, JobManager Web Interface: {}",
@@ -176,8 +176,7 @@ public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
             final ClusterSpecification clusterSpecification,
             final ApplicationConfiguration applicationConfiguration)
             throws ClusterDeploymentException {
-        if (client.getService(ExternalServiceDecorator.getExternalServiceName(clusterId))
-                .isPresent()) {
+        if (client.getService(KubernetesService.ServiceType.REST_SERVICE, clusterId).isPresent()) {
             throw new ClusterDeploymentException(
                     "The Flink cluster " + clusterId + " already exists.");
         }
@@ -202,7 +201,7 @@ public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
         // No need to do pipelineJars validation if it is a PyFlink job.
         if (!(PackagedProgramUtils.isPython(applicationConfiguration.getApplicationClassName())
                 || PackagedProgramUtils.isPython(applicationConfiguration.getProgramArguments()))) {
-            final List<File> pipelineJars =
+            final List<URI> pipelineJars =
                     KubernetesUtils.checkJarFileForApplicationMode(flinkConfig);
             Preconditions.checkArgument(pipelineJars.size() == 1, "Should only have one jar");
         }

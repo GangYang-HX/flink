@@ -24,10 +24,12 @@ import org.apache.flink.runtime.OperatorIDPair;
 import org.apache.flink.runtime.checkpoint.metadata.CheckpointMetadata;
 import org.apache.flink.runtime.checkpoint.metadata.MetadataSerializer;
 import org.apache.flink.runtime.checkpoint.metadata.MetadataSerializers;
-import org.apache.flink.runtime.checkpoint.metadata.MetadataV4Serializer;
+import org.apache.flink.runtime.checkpoint.metadata.MetadataV3Serializer;
 import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
+import org.apache.flink.runtime.executiongraph.InternalExecutionGraphAccessor;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.jobgraph.RestoreMode;
 import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.CheckpointStorageLoader;
 import org.apache.flink.runtime.state.CompletedCheckpointStorageLocation;
@@ -39,6 +41,7 @@ import org.apache.flink.runtime.state.storage.JobManagerCheckpointStorage;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 
+import org.apache.commons.collections.MapUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +55,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -84,20 +89,12 @@ public class Checkpoints {
 
     public static void storeCheckpointMetadata(
             CheckpointMetadata checkpointMetadata, DataOutputStream out) throws IOException {
-        storeCheckpointMetadata(checkpointMetadata, out, MetadataV4Serializer.INSTANCE);
-    }
-
-    public static void storeCheckpointMetadata(
-            CheckpointMetadata checkpointMetadata,
-            DataOutputStream out,
-            MetadataSerializer serializer)
-            throws IOException {
 
         // write generic header
         out.writeInt(HEADER_MAGIC_NUMBER);
 
-        out.writeInt(serializer.getVersion());
-        serializer.serialize(checkpointMetadata, out);
+        out.writeInt(MetadataV3Serializer.VERSION);
+        MetadataV3Serializer.serialize(checkpointMetadata, out);
     }
 
     // ------------------------------------------------------------------------
@@ -131,7 +128,8 @@ public class Checkpoints {
             CompletedCheckpointStorageLocation location,
             ClassLoader classLoader,
             boolean allowNonRestoredState,
-            CheckpointProperties checkpointProperties)
+            CheckpointProperties checkpointProperties,
+            RestoreMode restoreMode)
             throws IOException {
 
         checkNotNull(jobId, "jobId");
@@ -160,20 +158,70 @@ public class Checkpoints {
             }
         }
 
+        Map<String, OperatorID> description2OperatorIDs = new HashMap<>();
+        tasks.values().stream()
+                .findFirst()
+                .ifPresent(
+                        executionJobVertex -> {
+                            InternalExecutionGraphAccessor graph = executionJobVertex.getGraph();
+                            if (graph != null) {
+                                Map<OperatorID, String> operatorDescriptionsFromExecutionGraph =
+                                        graph.getOperatorDescriptions();
+                                if (MapUtils.isNotEmpty(operatorDescriptionsFromExecutionGraph)) {
+                                    if (!hasDuplicatedOperatorDescriptions(
+                                            operatorDescriptionsFromExecutionGraph)) {
+                                        operatorDescriptionsFromExecutionGraph.forEach(
+                                                ((operatorID, operatorDescription) ->
+                                                        description2OperatorIDs.put(
+                                                                operatorDescription, operatorID)));
+                                    }
+                                }
+                            }
+                        });
+
         // (2) validate it (parallelism, etc)
+        // The default state recovery is based on operator id. If it is not match, operator
+        // description is
+        // used. If both the above do not match, it is decided by 'allowNonRestoredState'
+        Map<OperatorID, String> operatorDescriptionsFromCheckpoint =
+                checkpointMetadata.getOperatorDescriptions();
+        boolean hasDuplicatedOperatorDescriptions =
+                hasDuplicatedOperatorDescriptions(operatorDescriptionsFromCheckpoint);
+
         HashMap<OperatorID, OperatorState> operatorStates =
                 new HashMap<>(checkpointMetadata.getOperatorStates().size());
         for (OperatorState operatorState : checkpointMetadata.getOperatorStates()) {
 
             ExecutionJobVertex executionJobVertex =
                     operatorToJobVertexMapping.get(operatorState.getOperatorID());
+            // State recovery base on operator id. default from operatorState
+            OperatorID recoveryStateOperatorID = operatorState.getOperatorID();
+            if (executionJobVertex == null
+                    && MapUtils.isNotEmpty(description2OperatorIDs)
+                    && !hasDuplicatedOperatorDescriptions) {
+                String operatorDescriptionFromCheckpoint =
+                        operatorDescriptionsFromCheckpoint.get(operatorState.getOperatorID());
+                OperatorID operatorID =
+                        description2OperatorIDs.get(operatorDescriptionFromCheckpoint);
+                if (operatorID != null) {
+                    executionJobVertex = operatorToJobVertexMapping.get(operatorID);
+                    recoveryStateOperatorID = operatorID;
+                    LOG.info(
+                            "State recovery by operator description, operator description: {}, "
+                                    + "checkpointOperatorID: {}, recoveryStateOperatorID: {}",
+                            operatorDescriptionFromCheckpoint.substring(
+                                    0, Math.min(300, operatorDescriptionFromCheckpoint.length())),
+                            operatorState.getOperatorID(),
+                            operatorID);
+                }
+            }
 
             if (executionJobVertex != null) {
 
                 if (executionJobVertex.getMaxParallelism() == operatorState.getMaxParallelism()
                         || executionJobVertex.canRescaleMaxParallelism(
                                 operatorState.getMaxParallelism())) {
-                    operatorStates.put(operatorState.getOperatorID(), operatorState);
+                    operatorStates.put(recoveryStateOperatorID, operatorState);
                 } else {
                     String msg =
                             String.format(
@@ -195,13 +243,18 @@ public class Checkpoints {
             } else {
                 if (operatorState.getCoordinatorState() != null) {
                     throwNonRestoredStateException(
-                            checkpointPointer, operatorState.getOperatorID());
+                            checkpointPointer,
+                            operatorDescriptionsFromCheckpoint.get(operatorState.getOperatorID()),
+                            operatorState.getOperatorID());
                 }
 
                 for (OperatorSubtaskState operatorSubtaskState : operatorState.getStates()) {
                     if (operatorSubtaskState.hasState()) {
                         throwNonRestoredStateException(
-                                checkpointPointer, operatorState.getOperatorID());
+                                checkpointPointer,
+                                operatorDescriptionsFromCheckpoint.get(
+                                        operatorState.getOperatorID()),
+                                operatorState.getOperatorID());
                     }
                 }
 
@@ -219,21 +272,31 @@ public class Checkpoints {
                 operatorStates,
                 checkpointMetadata.getMasterStates(),
                 checkpointProperties,
-                location,
-                null,
-                checkpointMetadata.getCheckpointProperties());
+                restoreMode == RestoreMode.CLAIM
+                        ? new ClaimModeCompletedStorageLocation(location)
+                        : location,
+                null);
+    }
+
+    private static boolean hasDuplicatedOperatorDescriptions(
+            Map<OperatorID, String> operatorDescriptions) {
+        return operatorDescriptions.values().stream()
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+                .values()
+                .stream()
+                .anyMatch(count -> count > 1);
     }
 
     private static void throwNonRestoredStateException(
-            String checkpointPointer, OperatorID operatorId) {
+            String checkpointPointer, String operatorDescription, OperatorID operatorId) {
         String msg =
                 String.format(
                         "Failed to rollback to checkpoint/savepoint %s. "
-                                + "Cannot map checkpoint/savepoint state for operator %s to the new program, "
-                                + "because the operator is not available in the new program. If "
+                                + "Cannot map checkpoint/savepoint state for operator %s(%s) to "
+                                + "the new program, because the operator is not available in the new program. If "
                                 + "you want to allow to skip this, you can set the --allowNonRestoredState "
                                 + "option on the CLI.",
-                        checkpointPointer, operatorId);
+                        checkpointPointer, operatorDescription, operatorId);
 
         throw new IllegalStateException(msg);
     }
@@ -379,4 +442,42 @@ public class Checkpoints {
 
     /** This class contains only static utility methods and is not meant to be instantiated. */
     private Checkpoints() {}
+
+    private static class ClaimModeCompletedStorageLocation
+            implements CompletedCheckpointStorageLocation {
+
+        private final CompletedCheckpointStorageLocation wrapped;
+
+        private ClaimModeCompletedStorageLocation(CompletedCheckpointStorageLocation location) {
+            wrapped = location;
+        }
+
+        @Override
+        public String getExternalPointer() {
+            return wrapped.getExternalPointer();
+        }
+
+        @Override
+        public StreamStateHandle getMetadataHandle() {
+            return wrapped.getMetadataHandle();
+        }
+
+        @Override
+        public void disposeStorageLocation() throws IOException {
+            try {
+                wrapped.disposeStorageLocation();
+            } catch (Exception ex) {
+                LOG.debug(
+                        "We could not delete the storage location: {} in CLAIM restore mode. It is"
+                                + " most probably because of shared files still being used by newer"
+                                + " checkpoints",
+                        wrapped);
+            }
+        }
+
+        @Override
+        public String getMetadataFileFullPath() {
+            return null;
+        }
+    }
 }

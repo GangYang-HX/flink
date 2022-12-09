@@ -119,7 +119,7 @@ public interface SlotPoolService extends AutoCloseable {
      * @param taskManagerId identifying the TaskExecutor
      * @param cause cause for failing the slots
      */
-    void releaseFreeSlotsOnTaskManager(ResourceID taskManagerId, Exception cause);
+    void releaseFreeSlotOnTaskManager(ResourceID taskManagerId, Exception cause);
 
     /**
      * Connects the SlotPool to the given ResourceManager. After this method is called, the SlotPool

@@ -25,7 +25,7 @@ import org.apache.calcite.rel.convert.ConverterRule
 import org.apache.calcite.rel.core.Snapshot
 import org.apache.calcite.rel.logical.LogicalSnapshot
 import org.apache.calcite.rel.metadata.{RelMdCollation, RelMetadataQuery}
-import org.apache.calcite.rex.{RexFieldAccess, RexLiteral, RexNode}
+import org.apache.calcite.rex.{RexCall, RexFieldAccess, RexLiteral, RexNode}
 import org.apache.calcite.sql.`type`.SqlTypeFamily
 import org.apache.calcite.util.Litmus
 
@@ -44,7 +44,7 @@ class FlinkLogicalSnapshot(
   extends Snapshot(cluster, traits, child, period)
   with FlinkLogicalRel {
 
-  isValid(Litmus.THROW, null)
+  // isValid(Litmus.THROW, null)
 
   override def isValid(litmus: Litmus, context: RelNode.Context): Boolean = {
     val msg = "Temporal table can only be used in temporal join and only supports " +
@@ -53,6 +53,7 @@ class FlinkLogicalSnapshot(
     period match {
       case _: RexFieldAccess =>
       // pass
+      case r: RexCall if "NOW".equals(r.op.getName) =>
       case lit: RexLiteral =>
         return litmus.fail(String.format(msg, s"a constant timestamp '${lit.toString}'"))
       case _ =>

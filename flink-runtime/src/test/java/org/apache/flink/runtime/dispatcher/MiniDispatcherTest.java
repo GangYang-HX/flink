@@ -143,7 +143,7 @@ public class MiniDispatcherTest extends TestLogger {
         }
 
         if (rpcService != null) {
-            RpcUtils.terminateRpcService(rpcService);
+            RpcUtils.terminateRpcService(rpcService, timeout);
         }
     }
 
@@ -161,7 +161,7 @@ public class MiniDispatcherTest extends TestLogger {
 
             assertThat(testingJobManagerRunner.getJobID(), is(jobGraph.getJobID()));
         } finally {
-            RpcUtils.terminateRpcEndpoint(miniDispatcher);
+            RpcUtils.terminateRpcEndpoint(miniDispatcher, timeout);
         }
     }
 
@@ -182,7 +182,7 @@ public class MiniDispatcherTest extends TestLogger {
                     testingCleanupRunnerFactory.takeCreatedJobManagerRunner();
             assertThat(testingCleanupRunner.getJobID(), is(jobId));
         } finally {
-            RpcUtils.terminateRpcEndpoint(miniDispatcher);
+            RpcUtils.terminateRpcEndpoint(miniDispatcher, timeout);
         }
     }
 
@@ -223,7 +223,7 @@ public class MiniDispatcherTest extends TestLogger {
             // we have to complete the future to make the job and, as a consequence, the
             // MiniDispatcher terminate
             globalCleanupResultFuture.complete(null);
-            RpcUtils.terminateRpcEndpoint(miniDispatcher);
+            RpcUtils.terminateRpcEndpoint(miniDispatcher, timeout);
         }
     }
 
@@ -252,7 +252,7 @@ public class MiniDispatcherTest extends TestLogger {
             testingJobManagerRunner.getTerminationFuture().get();
             Assertions.assertThat(miniDispatcher.getShutDownFuture()).isNotDone();
         } finally {
-            RpcUtils.terminateRpcEndpoint(miniDispatcher);
+            RpcUtils.terminateRpcEndpoint(miniDispatcher, timeout);
         }
     }
 
@@ -287,7 +287,7 @@ public class MiniDispatcherTest extends TestLogger {
 
             assertThat(jobResult.getJobId(), is(jobGraph.getJobID()));
         } finally {
-            RpcUtils.terminateRpcEndpoint(miniDispatcher);
+            RpcUtils.terminateRpcEndpoint(miniDispatcher, timeout);
         }
     }
 
@@ -318,7 +318,7 @@ public class MiniDispatcherTest extends TestLogger {
             ApplicationStatus applicationStatus = miniDispatcher.getShutDownFuture().get();
             assertThat(applicationStatus, is(ApplicationStatus.CANCELED));
         } finally {
-            RpcUtils.terminateRpcEndpoint(miniDispatcher);
+            RpcUtils.terminateRpcEndpoint(miniDispatcher, timeout);
         }
     }
 

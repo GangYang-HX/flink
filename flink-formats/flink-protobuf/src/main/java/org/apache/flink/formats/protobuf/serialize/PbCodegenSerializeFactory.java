@@ -19,8 +19,8 @@
 package org.apache.flink.formats.protobuf.serialize;
 
 import org.apache.flink.formats.protobuf.PbCodegenException;
-import org.apache.flink.formats.protobuf.PbFormatContext;
-import org.apache.flink.formats.protobuf.util.PbFormatUtils;
+import org.apache.flink.formats.protobuf.PbFormatConfig;
+import org.apache.flink.formats.protobuf.PbFormatUtils;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
@@ -28,27 +28,30 @@ import org.apache.flink.table.types.logical.RowType;
 
 import com.google.protobuf.Descriptors;
 
-/** Codegen factory class which return {@link PbCodegenSerializer} of different data type. */
+/**
+ * Codegen factory class which return {@link
+ * org.apache.flink.formats.protobuf.serialize.PbCodegenSerializer} of different data type.
+ */
 public class PbCodegenSerializeFactory {
     public static PbCodegenSerializer getPbCodegenSer(
-            Descriptors.FieldDescriptor fd, LogicalType type, PbFormatContext formatContext)
+            Descriptors.FieldDescriptor fd, LogicalType type, PbFormatConfig pbFormatConfig)
             throws PbCodegenException {
         if (type instanceof RowType) {
-            return new PbCodegenRowSerializer(fd.getMessageType(), (RowType) type, formatContext);
+            return new PbCodegenRowSerializer(fd.getMessageType(), (RowType) type, pbFormatConfig);
         } else if (PbFormatUtils.isSimpleType(type)) {
-            return new PbCodegenSimpleSerializer(fd, type, formatContext);
+            return new PbCodegenSimpleSerializer(fd, type, pbFormatConfig);
         } else if (type instanceof ArrayType) {
             return new PbCodegenArraySerializer(
-                    fd, ((ArrayType) type).getElementType(), formatContext);
+                    fd, ((ArrayType) type).getElementType(), pbFormatConfig);
         } else if (type instanceof MapType) {
-            return new PbCodegenMapSerializer(fd, (MapType) type, formatContext);
+            return new PbCodegenMapSerializer(fd, (MapType) type, pbFormatConfig);
         } else {
-            throw new PbCodegenException("Do not support flink data type: " + type);
+            throw new PbCodegenException("Cannot support flink data type: " + type);
         }
     }
 
     public static PbCodegenSerializer getPbCodegenTopRowSer(
-            Descriptors.Descriptor descriptor, RowType rowType, PbFormatContext formatContext) {
-        return new PbCodegenRowSerializer(descriptor, rowType, formatContext);
+            Descriptors.Descriptor descriptor, RowType rowType, PbFormatConfig pbFormatConfig) {
+        return new PbCodegenRowSerializer(descriptor, rowType, pbFormatConfig);
     }
 }

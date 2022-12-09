@@ -28,6 +28,7 @@ import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.core.testutils.OneShotLatch;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -36,9 +37,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Queue;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 
 /** Unit tests for the {@link SplitFetcherManager}. */
 public class SplitFetcherManagerTest {
@@ -62,8 +64,13 @@ public class SplitFetcherManagerTest {
         SplitFetcherManager<Object, TestingSourceSplit> fetcherManager =
                 createFetcher("test-split", new FutureCompletingBlockingQueue<>(), reader);
         fetcherManager.close(1000L);
-        assertThatThrownBy(fetcherManager::checkErrors)
-                .hasRootCauseMessage("Artificial exception on closing the split reader.");
+        try {
+            fetcherManager.checkErrors();
+        } catch (Exception e) {
+            assertEquals(
+                    "Artificial exception on closing the split reader.",
+                    ExceptionUtils.getRootCause(e).getMessage());
+        }
     }
 
     // the final modifier is important so that '@SafeVarargs' is accepted on Java 8
@@ -83,7 +90,7 @@ public class SplitFetcherManagerTest {
         reader.awaitAllRecordsReturned();
         drainQueue(queue);
 
-        assertThat(queue.getAvailabilityFuture().isDone()).isFalse();
+        assertFalse(queue.getAvailabilityFuture().isDone());
         reader.triggerThrowException();
 
         // await the error propagation
@@ -93,7 +100,7 @@ public class SplitFetcherManagerTest {
             fetcher.checkErrors();
             fail("expected exception");
         } catch (Exception e) {
-            assertThat(e.getCause().getCause()).isSameAs(testingException);
+            assertSame(testingException, e.getCause().getCause());
         } finally {
             fetcher.close(20_000L);
         }

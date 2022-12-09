@@ -18,6 +18,7 @@
 
 package org.apache.flink.table.api;
 
+import org.apache.flink.annotation.Experimental;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.time.Time;
@@ -30,9 +31,9 @@ import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.OptimizerConfigOptions;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.delegation.Executor;
-import org.apache.flink.table.functions.FunctionContext;
 import org.apache.flink.util.Preconditions;
 
+import java.math.MathContext;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -112,8 +113,23 @@ public final class TableConfig implements WritableConfig, ReadableConfig {
     //
     // The set() methods only impact the application-specific configuration.
 
+    /**
+     * Defines if all fields need to be checked for NULL first.
+     *
+     * @deprecated This option is not used anymore and will be removed in next releases.
+     */
+    @Deprecated private Boolean nullCheck = true;
+
     /** Defines the configuration of Planner for Table API and SQL queries. */
     private PlannerConfig plannerConfig = PlannerConfig.EMPTY_CONFIG;
+
+    /**
+     * Defines the default context for decimal division calculation. We use Scala's default
+     * MathContext.DECIMAL128.
+     *
+     * @deprecated This option is not used anymore and will be removed in next releases.
+     */
+    @Deprecated private MathContext decimalContext = MathContext.DECIMAL128;
 
     /**
      * A configuration object to hold all configuration that has been set specifically in the Table
@@ -259,11 +275,12 @@ public final class TableConfig implements WritableConfig, ReadableConfig {
      * <p>Example:
      *
      * <pre>{@code
-     * TableConfig config = tEnv.getConfig();
-     * config.setLocalTimeZone(ZoneOffset.ofHours(2));
-     * tEnv.executeSql("CREATE TABLE testTable (id BIGINT, tmstmp TIMESTAMP WITH LOCAL TIME ZONE)");
-     * tEnv.executeSql("INSERT INTO testTable VALUES ((1, '2000-01-01 2:00:00'), (2, TIMESTAMP '2000-01-01 2:00:00'))");
-     * tEnv.executeSql("SELECT * FROM testTable"); // query with local time zone set to UTC+2
+     * TableEnvironment tEnv = ...
+     * TableConfig tableConfig = tEnv.getConfig
+     * tableConfig.setLocalTimeZone(ZoneOffset.ofHours(2));
+     * tEnv("CREATE TABLE testTable (id BIGINT, tmstmp TIMESTAMP WITH LOCAL TIME ZONE)");
+     * tEnv("INSERT INTO testTable VALUES ((1, '2000-01-01 2:00:00'), (2, TIMESTAMP '2000-01-01 2:00:00'))");
+     * tEnv("SELECT * FROM testTable"); // query with local time zone set to UTC+2
      * }</pre>
      *
      * <p>should produce:
@@ -279,8 +296,8 @@ public final class TableConfig implements WritableConfig, ReadableConfig {
      * <p>If we change the local time zone and query the same table:
      *
      * <pre>{@code
-     * config.setLocalTimeZone(ZoneOffset.ofHours(0));
-     * tEnv.executeSql("SELECT * FROM testTable"); // query with local time zone set to UTC+0
+     * tableConfig.setLocalTimeZone(ZoneOffset.ofHours(0));
+     * tEnv("SELECT * FROM testTable"); // query with local time zone set to UTC+0
      * }</pre>
      *
      * <p>we should get:
@@ -314,6 +331,25 @@ public final class TableConfig implements WritableConfig, ReadableConfig {
         }
     }
 
+    /**
+     * Returns the NULL check. If enabled, all fields need to be checked for NULL first.
+     *
+     * @deprecated This option is not used anymore and will be removed in next releases.
+     */
+    @Deprecated
+    public Boolean getNullCheck() {
+        return nullCheck;
+    }
+
+    /**
+     * Sets the NULL check. If enabled, all fields need to be checked for NULL first.
+     *
+     * @deprecated This option is not used anymore and will be removed in next releases.
+     */
+    public void setNullCheck(Boolean nullCheck) {
+        this.nullCheck = Preconditions.checkNotNull(nullCheck);
+    }
+
     /** Returns the current configuration of Planner for Table API and SQL queries. */
     public PlannerConfig getPlannerConfig() {
         return plannerConfig;
@@ -325,6 +361,28 @@ public final class TableConfig implements WritableConfig, ReadableConfig {
      */
     public void setPlannerConfig(PlannerConfig plannerConfig) {
         this.plannerConfig = Preconditions.checkNotNull(plannerConfig);
+    }
+
+    /**
+     * Returns the default context for decimal division calculation. {@link
+     * java.math.MathContext#DECIMAL128} by default.
+     *
+     * @deprecated This option is not used anymore and will be removed in next releases.
+     */
+    @Deprecated
+    public MathContext getDecimalContext() {
+        return decimalContext;
+    }
+
+    /**
+     * Sets the default context for decimal division calculation. {@link
+     * java.math.MathContext#DECIMAL128} by default.
+     *
+     * @deprecated This option is not used anymore and will be removed in next releases.
+     */
+    @Deprecated
+    public void setDecimalContext(MathContext decimalContext) {
+        this.decimalContext = Preconditions.checkNotNull(decimalContext);
     }
 
     /**
@@ -441,7 +499,7 @@ public final class TableConfig implements WritableConfig, ReadableConfig {
 
     /**
      * Sets a custom user parameter that can be accessed via {@link
-     * FunctionContext#getJobParameter(String, String)}.
+     * org.apache.flink.table.functions.FunctionContext#getJobParameter(String, String)}.
      *
      * <p>This will add an entry to the current value of {@link
      * PipelineOptions#GLOBAL_JOB_PARAMETERS}.
@@ -451,12 +509,13 @@ public final class TableConfig implements WritableConfig, ReadableConfig {
      *
      * <pre>{@code
      * Map<String, String> params = ...
-     * TableConfig config = tEnv.getConfig();
+     * TableConfig tableConfig = tEnv.getConfig;
      * config.set(PipelineOptions.GLOBAL_JOB_PARAMETERS, params);
      * }</pre>
      */
+    @Experimental
     public void addJobParameter(String key, String value) {
-        final Map<String, String> params =
+        Map<String, String> params =
                 getOptional(PipelineOptions.GLOBAL_JOB_PARAMETERS)
                         .map(HashMap::new)
                         .orElseGet(HashMap::new);

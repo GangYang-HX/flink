@@ -36,8 +36,7 @@ import scala.collection.JavaConverters._
 
 abstract class RexNodeTestBase {
 
-  val typeFactory: FlinkTypeFactory = new FlinkTypeFactory(
-    Thread.currentThread().getContextClassLoader)
+  val typeFactory: FlinkTypeFactory = new FlinkTypeFactory(new FlinkTypeSystem)
 
   val allFieldNames: java.util.List[String] = List("name", "id", "amount", "price", "flag").asJava
 

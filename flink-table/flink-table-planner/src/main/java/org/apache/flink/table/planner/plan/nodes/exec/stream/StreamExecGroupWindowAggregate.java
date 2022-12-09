@@ -26,6 +26,7 @@ import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
 import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
 import org.apache.flink.table.planner.codegen.EqualiserCodeGenerator;
 import org.apache.flink.table.planner.codegen.agg.AggsHandlerCodeGenerator;
@@ -213,8 +214,8 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
         if (isRowtimeAttribute(window.timeAttribute())) {
             inputTimeFieldIndex =
                     timeFieldIndex(
-                            planner.getTypeFactory().buildRelNodeRowType(inputRowType),
-                            planner.createRelBuilder(),
+                            FlinkTypeFactory.INSTANCE().buildRelNodeRowType(inputRowType),
+                            planner.getRelBuilder(),
                             window.timeAttribute());
             if (inputTimeFieldIndex < 0) {
                 throw new TableException(
@@ -235,7 +236,6 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
         Arrays.fill(aggCallNeedRetractions, needRetraction);
         final AggregateInfoList aggInfoList =
                 transformToStreamAggregateInfoList(
-                        planner.getTypeFactory(),
                         inputRowType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         aggCallNeedRetractions,
@@ -247,8 +247,7 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
                 createAggsHandler(
                         aggInfoList,
                         config,
-                        planner.getFlinkContext().getClassLoader(),
-                        planner.createRelBuilder(),
+                        planner.getRelBuilder(),
                         inputRowType.getChildren(),
                         shiftTimeZone);
 
@@ -259,9 +258,7 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
                         .toArray(LogicalType[]::new);
 
         final EqualiserCodeGenerator generator =
-                new EqualiserCodeGenerator(
-                        ArrayUtils.addAll(aggResultTypes, windowPropertyTypes),
-                        planner.getFlinkContext().getClassLoader());
+                new EqualiserCodeGenerator(ArrayUtils.addAll(aggResultTypes, windowPropertyTypes));
         final GeneratedRecordEqualiser equaliser =
                 generator.generateRecordEqualiser("WindowValueEqualiser");
 
@@ -292,10 +289,7 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
 
         // set KeyType and Selector for state
         final RowDataKeySelector selector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        grouping,
-                        InternalTypeInfo.of(inputRowType));
+                KeySelectorUtil.getRowDataSelector(grouping, InternalTypeInfo.of(inputRowType));
         transform.setStateKeySelector(selector);
         transform.setStateKeyType(selector.getProducedType());
         return transform;
@@ -310,7 +304,6 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
     private GeneratedClass<?> createAggsHandler(
             AggregateInfoList aggInfoList,
             ExecNodeConfig config,
-            ClassLoader classLoader,
             RelBuilder relBuilder,
             List<LogicalType> fieldTypes,
             ZoneId shiftTimeZone) {
@@ -333,7 +326,7 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
 
         final AggsHandlerCodeGenerator generator =
                 new AggsHandlerCodeGenerator(
-                                new CodeGeneratorContext(config, classLoader),
+                                new CodeGeneratorContext(config.getTableConfig()),
                                 relBuilder,
                                 JavaScalaConversionUtil.toScala(fieldTypes),
                                 false) // copyInputField

@@ -24,7 +24,7 @@ import org.apache.flink.table.data.StringData;
 import java.util.Arrays;
 
 /** A test for the {@link StringDataSerializer}. */
-class StringDataSerializerTest extends SerializerTestBase<StringData> {
+public class StringDataSerializerTest extends SerializerTestBase<StringData> {
 
     @Override
     protected StringDataSerializer createSerializer() {

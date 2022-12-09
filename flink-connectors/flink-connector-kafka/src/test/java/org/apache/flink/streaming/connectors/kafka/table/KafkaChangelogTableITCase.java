@@ -477,7 +477,7 @@ public class KafkaChangelogTableITCase extends KafkaTableTestBase {
                                         .setValueSerializationSchema(serSchema)
                                         .setPartitioner(partitioner)
                                         .build())
-                        .setDeliveryGuarantee(DeliveryGuarantee.EXACTLY_ONCE)
+                        .setDeliverGuarantee(DeliveryGuarantee.EXACTLY_ONCE)
                         .build());
         env.execute("Write sequence");
     }

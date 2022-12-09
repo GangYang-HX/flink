@@ -21,9 +21,12 @@ package org.apache.flink.connector.kafka.source.enumerator;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.source.Boundedness;
+import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
+import org.apache.flink.connector.kafka.blacklist.ReportKafkaTpLagSourceEvent;
+import org.apache.flink.connector.kafka.blacklist.ReportLagAccumulator;
 import org.apache.flink.connector.kafka.source.KafkaSourceOptions;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.connector.kafka.source.enumerator.subscriber.KafkaSubscriber;
@@ -67,6 +70,8 @@ public class KafkaSourceEnumerator
     private final OffsetsInitializer stoppingOffsetInitializer;
     private final Properties properties;
     private final long partitionDiscoveryIntervalMs;
+    //    private final long partitionDiscoveryTimeoutMs;
+    private final int partitionDiscoveryRetryTimes;
     private final SplitEnumeratorContext<KafkaPartitionSplit> context;
     private final Boundedness boundedness;
 
@@ -88,6 +93,8 @@ public class KafkaSourceEnumerator
     // This flag will be marked as true if periodically partition discovery is disabled AND the
     // initializing partition discovery has finished.
     private boolean noMoreNewPartitionSplits = false;
+
+    private ReportLagAccumulator reportLagAccumulator;
 
     public KafkaSourceEnumerator(
             KafkaSubscriber subscriber,
@@ -128,6 +135,11 @@ public class KafkaSourceEnumerator
                         properties,
                         KafkaSourceOptions.PARTITION_DISCOVERY_INTERVAL_MS,
                         Long::parseLong);
+        this.partitionDiscoveryRetryTimes =
+                KafkaSourceOptions.getOption(
+                        properties,
+                        KafkaSourceOptions.PARTITION_DISCOVERY_RETRIES,
+                        Integer::parseInt);
         this.consumerGroupId = properties.getProperty(ConsumerConfig.GROUP_ID_CONFIG);
     }
 
@@ -199,6 +211,13 @@ public class KafkaSourceEnumerator
     }
 
     @Override
+    public void handleSourceEvent(int subtaskId, SourceEvent sourceEvent) {
+        if (sourceEvent instanceof ReportKafkaTpLagSourceEvent) {
+            accumulatorKafkaTopicLag((ReportKafkaTpLagSourceEvent) sourceEvent);
+        }
+    }
+
+    @Override
     public void close() {
         if (adminClient != null) {
             adminClient.close();
@@ -206,6 +225,30 @@ public class KafkaSourceEnumerator
     }
 
     // ----------------- private methods -------------------
+
+    private void accumulatorKafkaTopicLag(ReportKafkaTpLagSourceEvent reportKafkaTpLagSourceEvent) {
+        if (reportLagAccumulator == null) {
+            synchronized (KafkaSourceEnumerator.class) {
+                if (reportLagAccumulator == null) {
+                    reportLagAccumulator = new ReportLagAccumulator();
+                    LOG.info(
+                            "accumulatorKafkaTopicLag,subtaskId:{} has new ReportLagAccumulator",
+                            reportKafkaTpLagSourceEvent.getSubtaskId());
+                }
+            }
+        }
+        try {
+            reportLagAccumulator.update(reportKafkaTpLagSourceEvent.getBlacklistMetric());
+            LOG.info(
+                    "subtask:{} updates the lag success",
+                    reportKafkaTpLagSourceEvent.getSubtaskId());
+        } catch (Exception e) {
+            LOG.error(
+                    "subtask:{} updates the lag error",
+                    reportKafkaTpLagSourceEvent.getSubtaskId(),
+                    e);
+        }
+    }
 
     /**
      * List subscribed topic partitions on Kafka brokers.
@@ -216,7 +259,7 @@ public class KafkaSourceEnumerator
      * @return Set of subscribed {@link TopicPartition}s
      */
     private Set<TopicPartition> getSubscribedTopicPartitions() {
-        return subscriber.getSubscribedTopicPartitions(adminClient);
+        return subscriber.getSubscribedTopicPartitions(adminClient, partitionDiscoveryRetryTimes);
     }
 
     /**
@@ -407,6 +450,12 @@ public class KafkaSourceEnumerator
                 adminClientProps.getProperty(KafkaSourceOptions.CLIENT_ID_PREFIX.key());
         adminClientProps.setProperty(
                 ConsumerConfig.CLIENT_ID_CONFIG, clientIdPrefix + "-enumerator-admin-client");
+        adminClientProps.setProperty(
+                ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG,
+                KafkaSourceOptions.getOption(
+                        properties,
+                        KafkaSourceOptions.PARTITION_DISCOVERY_TIMEOUT_MS,
+                        String::toString));
         return AdminClient.create(adminClientProps);
     }
 
@@ -615,11 +664,20 @@ public class KafkaSourceEnumerator
                     .collect(
                             Collectors.toMap(
                                     Map.Entry::getKey,
+                                    // re set partition whose log segment timestamp is -1 and offset
+                                    // is -1 and leaderEpoch is empty
                                     entry ->
-                                            new OffsetAndTimestamp(
-                                                    entry.getValue().offset(),
-                                                    entry.getValue().timestamp(),
-                                                    entry.getValue().leaderEpoch())));
+                                            (entry.getValue().offset() == -1
+                                                            && entry.getValue().timestamp() == -1
+                                                            && !entry.getValue()
+                                                                    .leaderEpoch()
+                                                                    .isPresent())
+                                                    ? new OffsetAndTimestamp(
+                                                            0, 0, entry.getValue().leaderEpoch())
+                                                    : new OffsetAndTimestamp(
+                                                            entry.getValue().offset(),
+                                                            entry.getValue().timestamp(),
+                                                            entry.getValue().leaderEpoch())));
         }
 
         @Override

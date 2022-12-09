@@ -34,7 +34,7 @@ import org.junit.Test;
  * into table source.
  */
 public class PushLocalAggIntoTableSourceScanRuleTest extends TableTestBase {
-    protected BatchTableTestUtil util = batchTestUtil(TableConfig.getDefault());
+    protected BatchTableTestUtil util = batchTestUtil(new TableConfig());
 
     @Before
     public void setup() {

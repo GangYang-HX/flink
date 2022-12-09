@@ -19,8 +19,7 @@ package org.apache.flink.table.planner.codegen
 
 import org.apache.flink.api.common.functions.Function
 import org.apache.flink.api.dag.Transformation
-import org.apache.flink.configuration.ReadableConfig
-import org.apache.flink.table.api.{TableException, ValidationException}
+import org.apache.flink.table.api.{TableConfig, TableException, ValidationException}
 import org.apache.flink.table.data.RowData
 import org.apache.flink.table.data.utils.JoinedRowData
 import org.apache.flink.table.functions.FunctionKind
@@ -40,7 +39,7 @@ import org.apache.calcite.rex._
 object CorrelateCodeGenerator {
 
   def generateCorrelateTransformation(
-      tableConfig: ReadableConfig,
+      tableConfig: TableConfig,
       operatorCtx: CodeGeneratorContext,
       inputTransformation: Transformation[RowData],
       inputType: RowType,
@@ -94,7 +93,7 @@ object CorrelateCodeGenerator {
   /** Generates the flat map operator to run the user-defined table function. */
   private[flink] def generateOperator[T <: Function](
       ctx: CodeGeneratorContext,
-      tableConfig: ReadableConfig,
+      tableConfig: TableConfig,
       inputType: RowType,
       condition: Option[RexNode],
       returnType: RowType,
@@ -180,7 +179,7 @@ object CorrelateCodeGenerator {
    */
   private def generateCorrelateCollector(
       ctx: CodeGeneratorContext,
-      tableConfig: ReadableConfig,
+      tableConfig: TableConfig,
       inputType: RowType,
       functionResultType: RowType,
       resultType: RowType,
@@ -191,7 +190,7 @@ object CorrelateCodeGenerator {
     val inputTerm = CodeGenUtils.DEFAULT_INPUT1_TERM
     val udtfInputTerm = CodeGenUtils.DEFAULT_INPUT2_TERM
 
-    val collectorCtx = new CodeGeneratorContext(tableConfig, ctx.classLoader)
+    val collectorCtx = CodeGeneratorContext(tableConfig)
 
     val body = {
       // completely output left input + right

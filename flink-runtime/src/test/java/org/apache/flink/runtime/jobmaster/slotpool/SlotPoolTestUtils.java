@@ -58,15 +58,6 @@ public final class SlotPoolTestUtils {
     public static Collection<SlotOffer> offerSlots(
             DeclarativeSlotPool slotPool,
             Collection<? extends SlotOffer> slotOffers,
-            TaskManagerLocation taskManagerLocation) {
-        return slotPool.offerSlots(
-                slotOffers, taskManagerLocation, createTaskManagerGateway(null), 0);
-    }
-
-    @Nonnull
-    public static Collection<SlotOffer> offerSlots(
-            DeclarativeSlotPool slotPool,
-            Collection<? extends SlotOffer> slotOffers,
             TaskManagerGateway taskManagerGateway) {
         return slotPool.offerSlots(
                 slotOffers, new LocalTaskManagerLocation(), taskManagerGateway, 0);
@@ -78,5 +69,14 @@ public final class SlotPoolTestUtils {
             Collection<SlotOffer> slotOffers,
             TaskManagerGateway taskManagerGateway) {
         return slotPool.offerSlots(new LocalTaskManagerLocation(), taskManagerGateway, slotOffers);
+    }
+
+    @Nonnull
+    public static Collection<SlotOffer> offerSlots(
+            DeclarativeSlotPool slotPool,
+            Collection<? extends SlotOffer> slotOffers,
+            TaskManagerLocation taskManagerLocation) {
+        return slotPool.offerSlots(
+                slotOffers, taskManagerLocation, createTaskManagerGateway(null), 0);
     }
 }

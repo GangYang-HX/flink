@@ -20,12 +20,12 @@ package org.apache.flink.table.planner.plan.optimize
 import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.catalog.{CatalogManager, FunctionCatalog}
 import org.apache.flink.table.module.ModuleManager
-import org.apache.flink.table.planner.calcite.{FlinkRelBuilder, RexFactory}
+import org.apache.flink.table.planner.calcite.{FlinkContext, FlinkRelBuilder, SqlExprToRexConverterFactory}
 import org.apache.flink.table.planner.delegation.BatchPlanner
+import org.apache.flink.table.planner.materialize.MaterializationsRegistry
 import org.apache.flink.table.planner.plan.nodes.calcite.{LegacySink, Sink}
 import org.apache.flink.table.planner.plan.optimize.program.{BatchOptimizeContext, FlinkBatchProgram}
 import org.apache.flink.table.planner.plan.schema.IntermediateRelTable
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapContext
 import org.apache.flink.table.planner.utils.TableConfigUtils
 import org.apache.flink.util.Preconditions
 
@@ -39,8 +39,7 @@ class BatchCommonSubGraphBasedOptimizer(planner: BatchPlanner)
 
   override protected def doOptimize(roots: Seq[RelNode]): Seq[RelNodeBlock] = {
     // build RelNodeBlock plan
-    val rootBlocks =
-      RelNodeBlockPlanBuilder.buildRelNodeBlockPlan(roots, planner.getTableConfig)
+    val rootBlocks = RelNodeBlockPlanBuilder.buildRelNodeBlockPlan(roots, planner.getTableConfig)
     // optimize recursively RelNodeBlock
     rootBlocks.foreach(optimizeBlock)
     rootBlocks
@@ -79,14 +78,14 @@ class BatchCommonSubGraphBasedOptimizer(planner: BatchPlanner)
    *   The optimized [[RelNode]] tree
    */
   private def optimizeTree(relNode: RelNode): RelNode = {
-    val tableConfig = planner.getTableConfig
+    val config = planner.getTableConfig
     val programs = TableConfigUtils
-      .getCalciteConfig(tableConfig)
+      .getCalciteConfig(config)
       .getBatchProgram
-      .getOrElse(FlinkBatchProgram.buildProgram(tableConfig))
+      .getOrElse(FlinkBatchProgram.buildProgram(config))
     Preconditions.checkNotNull(programs)
 
-    val context = unwrapContext(relNode)
+    val context = relNode.getCluster.getPlanner.getContext.unwrap(classOf[FlinkContext])
 
     programs.optimize(
       relNode,
@@ -94,7 +93,7 @@ class BatchCommonSubGraphBasedOptimizer(planner: BatchPlanner)
 
         override def isBatchMode: Boolean = true
 
-        override def getTableConfig: TableConfig = tableConfig
+        override def getTableConfig: TableConfig = config
 
         override def getFunctionCatalog: FunctionCatalog = planner.functionCatalog
 
@@ -102,13 +101,15 @@ class BatchCommonSubGraphBasedOptimizer(planner: BatchPlanner)
 
         override def getModuleManager: ModuleManager = planner.moduleManager
 
-        override def getRexFactory: RexFactory = context.getRexFactory
+        override def getSqlExprToRexConverterFactory: SqlExprToRexConverterFactory =
+          context.getSqlExprToRexConverterFactory
 
-        override def getFlinkRelBuilder: FlinkRelBuilder = planner.createRelBuilder
+        override def getFlinkRelBuilder: FlinkRelBuilder = planner.getRelBuilder
 
         override def needFinalTimeIndicatorConversion: Boolean = true
 
-        override def getClassLoader: ClassLoader = context.getClassLoader
+        override def getMaterializationsRegistry: MaterializationsRegistry =
+          planner.materializationsRegistry
       }
     )
   }

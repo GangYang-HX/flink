@@ -186,6 +186,7 @@ public class HadoopConfMountDecorator extends AbstractKubernetesStepDecorator {
         final List<String> expectedFileNames = new ArrayList<>();
         expectedFileNames.add("core-site.xml");
         expectedFileNames.add("hdfs-site.xml");
+        expectedFileNames.add("mount-table.xml");
 
         final File directory = new File(localHadoopConfigurationDirectory);
         if (directory.exists() && directory.isDirectory()) {

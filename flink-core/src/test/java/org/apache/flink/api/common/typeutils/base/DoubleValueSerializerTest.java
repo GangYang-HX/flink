@@ -25,7 +25,7 @@ import org.apache.flink.types.DoubleValue;
 import java.util.Random;
 
 /** A test for the {@link DoubleValueSerializer}. */
-class DoubleValueSerializerTest extends SerializerTestBase<DoubleValue> {
+public class DoubleValueSerializerTest extends SerializerTestBase<DoubleValue> {
 
     @Override
     protected TypeSerializer<DoubleValue> createSerializer() {

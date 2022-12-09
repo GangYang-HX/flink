@@ -29,18 +29,18 @@ import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Collections;
 
 import static org.apache.flink.table.expressions.ApiExpressionUtils.intervalOfMillis;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for describing {@link Operation}s. */
-class QueryOperationTest {
+public class QueryOperationTest {
 
     @Test
-    void testSummaryString() {
+    public void testSummaryString() {
         ResolvedSchema schema =
                 ResolvedSchema.physical(
                         Collections.singletonList("a"), Collections.singletonList(DataTypes.INT()));
@@ -69,17 +69,17 @@ class QueryOperationTest {
                         true,
                         schema);
 
-        assertThat(unionQueryOperation.asSummaryString())
-                .isEqualTo(
-                        "Union: (all: [true])\n"
-                                + "    Project: (projections: [a])\n"
-                                + "        CatalogTable: (identifier: [cat1.db1.tab1], fields: [a])\n"
-                                + "    Project: (projections: [a])\n"
-                                + "        CatalogTable: (identifier: [cat1.db1.tab1], fields: [a])");
+        assertEquals(
+                "Union: (all: [true])\n"
+                        + "    Project: (projections: [a])\n"
+                        + "        CatalogTable: (identifier: [cat1.db1.tab1], fields: [a])\n"
+                        + "    Project: (projections: [a])\n"
+                        + "        CatalogTable: (identifier: [cat1.db1.tab1], fields: [a])",
+                unionQueryOperation.asSummaryString());
     }
 
     @Test
-    void testWindowAggregationSummaryString() {
+    public void testWindowAggregationSummaryString() {
         ResolvedSchema schema =
                 ResolvedSchema.physical(
                         Collections.singletonList("a"), Collections.singletonList(DataTypes.INT()));
@@ -109,16 +109,16 @@ class QueryOperationTest {
 
         DistinctQueryOperation distinctQueryOperation = new DistinctQueryOperation(tableOperation);
 
-        assertThat(distinctQueryOperation.asSummaryString())
-                .isEqualTo(
-                        "Distinct:\n"
-                                + "    WindowAggregate: (group: [a], agg: [sum(a)], windowProperties: [],"
-                                + " window: [SessionWindow(field: [a], gap: [10])])\n"
-                                + "        CatalogTable: (identifier: [cat1.db1.tab1], fields: [a])");
+        assertEquals(
+                "Distinct:\n"
+                        + "    WindowAggregate: (group: [a], agg: [sum(a)], windowProperties: [],"
+                        + " window: [SessionWindow(field: [a], gap: [10])])\n"
+                        + "        CatalogTable: (identifier: [cat1.db1.tab1], fields: [a])",
+                distinctQueryOperation.asSummaryString());
     }
 
     @Test
-    void testIndentation() {
+    public void testIndentation() {
 
         String input =
                 "firstLevel\n"
@@ -129,13 +129,13 @@ class QueryOperationTest {
 
         String indentedInput = OperationUtils.indent(input);
 
-        assertThat(indentedInput)
-                .isEqualTo(
-                        "\n"
-                                + "    firstLevel\n"
-                                + "        secondLevel0\n"
-                                + "            thirdLevel0\n"
-                                + "        secondLevel1\n"
-                                + "            thirdLevel1");
+        assertEquals(
+                "\n"
+                        + "    firstLevel\n"
+                        + "        secondLevel0\n"
+                        + "            thirdLevel0\n"
+                        + "        secondLevel1\n"
+                        + "            thirdLevel1",
+                indentedInput);
     }
 }

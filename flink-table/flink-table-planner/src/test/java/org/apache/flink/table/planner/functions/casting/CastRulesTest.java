@@ -95,7 +95,7 @@ import static org.apache.flink.table.data.StringData.fromString;
 import static org.apache.flink.table.data.binary.BinaryStringData.EMPTY_UTF8;
 import static org.apache.flink.table.test.TableAssertions.assertThatGenericDataOfType;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * This class runs unit tests of {@link CastRule} implementations. For IT test cases, check out the
@@ -1665,8 +1665,7 @@ class CastRulesTest {
                 Class<? extends Throwable> exception) {
             this.inputTypes.add(dataType);
             this.assertionExecutors.add(
-                    executor ->
-                            assertThatThrownBy(() -> executor.cast(src)).isInstanceOf(exception));
+                    executor -> assertThrows(exception, () -> executor.cast(src)));
             this.descriptions.add("{" + src + " => " + exception.getName() + "}");
             this.castContexts.add(castContext);
             return this;

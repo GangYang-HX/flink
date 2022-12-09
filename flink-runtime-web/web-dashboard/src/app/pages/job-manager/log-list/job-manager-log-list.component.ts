@@ -16,17 +16,11 @@
  * limitations under the License.
  */
 
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Inject, OnDestroy, OnInit } from '@angular/core';
-import { of, Subject } from 'rxjs';
-import { catchError, finalize, takeUntil } from 'rxjs/operators';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { finalize } from 'rxjs/operators';
 
-import { JobManagerLogItem } from '@flink-runtime-web/interfaces';
-import {
-  JOB_MANAGER_MODULE_CONFIG,
-  JOB_MANAGER_MODULE_DEFAULT_CONFIG,
-  JobManagerModuleConfig
-} from '@flink-runtime-web/pages/job-manager/job-manager.config';
-import { JobManagerService } from '@flink-runtime-web/services';
+import { JobManagerLogItem } from 'interfaces';
+import { JobManagerService } from 'services';
 
 import { typeDefinition } from '../../../utils/strong-type';
 
@@ -36,7 +30,7 @@ import { typeDefinition } from '../../../utils/strong-type';
   styleUrls: ['./job-manager-log-list.component.less'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class JobManagerLogListComponent implements OnInit, OnDestroy {
+export class JobManagerLogListComponent implements OnInit {
   public readonly trackByName = (_: number, log: JobManagerLogItem): string => log.name;
   public readonly narrowLogData = typeDefinition<JobManagerLogItem>();
 
@@ -46,37 +40,20 @@ export class JobManagerLogListComponent implements OnInit, OnDestroy {
 
   public listOfLog: JobManagerLogItem[] = [];
   public isLoading = true;
-  public logRouterFactory: (...args: string[]) => string | string[];
 
-  private destroy$ = new Subject<void>();
-
-  constructor(
-    private readonly jobManagerService: JobManagerService,
-    private readonly cdr: ChangeDetectorRef,
-    @Inject(JOB_MANAGER_MODULE_CONFIG) readonly moduleConfig: JobManagerModuleConfig
-  ) {
-    this.logRouterFactory =
-      moduleConfig.routerFactories?.jobManager || JOB_MANAGER_MODULE_DEFAULT_CONFIG.routerFactories.jobManager;
-  }
+  constructor(private readonly jobManagerService: JobManagerService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit(): void {
     this.jobManagerService
       .loadLogList()
       .pipe(
-        catchError(() => of([] as JobManagerLogItem[])),
         finalize(() => {
           this.isLoading = false;
           this.cdr.markForCheck();
-        }),
-        takeUntil(this.destroy$)
+        })
       )
       .subscribe(data => {
         this.listOfLog = data;
       });
-  }
-
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
   }
 }

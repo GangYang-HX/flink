@@ -20,7 +20,6 @@ package org.apache.flink.table.runtime.generated;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 
 /**
@@ -46,7 +45,7 @@ public class GeneratedResultFuture<T extends ResultFuture<?>> extends GeneratedC
      * @param conf configuration when generating ResultFuture.
      */
     public GeneratedResultFuture(
-            String className, String code, Object[] references, ReadableConfig conf) {
+            String className, String code, Object[] references, Configuration conf) {
         super(className, code, references, conf);
     }
 }

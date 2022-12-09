@@ -28,13 +28,19 @@ import org.apache.flink.kubernetes.kubeclient.Fabric8FlinkKubeClient;
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClient;
 import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.runtime.clusterframework.BootstrapTools;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.Executors;
 
+import io.fabric8.kubernetes.api.model.Config;
+import io.fabric8.kubernetes.api.model.ConfigBuilder;
+import io.fabric8.kubernetes.api.model.NamedClusterBuilder;
+import io.fabric8.kubernetes.api.model.NamedContextBuilder;
 import io.fabric8.kubernetes.client.NamespacedKubernetesClient;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.api.io.TempDir;
+import io.fabric8.kubernetes.client.utils.Serialization;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,10 +48,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** Base test class for Kubernetes. */
-public class KubernetesTestBase {
-    @RegisterExtension
-    protected final MixedKubernetesServerExtension server =
-            new MixedKubernetesServerExtension(true, true);
+public class KubernetesTestBase extends TestLogger {
 
     protected static final String NAMESPACE = "test";
     protected static final String CLUSTER_ID = "my-flink-cluster1";
@@ -55,6 +58,10 @@ public class KubernetesTestBase {
     protected static final KubernetesConfigOptions.ImagePullPolicy CONTAINER_IMAGE_PULL_POLICY =
             KubernetesConfigOptions.ImagePullPolicy.IfNotPresent;
     protected static final int JOB_MANAGER_MEMORY = 768;
+
+    @Rule public MixedKubernetesServer server = new MixedKubernetesServer(true, true);
+
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     protected File flinkConfDir;
 
@@ -81,12 +88,11 @@ public class KubernetesTestBase {
 
     protected void onSetup() throws Exception {}
 
-    @BeforeEach
-    void setup(@TempDir File flinkConfDir, @TempDir File hadoopConfDir, @TempDir File kerberosDir)
-            throws Exception {
-        this.flinkConfDir = flinkConfDir.getAbsoluteFile();
-        this.hadoopConfDir = hadoopConfDir.getAbsoluteFile();
-        this.kerberosDir = kerberosDir.getAbsoluteFile();
+    @Before
+    public final void setup() throws Exception {
+        flinkConfDir = temporaryFolder.newFolder().getAbsoluteFile();
+        hadoopConfDir = temporaryFolder.newFolder().getAbsoluteFile();
+        kerberosDir = temporaryFolder.newFolder().getAbsoluteFile();
 
         setupFlinkConfig();
         writeFlinkConfiguration();
@@ -99,8 +105,8 @@ public class KubernetesTestBase {
         onSetup();
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
+    @After
+    public void tearDown() throws Exception {
         flinkKubeClient.close();
     }
 
@@ -130,5 +136,33 @@ public class KubernetesTestBase {
     protected void generateKerberosFileItems() throws IOException {
         KubernetesTestUtils.createTemporyFile("some keytab", kerberosDir, KEYTAB_FILE);
         KubernetesTestUtils.createTemporyFile("some conf", kerberosDir, KRB5_CONF_FILE);
+    }
+
+    protected String writeKubeConfigForMockKubernetesServer() throws Exception {
+        final Config kubeConfig =
+                new ConfigBuilder()
+                        .withApiVersion(server.getClient().getApiVersion())
+                        .withClusters(
+                                new NamedClusterBuilder()
+                                        .withName(CLUSTER_ID)
+                                        .withNewCluster()
+                                        .withNewServer(server.getClient().getMasterUrl().toString())
+                                        .withInsecureSkipTlsVerify(true)
+                                        .endCluster()
+                                        .build())
+                        .withContexts(
+                                new NamedContextBuilder()
+                                        .withName(CLUSTER_ID)
+                                        .withNewContext()
+                                        .withCluster(CLUSTER_ID)
+                                        .withUser(
+                                                server.getClient().getConfiguration().getUsername())
+                                        .endContext()
+                                        .build())
+                        .withNewCurrentContext(CLUSTER_ID)
+                        .build();
+        final File kubeConfigFile = new File(temporaryFolder.newFolder(".kube"), "config");
+        Serialization.yamlMapper().writeValue(kubeConfigFile, kubeConfig);
+        return kubeConfigFile.getAbsolutePath();
     }
 }

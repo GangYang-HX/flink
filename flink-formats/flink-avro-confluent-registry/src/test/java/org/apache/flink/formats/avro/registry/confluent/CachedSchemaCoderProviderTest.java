@@ -22,7 +22,7 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
 import javax.net.ssl.SSLSocketFactory;
@@ -31,24 +31,26 @@ import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 /**
  * Tests for properties set by {@link RegistryAvroFormatFactory} in {@link
  * CachedSchemaCoderProvider}.
  */
-class CachedSchemaCoderProviderTest {
+public class CachedSchemaCoderProviderTest {
 
     @Test
-    void testThatSslIsNotInitializedForNoSslProperties() {
+    public void testThatSslIsNotInitializedForNoSslProperties() {
         CachedSchemaCoderProvider provider = initCachedSchemaCoderProvider(new HashMap<>());
         SSLSocketFactory sslSocketFactory = getSslSocketFactoryFromProvider(provider);
 
-        assertThat(sslSocketFactory).isNull();
+        assertNull(sslSocketFactory);
     }
 
     @Test
-    void testThatSslIsInitializedForSslProperties() throws URISyntaxException {
+    public void testThatSslIsInitializedForSslProperties() throws URISyntaxException {
         String keystoreFile = getAbsolutePath("/test-keystore.jks");
         String keystorePassword = "123456";
         Map<String, String> configs = new HashMap<>();
@@ -60,20 +62,20 @@ class CachedSchemaCoderProviderTest {
         CachedSchemaCoderProvider provider = initCachedSchemaCoderProvider(configs);
         SSLSocketFactory sslSocketFactory = getSslSocketFactoryFromProvider(provider);
 
-        assertThat(sslSocketFactory).isNotNull();
+        assertNotNull(sslSocketFactory);
     }
 
     @Test
-    void testThatBasicAuthIsNotInitializedForNoBasicAuthProperties() {
+    public void testThatBasicAuthIsNotInitializedForNoBasicAuthProperties() {
         CachedSchemaCoderProvider provider = initCachedSchemaCoderProvider(new HashMap<>());
         BasicAuthCredentialProvider basicAuthCredentialProvider =
                 getBasicAuthFromProvider(provider);
 
-        assertThat(basicAuthCredentialProvider).isNull();
+        assertNull(basicAuthCredentialProvider);
     }
 
     @Test
-    void testThatBasicAuthIsInitializedForBasicAuthProperties() {
+    public void testThatBasicAuthIsInitializedForBasicAuthProperties() {
         String userPassword = "user:pwd";
         Map<String, String> configs = new HashMap<>();
         configs.put("basic.auth.credentials.source", "USER_INFO");
@@ -83,21 +85,21 @@ class CachedSchemaCoderProviderTest {
         BasicAuthCredentialProvider basicAuthCredentialProvider =
                 getBasicAuthFromProvider(provider);
 
-        assertThat(basicAuthCredentialProvider).isNotNull();
-        assertThat(basicAuthCredentialProvider.getUserInfo(null)).isEqualTo(userPassword);
+        assertNotNull(basicAuthCredentialProvider);
+        assertEquals(basicAuthCredentialProvider.getUserInfo(null), userPassword);
     }
 
     @Test
-    void testThatBearerAuthIsNotInitializedForNoBearerAuthProperties() {
+    public void testThatBearerAuthIsNotInitializedForNoBearerAuthProperties() {
         CachedSchemaCoderProvider provider = initCachedSchemaCoderProvider(new HashMap<>());
         BearerAuthCredentialProvider bearerAuthCredentialProvider =
                 getBearerAuthFromProvider(provider);
 
-        assertThat(bearerAuthCredentialProvider).isNull();
+        assertNull(bearerAuthCredentialProvider);
     }
 
     @Test
-    void testThatBearerAuthIsInitializedForBearerAuthProperties() {
+    public void testThatBearerAuthIsInitializedForBearerAuthProperties() {
         String token = "123456";
         Map<String, String> configs = new HashMap<>();
         configs.put("bearer.auth.credentials.source", "STATIC_TOKEN");
@@ -107,8 +109,8 @@ class CachedSchemaCoderProviderTest {
         BearerAuthCredentialProvider bearerAuthCredentialProvider =
                 getBearerAuthFromProvider(provider);
 
-        assertThat(bearerAuthCredentialProvider).isNotNull();
-        assertThat(bearerAuthCredentialProvider.getBearerToken(null)).isEqualTo(token);
+        assertNotNull(bearerAuthCredentialProvider);
+        assertEquals(bearerAuthCredentialProvider.getBearerToken(null), token);
     }
 
     private String getAbsolutePath(String path) throws URISyntaxException {

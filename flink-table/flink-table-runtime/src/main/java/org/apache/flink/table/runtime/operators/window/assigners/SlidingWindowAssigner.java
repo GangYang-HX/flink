@@ -30,6 +30,7 @@ import org.apache.commons.math3.util.ArithmeticUtils;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -75,6 +76,24 @@ public class SlidingWindowAssigner extends PanedWindowAssigner<TimeWindow>
         for (long start = lastStart; start > timestamp - size; start -= slide) {
             windows.add(new TimeWindow(start, start + size));
         }
+        return windows;
+    }
+
+    @Override
+    public Collection<TimeWindow> matchWindows(long timestamp, boolean alignStart) {
+        List<TimeWindow> windows = new ArrayList<>((int) (size / slide));
+        long lastStart = TimeWindow.getWindowStartWithOffset(timestamp, offset, slide);
+        if (lastStart != timestamp) {
+            return Collections.emptyList();
+        }
+        if (alignStart) {
+            windows.add(new TimeWindow(lastStart, lastStart + size));
+        } else {
+            if (lastStart - size >= 0) {
+                windows.add(new TimeWindow(lastStart - size, lastStart));
+            }
+        }
+
         return windows;
     }
 

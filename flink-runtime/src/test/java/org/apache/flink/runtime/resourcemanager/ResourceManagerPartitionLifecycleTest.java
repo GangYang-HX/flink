@@ -27,7 +27,6 @@ import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.TestingRpcService;
-import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorHeartbeatPayload;
@@ -46,12 +45,10 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Map;
-import java.util.Optional;
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.instanceOf;
@@ -85,7 +82,7 @@ public class ResourceManagerPartitionLifecycleTest extends TestLogger {
     @AfterClass
     public static void tearDownClass() throws Exception {
         if (rpcService != null) {
-            RpcUtils.terminateRpcService(rpcService);
+            RpcUtils.terminateRpcServices(TIMEOUT, rpcService);
         }
     }
 
@@ -230,20 +227,14 @@ public class ResourceManagerPartitionLifecycleTest extends TestLogger {
             IntermediateDataSetID dataSetId,
             int numTotalPartitions,
             ResultPartitionID... partitionIds) {
-
-        final Map<ResultPartitionID, ShuffleDescriptor> shuffleDescriptors =
-                Arrays.stream(partitionIds)
-                        .map(TestingShuffleDescriptor::new)
-                        .collect(
-                                Collectors.toMap(
-                                        TestingShuffleDescriptor::getResultPartitionID, d -> d));
-
         return new TaskExecutorHeartbeatPayload(
                 new SlotReport(),
                 new ClusterPartitionReport(
                         Collections.singletonList(
                                 new ClusterPartitionReport.ClusterPartitionReportEntry(
-                                        dataSetId, numTotalPartitions, shuffleDescriptors))));
+                                        dataSetId,
+                                        new HashSet<>(Arrays.asList(partitionIds)),
+                                        numTotalPartitions))));
     }
 
     @FunctionalInterface
@@ -258,24 +249,5 @@ public class ResourceManagerPartitionLifecycleTest extends TestLogger {
                 ResourceID taskExecutorId1,
                 ResourceID taskExecutorId2)
                 throws Exception;
-    }
-
-    private static class TestingShuffleDescriptor implements ShuffleDescriptor {
-
-        private final ResultPartitionID resultPartitionID;
-
-        private TestingShuffleDescriptor(ResultPartitionID resultPartitionID) {
-            this.resultPartitionID = resultPartitionID;
-        }
-
-        @Override
-        public ResultPartitionID getResultPartitionID() {
-            return resultPartitionID;
-        }
-
-        @Override
-        public Optional<ResourceID> storesLocalResourcesOn() {
-            return Optional.empty();
-        }
     }
 }

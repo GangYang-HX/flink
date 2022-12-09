@@ -75,7 +75,6 @@ public class InternalOperatorMetricGroup extends ComponentMetricGroup<TaskMetric
                 this.parent.parent.jobId.toString(),
                 this.parent.vertexId.toString(),
                 this.parent.subtaskIndex,
-                this.parent.attemptNumber(),
                 filter.filterCharacters(this.operatorName));
     }
 

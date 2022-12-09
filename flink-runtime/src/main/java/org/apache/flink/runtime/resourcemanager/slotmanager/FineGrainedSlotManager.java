@@ -39,7 +39,7 @@ import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.slots.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.util.ResourceCounter;
-import org.apache.flink.util.FlinkExpectedException;
+import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
@@ -65,6 +65,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** Implementation of {@link SlotManager} supporting fine-grained resource management. */
 public class FineGrainedSlotManager implements SlotManager {
@@ -129,24 +131,24 @@ public class FineGrainedSlotManager implements SlotManager {
             SlotStatusSyncer slotStatusSyncer,
             ResourceAllocationStrategy resourceAllocationStrategy) {
 
-        this.scheduledExecutor = Preconditions.checkNotNull(scheduledExecutor);
+        this.scheduledExecutor = checkNotNull(scheduledExecutor);
 
-        Preconditions.checkNotNull(slotManagerConfiguration);
+        checkNotNull(slotManagerConfiguration);
         this.taskManagerTimeout = slotManagerConfiguration.getTaskManagerTimeout();
         this.waitResultConsumedBeforeRelease =
                 slotManagerConfiguration.isWaitResultConsumedBeforeRelease();
         this.requirementsCheckDelay =
-                Preconditions.checkNotNull(slotManagerConfiguration.getRequirementCheckDelay());
+                checkNotNull(slotManagerConfiguration.getRequirementCheckDelay());
 
-        this.slotManagerMetricGroup = Preconditions.checkNotNull(slotManagerMetricGroup);
+        this.slotManagerMetricGroup = checkNotNull(slotManagerMetricGroup);
 
-        this.resourceTracker = Preconditions.checkNotNull(resourceTracker);
-        this.taskManagerTracker = Preconditions.checkNotNull(taskManagerTracker);
-        this.slotStatusSyncer = Preconditions.checkNotNull(slotStatusSyncer);
-        this.resourceAllocationStrategy = Preconditions.checkNotNull(resourceAllocationStrategy);
+        this.resourceTracker = checkNotNull(resourceTracker);
+        this.taskManagerTracker = checkNotNull(taskManagerTracker);
+        this.slotStatusSyncer = checkNotNull(slotStatusSyncer);
+        this.resourceAllocationStrategy = checkNotNull(resourceAllocationStrategy);
 
-        this.maxTotalCpu = Preconditions.checkNotNull(slotManagerConfiguration.getMaxTotalCpu());
-        this.maxTotalMem = Preconditions.checkNotNull(slotManagerConfiguration.getMaxTotalMem());
+        this.maxTotalCpu = checkNotNull(slotManagerConfiguration.getMaxTotalCpu());
+        this.maxTotalMem = checkNotNull(slotManagerConfiguration.getMaxTotalMem());
 
         resourceManagerId = null;
         resourceActions = null;
@@ -187,7 +189,7 @@ public class FineGrainedSlotManager implements SlotManager {
      * @param newResourceManagerId to use for communication with the task managers
      * @param newMainThreadExecutor to use to run code in the ResourceManager's main thread
      * @param newResourceActions to use for resource (de-)allocations
-     * @param newBlockedTaskManagerChecker to query whether a task manager is blocked
+     * @param newBlockedTaskManagerChecker blocked task manager checker
      */
     @Override
     public void start(
@@ -197,12 +199,12 @@ public class FineGrainedSlotManager implements SlotManager {
             BlockedTaskManagerChecker newBlockedTaskManagerChecker) {
         LOG.info("Starting the slot manager.");
 
-        resourceManagerId = Preconditions.checkNotNull(newResourceManagerId);
-        mainThreadExecutor = Preconditions.checkNotNull(newMainThreadExecutor);
-        resourceActions = Preconditions.checkNotNull(newResourceActions);
+        resourceManagerId = checkNotNull(newResourceManagerId);
+        mainThreadExecutor = checkNotNull(newMainThreadExecutor);
+        resourceActions = checkNotNull(newResourceActions);
         slotStatusSyncer.initialize(
                 taskManagerTracker, resourceTracker, resourceManagerId, mainThreadExecutor);
-        blockedTaskManagerChecker = Preconditions.checkNotNull(newBlockedTaskManagerChecker);
+        blockedTaskManagerChecker = checkNotNull(newBlockedTaskManagerChecker);
 
         started = true;
 
@@ -348,8 +350,7 @@ public class FineGrainedSlotManager implements SlotManager {
                         maxTotalMem.toHumanReadableString());
                 resourceActions.releaseResource(
                         taskExecutorConnection.getInstanceID(),
-                        new FlinkExpectedException(
-                                "The max total resource limitation is reached."));
+                        new FlinkException("The max total resource limitation is reached."));
                 return false;
             }
 
@@ -514,8 +515,7 @@ public class FineGrainedSlotManager implements SlotManager {
                                 mainThreadExecutor.execute(
                                         () -> {
                                             checkResourceRequirements();
-                                            Preconditions.checkNotNull(requirementsCheckFuture)
-                                                    .complete(null);
+                                            checkNotNull(requirementsCheckFuture).complete(null);
                                         }),
                         requirementsCheckDelay.toMillis(),
                         TimeUnit.MILLISECONDS);
@@ -728,8 +728,7 @@ public class FineGrainedSlotManager implements SlotManager {
     }
 
     private void releaseIdleTaskExecutor(InstanceID timedOutTaskManagerId) {
-        final FlinkExpectedException cause =
-                new FlinkExpectedException("TaskManager exceeded the idle timeout.");
+        final FlinkException cause = new FlinkException("TaskManager exceeded the idle timeout.");
         resourceActions.releaseResource(timedOutTaskManagerId, cause);
     }
 
@@ -769,9 +768,9 @@ public class FineGrainedSlotManager implements SlotManager {
 
     private void checkInit() {
         Preconditions.checkState(started, "The slot manager has not been started.");
-        Preconditions.checkNotNull(resourceManagerId);
-        Preconditions.checkNotNull(mainThreadExecutor);
-        Preconditions.checkNotNull(resourceActions);
+        checkNotNull(resourceManagerId);
+        checkNotNull(mainThreadExecutor);
+        checkNotNull(resourceActions);
     }
 
     private boolean isMaxTotalResourceExceededAfterAdding(ResourceProfile newResource) {
@@ -783,8 +782,8 @@ public class FineGrainedSlotManager implements SlotManager {
                 || totalResourceAfterAdding.getTotalMemory().compareTo(maxTotalMem) > 0;
     }
 
-    private boolean isBlockedTaskManager(ResourceID resourceID) {
-        Preconditions.checkNotNull(blockedTaskManagerChecker);
-        return blockedTaskManagerChecker.isBlockedTaskManager(resourceID);
+    private boolean isBlockedTaskManager(ResourceID resourceId) {
+        checkNotNull(blockedTaskManagerChecker);
+        return blockedTaskManagerChecker.isBlockedTaskManager(resourceId);
     }
 }

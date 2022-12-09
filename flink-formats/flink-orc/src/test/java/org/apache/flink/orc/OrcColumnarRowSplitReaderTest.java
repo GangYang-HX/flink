@@ -37,6 +37,7 @@ import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
+import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -54,7 +55,10 @@ import java.util.Map;
 import java.util.stream.IntStream;
 
 import static org.apache.flink.table.utils.DateTimeUtils.toSQLDate;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /** Test for {@link OrcColumnarRowSplitReader}. */
 public class OrcColumnarRowSplitReaderTest {
@@ -94,17 +98,17 @@ public class OrcColumnarRowSplitReaderTest {
                 // read and count all rows
                 while (!reader.reachedEnd()) {
                     RowData row = reader.nextRecord(null);
-                    assertThat(row.isNullAt(0)).isFalse();
-                    assertThat(row.isNullAt(1)).isFalse();
+                    Assert.assertFalse(row.isNullAt(0));
+                    Assert.assertFalse(row.isNullAt(1));
                     totalF0 += row.getInt(0);
-                    assertThat(row.getString(1).toString()).isNotNull();
+                    Assert.assertNotNull(row.getString(1).toString());
                     cnt++;
                 }
             }
         }
         // check that all rows have been read
-        assertThat(cnt).isEqualTo(1920800);
-        assertThat(totalF0).isEqualTo(1844737280400L);
+        assertEquals(1920800, cnt);
+        assertEquals(1844737280400L, totalF0);
     }
 
     @Test
@@ -113,14 +117,13 @@ public class OrcColumnarRowSplitReaderTest {
 
         try (OrcColumnarRowSplitReader reader =
                 createReader(new int[] {0}, testSchemaDecimal, new HashMap<>(), splits[0])) {
-            assertThat(reader.reachedEnd()).isFalse();
+            assertFalse(reader.reachedEnd());
             RowData row = reader.nextRecord(null);
 
             // validate first row
-            assertThat(row).isNotNull();
-            assertThat(row.getArity()).isEqualTo(1);
-            assertThat(row.getDecimal(0, 10, 5))
-                    .isEqualTo(DecimalDataUtils.castFrom(-1000.5d, 10, 5));
+            assertNotNull(row);
+            assertEquals(1, row.getArity());
+            assertEquals(DecimalDataUtils.castFrom(-1000.5d, 10, 5), row.getDecimal(0, 10, 5));
 
             // check correct number of rows
             long cnt = 1;
@@ -128,14 +131,14 @@ public class OrcColumnarRowSplitReaderTest {
             while (!reader.reachedEnd()) {
                 row = reader.nextRecord(null);
                 if (!row.isNullAt(0)) {
-                    assertThat(row.getDecimal(0, 10, 5)).isNotNull();
+                    assertNotNull(row.getDecimal(0, 10, 5));
                 } else {
                     nullCount++;
                 }
                 cnt++;
             }
-            assertThat(cnt).isEqualTo(6000);
-            assertThat(nullCount).isEqualTo(2000);
+            assertEquals(6000, cnt);
+            assertEquals(2000, nullCount);
         }
     }
 
@@ -181,28 +184,28 @@ public class OrcColumnarRowSplitReaderTest {
                     RowData row = reader.nextRecord(null);
 
                     // data values
-                    assertThat(row.isNullAt(3)).isFalse();
-                    assertThat(row.isNullAt(5)).isFalse();
+                    Assert.assertFalse(row.isNullAt(3));
+                    Assert.assertFalse(row.isNullAt(5));
                     totalF0 += row.getInt(3);
-                    assertThat(row.getString(5).toString()).isNotNull();
+                    Assert.assertNotNull(row.getString(5).toString());
 
                     // part values
-                    assertThat(row.isNullAt(0)).isFalse();
-                    assertThat(row.isNullAt(1)).isFalse();
-                    assertThat(row.isNullAt(2)).isFalse();
-                    assertThat(row.isNullAt(4)).isFalse();
-                    assertThat(row.getDecimal(0, 10, 5))
-                            .isEqualTo(DecimalDataUtils.castFrom(5.333, 10, 5));
-                    assertThat(row.getInt(1)).isEqualTo(1);
-                    assertThat(row.getLong(2)).isEqualTo(3);
-                    assertThat(row.getString(4).toString()).isEqualTo("f5");
+                    Assert.assertFalse(row.isNullAt(0));
+                    Assert.assertFalse(row.isNullAt(1));
+                    Assert.assertFalse(row.isNullAt(2));
+                    Assert.assertFalse(row.isNullAt(4));
+                    Assert.assertEquals(
+                            DecimalDataUtils.castFrom(5.333, 10, 5), row.getDecimal(0, 10, 5));
+                    Assert.assertEquals(1, row.getInt(1));
+                    Assert.assertEquals(3, row.getLong(2));
+                    Assert.assertEquals("f5", row.getString(4).toString());
                     cnt++;
                 }
             }
         }
         // check that all rows have been read
-        assertThat(cnt).isEqualTo(1920800);
-        assertThat(totalF0).isEqualTo(1844737280400L);
+        assertEquals(1920800, cnt);
+        assertEquals(1844737280400L, totalF0);
     }
 
     @Test
@@ -219,19 +222,19 @@ public class OrcColumnarRowSplitReaderTest {
                 // read and count all rows
                 while (!reader.reachedEnd()) {
                     RowData row = reader.nextRecord(null);
-                    assertThat(row.isNullAt(0)).isFalse();
-                    assertThat(row.isNullAt(1)).isFalse();
-                    assertThat(row.isNullAt(2)).isFalse();
-                    assertThat(row.getString(0).toString()).isNotNull();
+                    Assert.assertFalse(row.isNullAt(0));
+                    Assert.assertFalse(row.isNullAt(1));
+                    Assert.assertFalse(row.isNullAt(2));
+                    Assert.assertNotNull(row.getString(0).toString());
                     totalF0 += row.getInt(1);
-                    assertThat(row.getString(2).toString()).isNotNull();
+                    Assert.assertNotNull(row.getString(2).toString());
                     cnt++;
                 }
             }
         }
         // check that all rows have been read
-        assertThat(cnt).isEqualTo(1920800);
-        assertThat(totalF0).isEqualTo(1844737280400L);
+        assertEquals(1920800, cnt);
+        assertEquals(1844737280400L, totalF0);
     }
 
     protected void prepareReadFileWithTypes(String file, int rowSize) throws IOException {
@@ -336,42 +339,43 @@ public class OrcColumnarRowSplitReaderTest {
                 RowData row = reader.nextRecord(null);
 
                 if (cnt == rowSize - 1) {
-                    assertThat(row.isNullAt(0)).isTrue();
-                    assertThat(row.isNullAt(1)).isTrue();
-                    assertThat(row.isNullAt(2)).isTrue();
-                    assertThat(row.isNullAt(3)).isTrue();
-                    assertThat(row.isNullAt(4)).isTrue();
+                    Assert.assertTrue(row.isNullAt(0));
+                    Assert.assertTrue(row.isNullAt(1));
+                    Assert.assertTrue(row.isNullAt(2));
+                    Assert.assertTrue(row.isNullAt(3));
+                    Assert.assertTrue(row.isNullAt(4));
                 } else {
-                    assertThat(row.isNullAt(0)).isFalse();
-                    assertThat(row.isNullAt(1)).isFalse();
-                    assertThat(row.isNullAt(2)).isFalse();
-                    assertThat(row.isNullAt(3)).isFalse();
-                    assertThat(row.isNullAt(4)).isFalse();
-                    assertThat(row.getTimestamp(0, 9))
-                            .isEqualTo(TimestampData.fromTimestamp(toTimestamp(cnt)));
-                    assertThat(row.getFloat(1)).isEqualTo((float) cnt);
-                    assertThat(row.getDouble(2)).isEqualTo(cnt);
-                    assertThat(row.getByte(3)).isEqualTo((byte) cnt);
-                    assertThat(row.getShort(4)).isEqualTo((short) cnt);
+                    Assert.assertFalse(row.isNullAt(0));
+                    Assert.assertFalse(row.isNullAt(1));
+                    Assert.assertFalse(row.isNullAt(2));
+                    Assert.assertFalse(row.isNullAt(3));
+                    Assert.assertFalse(row.isNullAt(4));
+                    Assert.assertEquals(
+                            TimestampData.fromTimestamp(toTimestamp(cnt)), row.getTimestamp(0, 9));
+                    Assert.assertEquals(cnt, row.getFloat(1), 0);
+                    Assert.assertEquals(cnt, row.getDouble(2), 0);
+                    Assert.assertEquals((byte) cnt, row.getByte(3));
+                    Assert.assertEquals(cnt, row.getShort(4));
                 }
-                assertThat(row.getBoolean(5)).isTrue();
-                assertThat(toSQLDate(row.getInt(6)).toString())
-                        .isEqualTo(new Date(562423).toString());
+                Assert.assertTrue(row.getBoolean(5));
+                Assert.assertEquals(
+                        new Date(562423).toString(), toSQLDate(row.getInt(6)).toString());
 
-                assertThat(row.getTimestamp(7, 9).toLocalDateTime())
-                        .isEqualTo(LocalDateTime.of(1999, 1, 1, 1, 1));
+                Assert.assertEquals(
+                        LocalDateTime.of(1999, 1, 1, 1, 1),
+                        row.getTimestamp(7, 9).toLocalDateTime());
 
-                assertThat(row.getDouble(8)).isEqualTo(6.6);
-                assertThat(row.isNullAt(9)).isTrue();
-                assertThat(row.isNullAt(10)).isTrue();
-                assertThat(row.isNullAt(11)).isTrue();
-                assertThat(row.isNullAt(12)).isTrue();
-                assertThat(row.isNullAt(13)).isTrue();
+                Assert.assertEquals(6.6, row.getDouble(8), 0);
+                Assert.assertTrue(row.isNullAt(9));
+                Assert.assertTrue(row.isNullAt(10));
+                Assert.assertTrue(row.isNullAt(11));
+                Assert.assertTrue(row.isNullAt(12));
+                Assert.assertTrue(row.isNullAt(13));
                 cnt++;
             }
         }
         // check that all rows have been read
-        assertThat(cnt).isEqualTo(rowSize);
+        assertEquals(rowSize, cnt);
     }
 
     @Test
@@ -382,7 +386,7 @@ public class OrcColumnarRowSplitReaderTest {
             while (!reader.reachedEnd()) {
                 reader.nextRecord(null);
             }
-            assertThat(reader.reachedEnd()).isTrue();
+            assertTrue(reader.reachedEnd());
         }
     }
 

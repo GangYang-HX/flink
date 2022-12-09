@@ -48,13 +48,6 @@ public interface AccessExecution {
     long[] getStateTimestamps();
 
     /**
-     * Returns the end timestamps for every {@link ExecutionState}.
-     *
-     * @return timestamps for each state
-     */
-    long[] getStateEndTimestamps();
-
-    /**
      * Returns the current {@link ExecutionState} for this execution.
      *
      * @return execution state for this execution
@@ -85,14 +78,6 @@ public interface AccessExecution {
      * @return timestamp for the given state
      */
     long getStateTimestamp(ExecutionState state);
-
-    /**
-     * Returns the end timestamp for the given {@link ExecutionState}.
-     *
-     * @param state state for which the timestamp should be returned
-     * @return timestamp for the given state
-     */
-    long getStateEndTimestamp(ExecutionState state);
 
     /**
      * Returns the user-defined accumulators as strings.

@@ -18,8 +18,8 @@
 
 package org.apache.flink.table.planner.functions;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.StateBackendOptions;
+import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Schema;
@@ -34,51 +34,56 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.BuiltInFunctionDefinition;
 import org.apache.flink.table.planner.factories.TableFactoryHarness;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.test.junit5.MiniClusterExtension;
+import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.Preconditions;
 
-import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.function.Executable;
-import org.junit.jupiter.api.parallel.Execution;
-import org.junit.jupiter.api.parallel.ExecutionMode;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-import static org.apache.flink.runtime.state.StateBackendLoader.HASHMAP_STATE_BACKEND_NAME;
-import static org.apache.flink.runtime.state.StateBackendLoader.ROCKSDB_STATE_BACKEND_NAME;
-import static org.apache.flink.table.test.TableAssertions.assertThat;
+import static org.apache.flink.table.types.DataType.getFieldCount;
 import static org.apache.flink.table.types.DataType.getFieldDataTypes;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test base for testing aggregate {@link BuiltInFunctionDefinition built-in functions}. */
-@Execution(ExecutionMode.CONCURRENT)
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@ExtendWith(MiniClusterExtension.class)
-abstract class BuiltInAggregateFunctionTestBase {
+@RunWith(Parameterized.class)
+public class BuiltInAggregateFunctionTestBase {
 
-    abstract Stream<TestSpec> getTestCaseSpecs();
+    @ClassRule
+    public static MiniClusterWithClientResource miniClusterResource =
+            new MiniClusterWithClientResource(
+                    new MiniClusterResourceConfiguration.Builder()
+                            .setNumberTaskManagers(1)
+                            .setNumberSlotsPerTaskManager(1)
+                            .build());
 
-    final Stream<BuiltInFunctionTestBase.TestCase> getTestCases() {
-        return this.getTestCaseSpecs().flatMap(TestSpec::getTestCases);
-    }
+    @Parameter public TestSpec testSpec;
 
-    @ParameterizedTest
-    @MethodSource("getTestCases")
-    final void test(BuiltInFunctionTestBase.TestCase testCase) throws Throwable {
-        testCase.execute();
+    @Test
+    public void testFunction() throws Exception {
+        final TableEnvironment tEnv =
+                TableEnvironment.create(EnvironmentSettings.inStreamingMode());
+        tEnv.getConfig().set(StateBackendOptions.STATE_BACKEND, testSpec.backendName);
+        final Table sourceTable = asTable(tEnv, testSpec.sourceRowType, testSpec.sourceRows);
+
+        for (final TestItem testItem : testSpec.testItems) {
+            testItem.execute(tEnv, sourceTable);
+        }
     }
 
     protected static Table asTable(TableEnvironment tEnv, DataType sourceRowType, List<Row> rows) {
@@ -113,6 +118,22 @@ abstract class BuiltInAggregateFunctionTestBase {
                 return SourceFunctionProvider.of(new Source(rows, converter), true);
             }
         };
+    }
+
+    protected static void assertRows(List<Row> expectedRows, TableResult tableResult) {
+        final List<Row> actualRows =
+                materializeResult(tableResult).stream()
+                        .sorted(Comparator.comparing(Objects::toString))
+                        .collect(Collectors.toList());
+        final List<Row> sortedExpectedRows =
+                expectedRows.stream()
+                        .sorted(Comparator.comparing(Objects::toString))
+                        .collect(Collectors.toList());
+
+        assertEquals(
+                String.format("%n%nExpected:%n%s%n%nActual:%n%s", sortedExpectedRows, actualRows),
+                sortedExpectedRows,
+                actualRows);
     }
 
     private static List<Row> materializeResult(TableResult tableResult) {
@@ -153,6 +174,7 @@ abstract class BuiltInAggregateFunctionTestBase {
 
         private DataType sourceRowType;
         private List<Row> sourceRows;
+        private String backendName;
 
         private TestSpec(BuiltInFunctionDefinition definition) {
             this.definition = Preconditions.checkNotNull(definition);
@@ -171,6 +193,15 @@ abstract class BuiltInAggregateFunctionTestBase {
             this.sourceRowType = sourceRowType;
             this.sourceRows = sourceRows;
             return this;
+        }
+
+        public TestSpec withStateBackend(String backendName) {
+            this.backendName = backendName;
+            return this;
+        }
+
+        public TestSpec copy() {
+            return new TestSpec(definition).withSource(sourceRowType, new ArrayList<>(sourceRows));
         }
 
         TestSpec testSqlResult(
@@ -207,41 +238,6 @@ abstract class BuiltInAggregateFunctionTestBase {
             return this;
         }
 
-        private Executable createTestItemExecutable(TestItem testItem, String stateBackend) {
-            return () -> {
-                Configuration conf = new Configuration();
-                conf.set(StateBackendOptions.STATE_BACKEND, stateBackend);
-                final TableEnvironment tEnv =
-                        TableEnvironment.create(
-                                EnvironmentSettings.newInstance()
-                                        .inStreamingMode()
-                                        .withConfiguration(conf)
-                                        .build());
-                final Table sourceTable = asTable(tEnv, sourceRowType, sourceRows);
-
-                testItem.execute(tEnv, sourceTable);
-            };
-        }
-
-        Stream<BuiltInFunctionTestBase.TestCase> getTestCases() {
-            return Stream.concat(
-                    testItems.stream()
-                            .map(
-                                    testItem ->
-                                            new BuiltInFunctionTestBase.TestCase(
-                                                    testItem.toString(),
-                                                    createTestItemExecutable(
-                                                            testItem, HASHMAP_STATE_BACKEND_NAME))),
-                    testItems.stream()
-                            .map(
-                                    testItem ->
-                                            new BuiltInFunctionTestBase.TestCase(
-                                                    testItem.toString(),
-                                                    createTestItemExecutable(
-                                                            testItem,
-                                                            ROCKSDB_STATE_BACKEND_NAME))));
-        }
-
         @Override
         public String toString() {
             final StringBuilder bob = new StringBuilder();
@@ -251,6 +247,7 @@ abstract class BuiltInAggregateFunctionTestBase {
                 bob.append(description);
                 bob.append(")");
             }
+            bob.append(", backend: ").append(backendName);
 
             return bob.toString();
         }
@@ -277,15 +274,12 @@ abstract class BuiltInAggregateFunctionTestBase {
                 final DataType actualRowType =
                         tableResult.getResolvedSchema().toSourceRowDataType();
 
-                assertThat(actualRowType)
-                        .getChildren()
-                        .containsExactlyElementsOf(getFieldDataTypes(expectedRowType));
+                assertEquals(getFieldCount(expectedRowType), getFieldCount(actualRowType));
+                assertEquals(getFieldDataTypes(expectedRowType), getFieldDataTypes(actualRowType));
             }
 
             if (expectedRows != null) {
-                final List<Row> actualRows = materializeResult(tableResult);
-
-                assertThat(actualRows).containsExactlyInAnyOrderElementsOf(expectedRows);
+                assertRows(expectedRows, tableResult);
             }
         }
 

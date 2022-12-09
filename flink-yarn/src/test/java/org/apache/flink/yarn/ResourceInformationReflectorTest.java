@@ -19,24 +19,31 @@
 package org.apache.flink.yarn;
 
 import org.apache.flink.runtime.util.HadoopUtils;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.hadoop.yarn.api.records.Resource;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /** Tests for {@link ResourceInformationReflector}. */
-class ResourceInformationReflectorTest {
+public class ResourceInformationReflectorTest extends TestLogger {
 
     private static final String RESOURCE_NAME = "test";
     private static final long RESOURCE_VALUE = 1;
 
     @Test
-    void testSetResourceInformationIfMethodPresent() {
+    public void testSetResourceInformationIfMethodPresent() {
         final ResourceInformationReflector resourceInformationReflector =
                 new ResourceInformationReflector(
                         ResourceWithMethod.class.getName(), ResourceInfoWithMethod.class.getName());
@@ -44,15 +51,16 @@ class ResourceInformationReflectorTest {
         resourceInformationReflector.setResourceInformationUnSafe(
                 resourceWithMethod, RESOURCE_NAME, RESOURCE_VALUE);
 
-        assertThat(resourceWithMethod.getResourceWithName(RESOURCE_NAME)).isNotNull();
-        assertThat(resourceWithMethod.getResourceWithName(RESOURCE_NAME).getName())
-                .isEqualTo(RESOURCE_NAME);
-        assertThat(resourceWithMethod.getResourceWithName(RESOURCE_NAME).getValue())
-                .isEqualTo(RESOURCE_VALUE);
+        assertNotNull(resourceWithMethod.getResourceWithName(RESOURCE_NAME));
+        assertThat(
+                resourceWithMethod.getResourceWithName(RESOURCE_NAME).getName(), is(RESOURCE_NAME));
+        assertThat(
+                resourceWithMethod.getResourceWithName(RESOURCE_NAME).getValue(),
+                is(RESOURCE_VALUE));
     }
 
     @Test
-    void testGetResourceInformationIfMethodPresent() {
+    public void testGetResourceInformationIfMethodPresent() {
         final ResourceInformationReflector resourceInformationReflector =
                 new ResourceInformationReflector(
                         ResourceWithMethod.class.getName(), ResourceInfoWithMethod.class.getName());
@@ -62,11 +70,13 @@ class ResourceInformationReflectorTest {
 
         final Map<String, Long> externalResources =
                 resourceInformationReflector.getExternalResourcesUnSafe(resourceWithMethod);
-        assertThat(externalResources).hasSize(1).containsEntry(RESOURCE_NAME, RESOURCE_VALUE);
+        assertThat(externalResources.size(), is(1));
+        assertTrue(externalResources.containsKey(RESOURCE_NAME));
+        assertThat(externalResources.get(RESOURCE_NAME), is(RESOURCE_VALUE));
     }
 
     @Test
-    void testSetResourceInformationIfMethodAbsent() {
+    public void testSetResourceInformationIfMethodAbsent() {
         final ResourceInformationReflector resourceInformationReflector =
                 new ResourceInformationReflector(
                         ResourceWithoutMethod.class.getName(),
@@ -75,11 +85,11 @@ class ResourceInformationReflectorTest {
         resourceInformationReflector.setResourceInformationUnSafe(
                 resourceWithMethod, RESOURCE_NAME, RESOURCE_VALUE);
 
-        assertThat(resourceWithMethod.getResourceWithName(RESOURCE_NAME)).isNull();
+        assertNull(resourceWithMethod.getResourceWithName(RESOURCE_NAME));
     }
 
     @Test
-    void testGetResourceInformationIfMethodAbsent() {
+    public void testGetResourceInformationIfMethodAbsent() {
         final ResourceInformationReflector resourceInformationReflector =
                 new ResourceInformationReflector(
                         ResourceWithoutMethod.class.getName(),
@@ -90,24 +100,24 @@ class ResourceInformationReflectorTest {
 
         final Map<String, Long> externalResources =
                 resourceInformationReflector.getExternalResourcesUnSafe(resourceWithMethod);
-        assertThat(externalResources.entrySet()).isEmpty();
+        assertThat(externalResources.entrySet(), is(empty()));
     }
 
     @Test
-    void testDefaultTwoResourceTypeWithYarnSupport() {
-        assumeThat(HadoopUtils.isMinHadoopVersion(2, 10)).isTrue();
+    public void testDefaultTwoResourceTypeWithYarnSupport() {
+        assumeTrue(HadoopUtils.isMinHadoopVersion(2, 10));
 
         final Resource resource = Resource.newInstance(100, 1);
 
         // make sure that Resource has at least two associated resources (cpu and memory)
         final Map<String, Long> resourcesResult =
                 ResourceInformationReflector.INSTANCE.getAllResourceInfos(resource);
-        assertThat(resourcesResult).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(resourcesResult.size(), greaterThanOrEqualTo(2));
     }
 
     @Test
-    void testSetAndGetExtendedResourcesWithoutYarnSupport() {
-        assumeThat(HadoopUtils.isMaxHadoopVersion(2, 10)).isTrue();
+    public void testSetAndGetExtendedResourcesWithoutYarnSupport() {
+        assumeTrue(HadoopUtils.isMaxHadoopVersion(2, 10));
 
         final Resource resource = Resource.newInstance(100, 1);
 
@@ -117,7 +127,7 @@ class ResourceInformationReflectorTest {
 
         final Map<String, Long> externalResourcesResult =
                 ResourceInformationReflector.INSTANCE.getExternalResources(resource);
-        assertThat(externalResourcesResult).isEmpty();
+        assertTrue(externalResourcesResult.isEmpty());
     }
 
     /**

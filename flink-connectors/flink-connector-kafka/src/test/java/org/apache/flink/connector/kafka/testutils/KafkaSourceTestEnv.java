@@ -44,7 +44,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Base class for KafkaSource unit tests. */
 public class KafkaSourceTestEnv extends KafkaTestBase {
@@ -244,7 +244,7 @@ public class KafkaSourceTestEnv extends KafkaTestBase {
                                                 new ArrayList<>(committedOffsets.keySet())))
                         .partitionsToOffsetAndMetadata()
                         .get();
-        assertThat(toVerify).as("The offsets are not committed").isEqualTo(committedOffsets);
+        assertEquals("The offsets are not committed", committedOffsets, toVerify);
     }
 
     public static void produceToKafka(Collection<ProducerRecord<String, Integer>> records)
