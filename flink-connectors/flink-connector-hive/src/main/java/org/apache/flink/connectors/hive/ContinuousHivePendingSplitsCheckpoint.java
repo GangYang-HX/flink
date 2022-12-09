@@ -20,6 +20,7 @@ package org.apache.flink.connectors.hive;
 
 import org.apache.flink.connector.file.src.PendingSplitsCheckpoint;
 import org.apache.flink.connectors.hive.read.HiveSourceSplit;
+import org.apache.flink.core.fs.Path;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,6 +39,17 @@ public class ContinuousHivePendingSplitsCheckpoint
             Comparable<?> currentReadOffset,
             Collection<List<String>> seenPartitionsSinceOffset) {
         super(new ArrayList<>(splits), Collections.emptyList());
+        this.currentReadOffset = currentReadOffset;
+        this.seenPartitionsSinceOffset =
+                Collections.unmodifiableCollection(new ArrayList<>(seenPartitionsSinceOffset));
+    }
+
+    public ContinuousHivePendingSplitsCheckpoint(
+            Collection<HiveSourceSplit> splits,
+            Comparable<?> currentReadOffset,
+            Collection<List<String>> seenPartitionsSinceOffset,
+            Collection<Path> pathsAlreadyProcessed) {
+        super(new ArrayList<>(splits), new ArrayList<>(pathsAlreadyProcessed));
         this.currentReadOffset = currentReadOffset;
         this.seenPartitionsSinceOffset =
                 Collections.unmodifiableCollection(new ArrayList<>(seenPartitionsSinceOffset));

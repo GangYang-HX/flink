@@ -53,15 +53,17 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.streaming.api.graph.StreamGraph;
-import org.apache.flink.test.junit5.MiniClusterExtension;
-import org.apache.flink.testutils.junit.SharedObjectsExtension;
+import org.apache.flink.test.util.MiniClusterWithClientResource;
+import org.apache.flink.testutils.junit.SharedObjects;
 import org.apache.flink.testutils.junit.SharedReference;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.DataInputStream;
 import java.io.EOFException;
@@ -78,17 +80,19 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests of switching on or off compaction for the {@link FileSink}. */
-public class FileSinkCompactionSwitchITCase {
+public class FileSinkCompactionSwitchITCase extends TestLogger {
 
     private static final int PARALLELISM = 4;
 
-    @RegisterExtension
-    private static final MiniClusterExtension MINI_CLUSTER_RESOURCE =
-            new MiniClusterExtension(
+    @Rule
+    public final MiniClusterWithClientResource miniClusterResource =
+            new MiniClusterWithClientResource(
                     new MiniClusterResourceConfiguration.Builder()
                             .setNumberTaskManagers(1)
                             .setNumberSlotsPerTaskManager(PARALLELISM)
@@ -104,30 +108,29 @@ public class FileSinkCompactionSwitchITCase {
 
     protected static final int NUM_BUCKETS = 4;
 
-    @TempDir private static java.nio.file.Path tmpDir;
+    @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
 
-    @RegisterExtension
-    private final SharedObjectsExtension sharedObjects = SharedObjectsExtension.create();
+    @Rule public final SharedObjects sharedObjects = SharedObjects.create();
 
     private static final Map<String, CountDownLatch> LATCH_MAP = new ConcurrentHashMap<>();
 
     private String latchId;
 
-    @BeforeEach
-    void setup() {
+    @Before
+    public void setup() {
         this.latchId = UUID.randomUUID().toString();
         // Wait for 3 checkpoints to ensure that the coordinator and all compactors have state
         LATCH_MAP.put(latchId, new CountDownLatch(NUM_SOURCES * 3));
     }
 
-    @AfterEach
-    void teardown() {
+    @After
+    public void teardown() {
         LATCH_MAP.remove(latchId);
     }
 
     @Test
-    void testSwitchNeverEnabledToEnabled(@TempDir java.nio.file.Path tmpPath) throws Exception {
-        String path = tmpPath.toFile().getAbsolutePath();
+    public void testSwitchNeverEnabledToEnabled() throws Exception {
+        String path = TEMPORARY_FOLDER.newFolder().getAbsolutePath();
         FileSink<Integer> originFileSink = createFileSink(path, null, false);
         FileSink<Integer> restoredFileSink =
                 createFileSink(path, createFileCompactStrategy(), false);
@@ -135,8 +138,8 @@ public class FileSinkCompactionSwitchITCase {
     }
 
     @Test
-    void testSwitchDisabledToEnabled(@TempDir java.nio.file.Path tmpPath) throws Exception {
-        String path = tmpPath.toFile().getAbsolutePath();
+    public void testSwitchDisabledToEnabled() throws Exception {
+        String path = TEMPORARY_FOLDER.newFolder().getAbsolutePath();
         FileSink<Integer> originFileSink = createFileSink(path, null, true);
         FileSink<Integer> restoredFileSink =
                 createFileSink(path, createFileCompactStrategy(), false);
@@ -144,17 +147,16 @@ public class FileSinkCompactionSwitchITCase {
     }
 
     @Test
-    void testSwitchEnabledToDisabled(@TempDir java.nio.file.Path tmpPath) throws Exception {
-        String path = tmpPath.toFile().getAbsolutePath();
+    public void testSwitchEnabledToDisabled() throws Exception {
+        String path = TEMPORARY_FOLDER.newFolder().getAbsolutePath();
         FileSink<Integer> originFileSink = createFileSink(path, createFileCompactStrategy(), false);
         FileSink<Integer> restoredFileSink = createFileSink(path, null, true);
         testSwitchingCompaction(path, originFileSink, restoredFileSink);
     }
 
     @Test
-    void testSwitchEnabledToDisabledImproperly(@TempDir java.nio.file.Path tmpPath)
-            throws Exception {
-        String path = tmpPath.toFile().getAbsolutePath();
+    public void testSwitchEnabledToDisabledImproperly() throws Exception {
+        String path = TEMPORARY_FOLDER.newFolder().getAbsolutePath();
         FileSink<Integer> originFileSink = createFileSink(path, createFileCompactStrategy(), false);
         FileSink<Integer> restoredFileSink = createFileSink(path, null, false);
         try {
@@ -168,7 +170,7 @@ public class FileSinkCompactionSwitchITCase {
     private void testSwitchingCompaction(
             String path, FileSink<Integer> originFileSink, FileSink<Integer> restoredFileSink)
             throws Exception {
-        String cpPath = "file://" + tmpDir.toFile().getAbsolutePath();
+        String cpPath = "file://" + TEMPORARY_FOLDER.newFolder().getAbsolutePath();
 
         SharedReference<ConcurrentHashMap<Integer, Integer>> sendCountMap =
                 sharedObjects.add(new ConcurrentHashMap<>());
@@ -192,7 +194,7 @@ public class FileSinkCompactionSwitchITCase {
                     miniCluster
                             .triggerSavepoint(
                                     jobGraph.getJobID(),
-                                    tmpDir.toFile().getAbsolutePath(),
+                                    TEMPORARY_FOLDER.newFolder().getAbsolutePath(),
                                     true,
                                     SavepointFormatType.CANONICAL)
                             .get();
@@ -263,29 +265,29 @@ public class FileSinkCompactionSwitchITCase {
     private static void checkIntegerSequenceSinkOutput(
             String path, Map<Integer, Integer> countMap, int numBuckets, int numSources)
             throws Exception {
-        assertThat(countMap).hasSize(numSources);
+        assertEquals(numSources, countMap.size());
 
         File dir = new File(path);
         String[] subDirNames = dir.list();
-        assertThat(subDirNames).isNotNull();
+        assertNotNull(subDirNames);
 
         Arrays.sort(subDirNames, Comparator.comparingInt(Integer::parseInt));
-        assertThat(subDirNames).hasSize(numBuckets);
+        assertEquals(numBuckets, subDirNames.length);
         for (int i = 0; i < numBuckets; ++i) {
-            assertThat(subDirNames[i]).isEqualTo(Integer.toString(i));
+            assertEquals(Integer.toString(i), subDirNames[i]);
 
             // now check its content
             File bucketDir = new File(path, subDirNames[i]);
-            assertThat(bucketDir)
-                    .isDirectory()
-                    .as(bucketDir.getAbsolutePath() + " Should be a existing directory");
+            assertTrue(
+                    bucketDir.getAbsolutePath() + " Should be a existing directory",
+                    bucketDir.isDirectory());
 
             Map<Integer, Integer> counts = new HashMap<>();
             File[] files = bucketDir.listFiles(f -> !f.getName().startsWith("."));
-            assertThat(files).isNotNull();
+            assertNotNull(files);
 
             for (File file : files) {
-                assertThat(file).isFile();
+                assertTrue(file.isFile());
 
                 try (DataInputStream dataInputStream =
                         new DataInputStream(new FileInputStream(file))) {
@@ -308,7 +310,7 @@ public class FileSinkCompactionSwitchITCase {
                             .mapToInt(num -> num)
                             .max()
                             .getAsInt();
-            assertThat(counts).hasSize(expectedCount);
+            assertEquals(expectedCount, counts.size());
 
             List<Integer> countList = new ArrayList<>(countMap.values());
             Collections.sort(countList);
@@ -321,17 +323,17 @@ public class FileSinkCompactionSwitchITCase {
                                         : (rangeFrom + numBuckets - rangeFrom % numBuckets));
                 int rangeTo = countList.get(j);
                 for (int k = rangeFrom; k < rangeTo; k += numBuckets) {
-                    assertThat(counts.getOrDefault(k, 0).intValue())
-                            .as(
-                                    "The record "
-                                            + k
-                                            + " should occur "
-                                            + (numBuckets - j)
-                                            + " times, "
-                                            + " but only occurs "
-                                            + counts.getOrDefault(k, 0)
-                                            + "time")
-                            .isEqualTo(numBuckets - j);
+                    assertEquals(
+                            "The record "
+                                    + k
+                                    + " should occur "
+                                    + (numBuckets - j)
+                                    + " times, "
+                                    + " but only occurs "
+                                    + counts.getOrDefault(k, 0)
+                                    + "time",
+                            numBuckets - j,
+                            counts.getOrDefault(k, 0).intValue());
                 }
             }
         }

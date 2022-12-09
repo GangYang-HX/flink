@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.jobmaster.factories;
 
-import org.apache.flink.runtime.blocklist.BlocklistUtils;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
@@ -120,8 +119,6 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
                                         jobGraph.getJobID(), shuffleMaster, lookup),
                         new DefaultExecutionDeploymentTracker(),
                         DefaultExecutionDeploymentReconciler::new,
-                        BlocklistUtils.loadBlocklistHandlerFactory(
-                                jobMasterConfiguration.getConfiguration()),
                         initializationTimestamp);
 
         jobMaster.start();

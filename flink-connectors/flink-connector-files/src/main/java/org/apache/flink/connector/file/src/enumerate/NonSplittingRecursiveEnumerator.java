@@ -77,7 +77,6 @@ public class NonSplittingRecursiveEnumerator implements FileEnumerator {
     public Collection<FileSourceSplit> enumerateSplits(Path[] paths, int minDesiredSplits)
             throws IOException {
         final ArrayList<FileSourceSplit> splits = new ArrayList<>();
-
         for (Path path : paths) {
             final FileSystem fs = path.getFileSystem();
             final FileStatus status = fs.getFileStatus(path);

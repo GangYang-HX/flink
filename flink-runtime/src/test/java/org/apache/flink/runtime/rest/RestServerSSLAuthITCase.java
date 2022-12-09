@@ -33,7 +33,6 @@ import org.apache.flink.runtime.webmonitor.RestfulGateway;
 import org.apache.flink.runtime.webmonitor.TestingRestfulGateway;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.TestLogger;
-import org.apache.flink.util.concurrent.Executors;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -70,9 +69,9 @@ public class RestServerSSLAuthITCase extends TestLogger {
     private final Configuration clientConfig;
     private final Configuration serverConfig;
 
-    public RestServerSSLAuthITCase(final Tuple2<Configuration, Configuration> clientServerConfig) {
-        this.clientConfig = clientServerConfig.f0;
-        this.serverConfig = clientServerConfig.f1;
+    public RestServerSSLAuthITCase(final Tuple2<Configuration, Configuration> clinetServerConfig) {
+        this.clientConfig = clinetServerConfig.f0;
+        this.serverConfig = clinetServerConfig.f1;
     }
 
     @Parameterized.Parameters
@@ -115,7 +114,7 @@ public class RestServerSSLAuthITCase extends TestLogger {
                     TestRestServerEndpoint.builder(serverConfig)
                             .withHandler(testVersionHandler.getMessageHeaders(), testVersionHandler)
                             .buildAndStart();
-            restClient = new RestClient(clientConfig, Executors.directExecutor());
+            restClient = new RestServerEndpointITCase.TestRestClient(clientConfig);
 
             CompletableFuture<EmptyResponseBody> response =
                     restClient.sendRequest(

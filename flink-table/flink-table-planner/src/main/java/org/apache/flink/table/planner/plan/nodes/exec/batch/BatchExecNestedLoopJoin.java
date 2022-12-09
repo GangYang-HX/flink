@@ -92,8 +92,7 @@ public class BatchExecNestedLoopJoin extends ExecNodeBase<RowData>
 
         CodeGenOperatorFactory<RowData> operator =
                 new NestedLoopJoinCodeGenerator(
-                                new CodeGeneratorContext(
-                                        config, planner.getFlinkContext().getClassLoader()),
+                                new CodeGeneratorContext(config.getTableConfig()),
                                 singleRowJoin,
                                 leftIsBuild,
                                 leftType,

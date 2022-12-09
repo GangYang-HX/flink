@@ -70,8 +70,7 @@ public class CanalJsonSerializationSchema implements SerializationSchema<RowData
     }
 
     @Override
-    public void open(InitializationContext context) throws Exception {
-        jsonSerializer.open(context);
+    public void open(InitializationContext context) {
         reuse = new GenericRowData(2);
     }
 

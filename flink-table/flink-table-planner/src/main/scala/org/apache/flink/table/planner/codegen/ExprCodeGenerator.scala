@@ -57,6 +57,11 @@ import scala.collection.JavaConversions._
 class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
   extends RexVisitor[GeneratedExpression] {
 
+  // check if nullCheck is enabled when inputs can be null
+  if (nullableInput && !ctx.nullCheck) {
+    throw new CodeGenException("Null check must be enabled if entire rows can be null.")
+  }
+
   /** term of the [[ProcessFunction]]'s context, can be changed when needed */
   var contextTerm = "ctx"
 
@@ -180,7 +185,9 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case TimeIndicatorTypeInfo.PROCTIME_STREAM_MARKER =>
         // attribute is proctime indicator.
         // we use a null literal and generate a timestamp when we need it.
-        generateNullLiteral(new LocalZonedTimestampType(true, TimestampKind.PROCTIME, 3))
+        generateNullLiteral(
+          new LocalZonedTimestampType(true, TimestampKind.PROCTIME, 3),
+          ctx.nullCheck)
       case TimeIndicatorTypeInfo.PROCTIME_BATCH_MARKER =>
         // attribute is proctime field in a batch query.
         // it is initialized with the current time.
@@ -193,7 +200,8 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
     val input2AccessExprs = input2Type match {
       case Some(ti) =>
         input2Mapping
-          .map(idx => generateInputAccess(ctx, ti, input2Term.get, idx, nullableInput, true))
+          .map(
+            idx => generateInputAccess(ctx, ti, input2Term.get, idx, nullableInput, ctx.nullCheck))
           .toSeq
       case None => Seq() // add nothing
     }
@@ -333,7 +341,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
 
     val code = if (returnTypeClazz == classOf[BinaryRowData] && outRowWriter.isDefined) {
       val writer = outRowWriter.get
-      val resetWriter = s"$writer.reset();"
+      val resetWriter = if (ctx.nullCheck) s"$writer.reset();" else s"$writer.resetCursor();"
       val completeWriter: String = s"$writer.complete();"
       s"""
          |$outRowInitCode
@@ -351,15 +359,6 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
   }
 
   override def visitInputRef(inputRef: RexInputRef): GeneratedExpression = {
-    // for specific custom code generation
-    if (input1Type == null) {
-      return GeneratedExpression(
-        inputRef.getName,
-        inputRef.getName + "IsNull",
-        NO_CODE,
-        FlinkTypeFactory.toLogicalType(inputRef.getType))
-    }
-    // for the general cases with a previous call to bindInput()
     val input1Arity = input1Type match {
       case r: RowType => r.getFieldCount
       case _ => 1
@@ -379,7 +378,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       inputRef.getIndex - input1Arity
     }
 
-    generateInputAccess(ctx, input._1, input._2, index, nullableInput, true)
+    generateInputAccess(ctx, input._1, input._2, index, nullableInput, ctx.nullCheck)
   }
 
   override def visitTableInputRef(rexTableInputRef: RexTableInputRef): GeneratedExpression =
@@ -390,14 +389,12 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
     val index = rexFieldAccess.getField.getIndex
     val fieldAccessExpr = generateFieldAccess(ctx, refExpr.resultType, refExpr.resultTerm, index)
 
-    val resultType = fieldAccessExpr.resultType
-
-    val resultTypeTerm = primitiveTypeTermForType(resultType)
-    val defaultValue = primitiveDefaultValue(resultType)
+    val resultTypeTerm = primitiveTypeTermForType(fieldAccessExpr.resultType)
+    val defaultValue = primitiveDefaultValue(fieldAccessExpr.resultType)
     val Seq(resultTerm, nullTerm) =
       ctx.addReusableLocalVariables((resultTypeTerm, "result"), ("boolean", "isNull"))
 
-    val resultCode =
+    val resultCode = if (ctx.nullCheck) {
       s"""
          |${refExpr.code}
          |if (${refExpr.nullTerm}) {
@@ -410,6 +407,13 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
          |  $nullTerm = ${fieldAccessExpr.nullTerm};
          |}
          |""".stripMargin
+    } else {
+      s"""
+         |${refExpr.code}
+         |${fieldAccessExpr.code}
+         |$resultTerm = ${fieldAccessExpr.resultTerm};
+         |""".stripMargin
+    }
 
     GeneratedExpression(resultTerm, nullTerm, resultCode, fieldAccessExpr.resultType)
   }
@@ -482,7 +486,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case (operandLiteral: RexLiteral, 0)
           if operandLiteral.getType.getSqlTypeName == SqlTypeName.NULL &&
             call.getOperator.getReturnTypeInference == ReturnTypes.ARG0 =>
-        generateNullLiteral(resultType)
+        generateNullLiteral(resultType, ctx.nullCheck)
 
       case (o @ _, _) => o.accept(this)
     }
@@ -572,7 +576,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case UNARY_MINUS if isTimeInterval(resultType) =>
         val operand = operands.head
         requireTimeInterval(operand)
-        generateUnaryIntervalPlusMinus(ctx, plus = false, resultType, operand)
+        generateUnaryIntervalPlusMinus(ctx, plus = false, operand)
 
       case UNARY_PLUS if isNumeric(resultType) =>
         val operand = operands.head
@@ -582,64 +586,59 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case UNARY_PLUS if isTimeInterval(resultType) =>
         val operand = operands.head
         requireTimeInterval(operand)
-        generateUnaryIntervalPlusMinus(ctx, plus = true, resultType, operand)
+        generateUnaryIntervalPlusMinus(ctx, plus = true, operand)
 
       // comparison
       case EQUALS =>
         val left = operands.head
         val right = operands(1)
-        generateEquals(ctx, left, right, resultType)
-
-      case IS_DISTINCT_FROM =>
-        val left = operands.head
-        val right = operands(1)
-        generateIsDistinctFrom(ctx, left, right, resultType)
+        generateEquals(ctx, left, right)
 
       case IS_NOT_DISTINCT_FROM =>
         val left = operands.head
         val right = operands(1)
-        generateIsNotDistinctFrom(ctx, left, right, resultType)
+        generateIsNotDistinctFrom(ctx, left, right)
 
       case NOT_EQUALS =>
         val left = operands.head
         val right = operands(1)
-        generateNotEquals(ctx, left, right, resultType)
+        generateNotEquals(ctx, left, right)
 
       case GREATER_THAN =>
         val left = operands.head
         val right = operands(1)
         requireComparable(left)
         requireComparable(right)
-        generateComparison(ctx, ">", left, right, resultType)
+        generateComparison(ctx, ">", left, right)
 
       case GREATER_THAN_OR_EQUAL =>
         val left = operands.head
         val right = operands(1)
         requireComparable(left)
         requireComparable(right)
-        generateComparison(ctx, ">=", left, right, resultType)
+        generateComparison(ctx, ">=", left, right)
 
       case LESS_THAN =>
         val left = operands.head
         val right = operands(1)
         requireComparable(left)
         requireComparable(right)
-        generateComparison(ctx, "<", left, right, resultType)
+        generateComparison(ctx, "<", left, right)
 
       case LESS_THAN_OR_EQUAL =>
         val left = operands.head
         val right = operands(1)
         requireComparable(left)
         requireComparable(right)
-        generateComparison(ctx, "<=", left, right, resultType)
+        generateComparison(ctx, "<=", left, right)
 
       case IS_NULL =>
         val operand = operands.head
-        generateIsNull(operand, resultType)
+        generateIsNull(ctx, operand)
 
       case IS_NOT_NULL =>
         val operand = operands.head
-        generateIsNotNull(operand, resultType)
+        generateIsNotNull(ctx, operand)
 
       // logic
       case AND =>
@@ -647,7 +646,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
           (left: GeneratedExpression, right: GeneratedExpression) =>
             requireBoolean(left)
             requireBoolean(right)
-            generateAnd(left, right, resultType)
+            generateAnd(ctx, left, right)
         }
 
       case OR =>
@@ -655,13 +654,13 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
           (left: GeneratedExpression, right: GeneratedExpression) =>
             requireBoolean(left)
             requireBoolean(right)
-            generateOr(left, right, resultType)
+            generateOr(ctx, left, right)
         }
 
       case NOT =>
         val operand = operands.head
         requireBoolean(operand)
-        generateNot(ctx, operand, resultType)
+        generateNot(ctx, operand)
 
       case CASE =>
         generateIfElse(ctx, operands, resultType)
@@ -669,22 +668,22 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case IS_TRUE =>
         val operand = operands.head
         requireBoolean(operand)
-        generateIsTrue(operand, resultType)
+        generateIsTrue(operand)
 
       case IS_NOT_TRUE =>
         val operand = operands.head
         requireBoolean(operand)
-        generateIsNotTrue(operand, resultType)
+        generateIsNotTrue(operand)
 
       case IS_FALSE =>
         val operand = operands.head
         requireBoolean(operand)
-        generateIsFalse(operand, resultType)
+        generateIsFalse(operand)
 
       case IS_NOT_FALSE =>
         val operand = operands.head
         requireBoolean(operand)
-        generateIsNotFalse(operand, resultType)
+        generateIsNotFalse(operand)
 
       // casting
       case CAST =>
@@ -692,7 +691,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
           ctx,
           operands.head,
           resultType,
-          nullOnFailure = ctx.tableConfig
+          nullOnFailure = ctx.tableConfig.getConfiguration
             .get(ExecutionConfigOptions.TABLE_EXEC_LEGACY_CAST_BEHAVIOUR)
             .isEnabled)
 
@@ -726,7 +725,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
             val array = operands.head
             val index = operands(1)
             requireInteger(index)
-            generateArrayElementAt(array, index)
+            generateArrayElementAt(ctx, array, index)
 
           case LogicalTypeRoot.MAP =>
             val key = operands(1)
@@ -742,11 +741,11 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
         operands.head.resultType match {
           case t: LogicalType if TypeCheckUtils.isArray(t) =>
             val array = operands.head
-            generateArrayCardinality(ctx, array, resultType)
+            generateArrayCardinality(ctx, array)
 
           case t: LogicalType if TypeCheckUtils.isMap(t) =>
             val map = operands.head
-            generateMapCardinality(ctx, map, resultType)
+            generateMapCardinality(ctx, map)
 
           case _ => throw new CodeGenException("Expect an array or a map.")
         }
@@ -754,7 +753,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case ELEMENT =>
         val array = operands.head
         requireArray(array)
-        generateArrayElement(array)
+        generateArrayElement(ctx, array)
 
       case DOT =>
         generateDot(ctx, operands)
@@ -762,7 +761,9 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case PROCTIME =>
         // attribute is proctime indicator.
         // We use a null literal and generate a timestamp when we need it.
-        generateNullLiteral(new LocalZonedTimestampType(true, TimestampKind.PROCTIME, 3))
+        generateNullLiteral(
+          new LocalZonedTimestampType(true, TimestampKind.PROCTIME, 3),
+          ctx.nullCheck)
 
       case PROCTIME_MATERIALIZE =>
         generateProctimeTimestamp(ctx, contextTerm)
@@ -777,7 +778,7 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case JSON_ARRAY => new JsonArrayCallGen(call).generate(ctx, operands, resultType)
 
       case _: SqlThrowExceptionFunction =>
-        val nullValue = generateNullLiteral(resultType)
+        val nullValue = generateNullLiteral(resultType, nullCheck = true)
         val code =
           s"""
              |${operands.map(_.code).mkString("\n")}

@@ -70,8 +70,7 @@ public class TestingSlotPoolServiceBuilder implements SlotPoolServiceFactory {
 
     @Nonnull
     @Override
-    public SlotPoolService createSlotPoolService(
-            @Nonnull JobID jobId, DeclarativeSlotPoolFactory declarativeSlotPoolFactory) {
+    public SlotPoolService createSlotPoolService(@Nonnull JobID jobId) {
         return new TestingSlotPoolService(
                 jobId,
                 startConsumer,

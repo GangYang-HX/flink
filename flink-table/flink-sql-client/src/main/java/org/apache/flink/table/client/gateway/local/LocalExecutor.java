@@ -169,7 +169,7 @@ public class LocalExecutor implements Executor {
 
         List<Operation> operations;
         try {
-            operations = parser.parse(statement);
+            operations = context.wrapClassLoader(() -> parser.parse(statement));
         } catch (Throwable t) {
             throw new SqlExecutionException("Failed to parse statement: " + statement, t);
         }
@@ -186,7 +186,10 @@ public class LocalExecutor implements Executor {
                 (TableEnvironmentInternal) context.getTableEnvironment();
 
         try {
-            return Arrays.asList(tableEnv.getParser().getCompletionHints(statement, position));
+            return context.wrapClassLoader(
+                    () ->
+                            Arrays.asList(
+                                    tableEnv.getParser().getCompletionHints(statement, position)));
         } catch (Throwable t) {
             // catch everything such that the query does not crash the executor
             if (LOG.isDebugEnabled()) {
@@ -203,7 +206,7 @@ public class LocalExecutor implements Executor {
         final TableEnvironmentInternal tEnv =
                 (TableEnvironmentInternal) context.getTableEnvironment();
         try {
-            return tEnv.executeInternal(operation);
+            return context.wrapClassLoader(() -> tEnv.executeInternal(operation));
         } catch (Throwable t) {
             throw new SqlExecutionException(MESSAGE_SQL_EXECUTION_ERROR, t);
         }
@@ -216,7 +219,7 @@ public class LocalExecutor implements Executor {
         final TableEnvironmentInternal tEnv =
                 (TableEnvironmentInternal) context.getTableEnvironment();
         try {
-            return tEnv.executeInternal(operations);
+            return context.wrapClassLoader(() -> tEnv.executeInternal(operations));
         } catch (Throwable t) {
             throw new SqlExecutionException(MESSAGE_SQL_EXECUTION_ERROR, t);
         }
@@ -303,8 +306,20 @@ public class LocalExecutor implements Executor {
     }
 
     @Override
+    public void addJar(String sessionId, String jarUrl) {
+        final SessionContext context = getSessionContext(sessionId);
+        context.addJar(jarUrl);
+    }
+
+    @Override
     public void removeJar(String sessionId, String jarUrl) {
         final SessionContext context = getSessionContext(sessionId);
         context.removeJar(jarUrl);
+    }
+
+    @Override
+    public List<String> listJars(String sessionId) {
+        final SessionContext context = getSessionContext(sessionId);
+        return context.listJars();
     }
 }

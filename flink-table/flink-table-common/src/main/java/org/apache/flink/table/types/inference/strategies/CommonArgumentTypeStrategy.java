@@ -23,7 +23,7 @@ import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.inference.ArgumentTypeStrategy;
 import org.apache.flink.table.types.inference.CallContext;
-import org.apache.flink.table.types.inference.Signature.Argument;
+import org.apache.flink.table.types.inference.Signature;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeMerging;
 import org.apache.flink.table.types.utils.TypeConversions;
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 @Internal
 public final class CommonArgumentTypeStrategy implements ArgumentTypeStrategy {
 
-    private static final Argument COMMON_ARGUMENT = Argument.ofGroup("COMMON");
+    private static final Signature.Argument COMMON_ARGUMENT = Signature.Argument.of("<COMMON>");
 
     private final boolean preserveNullability;
 
@@ -66,7 +66,8 @@ public final class CommonArgumentTypeStrategy implements ArgumentTypeStrategy {
     }
 
     @Override
-    public Argument getExpectedArgument(FunctionDefinition functionDefinition, int argumentPos) {
+    public Signature.Argument getExpectedArgument(
+            FunctionDefinition functionDefinition, int argumentPos) {
         return COMMON_ARGUMENT;
     }
 }

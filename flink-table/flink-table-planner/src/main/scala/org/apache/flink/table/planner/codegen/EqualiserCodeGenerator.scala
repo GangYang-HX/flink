@@ -17,32 +17,32 @@
  */
 package org.apache.flink.table.planner.codegen
 
-import org.apache.flink.configuration.Configuration
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.planner.codegen.CodeGenUtils._
 import org.apache.flink.table.planner.codegen.Indenter.toISC
 import org.apache.flink.table.planner.codegen.calls.ScalarOperatorGens.generateEquals
 import org.apache.flink.table.runtime.generated.{GeneratedRecordEqualiser, RecordEqualiser}
 import org.apache.flink.table.runtime.types.PlannerTypeUtils
-import org.apache.flink.table.types.logical.{BooleanType, DistinctType, LogicalType, RowType}
+import org.apache.flink.table.types.logical.{DistinctType, LogicalType, RowType}
 import org.apache.flink.table.types.logical.LogicalTypeRoot._
 import org.apache.flink.table.types.logical.utils.LogicalTypeChecks.{getFieldTypes, isCompositeType}
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
-class EqualiserCodeGenerator(fieldTypes: Array[LogicalType], classLoader: ClassLoader) {
+class EqualiserCodeGenerator(fieldTypes: Array[LogicalType]) {
 
   private val RECORD_EQUALISER = className[RecordEqualiser]
   private val LEFT_INPUT = "left"
   private val RIGHT_INPUT = "right"
 
-  def this(rowType: RowType, classLoader: ClassLoader) = {
-    this(rowType.getChildren.asScala.toArray, classLoader)
+  def this(rowType: RowType) = {
+    this(rowType.getChildren.asScala.toArray)
   }
 
   def generateRecordEqualiser(name: String): GeneratedRecordEqualiser = {
     // ignore time zone
-    val ctx = new CodeGeneratorContext(new Configuration, classLoader)
+    val ctx = CodeGeneratorContext(new TableConfig)
     val className = newName(name)
 
     val equalsMethodCodes = for (idx <- fieldTypes.indices) yield generateEqualsMethod(ctx, idx)
@@ -79,7 +79,11 @@ class EqualiserCodeGenerator(fieldTypes: Array[LogicalType], classLoader: ClassL
         }
       """.stripMargin
 
-    new GeneratedRecordEqualiser(className, classCode, ctx.references.toArray, ctx.tableConfig)
+    new GeneratedRecordEqualiser(
+      className,
+      classCode,
+      ctx.references.toArray,
+      ctx.tableConfig.getConfiguration)
   }
 
   private def getEqualsMethodName(idx: Int) = s"""equalsAtIndex$idx"""
@@ -140,8 +144,7 @@ class EqualiserCodeGenerator(fieldTypes: Array[LogicalType], classLoader: ClassL
     if (isInternalPrimitive(fieldType)) {
       ("", s"$leftFieldTerm == $rightFieldTerm")
     } else if (isCompositeType(fieldType)) {
-      val equaliserGenerator =
-        new EqualiserCodeGenerator(getFieldTypes(fieldType).asScala.toArray, ctx.classLoader)
+      val equaliserGenerator = new EqualiserCodeGenerator(getFieldTypes(fieldType).asScala.toArray)
       val generatedEqualiser = equaliserGenerator.generateRecordEqualiser("fieldGeneratedEqualiser")
       val generatedEqualiserTerm =
         ctx.addReusableObject(generatedEqualiser, "fieldGeneratedEqualiser")
@@ -157,8 +160,7 @@ class EqualiserCodeGenerator(fieldTypes: Array[LogicalType], classLoader: ClassL
     } else {
       val left = GeneratedExpression(leftFieldTerm, leftNullTerm, "", fieldType)
       val right = GeneratedExpression(rightFieldTerm, rightNullTerm, "", fieldType)
-      val resultType = new BooleanType(fieldType.isNullable)
-      val gen = generateEquals(ctx, left, right, resultType)
+      val gen = generateEquals(ctx, left, right)
       (gen.code, gen.resultTerm)
     }
   }

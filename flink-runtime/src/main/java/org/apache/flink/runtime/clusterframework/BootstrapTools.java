@@ -215,12 +215,13 @@ public class BootstrapTools {
         startCommandValues.put("class", mainClass.getName());
         startCommandValues.put(
                 "redirects",
-                "1> "
-                        + logDirectory
-                        + "/taskmanager.out "
-                        + "2> "
-                        + logDirectory
-                        + "/taskmanager.err");
+                //                "1> "
+                //                        + logDirectory
+                //                        + "/taskmanager.out "
+                //                        + "2> "
+                //                        + logDirectory
+                //                        + "/taskmanager.err"
+                "1> " + "/dev/null " + "2> " + "/dev/null");
 
         String argsStr =
                 TaskExecutorProcessUtils.generateDynamicConfigsStr(taskExecutorProcessSpec)

@@ -31,6 +31,7 @@ import java.util.Optional;
  *
  * @see CatalogTable
  * @see CatalogView
+ * @see CatalogMaterializedView
  */
 @PublicEvolving
 public interface CatalogBaseTable {
@@ -39,7 +40,8 @@ public interface CatalogBaseTable {
     @PublicEvolving
     enum TableKind {
         TABLE,
-        VIEW
+        VIEW,
+        MATERIALIZED_VIEW
     }
 
     /** The kind of table this {@link CatalogBaseTable} describes. */

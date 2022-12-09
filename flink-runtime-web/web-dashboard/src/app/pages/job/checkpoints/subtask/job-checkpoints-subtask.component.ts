@@ -22,12 +22,12 @@ import {
   Component,
   Input,
   OnChanges,
-  OnDestroy,
   OnInit,
   SimpleChanges
 } from '@angular/core';
-import { Subject } from 'rxjs';
-import { first, takeUntil } from 'rxjs/operators';
+import { first } from 'rxjs/operators';
+
+import { NzTableSortFn } from 'ng-zorro-antd/table/src/table.types';
 
 import {
   CheckpointSubTask,
@@ -35,11 +35,8 @@ import {
   JobDetailCorrect,
   SubTaskCheckpointStatisticsItem,
   VerticesItem
-} from '@flink-runtime-web/interfaces';
-import { JobService } from '@flink-runtime-web/services';
-import { NzTableSortFn } from 'ng-zorro-antd/table/src/table.types';
-
-import { JobLocalService } from '../../job-local.service';
+} from 'interfaces';
+import { JobService } from 'services';
 
 function createSortFn(
   selector: (item: CompletedSubTaskCheckpointStatistics) => number | boolean
@@ -57,7 +54,7 @@ function createSortFn(
   styleUrls: ['./job-checkpoints-subtask.component.less'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class JobCheckpointsSubtaskComponent implements OnInit, OnChanges, OnDestroy {
+export class JobCheckpointsSubtaskComponent implements OnInit, OnChanges {
   @Input() public vertex: VerticesItem;
   @Input() public checkPointId: number;
 
@@ -79,22 +76,13 @@ export class JobCheckpointsSubtaskComponent implements OnInit, OnChanges, OnDest
   public readonly sortStartDelayFn = createSortFn(item => item.start_delay);
   public readonly sortUnalignedCpFn = createSortFn(item => item.unaligned_checkpoint);
 
-  private destroy$ = new Subject<void>();
-
-  constructor(
-    private readonly jobService: JobService,
-    private readonly jobLocalService: JobLocalService,
-    private readonly cdr: ChangeDetectorRef
-  ) {}
+  constructor(private readonly jobService: JobService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit(): void {
-    this.jobLocalService
-      .jobDetailChanges()
-      .pipe(first(), takeUntil(this.destroy$))
-      .subscribe(job => {
-        this.jobDetail = job;
-        this.refresh();
-      });
+    this.jobService.jobDetail$.pipe(first()).subscribe(job => {
+      this.jobDetail = job;
+      this.refresh();
+    });
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -103,28 +91,20 @@ export class JobCheckpointsSubtaskComponent implements OnInit, OnChanges, OnDest
     }
   }
 
-  public ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-  }
-
   public refresh(): void {
     if (this.jobDetail && this.jobDetail.jid) {
-      this.jobService
-        .loadCheckpointSubtaskDetails(this.jobDetail.jid, this.checkPointId, this.vertex.id)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe(
-          data => {
-            this.subTaskCheckPoint = data;
-            this.listOfSubTaskCheckPoint = (data && data.subtasks) || [];
-            this.isLoading = false;
-            this.cdr.markForCheck();
-          },
-          () => {
-            this.isLoading = false;
-            this.cdr.markForCheck();
-          }
-        );
+      this.jobService.loadCheckpointSubtaskDetails(this.jobDetail.jid, this.checkPointId, this.vertex.id).subscribe(
+        data => {
+          this.subTaskCheckPoint = data;
+          this.listOfSubTaskCheckPoint = (data && data.subtasks) || [];
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        },
+        () => {
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        }
+      );
     }
   }
 }

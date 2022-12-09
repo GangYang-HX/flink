@@ -75,7 +75,7 @@ import org.apache.flink.runtime.rest.handler.async.OperationResult;
 import org.apache.flink.runtime.rest.handler.job.AsynchronousJobOperationKey;
 import org.apache.flink.runtime.rest.messages.ThreadDumpInfo;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
-import org.apache.flink.runtime.rpc.FencedRpcEndpoint;
+import org.apache.flink.runtime.rpc.PermanentlyFencedRpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.rpc.RpcServiceUtils;
 import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
@@ -115,7 +115,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * job submissions, persisting them, spawning JobManagers to execute the jobs and to recover them in
  * case of a master failure. Furthermore, it knows about the state of the Flink session cluster.
  */
-public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId>
+public abstract class Dispatcher extends PermanentlyFencedRpcEndpoint<DispatcherId>
         implements DispatcherGateway {
 
     public static final String DISPATCHER_NAME = "dispatcher";
@@ -166,6 +166,8 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId>
 
     private final ResourceCleaner localResourceCleaner;
     private final ResourceCleaner globalResourceCleaner;
+
+    private final long startTimestamp;
 
     /** Enum to distinguish between initial job submission and re-submission for recovery. */
     protected enum ExecutionType {
@@ -278,6 +280,8 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId>
                 resourceCleanerFactory.createLocalResourceCleaner(this.getMainThreadExecutor());
         this.globalResourceCleaner =
                 resourceCleanerFactory.createGlobalResourceCleaner(this.getMainThreadExecutor());
+
+        this.startTimestamp = System.currentTimeMillis();
     }
 
     // ------------------------------------------------------
@@ -1304,6 +1308,9 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId>
                 // thread safeguard being triggered. For metrics, we can afford to be not 100%
                 // accurate
                 () -> (long) jobManagerRunnerRegistry.getWrappedDelegate().size());
+
+        jobManagerMetricGroup.gauge(
+                MetricNames.UPTIME, () -> Math.max(System.currentTimeMillis() - startTimestamp, 0));
     }
 
     public CompletableFuture<Void> onRemovedJobGraph(JobID jobId) {

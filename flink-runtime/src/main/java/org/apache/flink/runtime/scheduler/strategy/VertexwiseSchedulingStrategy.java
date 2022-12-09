@@ -20,16 +20,18 @@ package org.apache.flink.runtime.scheduler.strategy;
 
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
+import org.apache.flink.runtime.scheduler.DeploymentOption;
+import org.apache.flink.runtime.scheduler.ExecutionVertexDeploymentOption;
 import org.apache.flink.runtime.scheduler.SchedulerOperations;
 import org.apache.flink.runtime.scheduler.SchedulingTopologyListener;
 import org.apache.flink.util.IterableUtils;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -48,6 +50,8 @@ public class VertexwiseSchedulingStrategy
     private final SchedulerOperations schedulerOperations;
 
     private final SchedulingTopology schedulingTopology;
+
+    private final DeploymentOption deploymentOption = new DeploymentOption(false);
 
     private final Set<ExecutionVertexID> newVertices = new HashSet<>();
 
@@ -85,9 +89,11 @@ public class VertexwiseSchedulingStrategy
 
             Set<ExecutionVertexID> consumerVertices =
                     IterableUtils.toStream(executionVertex.getProducedResults())
-                            .map(SchedulingResultPartition::getConsumerVertexGroups)
-                            .flatMap(Collection::stream)
-                            .flatMap(IterableUtils::toStream)
+                            .map(SchedulingResultPartition::getConsumerVertexGroup)
+                            .filter(Optional::isPresent)
+                            .flatMap(
+                                    consumerVertexGroup ->
+                                            IterableUtils.toStream(consumerVertexGroup.get()))
                             .collect(Collectors.toSet());
 
             maybeScheduleVertices(consumerVertices);
@@ -135,12 +141,14 @@ public class VertexwiseSchedulingStrategy
         if (verticesToDeploy.isEmpty()) {
             return;
         }
-        final List<ExecutionVertexID> sortedVerticesToDeploy =
-                SchedulingStrategyUtils.sortExecutionVerticesInTopologicalOrder(
-                        schedulingTopology, verticesToDeploy);
+        final List<ExecutionVertexDeploymentOption> vertexDeploymentOptions =
+                SchedulingStrategyUtils.createExecutionVertexDeploymentOptionsInTopologicalOrder(
+                        schedulingTopology, verticesToDeploy, id -> deploymentOption);
 
-        sortedVerticesToDeploy.forEach(
-                id -> schedulerOperations.allocateSlotsAndDeploy(Collections.singletonList(id)));
+        vertexDeploymentOptions.forEach(
+                option ->
+                        schedulerOperations.allocateSlotsAndDeploy(
+                                Collections.singletonList(option)));
     }
 
     private boolean areVertexInputsAllConsumable(

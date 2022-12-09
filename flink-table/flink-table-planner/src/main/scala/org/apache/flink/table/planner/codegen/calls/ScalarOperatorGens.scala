@@ -29,7 +29,6 @@ import org.apache.flink.table.planner.codegen.GeneratedExpression.{ALWAYS_NULL, 
 import org.apache.flink.table.planner.codegen.GenerateUtils._
 import org.apache.flink.table.planner.functions.casting.{CastRule, CastRuleProvider, CodeGeneratorCastRule, ExpressionCodeGeneratorCastRule}
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil.toScala
-import org.apache.flink.table.planner.utils.TableConfigUtils
 import org.apache.flink.table.runtime.functions.SqlFunctionUtils
 import org.apache.flink.table.runtime.types.PlannerTypeUtils
 import org.apache.flink.table.runtime.types.PlannerTypeUtils.{isInteroperable, isPrimitive}
@@ -43,6 +42,7 @@ import org.apache.flink.table.utils.DateTimeUtils.MILLIS_PER_DAY
 import org.apache.flink.util.Preconditions.checkArgument
 
 import java.time.ZoneId
+import java.util.Arrays.asList
 
 import scala.collection.JavaConversions._
 
@@ -313,10 +313,9 @@ object ScalarOperatorGens {
   def generateUnaryIntervalPlusMinus(
       ctx: CodeGeneratorContext,
       plus: Boolean,
-      resultType: LogicalType,
       operand: GeneratedExpression): GeneratedExpression = {
     val operator = if (plus) "+" else "-"
-    generateUnaryArithmeticOperator(ctx, operator, resultType, operand)
+    generateUnaryArithmeticOperator(ctx, operator, operand.resultType, operand)
   }
 
   // ----------------------------------------------------------------------------------------
@@ -348,47 +347,42 @@ object ScalarOperatorGens {
   def generateEquals(
       ctx: CodeGeneratorContext,
       left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+      right: GeneratedExpression): GeneratedExpression = {
     checkImplicitConversionValidity(left, right)
     val canEqual = isInteroperable(left.resultType, right.resultType)
     if (isCharacterString(left.resultType) && isCharacterString(right.resultType)) {
-      generateOperatorIfNotNull(ctx, resultType, left, right)(
-        (leftTerm, rightTerm) => s"$leftTerm.equals($rightTerm)")
+      generateOperatorIfNotNull(ctx, new BooleanType(), left, right) {
+        (leftTerm, rightTerm) => s"$leftTerm.equals($rightTerm)"
+      }
     }
     // numeric types
     else if (isNumeric(left.resultType) && isNumeric(right.resultType)) {
-      generateComparison(ctx, "==", left, right, resultType)
+      generateComparison(ctx, "==", left, right)
     }
     // array types
     else if (isArray(left.resultType) && canEqual) {
-      generateArrayComparison(ctx, left, right, resultType)
+      generateArrayComparison(ctx, left, right)
     }
     // map types
     else if (isMap(left.resultType) && canEqual) {
       val mapType = left.resultType.asInstanceOf[MapType]
-      generateMapComparison(ctx, left, right, mapType.getKeyType, mapType.getValueType, resultType)
+      generateMapComparison(ctx, left, right, mapType.getKeyType, mapType.getValueType)
     }
     // multiset types
     else if (isMultiset(left.resultType) && canEqual) {
       val multisetType = left.resultType.asInstanceOf[MultisetType]
-      generateMapComparison(
-        ctx,
-        left,
-        right,
-        multisetType.getElementType,
-        new IntType(false),
-        resultType)
+      generateMapComparison(ctx, left, right, multisetType.getElementType, new IntType(false))
     }
     // comparable types of same type
     else if (isComparable(left.resultType) && canEqual) {
-      generateComparison(ctx, "==", left, right, resultType)
+      generateComparison(ctx, "==", left, right)
     }
     // generic types of same type
     else if (isRaw(left.resultType) && canEqual) {
       val Seq(resultTerm, nullTerm) = newNames("result", "isNull")
       val genericSer = ctx.addReusableTypeSerializer(left.resultType)
       val ser = s"$genericSer.getInnerSerializer()"
+      val resultType = new BooleanType()
       val code =
         s"""
            |${left.code}
@@ -399,8 +393,7 @@ object ScalarOperatorGens {
            |  ${left.resultTerm}.ensureMaterialized($ser);
            |  ${right.resultTerm}.ensureMaterialized($ser);
            |  $resultTerm =
-           |    ${left.resultTerm}.getBinarySection().
-           |    equals(${right.resultTerm}.getBinarySection());
+           |    ${left.resultTerm}.getBinarySection().equals(${right.resultTerm}.getBinarySection());
            |}
            |""".stripMargin
       GeneratedExpression(resultTerm, nullTerm, code, resultType)
@@ -409,28 +402,20 @@ object ScalarOperatorGens {
     // for performance, we cast literal string to literal time.
     else if (isTimePoint(left.resultType) && isCharacterString(right.resultType)) {
       if (right.literal) {
-        generateEquals(ctx, left, generateCastLiteral(ctx, right, left.resultType), resultType)
+        generateEquals(ctx, left, generateCastLiteral(ctx, right, left.resultType))
       } else {
-        generateEquals(
-          ctx,
-          left,
-          generateCast(ctx, right, left.resultType, nullOnFailure = true),
-          resultType)
+        generateEquals(ctx, left, generateCast(ctx, right, left.resultType, nullOnFailure = true))
       }
     } else if (isTimePoint(right.resultType) && isCharacterString(left.resultType)) {
       if (left.literal) {
-        generateEquals(ctx, generateCastLiteral(ctx, left, right.resultType), right, resultType)
+        generateEquals(ctx, generateCastLiteral(ctx, left, right.resultType), right)
       } else {
-        generateEquals(
-          ctx,
-          generateCast(ctx, left, right.resultType, nullOnFailure = true),
-          right,
-          resultType)
+        generateEquals(ctx, generateCast(ctx, left, right.resultType, nullOnFailure = true), right)
       }
     }
     // non comparable types
     else {
-      generateOperatorIfNotNull(ctx, resultType, left, right) {
+      generateOperatorIfNotNull(ctx, new BooleanType(), left, right) {
         if (isReference(left.resultType)) {
           (leftTerm, rightTerm) => s"$leftTerm.equals($rightTerm)"
         } else if (isReference(right.resultType)) {
@@ -444,85 +429,65 @@ object ScalarOperatorGens {
     }
   }
 
-  def generateIsDistinctFrom(
-      ctx: CodeGeneratorContext,
-      left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
-    generateAnd(
-      generateOr(
-        generateIsNotNull(left, new BooleanType(false)),
-        generateIsNotNull(right, new BooleanType(false)),
-        resultType),
-      generateIsNotTrue(generateEquals(ctx, left, right, resultType), new BooleanType(false)),
-      resultType
-    )
-  }
-
   def generateIsNotDistinctFrom(
       ctx: CodeGeneratorContext,
       left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+      right: GeneratedExpression): GeneratedExpression = {
     generateOr(
-      generateAnd(
-        generateIsNull(left, new BooleanType(false)),
-        generateIsNull(right, new BooleanType(false)),
-        resultType),
-      generateIsTrue(generateEquals(ctx, left, right, resultType), new BooleanType(false)),
-      resultType
-    )
+      ctx,
+      generateAnd(ctx, generateIsNull(ctx, left), generateIsNull(ctx, right)),
+      generateEquals(ctx, left, right))
   }
 
   def generateNotEquals(
       ctx: CodeGeneratorContext,
       left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+      right: GeneratedExpression): GeneratedExpression = {
     checkImplicitConversionValidity(left, right)
     if (isCharacterString(left.resultType) && isCharacterString(right.resultType)) {
-      generateOperatorIfNotNull(ctx, resultType, left, right)(
-        (leftTerm, rightTerm) => s"!$leftTerm.equals($rightTerm)")
+      generateOperatorIfNotNull(ctx, new BooleanType(), left, right) {
+        (leftTerm, rightTerm) => s"!$leftTerm.equals($rightTerm)"
+      }
     }
     // numeric types
     else if (isNumeric(left.resultType) && isNumeric(right.resultType)) {
-      generateComparison(ctx, "!=", left, right, resultType)
+      generateComparison(ctx, "!=", left, right)
     }
     // temporal types
     else if (
       isTemporal(left.resultType) &&
       isInteroperable(left.resultType, right.resultType)
     ) {
-      generateComparison(ctx, "!=", left, right, resultType)
+      generateComparison(ctx, "!=", left, right)
     }
     // array types
     else if (isArray(left.resultType) && isInteroperable(left.resultType, right.resultType)) {
-      val equalsExpr = generateEquals(ctx, left, right, resultType)
+      val equalsExpr = generateEquals(ctx, left, right)
       GeneratedExpression(
         s"(!${equalsExpr.resultTerm})",
         equalsExpr.nullTerm,
         equalsExpr.code,
-        resultType)
+        new BooleanType())
     }
     // map types
     else if (isMap(left.resultType) && isInteroperable(left.resultType, right.resultType)) {
-      val equalsExpr = generateEquals(ctx, left, right, resultType)
+      val equalsExpr = generateEquals(ctx, left, right)
       GeneratedExpression(
         s"(!${equalsExpr.resultTerm})",
         equalsExpr.nullTerm,
         equalsExpr.code,
-        resultType)
+        new BooleanType())
     }
     // comparable types
     else if (
       isComparable(left.resultType) &&
       isInteroperable(left.resultType, right.resultType)
     ) {
-      generateComparison(ctx, "!=", left, right, resultType)
+      generateComparison(ctx, "!=", left, right)
     }
     // non-comparable types
     else {
-      generateOperatorIfNotNull(ctx, resultType, left, right) {
+      generateOperatorIfNotNull(ctx, new BooleanType(), left, right) {
         if (isReference(left.resultType)) {
           (leftTerm, rightTerm) => s"!($leftTerm.equals($rightTerm))"
         } else if (isReference(right.resultType)) {
@@ -541,9 +506,8 @@ object ScalarOperatorGens {
       ctx: CodeGeneratorContext,
       operator: String,
       left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
-    generateOperatorIfNotNull(ctx, resultType, left, right) {
+      right: GeneratedExpression): GeneratedExpression = {
+    generateOperatorIfNotNull(ctx, new BooleanType(), left, right) {
       // either side is decimal
       if (isDecimal(left.resultType) || isDecimal(right.resultType)) {
         (leftTerm, rightTerm) =>
@@ -608,53 +572,55 @@ object ScalarOperatorGens {
     }
   }
 
-  def generateIsNull(operand: GeneratedExpression, resultType: LogicalType): GeneratedExpression = {
-    if (operand.resultType.isNullable) {
-      GeneratedExpression(operand.nullTerm, NEVER_NULL, operand.code, resultType)
-    } else if (isReference(operand.resultType)) {
+  def generateIsNull(
+      ctx: CodeGeneratorContext,
+      operand: GeneratedExpression): GeneratedExpression = {
+    if (ctx.nullCheck) {
+      GeneratedExpression(operand.nullTerm, NEVER_NULL, operand.code, new BooleanType(false))
+    } else if (!ctx.nullCheck && isReference(operand.resultType)) {
       val resultTerm = newName("isNull")
       val operatorCode =
         s"""
            |${operand.code}
            |boolean $resultTerm = ${operand.resultTerm} == null;
            |""".stripMargin
-      GeneratedExpression(resultTerm, NEVER_NULL, operatorCode, resultType)
+      GeneratedExpression(resultTerm, NEVER_NULL, operatorCode, new BooleanType(false))
     } else {
-      GeneratedExpression("false", NEVER_NULL, operand.code, resultType)
+      GeneratedExpression("false", NEVER_NULL, operand.code, new BooleanType(false))
     }
   }
 
   def generateIsNotNull(
-      operand: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
-    if (operand.resultType.isNullable) {
+      ctx: CodeGeneratorContext,
+      operand: GeneratedExpression): GeneratedExpression = {
+    if (ctx.nullCheck) {
       val resultTerm = newName("result")
       val operatorCode =
         s"""
            |${operand.code}
            |boolean $resultTerm = !${operand.nullTerm};
            |""".stripMargin.trim
-      GeneratedExpression(resultTerm, NEVER_NULL, operatorCode, resultType)
-    } else if (isReference(operand.resultType)) {
+      GeneratedExpression(resultTerm, NEVER_NULL, operatorCode, new BooleanType(false))
+    } else if (!ctx.nullCheck && isReference(operand.resultType)) {
       val resultTerm = newName("result")
       val operatorCode =
         s"""
            |${operand.code}
            |boolean $resultTerm = ${operand.resultTerm} != null;
            |""".stripMargin.trim
-      GeneratedExpression(resultTerm, NEVER_NULL, operatorCode, resultType)
+      GeneratedExpression(resultTerm, NEVER_NULL, operatorCode, new BooleanType(false))
     } else {
-      GeneratedExpression("true", NEVER_NULL, operand.code, resultType)
+      GeneratedExpression("true", NEVER_NULL, operand.code, new BooleanType(false))
     }
   }
 
   def generateAnd(
+      ctx: CodeGeneratorContext,
       left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+      right: GeneratedExpression): GeneratedExpression = {
     val Seq(resultTerm, nullTerm) = newNames("result", "isNull")
 
-    val operatorCode =
+    val operatorCode = if (ctx.nullCheck) {
       // Three-valued logic:
       // no Unknown -> Two-valued logic
       // True && Unknown -> Unknown
@@ -698,17 +664,27 @@ object ScalarOperatorGens {
          |  }
          |}
        """.stripMargin.trim
+    } else {
+      s"""
+         |${left.code}
+         |boolean $resultTerm = false;
+         |if (${left.resultTerm}) {
+         |  ${right.code}
+         |  $resultTerm = ${right.resultTerm};
+         |}
+         |""".stripMargin.trim
+    }
 
-    GeneratedExpression(resultTerm, nullTerm, operatorCode, resultType)
+    GeneratedExpression(resultTerm, nullTerm, operatorCode, new BooleanType())
   }
 
   def generateOr(
+      ctx: CodeGeneratorContext,
       left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+      right: GeneratedExpression): GeneratedExpression = {
     val Seq(resultTerm, nullTerm) = newNames("result", "isNull")
 
-    val operatorCode =
+    val operatorCode = if (ctx.nullCheck) {
       // Three-valued logic:
       // no Unknown -> Two-valued logic
       // True || Unknown -> True
@@ -752,56 +728,59 @@ object ScalarOperatorGens {
          |  }
          |}
          |""".stripMargin.trim
+    } else {
+      s"""
+         |${left.code}
+         |boolean $resultTerm = true;
+         |if (!${left.resultTerm}) {
+         |  ${right.code}
+         |  $resultTerm = ${right.resultTerm};
+         |}
+         |""".stripMargin.trim
+    }
 
-    GeneratedExpression(resultTerm, nullTerm, operatorCode, resultType)
+    GeneratedExpression(resultTerm, nullTerm, operatorCode, new BooleanType())
   }
 
-  def generateNot(
-      ctx: CodeGeneratorContext,
-      operand: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+  def generateNot(ctx: CodeGeneratorContext, operand: GeneratedExpression): GeneratedExpression = {
     // Three-valued logic:
     // no Unknown -> Two-valued logic
     // Unknown -> Unknown
-    generateUnaryOperatorIfNotNull(ctx, resultType, operand)(operandTerm => s"!($operandTerm)")
+    generateUnaryOperatorIfNotNull(ctx, new BooleanType(), operand) {
+      operandTerm => s"!($operandTerm)"
+    }
   }
 
-  def generateIsTrue(operand: GeneratedExpression, resultType: LogicalType): GeneratedExpression = {
+  def generateIsTrue(operand: GeneratedExpression): GeneratedExpression = {
     GeneratedExpression(
       operand.resultTerm, // unknown is always false by default
       GeneratedExpression.NEVER_NULL,
       operand.code,
-      resultType)
+      new BooleanType())
   }
 
-  def generateIsNotTrue(
-      operand: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+  def generateIsNotTrue(operand: GeneratedExpression): GeneratedExpression = {
     GeneratedExpression(
       s"(!${operand.resultTerm})", // unknown is always false by default
       GeneratedExpression.NEVER_NULL,
       operand.code,
-      resultType)
+      new BooleanType())
   }
 
-  def generateIsFalse(
-      operand: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+  def generateIsFalse(operand: GeneratedExpression): GeneratedExpression = {
     GeneratedExpression(
       s"(!${operand.resultTerm} && !${operand.nullTerm})",
       GeneratedExpression.NEVER_NULL,
       operand.code,
-      resultType)
+      new BooleanType())
   }
 
-  def generateIsNotFalse(
-      operand: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
+  def generateIsNotFalse(operand: GeneratedExpression): GeneratedExpression = {
     GeneratedExpression(
       s"(${operand.resultTerm} || ${operand.nullTerm})",
       GeneratedExpression.NEVER_NULL,
       operand.code,
-      resultType)
+      new BooleanType())
   }
 
   def generateReinterpret(
@@ -861,13 +840,18 @@ object ScalarOperatorGens {
     ctx.addReusableHeaderComment(
       s"Using option '${ExecutionConfigOptions.TABLE_EXEC_LEGACY_CAST_BEHAVIOUR.key()}':" +
         s"'${isLegacyCastBehaviourEnabled(ctx)}'")
-    ctx.addReusableHeaderComment("Timezone: " + ctx.tableConfig)
+    ctx.addReusableHeaderComment("Timezone: " + ctx.tableConfig.getLocalTimeZone)
 
     // Try to use the new cast rules
     val rule = CastRuleProvider.resolve(operand.resultType, targetType)
     rule match {
       case codeGeneratorCastRule: CodeGeneratorCastRule[_, _] =>
-        val inputType = operand.resultType.copy(true)
+        // Make sure to force nullability checks in case ctx.nullCheck is enabled
+        val inputType = if (ctx.nullCheck) {
+          operand.resultType.copy(true)
+        } else {
+          operand.resultType
+        }
 
         // Generate the code block
         val castCodeBlock = codeGeneratorCastRule.generateCodeBlock(
@@ -968,7 +952,7 @@ object ScalarOperatorGens {
       val resultTypeTerm = primitiveTypeTermForType(resultType)
       val defaultValue = primitiveDefaultValue(resultType)
 
-      val operatorCode =
+      val operatorCode = if (ctx.nullCheck) {
         s"""
            |${condition.code}
            |$resultTypeTerm $resultTerm = $defaultValue;
@@ -988,6 +972,20 @@ object ScalarOperatorGens {
            |  }
            |}
            |""".stripMargin.trim
+      } else {
+        s"""
+           |${condition.code}
+           |$resultTypeTerm $resultTerm;
+           |if (${condition.resultTerm}) {
+           |  ${trueAction.code}
+           |  $resultTerm = ${trueAction.resultTerm};
+           |}
+           |else {
+           |  ${falseAction.code}
+           |  $resultTerm = ${falseAction.resultTerm};
+           |}
+           |""".stripMargin.trim
+      }
 
       GeneratedExpression(resultTerm, nullTerm, operatorCode, resultType)
     }
@@ -1019,7 +1017,7 @@ object ScalarOperatorGens {
     val resultTypeTerm = primitiveTypeTermForType(access.resultType)
     val defaultValue = primitiveDefaultValue(access.resultType)
 
-    val resultCode =
+    val resultCode = if (ctx.nullCheck) {
       s"""
          |${operands.map(_.code).mkString("\n")}
          |$resultTypeTerm $resultTerm;
@@ -1034,6 +1032,13 @@ object ScalarOperatorGens {
          |  $nullTerm = ${access.nullTerm};
          |}
          |""".stripMargin
+    } else {
+      s"""
+         |${operands.map(_.code).mkString("\n")}
+         |${access.code}
+         |$resultTypeTerm $resultTerm = ${access.resultTerm};
+         |""".stripMargin
+    }
 
     GeneratedExpression(
       resultTerm,
@@ -1078,7 +1083,7 @@ object ScalarOperatorGens {
               val tpe = fieldTypes(idx)
               if (element.literal) {
                 ""
-              } else if (tpe.isNullable) {
+              } else if (ctx.nullCheck) {
                 s"""
                    |${element.code}
                    |if (${element.nullTerm}) {
@@ -1127,7 +1132,7 @@ object ScalarOperatorGens {
       .map {
         case (element, idx) =>
           val tpe = fieldTypes(idx)
-          if (tpe.isNullable) {
+          if (ctx.nullCheck) {
             s"""
                |${element.code}
                |if (${element.nullTerm}) {
@@ -1184,7 +1189,7 @@ object ScalarOperatorGens {
             }
         }
         val array = generateLiteralArray(ctx, arrayType, mapped)
-        val code = generatePrimitiveArrayUpdateCode(array.resultTerm, elementType, elements)
+        val code = generatePrimitiveArrayUpdateCode(ctx, array.resultTerm, elementType, elements)
         GeneratedExpression(array.resultTerm, GeneratedExpression.NEVER_NULL, code, arrayType)
       } else {
         // generate general array
@@ -1194,6 +1199,7 @@ object ScalarOperatorGens {
   }
 
   private def generatePrimitiveArrayUpdateCode(
+      ctx: CodeGeneratorContext,
       arrayTerm: String,
       elementType: LogicalType,
       elements: Seq[GeneratedExpression]): String = {
@@ -1202,7 +1208,7 @@ object ScalarOperatorGens {
         case (element, idx) =>
           if (element.literal) {
             ""
-          } else if (elementType.isNullable) {
+          } else if (ctx.nullCheck) {
             s"""
                |${element.code}
                |if (${element.nullTerm}) {
@@ -1279,6 +1285,7 @@ object ScalarOperatorGens {
    *   [[org.apache.calcite.sql.fun.SqlStdOperatorTable.ITEM]]
    */
   def generateArrayElementAt(
+      ctx: CodeGeneratorContext,
       array: GeneratedExpression,
       index: GeneratedExpression): GeneratedExpression = {
     val Seq(resultTerm, nullTerm) = newNames("result", "isNull")
@@ -1308,7 +1315,9 @@ object ScalarOperatorGens {
     GeneratedExpression(resultTerm, nullTerm, arrayAccessCode, componentInfo)
   }
 
-  def generateArrayElement(array: GeneratedExpression): GeneratedExpression = {
+  def generateArrayElement(
+      ctx: CodeGeneratorContext,
+      array: GeneratedExpression): GeneratedExpression = {
     val Seq(resultTerm, nullTerm) = newNames("result", "isNull")
     val resultType = array.resultType.asInstanceOf[ArrayType].getElementType
     val resultTypeTerm = primitiveTypeTermForType(resultType)
@@ -1341,9 +1350,8 @@ object ScalarOperatorGens {
 
   def generateArrayCardinality(
       ctx: CodeGeneratorContext,
-      array: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
-    generateUnaryOperatorIfNotNull(ctx, resultType, array)(_ => s"${array.resultTerm}.size()")
+      array: GeneratedExpression): GeneratedExpression = {
+    generateUnaryOperatorIfNotNull(ctx, new IntType(), array)(_ => s"${array.resultTerm}.size()")
   }
 
   /**
@@ -1412,27 +1420,13 @@ object ScalarOperatorGens {
     val baseMap = newName("map")
 
     // prepare map key array
-    val keyElements = elements
-      .grouped(2)
-      .map { case Seq(key, value) => (key, value) }
-      .toSeq
-      .groupBy(_._1)
-      .map(_._2.last)
-      .keys
-      .toSeq
+    val keyElements = elements.grouped(2).map { case Seq(key, _) => key }.toSeq
     val keyType = mapType.getKeyType
     val keyExpr = generateArray(ctx, new ArrayType(keyType), keyElements)
     val isKeyFixLength = isPrimitive(keyType)
 
     // prepare map value array
-    val valueElements = elements
-      .grouped(2)
-      .map { case Seq(key, value) => (key, value) }
-      .toSeq
-      .groupBy(_._1)
-      .map(_._2.last)
-      .values
-      .toSeq
+    val valueElements = elements.grouped(2).map { case Seq(_, value) => value }.toSeq
     val valueType = mapType.getValueType
     val valueExpr = generateArray(ctx, new ArrayType(valueType), valueElements)
     val isValueFixLength = isPrimitive(valueType)
@@ -1450,8 +1444,9 @@ object ScalarOperatorGens {
       // there are some non-literal primitive fields need to update
       val keyArrayTerm = newName("keyArray")
       val valueArrayTerm = newName("valueArray")
-      val keyUpdate = generatePrimitiveArrayUpdateCode(keyArrayTerm, keyType, keyElements)
-      val valueUpdate = generatePrimitiveArrayUpdateCode(valueArrayTerm, valueType, valueElements)
+      val keyUpdate = generatePrimitiveArrayUpdateCode(ctx, keyArrayTerm, keyType, keyElements)
+      val valueUpdate =
+        generatePrimitiveArrayUpdateCode(ctx, valueArrayTerm, valueType, valueElements)
       s"""
          |$BINARY_ARRAY $keyArrayTerm = $binaryMap.keyArray();
          |$keyUpdate
@@ -1503,8 +1498,7 @@ object ScalarOperatorGens {
       // Otherwise, the code of `key` will be called twice in `accessCode`, which may lead to
       // exceptions such as 'Redefinition of local variable'.
       GeneratedExpression(key.resultTerm, key.nullTerm, NO_CODE, key.resultType, key.literalValue),
-      GeneratedExpression(tmpKey, NEVER_NULL, NO_CODE, keyType),
-      new BooleanType(key.resultType.isNullable)
+      GeneratedExpression(tmpKey, NEVER_NULL, NO_CODE, keyType)
     )
     val code =
       s"""
@@ -1569,9 +1563,8 @@ object ScalarOperatorGens {
 
   def generateMapCardinality(
       ctx: CodeGeneratorContext,
-      map: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
-    generateUnaryOperatorIfNotNull(ctx, resultType, map)(_ => s"${map.resultTerm}.size()")
+      map: GeneratedExpression): GeneratedExpression = {
+    generateUnaryOperatorIfNotNull(ctx, new IntType(), map)(_ => s"${map.resultTerm}.size()")
   }
 
   // ----------------------------------------------------------------------------------------
@@ -1588,7 +1581,7 @@ object ScalarOperatorGens {
       resultType: LogicalType): GeneratedExpression = {
     checkArgument(literalExpr.literal)
     if (java.lang.Boolean.valueOf(literalExpr.nullTerm)) {
-      return generateNullLiteral(resultType)
+      return generateNullLiteral(resultType, nullCheck = true)
     }
 
     val castExecutor = CastRuleProvider
@@ -1622,9 +1615,8 @@ object ScalarOperatorGens {
   private def generateArrayComparison(
       ctx: CodeGeneratorContext,
       left: GeneratedExpression,
-      right: GeneratedExpression,
-      resultType: LogicalType): GeneratedExpression = {
-    generateCallWithStmtIfArgsNotNull(ctx, resultType, Seq(left, right)) {
+      right: GeneratedExpression): GeneratedExpression =
+    generateCallWithStmtIfArgsNotNull(ctx, new BooleanType(), Seq(left, right)) {
       args =>
         val leftTerm = args.head
         val rightTerm = args(1)
@@ -1646,11 +1638,7 @@ object ScalarOperatorGens {
           GeneratedExpression(rightElementTerm, rightElementNullTerm, "", elementType)
 
         val indexTerm = newName("index")
-        val elementEqualsExpr = generateEquals(
-          ctx,
-          leftElementExpr,
-          rightElementExpr,
-          new BooleanType(elementType.isNullable))
+        val elementEqualsExpr = generateEquals(ctx, leftElementExpr, rightElementExpr)
 
         val stmt =
           s"""
@@ -1688,16 +1676,14 @@ object ScalarOperatorGens {
              """.stripMargin
         (stmt, resultTerm)
     }
-  }
 
   private def generateMapComparison(
       ctx: CodeGeneratorContext,
       left: GeneratedExpression,
       right: GeneratedExpression,
       keyType: LogicalType,
-      valueType: LogicalType,
-      resultType: LogicalType): GeneratedExpression =
-    generateCallWithStmtIfArgsNotNull(ctx, resultType, Seq(left, right)) {
+      valueType: LogicalType): GeneratedExpression =
+    generateCallWithStmtIfArgsNotNull(ctx, new BooleanType(), Seq(left, right)) {
       args =>
         val leftTerm = args.head
         val rightTerm = args(1)
@@ -1723,8 +1709,7 @@ object ScalarOperatorGens {
 
         val entryTerm = newName("entry")
         val entryCls = classOf[java.util.Map.Entry[AnyRef, AnyRef]].getCanonicalName
-        val valueEqualsExpr =
-          generateEquals(ctx, leftValueExpr, rightValueExpr, new BooleanType(valueType.isNullable))
+        val valueEqualsExpr = generateEquals(ctx, leftValueExpr, rightValueExpr)
 
         val internalTypeCls = classOf[LogicalType].getCanonicalName
         val keyTypeTerm = ctx.addReusableObject(keyType, "keyType", internalTypeCls)
@@ -1803,7 +1788,6 @@ object ScalarOperatorGens {
       ctx: CodeGeneratorContext,
       operandType: LogicalType,
       resultType: LogicalType): String => String = {
-
     // no casting necessary
     if (isInteroperable(operandType, resultType)) { operandTerm => s"$operandTerm" }
     else {
@@ -1846,13 +1830,15 @@ object ScalarOperatorGens {
 
       override def legacyBehaviour(): Boolean = isLegacyCastBehaviourEnabled(ctx)
 
-      override def getSessionZoneId: ZoneId = TableConfigUtils.getLocalTimeZone(ctx.tableConfig)
+      override def getSessionZoneId: ZoneId = ctx.tableConfig.getLocalTimeZone
 
-      override def getClassLoader: ClassLoader = ctx.classLoader
+      override def getClassLoader: ClassLoader = Thread.currentThread().getContextClassLoader
     }
   }
 
   private def isLegacyCastBehaviourEnabled(ctx: CodeGeneratorContext) = {
-    ctx.tableConfig.get(ExecutionConfigOptions.TABLE_EXEC_LEGACY_CAST_BEHAVIOUR).isEnabled
+    ctx.tableConfig.getConfiguration
+      .get(ExecutionConfigOptions.TABLE_EXEC_LEGACY_CAST_BEHAVIOUR)
+      .isEnabled
   }
 }

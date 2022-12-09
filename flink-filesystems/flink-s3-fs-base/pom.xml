@@ -23,7 +23,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-filesystems</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-s3-fs-base</artifactId>
@@ -157,6 +158,10 @@ under the License.
 				</exclusion>
 				<exclusion>
 					<groupId>org.apache.commons</groupId>
+					<artifactId>commons-compress</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.commons</groupId>
 					<artifactId>commons-math3</artifactId>
 				</exclusion>
 				<exclusion>
@@ -277,6 +282,14 @@ under the License.
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<skipTests>true</skipTests>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

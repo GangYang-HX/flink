@@ -37,9 +37,6 @@ import org.apache.flink.runtime.webmonitor.RestfulGateway;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.Preconditions;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
@@ -84,21 +81,7 @@ public class SubtaskCurrentAttemptDetailsHandler
         final JobID jobID = request.getPathParameter(JobIDPathParameter.class);
         final JobVertexID jobVertexID = request.getPathParameter(JobVertexIdPathParameter.class);
 
-        final Collection<AccessExecution> attempts = executionVertex.getCurrentExecutions();
-        List<SubtaskExecutionAttemptDetailsInfo> otherConcurrentAttempts = null;
-
-        if (attempts.size() > 1) {
-            otherConcurrentAttempts = new ArrayList<>();
-            for (AccessExecution attempt : attempts) {
-                if (attempt.getAttemptNumber() != execution.getAttemptNumber()) {
-                    otherConcurrentAttempts.add(
-                            SubtaskExecutionAttemptDetailsInfo.create(
-                                    attempt, metricFetcher, jobID, jobVertexID, null));
-                }
-            }
-        }
-
         return SubtaskExecutionAttemptDetailsInfo.create(
-                execution, metricFetcher, jobID, jobVertexID, otherConcurrentAttempts);
+                execution, metricFetcher, jobID, jobVertexID);
     }
 }

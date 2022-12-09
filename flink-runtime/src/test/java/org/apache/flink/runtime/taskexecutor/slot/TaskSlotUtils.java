@@ -23,9 +23,8 @@ import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.memory.MemoryManager;
-
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import org.apache.flink.testutils.TestingUtils;
+import org.apache.flink.util.concurrent.Executors;
 
 /** Testing utility and factory methods for {@link TaskSlotTable} and {@link TaskSlot}s. */
 public enum TaskSlotUtils {
@@ -43,30 +42,25 @@ public enum TaskSlotUtils {
                     .build();
 
     public static <T extends TaskSlotPayload> TaskSlotTableImpl<T> createTaskSlotTable(
-            int numberOfSlots, ScheduledExecutorService executorService) {
-        return createTaskSlotTable(
-                numberOfSlots, createDefaultTimerService(DEFAULT_SLOT_TIMEOUT), executorService);
+            int numberOfSlots) {
+        return createTaskSlotTable(numberOfSlots, createDefaultTimerService());
     }
 
     public static <T extends TaskSlotPayload> TaskSlotTable<T> createTaskSlotTable(
-            int numberOfSlots, Time timeout, ScheduledExecutorService executorService) {
+            int numberOfSlots, Time timeout) {
         return createTaskSlotTable(
-                numberOfSlots,
-                createDefaultTimerService(timeout.toMilliseconds()),
-                executorService);
+                numberOfSlots, createDefaultTimerService(timeout.toMilliseconds()));
     }
 
     public static <T extends TaskSlotPayload> TaskSlotTableImpl<T> createTaskSlotTable(
-            int numberOfSlots,
-            TimerService<AllocationID> timerService,
-            ScheduledExecutorService executorService) {
+            int numberOfSlots, TimerService<AllocationID> timerService) {
         return new TaskSlotTableImpl<>(
                 numberOfSlots,
                 createTotalResourceProfile(numberOfSlots),
                 DEFAULT_RESOURCE_PROFILE,
                 MemoryManager.MIN_PAGE_SIZE,
                 timerService,
-                executorService);
+                Executors.newDirectExecutorService());
     }
 
     public static ResourceProfile createTotalResourceProfile(int numberOfSlots) {
@@ -77,8 +71,11 @@ public enum TaskSlotUtils {
         return result;
     }
 
+    public static TimerService<AllocationID> createDefaultTimerService() {
+        return createDefaultTimerService(DEFAULT_SLOT_TIMEOUT);
+    }
+
     public static TimerService<AllocationID> createDefaultTimerService(long shutdownTimeout) {
-        return new DefaultTimerService<>(
-                Executors.newSingleThreadScheduledExecutor(), shutdownTimeout);
+        return new DefaultTimerService<>(TestingUtils.defaultExecutor(), shutdownTimeout);
     }
 }

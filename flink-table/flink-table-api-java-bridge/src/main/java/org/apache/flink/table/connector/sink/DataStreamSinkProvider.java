@@ -54,10 +54,8 @@ public interface DataStreamSinkProvider
      *
      * @see SingleOutputStreamOperator#uid(String)
      */
-    default DataStreamSink<?> consumeDataStream(
-            ProviderContext providerContext, DataStream<RowData> dataStream) {
-        return consumeDataStream(dataStream);
-    }
+    DataStreamSink<?> consumeDataStream(
+            ProviderContext providerContext, DataStream<RowData> dataStream);
 
     /**
      * Consumes the given Java {@link DataStream} and returns the sink transformation {@link

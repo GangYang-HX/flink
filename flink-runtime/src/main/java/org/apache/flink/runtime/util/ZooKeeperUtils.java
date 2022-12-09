@@ -68,6 +68,7 @@ import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cac
 import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.TreeCacheSelector;
 import org.apache.flink.shaded.curator5.org.apache.curator.framework.state.SessionConnectionStateErrorPolicy;
 import org.apache.flink.shaded.curator5.org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.flink.shaded.curator5.org.apache.curator.utils.ZKPaths;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.CreateMode;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.KeeperException;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.ZooDefs;
@@ -836,7 +837,139 @@ public class ZooKeeperUtils {
 
     public static void deleteZNode(CuratorFramework curatorFramework, String path)
             throws Exception {
-        curatorFramework.delete().idempotent().deletingChildrenIfNeeded().forPath(path);
+        // Since we are using Curator version 2.12 there is a bug in deleting the children
+        // if there is a concurrent delete operation. Therefore we need to add this retry
+        // logic. See https://issues.apache.org/jira/browse/CURATOR-430 for more information.
+        // The retry logic can be removed once we upgrade to Curator version >= 4.0.1.
+        boolean zNodeDeleted = false;
+        while (!zNodeDeleted) {
+            Stat stat = curatorFramework.checkExists().forPath(path);
+            if (stat == null) {
+                LOG.debug("znode {} has been deleted", path);
+                return;
+            }
+            try {
+                curatorFramework.delete().deletingChildrenIfNeeded().forPath(path);
+                zNodeDeleted = true;
+            } catch (KeeperException.NoNodeException ignored) {
+                // concurrent delete operation. Try again.
+                LOG.debug("Retrying to delete znode because of other concurrent delete operation.");
+            }
+        }
+    }
+
+    public static boolean writeEphemeralNode(
+            final CuratorFramework client, final String path, final byte[] data) throws Exception {
+        Stat stat = client.checkExists().forPath(path);
+
+        if (stat != null) {
+            long owner = stat.getEphemeralOwner();
+            long sessionID = client.getZookeeperClient().getZooKeeper().getSessionId();
+
+            if (owner == sessionID) {
+                try {
+                    client.setData().forPath(path, data);
+                    return true;
+                } catch (KeeperException.NoNodeException noNode) {
+                    // node was deleted in the meantime
+                }
+            } else {
+                try {
+                    client.delete().forPath(path);
+                } catch (KeeperException.NoNodeException noNode) {
+                    // node was deleted in the meantime --> try again
+                }
+            }
+        } else {
+            try {
+                client.create()
+                        .creatingParentsIfNeeded()
+                        .withMode(CreateMode.EPHEMERAL)
+                        .forPath(path, data);
+                return true;
+            } catch (KeeperException.NodeExistsException nodeExists) {
+                // node has been created in the meantime --> try again
+            }
+        }
+
+        return false;
+    }
+
+    /** Cleans up leftover ZooKeeper paths. */
+    public static void cleanupZooKeeperPaths(
+            final CuratorFramework client, final Configuration configuration) throws Exception {
+        String highAvailableNamespaceNamespace = getClusterHighAvailableNamespace(configuration);
+
+        // ensure Curator client's namespace cover the HA namespace
+        if (client.getNamespace().contains(highAvailableNamespaceNamespace)) {
+            deleteOwnedZNode(client);
+            tryDeleteEmptyParentZNodes(client);
+        }
+    }
+
+    /**
+     * Gets the cluster high available namespace from the provided configuration.
+     *
+     * <p>The format is {@code HA_ZOOKEEPER_ROOT/HA_CLUSTER_ID} without leading '/'.
+     *
+     * @param configuration
+     * @return
+     */
+    public static String getClusterHighAvailableNamespace(Configuration configuration) {
+        String root = configuration.getValue(HighAvailabilityOptions.HA_ZOOKEEPER_ROOT);
+
+        String clusterId = configuration.getValue(HighAvailabilityOptions.HA_CLUSTER_ID);
+
+        String rootWithNamespace = generateZookeeperPath(root, clusterId);
+
+        // Curator prepends a '/' manually and throws an Exception if the
+        // namespace starts with a '/'.
+        return rootWithNamespace.substring(1);
+    }
+
+    private static void deleteOwnedZNode(final CuratorFramework client) throws Exception {
+        // delete the HA_CLUSTER_ID znode which is owned by this cluster
+        client.delete().deletingChildrenIfNeeded().forPath("/");
+    }
+
+    /**
+     * Tries to delete empty parent znodes.
+     *
+     * <p>IMPORTANT: This method can be removed once all supported ZooKeeper versions support the
+     * container {@link org.apache.zookeeper.CreateMode}.
+     *
+     * @throws Exception if the deletion fails for other reason than {@link
+     *     KeeperException.NotEmptyException}
+     */
+    private static void tryDeleteEmptyParentZNodes(final CuratorFramework client) throws Exception {
+        // try to delete the parent znodes if they are empty
+        String remainingPath = getParentPath(getNormalizedPath(client.getNamespace()));
+        final CuratorFramework nonNamespaceClient = client.usingNamespace(null);
+
+        while (!isRootPath(remainingPath)) {
+            try {
+                nonNamespaceClient.delete().forPath(remainingPath);
+            } catch (KeeperException.NotEmptyException ignored) {
+                // We can only delete empty znodes
+                break;
+            }
+
+            remainingPath = getParentPath(remainingPath);
+        }
+    }
+
+    private static boolean isRootPath(String remainingPath) {
+        return ZKPaths.PATH_SEPARATOR.equals(remainingPath);
+    }
+
+    @Nonnull
+    private static String getNormalizedPath(String path) {
+        return ZKPaths.makePath(path, "");
+    }
+
+    @Nonnull
+    private static String getParentPath(String path) {
+        return ZKPaths.getPathAndNode(path).getPath();
     }
 
     /** Private constructor to prevent instantiation. */

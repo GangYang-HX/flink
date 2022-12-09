@@ -24,9 +24,8 @@ import org.apache.flink.table.catalog.CatalogTestBase;
 import org.apache.flink.table.catalog.FunctionLanguage;
 import org.apache.flink.table.catalog.ObjectPath;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assumptions.assumeThat;
+import org.junit.Assume;
+import org.junit.Test;
 
 /** Base class for testing HiveCatalog. */
 public abstract class HiveCatalogMetadataTestBase extends CatalogTestBase {
@@ -37,7 +36,7 @@ public abstract class HiveCatalogMetadataTestBase extends CatalogTestBase {
     @Test
     public void testAlterTableStats() throws Exception {
         String hiveVersion = ((HiveCatalog) catalog).getHiveVersion();
-        assumeThat(hiveVersion.compareTo("1.2.1")).isGreaterThanOrEqualTo(0);
+        Assume.assumeTrue(hiveVersion.compareTo("1.2.1") >= 0);
         super.testAlterTableStats();
     }
 

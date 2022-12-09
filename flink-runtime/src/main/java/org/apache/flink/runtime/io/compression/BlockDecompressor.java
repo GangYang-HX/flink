@@ -33,10 +33,11 @@ public interface BlockDecompressor {
      * @param dst The target to write decompressed data
      * @param dstOff The start offset to write the decompressed data
      * @return Length of decompressed data
-     * @throws BufferDecompressionException if exception thrown when decompressing
+     * @throws DataCorruptionException if data corruption found when decompressing
+     * @throws InsufficientBufferException if the target does not have sufficient space
      */
     int decompress(ByteBuffer src, int srcOff, int srcLen, ByteBuffer dst, int dstOff)
-            throws BufferDecompressionException;
+            throws DataCorruptionException, InsufficientBufferException;
 
     /**
      * Decompress source data read from src and write the decompressed data to dst.
@@ -47,8 +48,9 @@ public interface BlockDecompressor {
      * @param dst The target to write decompressed data
      * @param dstOff The start offset to write the decompressed data
      * @return Length of decompressed data
-     * @throws BufferDecompressionException if exception thrown when decompressing
+     * @throws DataCorruptionException if data corruption found when decompressing
+     * @throws InsufficientBufferException if the target does not have sufficient space
      */
     int decompress(byte[] src, int srcOff, int srcLen, byte[] dst, int dstOff)
-            throws BufferDecompressionException;
+            throws DataCorruptionException, InsufficientBufferException;
 }

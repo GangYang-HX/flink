@@ -177,13 +177,12 @@ public class MetricFetcherTest extends TestLogger {
                 c1,
                 new Tuple2<>(
                         new QueryScopeInfo.OperatorQueryScopeInfo(
-                                jobID.toString(), "taskid", 2, 0, "opname", "abc"),
+                                jobID.toString(), "taskid", 2, "opname", "abc"),
                         "oc"));
         counters.put(
                 c2,
                 new Tuple2<>(
-                        new QueryScopeInfo.TaskQueryScopeInfo(
-                                jobID.toString(), "taskid", 2, 0, "abc"),
+                        new QueryScopeInfo.TaskQueryScopeInfo(jobID.toString(), "taskid", 2, "abc"),
                         "tc"));
         meters.put(
                 new Meter() {

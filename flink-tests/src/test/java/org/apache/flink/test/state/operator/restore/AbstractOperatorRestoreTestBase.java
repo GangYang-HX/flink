@@ -21,6 +21,7 @@ package org.apache.flink.test.state.operator.restore;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.time.Deadline;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.client.program.ClusterClient;
 import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.runtime.checkpoint.CheckpointFailureReason;
@@ -34,14 +35,10 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.graph.StreamingJobGraphGenerator;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.FutureUtils;
-import org.apache.flink.util.concurrent.ScheduledExecutor;
-import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
 
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -50,7 +47,6 @@ import java.io.File;
 import java.net.URL;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -72,10 +68,6 @@ import static org.junit.Assert.assertNotNull;
  * directory and copy the _metadata file by hand.
  */
 public abstract class AbstractOperatorRestoreTestBase extends TestLogger {
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     private static final int NUM_TMS = 1;
     private static final int NUM_SLOTS_PER_TM = 4;
@@ -105,8 +97,6 @@ public abstract class AbstractOperatorRestoreTestBase extends TestLogger {
                             .build());
 
     private final boolean allowNonRestoredState;
-    private final ScheduledExecutor scheduledExecutor =
-            new ScheduledExecutorServiceAdapter(EXECUTOR_RESOURCE.getExecutor());
 
     protected AbstractOperatorRestoreTestBase() {
         this(true);
@@ -147,10 +137,10 @@ public abstract class AbstractOperatorRestoreTestBase extends TestLogger {
         CompletableFuture<JobStatus> jobRunningFuture =
                 FutureUtils.retrySuccessfulWithDelay(
                         () -> clusterClient.getJobStatus(jobToMigrate.getJobID()),
-                        Duration.ofMillis(50),
+                        Time.milliseconds(50),
                         deadline,
                         (jobStatus) -> jobStatus == JobStatus.RUNNING,
-                        scheduledExecutor);
+                        TestingUtils.defaultScheduledExecutor());
         assertEquals(
                 JobStatus.RUNNING,
                 jobRunningFuture.get(deadline.timeLeft().toMillis(), TimeUnit.MILLISECONDS));
@@ -186,10 +176,10 @@ public abstract class AbstractOperatorRestoreTestBase extends TestLogger {
         CompletableFuture<JobStatus> jobCanceledFuture =
                 FutureUtils.retrySuccessfulWithDelay(
                         () -> clusterClient.getJobStatus(jobToMigrate.getJobID()),
-                        Duration.ofMillis(50),
+                        Time.milliseconds(50),
                         deadline,
                         (jobStatus) -> jobStatus == JobStatus.CANCELED,
-                        scheduledExecutor);
+                        TestingUtils.defaultScheduledExecutor());
         assertEquals(
                 JobStatus.CANCELED,
                 jobCanceledFuture.get(deadline.timeLeft().toMillis(), TimeUnit.MILLISECONDS));
@@ -210,10 +200,10 @@ public abstract class AbstractOperatorRestoreTestBase extends TestLogger {
         CompletableFuture<JobStatus> jobStatusFuture =
                 FutureUtils.retrySuccessfulWithDelay(
                         () -> clusterClient.getJobStatus(jobToRestore.getJobID()),
-                        Duration.ofMillis(50),
+                        Time.milliseconds(50),
                         deadline,
                         (jobStatus) -> jobStatus == JobStatus.FINISHED,
-                        scheduledExecutor);
+                        TestingUtils.defaultScheduledExecutor());
         assertEquals(
                 JobStatus.FINISHED,
                 jobStatusFuture.get(deadline.timeLeft().toMillis(), TimeUnit.MILLISECONDS));
@@ -224,6 +214,7 @@ public abstract class AbstractOperatorRestoreTestBase extends TestLogger {
         env.enableCheckpointing(500, CheckpointingMode.EXACTLY_ONCE);
         env.setRestartStrategy(RestartStrategies.noRestart());
         env.setStateBackend((StateBackend) new MemoryStateBackend());
+        env.enableChangelogStateBackend(false);
 
         switch (mode) {
             case MIGRATE:

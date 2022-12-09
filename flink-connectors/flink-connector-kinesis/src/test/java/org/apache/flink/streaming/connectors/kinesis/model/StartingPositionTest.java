@@ -24,7 +24,8 @@ import org.junit.rules.ExpectedException;
 
 import java.util.Date;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 /** Tests for {@link StartingPosition}. */
 public class StartingPositionTest {
@@ -35,50 +36,48 @@ public class StartingPositionTest {
     public void testStartingPositionFromTimestamp() {
         Date date = new Date();
         StartingPosition position = StartingPosition.fromTimestamp(date);
-        assertThat(position.getShardIteratorType()).isEqualTo(ShardIteratorType.AT_TIMESTAMP);
-        assertThat(position.getStartingMarker()).isEqualTo(date);
+        assertEquals(ShardIteratorType.AT_TIMESTAMP, position.getShardIteratorType());
+        assertEquals(date, position.getStartingMarker());
     }
 
     @Test
     public void testStartingPositionRestartFromSequenceNumber() {
         SequenceNumber sequenceNumber = new SequenceNumber("100");
         StartingPosition position = StartingPosition.restartFromSequenceNumber(sequenceNumber);
-        assertThat(position.getShardIteratorType())
-                .isEqualTo(ShardIteratorType.AFTER_SEQUENCE_NUMBER);
-        assertThat(position.getStartingMarker()).isEqualTo("100");
+        assertEquals(ShardIteratorType.AFTER_SEQUENCE_NUMBER, position.getShardIteratorType());
+        assertEquals("100", position.getStartingMarker());
     }
 
     @Test
     public void testStartingPositionRestartFromAggregatedSequenceNumber() {
         SequenceNumber sequenceNumber = new SequenceNumber("200", 3);
         StartingPosition position = StartingPosition.restartFromSequenceNumber(sequenceNumber);
-        assertThat(position.getShardIteratorType()).isEqualTo(ShardIteratorType.AT_SEQUENCE_NUMBER);
-        assertThat(position.getStartingMarker()).isEqualTo("200");
+        assertEquals(ShardIteratorType.AT_SEQUENCE_NUMBER, position.getShardIteratorType());
+        assertEquals("200", position.getStartingMarker());
     }
 
     @Test
     public void testStartingPositionContinueFromAggregatedSequenceNumber() {
         SequenceNumber sequenceNumber = new SequenceNumber("200", 3);
         StartingPosition position = StartingPosition.continueFromSequenceNumber(sequenceNumber);
-        assertThat(position.getShardIteratorType())
-                .isEqualTo(ShardIteratorType.AFTER_SEQUENCE_NUMBER);
-        assertThat(position.getStartingMarker()).isEqualTo("200");
+        assertEquals(ShardIteratorType.AFTER_SEQUENCE_NUMBER, position.getShardIteratorType());
+        assertEquals("200", position.getStartingMarker());
     }
 
     @Test
     public void testStartingPositionRestartFromSentinelEarliest() {
         SequenceNumber sequenceNumber = SentinelSequenceNumber.SENTINEL_EARLIEST_SEQUENCE_NUM.get();
         StartingPosition position = StartingPosition.restartFromSequenceNumber(sequenceNumber);
-        assertThat(position.getShardIteratorType()).isEqualTo(ShardIteratorType.TRIM_HORIZON);
-        assertThat(position.getStartingMarker()).isNull();
+        assertEquals(ShardIteratorType.TRIM_HORIZON, position.getShardIteratorType());
+        assertNull(position.getStartingMarker());
     }
 
     @Test
     public void testStartingPositionRestartFromSentinelLatest() {
         SequenceNumber sequenceNumber = SentinelSequenceNumber.SENTINEL_LATEST_SEQUENCE_NUM.get();
         StartingPosition position = StartingPosition.restartFromSequenceNumber(sequenceNumber);
-        assertThat(position.getShardIteratorType()).isEqualTo(ShardIteratorType.LATEST);
-        assertThat(position.getStartingMarker()).isNull();
+        assertEquals(ShardIteratorType.LATEST, position.getShardIteratorType());
+        assertNull(position.getStartingMarker());
     }
 
     @Test
@@ -88,7 +87,7 @@ public class StartingPositionTest {
         SequenceNumber sequenceNumber =
                 SentinelSequenceNumber.SENTINEL_SHARD_ENDING_SEQUENCE_NUM.get();
         StartingPosition position = StartingPosition.restartFromSequenceNumber(sequenceNumber);
-        assertThat(position.getShardIteratorType()).isEqualTo(ShardIteratorType.LATEST);
-        assertThat(position.getStartingMarker()).isNull();
+        assertEquals(ShardIteratorType.LATEST, position.getShardIteratorType());
+        assertNull(position.getStartingMarker());
     }
 }

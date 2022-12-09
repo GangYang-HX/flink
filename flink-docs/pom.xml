@@ -25,7 +25,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-parent</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-docs</artifactId>
@@ -34,6 +35,7 @@ under the License.
 	<properties>
 		<generated.docs.dir>./docs/layouts/shortcodes/generated</generated.docs.dir>
 		<generated.static.dir>./docs/static/generated</generated.static.dir>
+		<maven.test.skip>true</maven.test.skip>
 	</properties>
 
 	<dependencies>
@@ -41,7 +43,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-shaded-swagger</artifactId>
-			<version>${flink.shaded.version}</version>
+			<version>15.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
@@ -126,7 +128,7 @@ under the License.
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-python</artifactId>
+			<artifactId>flink-python_${scala.binary.version}</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 
@@ -167,23 +169,10 @@ under the License.
 			<scope>test</scope>
 		</dependency>
 
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-dstl-dfs</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-sql-gateway</artifactId>
+			<artifactId>flink-dstl-dfs</artifactId>
 			<version>${project.version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-sql-gateway</artifactId>
-			<version>${project.version}</version>
-			<type>test-jar</type>
 		</dependency>
 
         <dependency>
@@ -265,19 +254,11 @@ under the License.
 								<configuration>
 									<target>
 										<mkdir dir="${rootDir}/${generated.docs.dir}"/>
-										<java classname="org.apache.flink.docs.rest.RuntimeRestAPIDocGenerator" fork="true" failonerror="true">
+										<java classname="org.apache.flink.docs.rest.RestAPIDocGenerator" fork="true" failonerror="true">
 											<classpath refid="maven.compile.classpath"/>
 											<arg value="${rootDir}/${generated.docs.dir}/"/>
 										</java>
-										<java classname="org.apache.flink.docs.rest.RuntimeOpenApiSpecGenerator" fork="true" failonerror="true">
-											<classpath refid="maven.compile.classpath"/>
-											<arg value="${rootDir}/${generated.static.dir}/"/>
-										</java>
-										<java classname="org.apache.flink.docs.rest.SqlGatewayRestAPIDocGenerator" fork="true" failonerror="true">
-											<classpath refid="maven.compile.classpath"/>
-											<arg value="${rootDir}/${generated.docs.dir}/"/>
-										</java>
-										<java classname="org.apache.flink.docs.rest.SqlGatewayOpenApiSpecGenerator" fork="true" failonerror="true">
+										<java classname="org.apache.flink.docs.rest.OpenApiSpecGenerator" fork="true" failonerror="true">
 											<classpath refid="maven.compile.classpath"/>
 											<arg value="${rootDir}/${generated.static.dir}/"/>
 										</java>

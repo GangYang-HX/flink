@@ -22,19 +22,20 @@ package org.apache.flink.runtime.state.heap;
 
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.concurrent.ThreadLocalRandom;
 
 import static org.apache.flink.runtime.state.heap.SkipListUtils.MAX_LEVEL;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link SkipListUtils}. */
-class SkipListUtilsTest {
+public class SkipListUtilsTest extends TestLogger {
 
     @Test
-    void testKeySpacePutAndGet() {
+    public void testKeySpacePutAndGet() {
         for (int level = 0; level <= MAX_LEVEL; level++) {
             int keyLen = ThreadLocalRandom.current().nextInt(100) + 1;
             KeySpace keySpace = createKeySpace(level, keyLen);
@@ -49,7 +50,7 @@ class SkipListUtilsTest {
     }
 
     @Test
-    void testValueSpacePutAndGet() {
+    public void testValueSpacePutAndGet() {
         for (int i = 0; i < 100; i++) {
             int valueLen = ThreadLocalRandom.current().nextInt(100) + 1;
             ValueSpace valueSpace = createValueSpace(valueLen);
@@ -104,28 +105,28 @@ class SkipListUtilsTest {
     }
 
     private void verifyGetKeySpace(KeySpace keySpace, MemorySegment memorySegment, int offset) {
-        assertThat(SkipListUtils.getLevel(memorySegment, offset)).isEqualTo(keySpace.level);
-        assertThat(SkipListUtils.getNodeStatus(memorySegment, offset)).isEqualTo(keySpace.status);
-        assertThat(SkipListUtils.getKeyLen(memorySegment, offset))
-                .isEqualTo(keySpace.keyData.length);
-        assertThat(SkipListUtils.getValuePointer(memorySegment, offset))
-                .isEqualTo(keySpace.valuePointer);
-        assertThat(SkipListUtils.getNextKeyPointer(memorySegment, offset))
-                .isEqualTo(keySpace.nextKeyPointer);
+        assertEquals(keySpace.level, SkipListUtils.getLevel(memorySegment, offset));
+        assertEquals(keySpace.status, SkipListUtils.getNodeStatus(memorySegment, offset));
+        assertEquals(keySpace.keyData.length, SkipListUtils.getKeyLen(memorySegment, offset));
+        assertEquals(keySpace.valuePointer, SkipListUtils.getValuePointer(memorySegment, offset));
+        assertEquals(
+                keySpace.nextKeyPointer, SkipListUtils.getNextKeyPointer(memorySegment, offset));
         for (int i = 1; i <= keySpace.nextIndexNodes.length; i++) {
-            assertThat(SkipListUtils.getNextIndexNode(memorySegment, offset, i))
-                    .isEqualTo(keySpace.nextIndexNodes[i - 1]);
+            assertEquals(
+                    keySpace.nextIndexNodes[i - 1],
+                    SkipListUtils.getNextIndexNode(memorySegment, offset, i));
         }
         for (int i = 1; i <= keySpace.prevIndexNodes.length; i++) {
-            assertThat(SkipListUtils.getPrevIndexNode(memorySegment, offset, keySpace.level, i))
-                    .isEqualTo(keySpace.prevIndexNodes[i - 1]);
+            assertEquals(
+                    keySpace.prevIndexNodes[i - 1],
+                    SkipListUtils.getPrevIndexNode(memorySegment, offset, keySpace.level, i));
         }
         int keyDataOffset = SkipListUtils.getKeyDataOffset(keySpace.level);
         MemorySegment keyDataSegment = MemorySegmentFactory.wrap(keySpace.keyData);
-        assertThat(
-                        memorySegment.compare(
-                                keyDataSegment, offset + keyDataOffset, 0, keySpace.keyData.length))
-                .isEqualTo(0);
+        assertEquals(
+                0,
+                memorySegment.compare(
+                        keyDataSegment, offset + keyDataOffset, 0, keySpace.keyData.length));
     }
 
     private ValueSpace createValueSpace(int valueLen) {
@@ -149,23 +150,21 @@ class SkipListUtilsTest {
 
     private void verifyGetValueSpace(
             ValueSpace valueSpace, MemorySegment memorySegment, int offset) {
-        assertThat(SkipListUtils.getValueVersion(memorySegment, offset))
-                .isEqualTo(valueSpace.version);
-        assertThat(SkipListUtils.getKeyPointer(memorySegment, offset))
-                .isEqualTo(valueSpace.keyPointer);
-        assertThat(SkipListUtils.getNextValuePointer(memorySegment, offset))
-                .isEqualTo(valueSpace.nextValuePointer);
-        assertThat(SkipListUtils.getValueLen(memorySegment, offset))
-                .isEqualTo(valueSpace.valueData.length);
+        assertEquals(valueSpace.version, SkipListUtils.getValueVersion(memorySegment, offset));
+        assertEquals(valueSpace.keyPointer, SkipListUtils.getKeyPointer(memorySegment, offset));
+        assertEquals(
+                valueSpace.nextValuePointer,
+                SkipListUtils.getNextValuePointer(memorySegment, offset));
+        assertEquals(valueSpace.valueData.length, SkipListUtils.getValueLen(memorySegment, offset));
         int valueDataOffset = SkipListUtils.getValueMetaLen();
         MemorySegment valueDataSegment = MemorySegmentFactory.wrap(valueSpace.valueData);
-        assertThat(
-                        memorySegment.compare(
-                                valueDataSegment,
-                                offset + valueDataOffset,
-                                0,
-                                valueSpace.valueData.length))
-                .isEqualTo(0);
+        assertEquals(
+                0,
+                memorySegment.compare(
+                        valueDataSegment,
+                        offset + valueDataOffset,
+                        0,
+                        valueSpace.valueData.length));
     }
 
     /** Used to test key space. */

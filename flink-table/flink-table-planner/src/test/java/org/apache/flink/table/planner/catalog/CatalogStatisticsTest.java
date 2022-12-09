@@ -48,8 +48,8 @@ import org.apache.flink.table.planner.utils.TableTestUtil;
 import org.apache.flink.table.planner.utils.TestPartitionableSourceFactory;
 import org.apache.flink.table.planner.utils.TestTableSource;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.utils.DateTimeUtils;
 
+import org.apache.calcite.avatica.util.DateTimeUtils;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.junit.Before;
@@ -61,7 +61,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 /** Test for Catalog Statistics. */
 public class CatalogStatisticsTest {
@@ -89,7 +91,7 @@ public class CatalogStatisticsTest {
         EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
         tEnv = TableEnvironment.create(settings);
         catalog = tEnv.getCatalog(tEnv.getCurrentCatalog()).orElse(null);
-        assertThat(catalog).isNotNull();
+        assertNotNull(catalog);
     }
 
     @Test
@@ -163,24 +165,21 @@ public class CatalogStatisticsTest {
                                                 "select id, name from PartT where part1 = 'A'")));
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
-        assertThat(mq.getRowCount(t1)).isEqualTo(200.0);
-        assertThat(mq.getAverageColumnSizes(t1)).isEqualTo(Arrays.asList(8.0, 43.5));
+        assertEquals(200.0, mq.getRowCount(t1), 0.0);
+        assertEquals(Arrays.asList(8.0, 43.5), mq.getAverageColumnSizes(t1));
 
         // long type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null)).isEqualTo(23.0);
-        assertThat(mq.getColumnNullCount(t1, 0)).isEqualTo(154.0);
-        assertThat(mq.getColumnInterval(t1, 0))
-                .isEqualTo(
-                        ValueInterval$.MODULE$.apply(
-                                BigDecimal.valueOf(-123L),
-                                BigDecimal.valueOf(763322L),
-                                true,
-                                true));
+        assertEquals(46.0, mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null), 0.0);
+        assertEquals(154.0, mq.getColumnNullCount(t1, 0), 0.0);
+        assertEquals(
+                ValueInterval$.MODULE$.apply(
+                        BigDecimal.valueOf(-123L), BigDecimal.valueOf(763322L), true, true),
+                mq.getColumnInterval(t1, 0));
 
         // string type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null)).isEqualTo(20.0);
-        assertThat(mq.getColumnNullCount(t1, 1)).isEqualTo(0.0);
-        assertThat(mq.getColumnInterval(t1, 1)).isNull();
+        assertEquals(40.0, mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null), 0.0);
+        assertEquals(0.0, mq.getColumnNullCount(t1, 1), 0.0);
+        assertNull(mq.getColumnInterval(t1, 1));
     }
 
     @Test
@@ -199,18 +198,21 @@ public class CatalogStatisticsTest {
                                                 "select id, name from PartT where part1 = 'A'")));
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
-        assertThat(mq.getRowCount(t1)).isEqualTo(100_000_000);
-        assertThat(mq.getAverageColumnSizes(t1)).isEqualTo(Arrays.asList(4.0, 12.0));
+        assertEquals(100_000_000, mq.getRowCount(t1), 0.0);
+        assertEquals(Arrays.asList(8.0, 43.5), mq.getAverageColumnSizes(t1));
 
         // long type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null)).isNull();
-        assertThat(mq.getColumnNullCount(t1, 0)).isNull();
-        assertThat(mq.getColumnInterval(t1, 0)).isNull();
+        assertEquals(46.0, mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null), 0.0);
+        assertEquals(154.0, mq.getColumnNullCount(t1, 0), 0.0);
+        assertEquals(
+                ValueInterval$.MODULE$.apply(
+                        BigDecimal.valueOf(-123L), BigDecimal.valueOf(763322L), true, true),
+                mq.getColumnInterval(t1, 0));
 
         // string type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null)).isNull();
-        assertThat(mq.getColumnNullCount(t1, 1)).isNull();
-        assertThat(mq.getColumnInterval(t1, 1)).isNull();
+        assertEquals(40.0, mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null), 0.0);
+        assertEquals(0.0, mq.getColumnNullCount(t1, 1), 0.0);
+        assertNull(mq.getColumnInterval(t1, 1));
     }
 
     @Test
@@ -228,16 +230,16 @@ public class CatalogStatisticsTest {
                                                 "select id, name from PartT where part1 = 'A'")));
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
-        assertThat(mq.getRowCount(t1)).isEqualTo(200.0);
+        assertEquals(200.0, mq.getRowCount(t1), 0.0);
 
         // long type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null)).isNull();
-        assertThat(mq.getColumnNullCount(t1, 0)).isNull();
-        assertThat(mq.getColumnInterval(t1, 0)).isNull();
+        assertNull(mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null));
+        assertNull(mq.getColumnNullCount(t1, 0));
+        assertNull(mq.getColumnInterval(t1, 0));
 
         // string type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null)).isNull();
-        assertThat(mq.getColumnNullCount(t1, 1)).isNull();
+        assertNull(mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null));
+        assertNull(mq.getColumnNullCount(t1, 1));
     }
 
     @Test
@@ -256,16 +258,16 @@ public class CatalogStatisticsTest {
                                                 "select id, name from PartT where part1 = 'A'")));
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
-        assertThat(mq.getRowCount(t1)).isEqualTo(200.0);
+        assertEquals(200.0, mq.getRowCount(t1), 0.0);
 
         // long type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null)).isNull();
-        assertThat(mq.getColumnNullCount(t1, 0)).isNull();
-        assertThat(mq.getColumnInterval(t1, 0)).isNull();
+        assertNull(mq.getDistinctRowCount(t1, ImmutableBitSet.of(0), null));
+        assertNull(mq.getColumnNullCount(t1, 0));
+        assertNull(mq.getColumnInterval(t1, 0));
 
         // string type
-        assertThat(mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null)).isNull();
-        assertThat(mq.getColumnNullCount(t1, 1)).isNull();
+        assertNull(mq.getDistinctRowCount(t1, ImmutableBitSet.of(1), null));
+        assertNull(mq.getColumnNullCount(t1, 1));
     }
 
     private void createPartitionStats(String part1, int part2) throws Exception {
@@ -340,56 +342,49 @@ public class CatalogStatisticsTest {
         RelNode t1 = TableTestUtil.toRelNode(tEnv.sqlQuery("select * from " + tableName));
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
-        assertThat(mq.getRowCount(t1)).isEqualTo(100.0);
+        assertEquals(100.0, mq.getRowCount(t1), 0.0);
         assertColumnStatistics(t1, mq);
     }
 
     private void assertColumnStatistics(RelNode rel, FlinkRelMetadataQuery mq) {
-        assertThat(mq.getAverageColumnSizes(rel))
-                .isEqualTo(Arrays.asList(1.0, 8.0, 43.5, 12.0, 8.0));
+        assertEquals(Arrays.asList(1.0, 8.0, 43.5, 12.0, 8.0), mq.getAverageColumnSizes(rel));
 
         // boolean type
-        assertThat(mq.getDistinctRowCount(rel, ImmutableBitSet.of(0), null)).isEqualTo(2.0);
-        assertThat(mq.getColumnNullCount(rel, 0)).isEqualTo(5.0);
-        assertThat(mq.getColumnInterval(rel, 0)).isNull();
+        assertEquals(2.0, mq.getDistinctRowCount(rel, ImmutableBitSet.of(0), null), 0.0);
+        assertEquals(5.0, mq.getColumnNullCount(rel, 0), 0.0);
+        assertNull(mq.getColumnInterval(rel, 0));
 
         // long type
-        assertThat(mq.getDistinctRowCount(rel, ImmutableBitSet.of(1), null)).isEqualTo(23.0);
-        assertThat(mq.getColumnNullCount(rel, 1)).isEqualTo(77.0);
-        assertThat(mq.getColumnInterval(rel, 1))
-                .isEqualTo(
-                        ValueInterval$.MODULE$.apply(
-                                BigDecimal.valueOf(-123L),
-                                BigDecimal.valueOf(763322L),
-                                true,
-                                true));
+        assertEquals(23.0, mq.getDistinctRowCount(rel, ImmutableBitSet.of(1), null), 0.0);
+        assertEquals(77.0, mq.getColumnNullCount(rel, 1), 0.0);
+        assertEquals(
+                ValueInterval$.MODULE$.apply(
+                        BigDecimal.valueOf(-123L), BigDecimal.valueOf(763322L), true, true),
+                mq.getColumnInterval(rel, 1));
 
         // string type
-        assertThat(mq.getDistinctRowCount(rel, ImmutableBitSet.of(2), null)).isEqualTo(20.0);
-        assertThat(mq.getColumnNullCount(rel, 2)).isEqualTo(0.0);
-        assertThat(mq.getColumnInterval(rel, 2)).isNull();
+        assertEquals(20.0, mq.getDistinctRowCount(rel, ImmutableBitSet.of(2), null), 0.0);
+        assertEquals(0.0, mq.getColumnNullCount(rel, 2), 0.0);
+        assertNull(mq.getColumnInterval(rel, 2));
 
         // date type
-        assertThat(mq.getDistinctRowCount(rel, ImmutableBitSet.of(3), null)).isEqualTo(100.0);
-        assertThat(mq.getColumnNullCount(rel, 3)).isEqualTo(0.0);
-        assertThat(mq.getColumnInterval(rel, 3))
-                .isEqualTo(
-                        ValueInterval$.MODULE$.apply(
-                                java.sql.Date.valueOf(DateTimeUtils.formatDate(71)),
-                                java.sql.Date.valueOf(DateTimeUtils.formatDate(17923)),
-                                true,
-                                true));
+        assertEquals(100.0, mq.getDistinctRowCount(rel, ImmutableBitSet.of(3), null), 0.0);
+        assertEquals(0.0, mq.getColumnNullCount(rel, 3), 0.0);
+        assertEquals(
+                ValueInterval$.MODULE$.apply(
+                        java.sql.Date.valueOf(DateTimeUtils.unixDateToString(71)),
+                        java.sql.Date.valueOf(DateTimeUtils.unixDateToString(17923)),
+                        true,
+                        true),
+                mq.getColumnInterval(rel, 3));
 
         // double type
-        assertThat(mq.getDistinctRowCount(rel, ImmutableBitSet.of(4), null)).isEqualTo(73.0);
-        assertThat(mq.getColumnNullCount(rel, 4)).isEqualTo(27.0);
-        assertThat(mq.getColumnInterval(rel, 4))
-                .isEqualTo(
-                        ValueInterval$.MODULE$.apply(
-                                BigDecimal.valueOf(-123.35),
-                                BigDecimal.valueOf(7633.22),
-                                true,
-                                true));
+        assertEquals(73.0, mq.getDistinctRowCount(rel, ImmutableBitSet.of(4), null), 0.0);
+        assertEquals(27.0, mq.getColumnNullCount(rel, 4), 0.0);
+        assertEquals(
+                ValueInterval$.MODULE$.apply(
+                        BigDecimal.valueOf(-123.35), BigDecimal.valueOf(7633.22), true, true),
+                mq.getColumnInterval(rel, 4));
     }
 
     private void alterTableStatisticsWithUnknownRowCount(Catalog catalog, String tableName)
@@ -408,7 +403,7 @@ public class CatalogStatisticsTest {
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
         // 1E8 is default value defined in FlinkPreparingTableBase
-        assertThat(mq.getRowCount(t1)).isEqualTo(1E8);
+        assertEquals(1E8, mq.getRowCount(t1), 0.0);
         assertColumnStatistics(t1, mq);
     }
 }

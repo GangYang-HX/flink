@@ -24,7 +24,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.elasticsearch.testutils.SourceSinkDataTestKit;
 import org.apache.flink.test.util.AbstractTestBase;
 
-import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.client.Client;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.fail;
 
 /**
  * Environment preparation and suite of tests for version-specific {@link ElasticsearchSinkBase}
@@ -44,7 +44,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public abstract class ElasticsearchSinkTestBase<C extends AutoCloseable, A>
         extends AbstractTestBase {
 
-    protected abstract RestHighLevelClient getClient();
+    // It's not good that we're using a Client here instead of a Rest Client but we need this
+    // for compatibility with ES 5.3.x. As soon as we drop that we can use RestClient here.
+    protected abstract Client getClient();
 
     protected abstract String getClusterName();
 
@@ -88,7 +90,7 @@ public abstract class ElasticsearchSinkTestBase<C extends AutoCloseable, A>
         env.execute("Elasticsearch Sink Test");
 
         // verify the results
-        RestHighLevelClient client = getClient();
+        Client client = getClient();
 
         SourceSinkDataTestKit.verifyProducedSinkData(client, index);
 
@@ -100,28 +102,33 @@ public abstract class ElasticsearchSinkTestBase<C extends AutoCloseable, A>
      * null}.
      */
     public void runNullAddressesTest() {
-        assertThatThrownBy(
-                        () ->
-                                createElasticsearchSink(
-                                        1,
-                                        getClusterName(),
-                                        null,
-                                        SourceSinkDataTestKit.getJsonSinkFunction("test")))
-                .isInstanceOfAny(IllegalArgumentException.class, NullPointerException.class);
+        try {
+            createElasticsearchSink(
+                    1, getClusterName(), null, SourceSinkDataTestKit.getJsonSinkFunction("test"));
+        } catch (IllegalArgumentException | NullPointerException expectedException) {
+            // test passes
+            return;
+        }
+
+        fail();
     }
 
     /**
      * Tests that the Elasticsearch sink fails eagerly if the provided list of addresses is empty.
      */
     public void runEmptyAddressesTest() {
-        assertThatThrownBy(
-                        () ->
-                                createElasticsearchSink(
-                                        1,
-                                        getClusterName(),
-                                        Collections.emptyList(),
-                                        SourceSinkDataTestKit.getJsonSinkFunction("test")))
-                .isInstanceOf(IllegalArgumentException.class);
+        try {
+            createElasticsearchSink(
+                    1,
+                    getClusterName(),
+                    Collections.emptyList(),
+                    SourceSinkDataTestKit.getJsonSinkFunction("test"));
+        } catch (IllegalArgumentException expectedException) {
+            // test passes
+            return;
+        }
+
+        fail();
     }
 
     /** Tests whether the Elasticsearch sink fails when there is no cluster to connect to. */
@@ -138,8 +145,16 @@ public abstract class ElasticsearchSinkTestBase<C extends AutoCloseable, A>
                         SourceSinkDataTestKit.getJsonSinkFunction("test"),
                         "123.123.123.123")); // incorrect ip address
 
-        assertThatThrownBy(() -> env.execute("Elasticsearch Sink Test"))
-                .isInstanceOf(JobExecutionException.class);
+        try {
+            env.execute("Elasticsearch Sink Test");
+        } catch (JobExecutionException expectedException) {
+            // every ES version throws a different exception in case of timeouts, so don't bother
+            // asserting on the exception
+            // test passes
+            return;
+        }
+
+        fail();
     }
 
     /** Utility method to create a user config map. */

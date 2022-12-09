@@ -66,7 +66,6 @@ public class FunctionDefinitionConvertRule implements CallExpressionConvertRule 
                         BridgingSqlFunction.of(
                                 context.getDataTypeFactory(),
                                 context.getTypeFactory(),
-                                context.getRexFactory(),
                                 SqlKind.OTHER_FUNCTION,
                                 ContextResolvedFunction.fromCallExpression(call),
                                 typeInference);

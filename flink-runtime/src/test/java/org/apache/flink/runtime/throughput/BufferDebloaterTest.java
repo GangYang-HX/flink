@@ -274,13 +274,7 @@ public class BufferDebloaterTest extends TestLogger {
 
         private BufferDebloater getBufferDebloater() {
             return new BufferDebloater(
-                    "Unknown task name in test",
-                    0,
-                    debloatTarget,
-                    maxBufferSize,
-                    minBufferSize,
-                    thresholdPercentages,
-                    1);
+                    0, debloatTarget, maxBufferSize, minBufferSize, thresholdPercentages, 1);
         }
     }
 }

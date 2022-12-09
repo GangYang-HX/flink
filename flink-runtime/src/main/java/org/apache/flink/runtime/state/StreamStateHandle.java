@@ -37,7 +37,4 @@ public interface StreamStateHandle extends StateObject {
 
     /** @return Content of this handle as bytes array if it is already in memory. */
     Optional<byte[]> asBytesIfInMemory();
-
-    /** @return a unique identifier of this handle. */
-    PhysicalStateHandleID getStreamStateHandleID();
 }

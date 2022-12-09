@@ -21,17 +21,17 @@ package org.apache.flink.connector.aws.table.util;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
 /** Unit tests for {@link AWSOptionUtils}. */
-class AWSOptionsUtilTest {
+public class AWSOptionsUtilTest {
 
     @Test
-    void testAWSKeyMapper() {
+    public void testAWSKeyMapper() {
         AWSOptionUtils awsOptionUtils = new AWSOptionUtils(getDefaultAWSConfigurations());
         Map<String, String> expectedProperties = getDefaultExpectedAWSConfigurations();
 
@@ -42,7 +42,7 @@ class AWSOptionsUtilTest {
     }
 
     @Test
-    void testAWSKeySelectionAndMapping() {
+    public void testAWSKeySelectionAndMapping() {
         Map<String, String> resolvedTableOptions = getDefaultAWSConfigurations();
         Map<String, String> expectedProperties = getDefaultExpectedAWSConfigurations();
         // adding irrelevant configurations
@@ -58,7 +58,7 @@ class AWSOptionsUtilTest {
     }
 
     @Test
-    void testGoodAWSProperties() {
+    public void testGoodAWSProperties() {
         AWSOptionUtils awsOptionUtils = new AWSOptionUtils(getDefaultAWSConfigurations());
         Properties expectedProperties = new Properties();
         expectedProperties.putAll(getDefaultExpectedAWSConfigurations());
@@ -69,7 +69,7 @@ class AWSOptionsUtilTest {
     }
 
     @Test
-    void testBadAWSRegion() {
+    public void testBadAWSRegion() {
         Map<String, String> defaultProperties = getDefaultAWSConfigurations();
         defaultProperties.put("aws.region", "invalid-aws-region");
 
@@ -81,7 +81,7 @@ class AWSOptionsUtilTest {
     }
 
     @Test
-    void testMissingAWSCredentials() {
+    public void testMissingAWSCredentials() {
         Map<String, String> defaultProperties = getDefaultAWSConfigurations();
         defaultProperties.remove("aws.credentials.basic.accesskeyid");
 
@@ -98,7 +98,7 @@ class AWSOptionsUtilTest {
     }
 
     @Test
-    void testInvalidTrustAllCertificatesOption() {
+    public void testInvalidTrustAllCertificatesOption() {
         Map<String, String> defaultProperties = getDefaultAWSConfigurations();
         defaultProperties.put("aws.trust.all.certificates", "invalid-boolean");
 

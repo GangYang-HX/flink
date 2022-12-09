@@ -26,7 +26,8 @@ import org.junit.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link TransactionsToAbortChecker}. */
 public class TransactionToAbortCheckerTest extends TestLogger {
@@ -46,7 +47,7 @@ public class TransactionToAbortCheckerTest extends TestLogger {
                         3, ImmutableMap.of(3L, "keep", 4L, "keep"));
 
         final List<String> transactionsToAbort = checker.getTransactionsToAbort(openTransactions);
-        assertThat(transactionsToAbort).hasSize(4);
+        assertEquals(4, transactionsToAbort.size());
         assertThatAbortCorrectTransaction(transactionsToAbort);
     }
 
@@ -65,11 +66,11 @@ public class TransactionToAbortCheckerTest extends TestLogger {
                         5, ImmutableMap.of(1L, "keep"));
 
         final List<String> transactionsToAbort = checker.getTransactionsToAbort(openTransactions);
-        assertThat(transactionsToAbort).hasSize(4);
+        assertEquals(4, transactionsToAbort.size());
         assertThatAbortCorrectTransaction(transactionsToAbort);
     }
 
     private static void assertThatAbortCorrectTransaction(List<String> abortedTransactions) {
-        assertThat(abortedTransactions.stream().allMatch(t -> t.equals(ABORT))).isTrue();
+        assertTrue(abortedTransactions.stream().allMatch(t -> t.equals(ABORT)));
     }
 }

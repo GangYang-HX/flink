@@ -36,7 +36,7 @@ import org.junit.Test;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.apache.flink.core.testutils.CommonTestUtils.assertThrows;
 
 /** Tests for modules. */
 public class ModuleITCase extends StreamingTestBase {
@@ -61,9 +61,10 @@ public class ModuleITCase extends StreamingTestBase {
         final Table table = tEnv().from("T");
 
         // Sanity check: without our module loaded, the factory discovery process is used.
-        assertThatThrownBy(table::explain)
-                .as("Discovered factory should not be used")
-                .isInstanceOf(UnsupportedOperationException.class);
+        assertThrows(
+                "Discovered factory should not be used",
+                UnsupportedOperationException.class,
+                table::explain);
 
         // The module has precedence over factory discovery.
         tEnv().loadModule("M", new SourceSinkFactoryOverwriteModule());
@@ -88,9 +89,10 @@ public class ModuleITCase extends StreamingTestBase {
                                 .build());
 
         // Sanity check: without our module loaded, the factory discovery process is used.
-        assertThatThrownBy(() -> tEnv().explainSql("INSERT INTO T SELECT 1"))
-                .as("Discovered factory should not be used")
-                .isInstanceOf(UnsupportedOperationException.class);
+        assertThrows(
+                "Discovered factory should not be used",
+                UnsupportedOperationException.class,
+                () -> tEnv().explainSql("INSERT INTO T SELECT 1"));
 
         // The module has precedence over factory discovery.
         tEnv().loadModule("M", new SourceSinkFactoryOverwriteModule());

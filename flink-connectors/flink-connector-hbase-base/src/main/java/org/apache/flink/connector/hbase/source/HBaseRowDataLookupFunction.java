@@ -20,14 +20,18 @@ package org.apache.flink.connector.hbase.source;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.connector.hbase.options.HBaseLookupOptions;
 import org.apache.flink.connector.hbase.util.HBaseConfigurationUtil;
 import org.apache.flink.connector.hbase.util.HBaseSerde;
 import org.apache.flink.connector.hbase.util.HBaseTableSchema;
-import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.metrics.Gauge;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.FunctionContext;
-import org.apache.flink.table.functions.LookupFunction;
+import org.apache.flink.table.functions.TableFunction;
 import org.apache.flink.util.StringUtils;
+
+import org.apache.flink.shaded.guava30.com.google.common.cache.Cache;
+import org.apache.flink.shaded.guava30.com.google.common.cache.CacheBuilder;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants;
@@ -42,8 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The HBaseRowDataLookupFunction is a standard user-defined table function, it can be used in
@@ -51,7 +54,7 @@ import java.util.Collections;
  * RowData}.
  */
 @Internal
-public class HBaseRowDataLookupFunction extends LookupFunction {
+public class HBaseRowDataLookupFunction extends TableFunction<RowData> {
 
     private static final Logger LOG = LoggerFactory.getLogger(HBaseRowDataLookupFunction.class);
     private static final long serialVersionUID = 1L;
@@ -65,39 +68,54 @@ public class HBaseRowDataLookupFunction extends LookupFunction {
     private transient HTable table;
     private transient HBaseSerde serde;
 
+    private final long cacheMaxSize;
+    private final long cacheExpireMs;
     private final int maxRetryTimes;
+    private transient Cache<Object, RowData> cache;
 
     public HBaseRowDataLookupFunction(
             Configuration configuration,
             String hTableName,
             HBaseTableSchema hbaseTableSchema,
             String nullStringLiteral,
-            int maxRetryTimes) {
+            HBaseLookupOptions lookupOptions) {
         this.serializedConfig = HBaseConfigurationUtil.serializeConfiguration(configuration);
         this.hTableName = hTableName;
         this.hbaseTableSchema = hbaseTableSchema;
         this.nullStringLiteral = nullStringLiteral;
-        this.maxRetryTimes = maxRetryTimes;
+        this.cacheMaxSize = lookupOptions.getCacheMaxSize();
+        this.cacheExpireMs = lookupOptions.getCacheExpireMs();
+        this.maxRetryTimes = lookupOptions.getMaxRetryTimes();
     }
 
     /**
      * The invoke entry point of lookup function.
      *
-     * @param keyRow - A {@link RowData} that wraps lookup keys. Currently only support single
-     *     rowkey.
+     * @param rowKey the lookup key. Currently only support single rowkey.
      */
-    @Override
-    public Collection<RowData> lookup(RowData keyRow) throws IOException {
+    public void eval(Object rowKey) throws IOException {
+        if (cache != null) {
+            RowData cacheRowData = cache.getIfPresent(rowKey);
+            if (cacheRowData != null) {
+                collect(cacheRowData);
+                return;
+            }
+        }
         for (int retry = 0; retry <= maxRetryTimes; retry++) {
             try {
-                // TODO: The implementation of LookupFunction will pass a GenericRowData as key row
-                // and it's safe to cast for now. We need to update the logic once we improve the
-                // LookupFunction in the future.
-                Get get = serde.createGet(((GenericRowData) keyRow).getField(0));
+                // fetch result
+                Get get = serde.createGet(rowKey);
                 if (get != null) {
                     Result result = table.get(get);
                     if (!result.isEmpty()) {
-                        return Collections.singletonList(serde.convertToReusedRow(result));
+                        if (cache != null) {
+                            // parse and collect
+                            RowData rowData = serde.convertToNewRow(result);
+                            collect(rowData);
+                            cache.put(rowKey, rowData);
+                        } else {
+                            collect(serde.convertToReusedRow(result));
+                        }
                     }
                 }
                 break;
@@ -113,7 +131,6 @@ public class HBaseRowDataLookupFunction extends LookupFunction {
                 }
             }
         }
-        return Collections.emptyList();
     }
 
     private Configuration prepareRuntimeConfiguration() {
@@ -147,6 +164,18 @@ public class HBaseRowDataLookupFunction extends LookupFunction {
         try {
             hConnection = ConnectionFactory.createConnection(config);
             table = (HTable) hConnection.getTable(TableName.valueOf(hTableName));
+            this.cache =
+                    cacheMaxSize <= 0 || cacheExpireMs <= 0
+                            ? null
+                            : CacheBuilder.newBuilder()
+                                    .recordStats()
+                                    .expireAfterWrite(cacheExpireMs, TimeUnit.MILLISECONDS)
+                                    .maximumSize(cacheMaxSize)
+                                    .build();
+            if (cache != null) {
+                context.getMetricGroup()
+                        .gauge("lookupCacheHitRate", (Gauge<Double>) () -> cache.stats().hitRate());
+            }
         } catch (TableNotFoundException tnfe) {
             LOG.error("Table '{}' not found ", hTableName, tnfe);
             throw new RuntimeException("HBase table '" + hTableName + "' not found.", tnfe);

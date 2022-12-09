@@ -18,12 +18,14 @@
 
 package org.apache.flink.formats.avro.glue.schema.registry;
 
+import org.apache.flink.util.TestLogger;
+
 import com.amazonaws.services.schemaregistry.common.configs.GlueSchemaRegistryConfiguration;
 import com.amazonaws.services.schemaregistry.serializers.GlueSchemaRegistrySerializationFacade;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import org.apache.avro.Schema;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 
@@ -35,7 +37,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link GlueSchemaRegistryAvroSerializationSchema}. */
-class GlueSchemaRegistryAvroSerializationSchemaTest {
+public class GlueSchemaRegistryAvroSerializationSchemaTest extends TestLogger {
     private static final String testTopic = "Test-Topic";
     private static final String schemaName = "User-Topic";
     private static final String AVRO_USER_SCHEMA_FILE = "src/test/java/resources/avro/user.avsc";
@@ -53,8 +55,8 @@ class GlueSchemaRegistryAvroSerializationSchemaTest {
             DefaultCredentialsProvider.builder().build();
     private static GlueSchemaRegistrySerializationFacade mockSerializationFacade;
 
-    @BeforeAll
-    static void setup() throws IOException {
+    @BeforeClass
+    public static void setup() throws IOException {
         metadata.put("test-key", "test-value");
         metadata.put(AWSSchemaRegistryConstants.TRANSPORT_METADATA_KEY, testTopic);
 
@@ -79,7 +81,7 @@ class GlueSchemaRegistryAvroSerializationSchemaTest {
 
     /** Test whether forGeneric method works. */
     @Test
-    void testForGeneric_withValidParams_succeeds() {
+    public void testForGeneric_withValidParams_succeeds() {
         assertThat(
                         GlueSchemaRegistryAvroSerializationSchema.forGeneric(
                                 userSchema, testTopic, configs))
@@ -92,7 +94,7 @@ class GlueSchemaRegistryAvroSerializationSchemaTest {
 
     /** Test whether forSpecific method works. */
     @Test
-    void testForSpecific_withValidParams_succeeds() {
+    public void testForSpecific_withValidParams_succeeds() {
         assertThat(
                         GlueSchemaRegistryAvroSerializationSchema.forSpecific(
                                 User.class, testTopic, configs))
@@ -105,7 +107,7 @@ class GlueSchemaRegistryAvroSerializationSchemaTest {
 
     /** Test whether serialize method when compression is not enabled works. */
     @Test
-    void testSerialize_withValidParams_withoutCompression_succeeds() {
+    public void testSerialize_withValidParams_withoutCompression_succeeds() {
         AWSSchemaRegistryConstants.COMPRESSION compressionType =
                 AWSSchemaRegistryConstants.COMPRESSION.NONE;
         configs.put(AWSSchemaRegistryConstants.COMPRESSION_TYPE, compressionType.name());
@@ -126,7 +128,7 @@ class GlueSchemaRegistryAvroSerializationSchemaTest {
 
     /** Test whether serialize method when compression is enabled works. */
     @Test
-    void testSerialize_withValidParams_withCompression_succeeds() {
+    public void testSerialize_withValidParams_withCompression_succeeds() {
         AWSSchemaRegistryConstants.COMPRESSION compressionType =
                 AWSSchemaRegistryConstants.COMPRESSION.ZLIB;
         configs.put(AWSSchemaRegistryConstants.COMPRESSION_TYPE, compressionType.name());
@@ -147,7 +149,7 @@ class GlueSchemaRegistryAvroSerializationSchemaTest {
 
     /** Test whether serialize method returns null when input object is null. */
     @Test
-    void testSerialize_withNullObject_returnNull() {
+    public void testSerialize_withNullObject_returnNull() {
         GlueSchemaRegistryAvroSerializationSchema<User> glueSchemaRegistryAvroSerializationSchema =
                 GlueSchemaRegistryAvroSerializationSchema.forSpecific(
                         User.class, testTopic, configs);

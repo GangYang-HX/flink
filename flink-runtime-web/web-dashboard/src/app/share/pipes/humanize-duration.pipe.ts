@@ -18,7 +18,7 @@
 
 import { Pipe, PipeTransform } from '@angular/core';
 
-import { isNil } from '@flink-runtime-web/utils';
+import { isNil } from 'utils';
 
 @Pipe({
   name: 'humanizeDuration'

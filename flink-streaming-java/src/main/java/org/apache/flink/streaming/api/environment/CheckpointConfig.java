@@ -137,6 +137,8 @@ public class CheckpointConfig implements java.io.Serializable {
      */
     private transient CheckpointStorage storage;
 
+    private boolean autoAdjustMaxParallelism;
+
     /**
      * Creates a deep copy of the provided {@link CheckpointConfig}.
      *
@@ -160,6 +162,7 @@ public class CheckpointConfig implements java.io.Serializable {
         this.storage = checkpointConfig.getCheckpointStorage();
         this.checkpointIdOfIgnoredInFlightData =
                 checkpointConfig.getCheckpointIdOfIgnoredInFlightData();
+        this.autoAdjustMaxParallelism = checkpointConfig.autoAdjustMaxParallelism;
     }
 
     public CheckpointConfig() {}
@@ -542,6 +545,14 @@ public class CheckpointConfig implements java.io.Serializable {
         return unalignedCheckpointsEnabled;
     }
 
+    public void enableAutoAdjustMaxParallelism(boolean autoAdjustMaxParallelism) {
+        this.autoAdjustMaxParallelism = autoAdjustMaxParallelism;
+    }
+
+    public boolean autoAdjustMaxParallelismEnable() {
+        return autoAdjustMaxParallelism;
+    }
+
     /**
      * Only relevant if {@link #unalignedCheckpointsEnabled} is enabled.
      *
@@ -838,5 +849,9 @@ public class CheckpointConfig implements java.io.Serializable {
         configuration
                 .getOptional(CheckpointingOptions.CHECKPOINTS_DIRECTORY)
                 .ifPresent(this::setCheckpointStorage);
+
+        configuration
+                .getOptional(ExecutionCheckpointingOptions.AUTO_ADJUST_MAX_PARALLELISM)
+                .ifPresent(this::enableAutoAdjustMaxParallelism);
     }
 }

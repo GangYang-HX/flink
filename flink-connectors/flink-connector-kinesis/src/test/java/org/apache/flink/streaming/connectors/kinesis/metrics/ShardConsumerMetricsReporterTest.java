@@ -27,7 +27,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -64,10 +65,10 @@ public class ShardConsumerMetricsReporterTest {
         metricsReporter.setNumberOfAggregatedRecords(3);
         metricsReporter.setNumberOfDeaggregatedRecords(4);
 
-        assertThat(metricsReporter.getAverageRecordSizeBytes()).isEqualTo(1);
-        assertThat(metricsReporter.getMillisBehindLatest()).isEqualTo(2);
-        assertThat(metricsReporter.getNumberOfAggregatedRecords()).isEqualTo(3);
-        assertThat(metricsReporter.getNumberOfDeaggregatedRecords()).isEqualTo(4);
+        assertEquals(1, metricsReporter.getAverageRecordSizeBytes());
+        assertEquals(2, metricsReporter.getMillisBehindLatest());
+        assertEquals(3, metricsReporter.getNumberOfAggregatedRecords());
+        assertEquals(4, metricsReporter.getNumberOfDeaggregatedRecords());
     }
 
     @Test
@@ -79,6 +80,6 @@ public class ShardConsumerMetricsReporterTest {
 
         metricsReporter.unregister();
 
-        assertThat(metricGroup.isClosed()).isTrue();
+        assertTrue(metricGroup.isClosed());
     }
 }

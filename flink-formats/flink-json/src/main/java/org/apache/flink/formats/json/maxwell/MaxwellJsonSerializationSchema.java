@@ -69,7 +69,6 @@ public class MaxwellJsonSerializationSchema implements SerializationSchema<RowDa
 
     @Override
     public void open(InitializationContext context) throws Exception {
-        jsonSerializer.open(context);
         this.reuse = new GenericRowData(2);
     }
 

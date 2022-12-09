@@ -31,7 +31,7 @@ TEST=flink-stream-state-ttl-test
 TEST_PROGRAM_NAME=DataStreamStateTTLTestProgram
 TEST_PROGRAM_JAR=${END_TO_END_DIR}/$TEST/target/$TEST_PROGRAM_NAME.jar
 
-setup_flink_slf4j_metric_reporter "numRecordsIn"
+setup_flink_slf4j_metric_reporter
 
 set_config_key "metrics.fetcher.update-interval" "2000"
 

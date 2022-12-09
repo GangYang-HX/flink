@@ -23,7 +23,6 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.util.SerializedValue;
 
-import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 
@@ -43,9 +42,9 @@ interface SubtaskAccess {
      * subtask that this {@code SubtaskAccess} instance binds to. The resulting future from the
      * sending is returned by the callable.
      *
-     * <p>This lets the caller target the specific subtask without necessarily sending the event now
-     * (for example, the event may be sent at a later point due to checkpoint alignment through the
-     * {@link SubtaskGatewayImpl}).
+     * <p>This let's the caller target the specific subtask without necessarily sending the event
+     * now (for example, the event may be sent at a later point due to checkpoint alignment through
+     * the {@link OperatorEventValve}).
      */
     Callable<CompletableFuture<Acknowledge>> createEventSendAction(
             SerializedValue<OperatorEvent> event);
@@ -91,15 +90,9 @@ interface SubtaskAccess {
     interface SubtaskAccessFactory {
 
         /**
-         * Creates accesses to all the current execution attempt of the subtask with the given
+         * Creates an access to the current execution attempt of the subtask with the given
          * subtaskIndex.
          */
-        Collection<SubtaskAccess> getAccessesForSubtask(int subtaskIndex);
-
-        /**
-         * Creates an access to the execution attempt with the given attemptNumber of the subtask
-         * with the given subtaskIndex.
-         */
-        SubtaskAccess getAccessForAttempt(int subtaskIndex, int attemptNumber);
+        SubtaskAccess getAccessForSubtask(int subtaskIndex);
     }
 }

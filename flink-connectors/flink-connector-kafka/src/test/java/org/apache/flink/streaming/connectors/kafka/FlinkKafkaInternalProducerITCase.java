@@ -38,7 +38,8 @@ import java.util.Collections;
 import java.util.Properties;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 /** Tests for our own {@link FlinkKafkaInternalProducer}. */
 @SuppressWarnings("serial")
@@ -95,9 +96,7 @@ public class FlinkKafkaInternalProducerITCase extends KafkaTestBase {
         } finally {
             kafkaProducer.close(Duration.ofSeconds(5));
         }
-        assertThat(exceptionInCallback)
-                .as("The message should have been successfully sent")
-                .isNull();
+        assertNull("The message should have been successfully sent", exceptionInCallback);
         assertRecord(topicName, "42", "42");
         deleteTestTopic(topicName);
     }
@@ -113,9 +112,7 @@ public class FlinkKafkaInternalProducerITCase extends KafkaTestBase {
             kafkaProducer.send(
                     new ProducerRecord<>(topicName, "42", "42"), new ErrorCheckingCallback());
             kafkaProducer.flush();
-            assertThat(exceptionInCallback)
-                    .as("The message should have been successfully sent")
-                    .isNull();
+            assertNull("The message should have been successfully sent", exceptionInCallback);
             long producerId = kafkaProducer.getProducerId();
             short epoch = kafkaProducer.getEpoch();
 
@@ -227,9 +224,7 @@ public class FlinkKafkaInternalProducerITCase extends KafkaTestBase {
         kafkaProducer.send(
                 new ProducerRecord<>(topicName, "42", "42"), new ErrorCheckingCallback());
         kafkaProducer.close(Duration.ofSeconds(5));
-        assertThat(exceptionInCallback)
-                .as("The message should have been successfully sent")
-                .isNull();
+        assertNull("The message should have been successfully sent", exceptionInCallback);
         return kafkaProducer;
     }
 
@@ -242,8 +237,8 @@ public class FlinkKafkaInternalProducerITCase extends KafkaTestBase {
             }
 
             ConsumerRecord<String, String> record = Iterables.getOnlyElement(records);
-            assertThat(record.key()).isEqualTo(expectedKey);
-            assertThat(record.value()).isEqualTo(expectedValue);
+            assertEquals(expectedKey, record.key());
+            assertEquals(expectedValue, record.value());
         }
     }
 

@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.security.modules;
 
-import org.apache.flink.runtime.hadoop.HadoopDependency;
 import org.apache.flink.runtime.security.SecurityConfiguration;
 import org.apache.flink.runtime.util.HadoopUtils;
 
@@ -37,7 +36,12 @@ public class HadoopModuleFactory implements SecurityModuleFactory {
     @Override
     public SecurityModule createModule(SecurityConfiguration securityConfig) {
         // First check if we have Hadoop in the ClassPath. If not, we simply don't do anything.
-        if (!HadoopDependency.isHadoopCommonOnClasspath(HadoopModule.class.getClassLoader())) {
+        try {
+            Class.forName(
+                    "org.apache.hadoop.conf.Configuration",
+                    false,
+                    HadoopModule.class.getClassLoader());
+        } catch (ClassNotFoundException e) {
             LOG.info(
                     "Cannot create Hadoop Security Module because Hadoop cannot be found in the Classpath.");
             return null;

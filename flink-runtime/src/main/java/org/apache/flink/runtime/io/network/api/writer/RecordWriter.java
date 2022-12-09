@@ -22,7 +22,6 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.core.io.IOReadableWritable;
 import org.apache.flink.core.memory.DataOutputSerializer;
-import org.apache.flink.runtime.checkpoint.CheckpointException;
 import org.apache.flink.runtime.event.AbstractEvent;
 import org.apache.flink.runtime.io.AvailabilityProvider;
 import org.apache.flink.runtime.metrics.groups.TaskIOMetricGroup;
@@ -67,7 +66,8 @@ public abstract class RecordWriter<T extends IOReadableWritable> implements Avai
     protected final boolean flushAlways;
 
     /** The thread that periodically flushes the output, to give an upper latency bound. */
-    @Nullable private final OutputFlusher outputFlusher;
+    @Nullable
+    private final OutputFlusher outputFlusher;
 
     /**
      * To avoid synchronization overhead on the critical path, best-effort error tracking is enough
@@ -121,14 +121,6 @@ public abstract class RecordWriter<T extends IOReadableWritable> implements Avai
         if (flushAlways) {
             flushAll();
         }
-    }
-
-    public void alignedBarrierTimeout(long checkpointId) throws IOException {
-        targetPartition.alignedBarrierTimeout(checkpointId);
-    }
-
-    public void abortCheckpoint(long checkpointId, CheckpointException cause) {
-        targetPartition.abortCheckpoint(checkpointId, cause);
     }
 
     @VisibleForTesting
@@ -206,8 +198,8 @@ public abstract class RecordWriter<T extends IOReadableWritable> implements Avai
         // For performance reasons, we are not checking volatile field every single time.
         if (flusherException != null
                 || (volatileFlusherExceptionCheckSkipCount
-                                >= VOLATILE_FLUSHER_EXCEPTION_MAX_CHECK_SKIP_COUNT
-                        && volatileFlusherException != null)) {
+                >= VOLATILE_FLUSHER_EXCEPTION_MAX_CHECK_SKIP_COUNT
+                && volatileFlusherException != null)) {
             throw new IOException(
                     "An exception happened while flushing the outputs", volatileFlusherException);
         }
@@ -215,11 +207,6 @@ public abstract class RecordWriter<T extends IOReadableWritable> implements Avai
                 >= VOLATILE_FLUSHER_EXCEPTION_MAX_CHECK_SKIP_COUNT) {
             volatileFlusherExceptionCheckSkipCount = 0;
         }
-    }
-
-    /** Sets the max overdraft buffer size of per gate. */
-    public void setMaxOverdraftBuffersPerGate(int maxOverdraftBuffersPerGate) {
-        targetPartition.setMaxOverdraftBuffersPerGate(maxOverdraftBuffersPerGate);
     }
 
     // ------------------------------------------------------------------------

@@ -18,6 +18,7 @@
 package org.apache.flink.table.planner.calcite
 
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, NothingTypeInfo, TypeInformation}
+import org.apache.flink.api.java.typeutils.TypeExtractor
 import org.apache.flink.table.api.{DataTypes, TableException, TableSchema, ValidationException}
 import org.apache.flink.table.calcite.ExtendedRelTypeFactory
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory.toLogicalType
@@ -50,9 +51,7 @@ import scala.collection.mutable
  * Flink specific type factory that represents the interface between Flink's [[LogicalType]] and
  * Calcite's [[RelDataType]].
  */
-class FlinkTypeFactory(
-    classLoader: ClassLoader,
-    typeSystem: RelDataTypeSystem = FlinkTypeSystem.INSTANCE)
+class FlinkTypeFactory(typeSystem: RelDataTypeSystem)
   extends JavaTypeFactoryImpl(typeSystem)
   with ExtendedRelTypeFactory {
 
@@ -368,7 +367,10 @@ class FlinkTypeFactory(
   }
 
   override def createRawType(className: String, serializerString: String): RelDataType = {
-    val rawType = RawType.restore(classLoader, className, serializerString)
+    val rawType = RawType.restore(
+      FlinkTypeFactory.getClass.getClassLoader, // temporary solution until FLINK-15635 is fixed
+      className,
+      serializerString)
     val rawRelDataType = createFieldTypeFromLogicalType(rawType)
     canonize(rawRelDataType)
   }
@@ -480,6 +482,7 @@ class FlinkTypeFactory(
 }
 
 object FlinkTypeFactory {
+  val INSTANCE = new FlinkTypeFactory(new FlinkTypeSystem)
 
   def isTimeIndicatorType(t: LogicalType): Boolean = t match {
     case t: TimestampType if t.getKind == TimestampKind.ROWTIME => true

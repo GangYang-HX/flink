@@ -19,7 +19,6 @@ package org.apache.flink.runtime.io.network.partition;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.deployment.InputGateDeploymentDescriptor;
 import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
@@ -27,7 +26,6 @@ import org.apache.flink.runtime.executiongraph.PartitionInfo;
 import org.apache.flink.runtime.io.network.NettyShuffleEnvironmentBuilder;
 import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGate;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
-import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleEnvironment;
 import org.apache.flink.runtime.shuffle.ShuffleIOOwnerContext;
 import org.apache.flink.runtime.taskexecutor.partition.ClusterPartitionReport;
@@ -41,7 +39,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import static org.hamcrest.CoreMatchers.not;
@@ -69,16 +66,10 @@ public class TaskExecutorPartitionTrackerImplTest extends TestLogger {
 
         partitionTracker.startTrackingPartition(
                 jobId,
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(clusterPartitionId),
-                        dataSetId,
-                        numberOfPartitions));
+                new TaskExecutorPartitionInfo(clusterPartitionId, dataSetId, numberOfPartitions));
         partitionTracker.startTrackingPartition(
                 jobId,
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(jobPartitionId),
-                        dataSetId,
-                        numberOfPartitions + 1));
+                new TaskExecutorPartitionInfo(jobPartitionId, dataSetId, numberOfPartitions + 1));
 
         partitionTracker.promoteJobPartitions(Collections.singleton(clusterPartitionId));
 
@@ -106,16 +97,10 @@ public class TaskExecutorPartitionTrackerImplTest extends TestLogger {
                 new TaskExecutorPartitionTrackerImpl(testingShuffleEnvironment);
         partitionTracker.startTrackingPartition(
                 new JobID(),
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId1),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId1, new IntermediateDataSetID(), 1));
         partitionTracker.startTrackingPartition(
                 new JobID(),
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId2),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId2, new IntermediateDataSetID(), 1));
         partitionTracker.stopTrackingAndReleaseJobPartitions(
                 Collections.singleton(resultPartitionId1));
 
@@ -138,16 +123,10 @@ public class TaskExecutorPartitionTrackerImplTest extends TestLogger {
                 new TaskExecutorPartitionTrackerImpl(testingShuffleEnvironment);
         partitionTracker.startTrackingPartition(
                 jobId1,
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId1),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId1, new IntermediateDataSetID(), 1));
         partitionTracker.startTrackingPartition(
                 jobId2,
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId2),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId2, new IntermediateDataSetID(), 1));
         partitionTracker.stopTrackingAndReleaseJobPartitionsFor(jobId1);
 
         assertThat(shuffleReleaseFuture.get(), hasItem(resultPartitionId1));
@@ -168,16 +147,10 @@ public class TaskExecutorPartitionTrackerImplTest extends TestLogger {
                 new TaskExecutorPartitionTrackerImpl(testingShuffleEnvironment);
         partitionTracker.startTrackingPartition(
                 jobId,
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId1),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId1, new IntermediateDataSetID(), 1));
         partitionTracker.startTrackingPartition(
                 jobId,
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId2),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId2, new IntermediateDataSetID(), 1));
         partitionTracker.promoteJobPartitions(Collections.singleton(resultPartitionId1));
 
         partitionTracker.stopTrackingAndReleaseJobPartitionsFor(jobId);
@@ -198,16 +171,10 @@ public class TaskExecutorPartitionTrackerImplTest extends TestLogger {
                 new TaskExecutorPartitionTrackerImpl(testingShuffleEnvironment);
         partitionTracker.startTrackingPartition(
                 new JobID(),
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId1),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId1, new IntermediateDataSetID(), 1));
         partitionTracker.startTrackingPartition(
                 new JobID(),
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId2),
-                        new IntermediateDataSetID(),
-                        1));
+                new TaskExecutorPartitionInfo(resultPartitionId2, new IntermediateDataSetID(), 1));
         partitionTracker.promoteJobPartitions(Collections.singleton(resultPartitionId1));
 
         partitionTracker.stopTrackingAndReleaseAllClusterPartitions();
@@ -230,13 +197,9 @@ public class TaskExecutorPartitionTrackerImplTest extends TestLogger {
         final TaskExecutorPartitionTracker partitionTracker =
                 new TaskExecutorPartitionTrackerImpl(testingShuffleEnvironment);
         partitionTracker.startTrackingPartition(
-                new JobID(),
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId1), dataSetId1, 1));
+                new JobID(), new TaskExecutorPartitionInfo(resultPartitionId1, dataSetId1, 1));
         partitionTracker.startTrackingPartition(
-                new JobID(),
-                new TaskExecutorPartitionInfo(
-                        new TestingShuffleDescriptor(resultPartitionId2), dataSetId2, 1));
+                new JobID(), new TaskExecutorPartitionInfo(resultPartitionId2, dataSetId2, 1));
         partitionTracker.promoteJobPartitions(Collections.singleton(resultPartitionId1));
 
         partitionTracker.stopTrackingAndReleaseClusterPartitions(Collections.singleton(dataSetId1));
@@ -303,25 +266,6 @@ public class TaskExecutorPartitionTrackerImplTest extends TestLogger {
         @Override
         public void close() throws Exception {
             backingShuffleEnvironment.close();
-        }
-    }
-
-    private static class TestingShuffleDescriptor implements ShuffleDescriptor {
-        private final ResultPartitionID resultPartitionID;
-
-        private TestingShuffleDescriptor(ResultPartitionID resultPartitionID) {
-
-            this.resultPartitionID = resultPartitionID;
-        }
-
-        @Override
-        public ResultPartitionID getResultPartitionID() {
-            return resultPartitionID;
-        }
-
-        @Override
-        public Optional<ResourceID> storesLocalResourcesOn() {
-            return Optional.empty();
         }
     }
 }

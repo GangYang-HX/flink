@@ -28,6 +28,7 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 
 import java.time.Duration;
 
+import static org.apache.flink.configuration.ConfigOptions.key;
 import static org.apache.flink.configuration.description.LinkElement.link;
 
 /**
@@ -85,10 +86,7 @@ public class ExecutionCheckpointingOptions {
                     .noDefaultValue()
                     .withDescription(
                             "The tolerable checkpoint consecutive failure number. If set to 0, that means "
-                                    + "we do not tolerance any checkpoint failure. This only applies to the following failure reasons: IOException on the "
-                                    + "Job Manager, failures in the async phase on the Task Managers and checkpoint expiration due to a timeout. Failures "
-                                    + "originating from the sync phase on the Task Managers are always forcing failover of an affected task. Other types of "
-                                    + "checkpoint failures (such as checkpoint being subsumed) are being ignored.");
+                                    + "we do not tolerance any checkpoint failure.");
 
     public static final ConfigOption<CheckpointConfig.ExternalizedCheckpointCleanup>
             EXTERNALIZED_CHECKPOINT =
@@ -186,6 +184,14 @@ public class ExecutionCheckpointingOptions {
                                                     + "If during checkpointing, checkpoint start delay exceeds this timeout, alignment "
                                                     + "will timeout and checkpoint barrier will start working as unaligned checkpoint.")
                                     .build());
+
+    public static final ConfigOption<Boolean> AUTO_ADJUST_MAX_PARALLELISM =
+            key("execution.checkpointing.auto-adjust-max-parallelism")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "adjust the max parallelism when restoring from an old checkpoint. "
+                                    + "This option will not work when there are keyed operator subtask state in the checkpoint.");
 
     /** @deprecated Use {@link #ALIGNED_CHECKPOINT_TIMEOUT} instead. */
     @Deprecated

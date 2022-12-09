@@ -30,6 +30,7 @@ import org.apache.flink.streaming.api.functions.source.ParallelSourceFunction;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.transformations.LegacySourceTransformation;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.connector.ProviderContext;
 import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.InputFormatProvider;
@@ -43,12 +44,10 @@ import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeBase;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeConfig;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeContext;
-import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
 import org.apache.flink.table.planner.plan.nodes.exec.MultipleTransformationTranslator;
 import org.apache.flink.table.planner.plan.nodes.exec.spec.DynamicTableSourceSpec;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.TransformationMetadata;
-import org.apache.flink.table.planner.utils.ShortcutUtils;
 import org.apache.flink.table.runtime.connector.source.ScanRuntimeProviderContext;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -56,7 +55,7 @@ import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.List;
+import java.util.Collections;
 import java.util.Optional;
 
 /**
@@ -77,10 +76,9 @@ public abstract class CommonExecTableSourceScan extends ExecNodeBase<RowData>
             ExecNodeContext context,
             ReadableConfig persistedConfig,
             DynamicTableSourceSpec tableSourceSpec,
-            List<InputProperty> inputProperties,
             LogicalType outputType,
             String description) {
-        super(id, context, persistedConfig, inputProperties, outputType, description);
+        super(id, context, persistedConfig, Collections.emptyList(), outputType, description);
         this.tableSourceSpec = tableSourceSpec;
     }
 
@@ -101,8 +99,7 @@ public abstract class CommonExecTableSourceScan extends ExecNodeBase<RowData>
         final InternalTypeInfo<RowData> outputTypeInfo =
                 InternalTypeInfo.of((RowType) getOutputType());
         final ScanTableSource tableSource =
-                tableSourceSpec.getScanTableSource(
-                        planner.getFlinkContext(), ShortcutUtils.unwrapTypeFactory(planner));
+                tableSourceSpec.getScanTableSource(planner.getFlinkContext());
         ScanTableSource.ScanRuntimeProvider provider =
                 tableSource.getScanRuntimeProvider(ScanRuntimeProviderContext.INSTANCE);
         if (provider instanceof SourceFunctionProvider) {
@@ -155,10 +152,11 @@ public abstract class CommonExecTableSourceScan extends ExecNodeBase<RowData>
         }
     }
 
-    private ProviderContext createProviderContext(ExecNodeConfig config) {
+    private ProviderContext createProviderContext(ReadableConfig config) {
         return name -> {
-            if (this instanceof StreamExecNode && config.shouldSetUid()) {
-                return Optional.of(createTransformationUid(name, config));
+            if (this instanceof StreamExecNode
+                    && !config.get(ExecutionConfigOptions.TABLE_EXEC_LEGACY_TRANSFORMATION_UIDS)) {
+                return Optional.of(createTransformationUid(name));
             }
             return Optional.empty();
         };

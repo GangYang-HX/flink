@@ -25,6 +25,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.OperatorStateHandle;
+import org.apache.flink.util.FlinkRuntimeException;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -151,7 +152,7 @@ public class DefaultCheckpointPlan implements CheckpointPlan {
             Map<OperatorID, OperatorState> operatorStates) {
         for (ExecutionJobVertex vertex : partlyFinishedVertex.values()) {
             if (hasUsedUnionListState(vertex, operatorStates)) {
-                throw new PartialFinishingNotSupportedByStateException(
+                throw new FlinkRuntimeException(
                         String.format(
                                 "The vertex %s (id = %s) has used"
                                         + " UnionListState, but part of its tasks are FINISHED.",
@@ -182,7 +183,7 @@ public class DefaultCheckpointPlan implements CheckpointPlan {
 
             if (entry.getValue() != vertex.getParallelism()
                     && hasUsedUnionListState(vertex, operatorStates)) {
-                throw new PartialFinishingNotSupportedByStateException(
+                throw new FlinkRuntimeException(
                         String.format(
                                 "The vertex %s (id = %s) has used"
                                         + " UnionListState, but part of its tasks has called operators' finish method.",

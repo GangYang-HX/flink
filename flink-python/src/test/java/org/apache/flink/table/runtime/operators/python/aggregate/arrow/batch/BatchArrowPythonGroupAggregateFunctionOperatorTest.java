@@ -24,6 +24,7 @@ import org.apache.flink.python.PythonOptions;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.python.PythonFunctionInfo;
@@ -38,7 +39,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -51,11 +52,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *   <li>FinishBundle is called when bundled time reach to max bundle time
  * </ul>
  */
-class BatchArrowPythonGroupAggregateFunctionOperatorTest
+public class BatchArrowPythonGroupAggregateFunctionOperatorTest
         extends AbstractBatchArrowPythonAggregateFunctionOperatorTest {
 
     @Test
-    void testGroupAggregateFunction() throws Exception {
+    public void testGroupAggregateFunction() throws Exception {
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness =
                 getTestHarness(new Configuration());
         long initialTime = 0L;
@@ -78,7 +79,7 @@ class BatchArrowPythonGroupAggregateFunctionOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByCount() throws Exception {
+    public void testFinishBundleTriggeredByCount() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 2);
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = getTestHarness(conf);
@@ -109,7 +110,7 @@ class BatchArrowPythonGroupAggregateFunctionOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByTime() throws Exception {
+    public void testFinishBundleTriggeredByTime() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         conf.setLong(PythonOptions.MAX_BUNDLE_TIME_MILLS, 1000L);
@@ -185,25 +186,19 @@ class BatchArrowPythonGroupAggregateFunctionOperatorTest
                 udfInputType,
                 udfOutputType,
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "UdafInputProjection",
                         inputType,
                         udfInputType,
                         udafInputOffsets),
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "GroupKey",
                         inputType,
                         (RowType) Projection.of(groupingSet).project(inputType),
                         groupingSet),
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "GroupSet",
                         inputType,
                         (RowType) Projection.of(groupingSet).project(inputType),
@@ -241,7 +236,7 @@ class BatchArrowPythonGroupAggregateFunctionOperatorTest
                     udfInputType,
                     udfOutputType,
                     getFunctionUrn(),
-                    createUserDefinedFunctionsProto(),
+                    getUserDefinedFunctionsProto(),
                     PythonTestUtils.createMockFlinkMetricContainer(),
                     false);
         }

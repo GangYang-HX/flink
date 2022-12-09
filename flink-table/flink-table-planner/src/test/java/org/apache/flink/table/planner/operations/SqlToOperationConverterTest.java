@@ -42,7 +42,6 @@ import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogTableImpl;
 import org.apache.flink.table.catalog.ContextResolvedTable;
 import org.apache.flink.table.catalog.FunctionCatalog;
-import org.apache.flink.table.catalog.FunctionLanguage;
 import org.apache.flink.table.catalog.GenericInMemoryCatalog;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -52,6 +51,7 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.delegation.Parser;
 import org.apache.flink.table.factories.TestManagedTableFactory;
+import org.apache.flink.table.module.ModuleManager;
 import org.apache.flink.table.operations.BeginStatementSetOperation;
 import org.apache.flink.table.operations.EndStatementSetOperation;
 import org.apache.flink.table.operations.ExplainOperation;
@@ -82,10 +82,8 @@ import org.apache.flink.table.operations.ddl.AlterTableAddConstraintOperation;
 import org.apache.flink.table.operations.ddl.AlterTableDropConstraintOperation;
 import org.apache.flink.table.operations.ddl.AlterTableOptionsOperation;
 import org.apache.flink.table.operations.ddl.AlterTableRenameOperation;
-import org.apache.flink.table.operations.ddl.CreateCatalogFunctionOperation;
 import org.apache.flink.table.operations.ddl.CreateDatabaseOperation;
 import org.apache.flink.table.operations.ddl.CreateTableOperation;
-import org.apache.flink.table.operations.ddl.CreateTempSystemFunctionOperation;
 import org.apache.flink.table.operations.ddl.CreateViewOperation;
 import org.apache.flink.table.operations.ddl.DropDatabaseOperation;
 import org.apache.flink.table.planner.calcite.FlinkPlannerImpl;
@@ -98,9 +96,6 @@ import org.apache.flink.table.planner.expressions.utils.Func8$;
 import org.apache.flink.table.planner.parse.CalciteParser;
 import org.apache.flink.table.planner.parse.ExtendedParser;
 import org.apache.flink.table.planner.runtime.utils.JavaUserDefinedScalarFunctions;
-import org.apache.flink.table.planner.utils.PlannerMocks;
-import org.apache.flink.table.resource.ResourceType;
-import org.apache.flink.table.resource.ResourceUri;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.utils.CatalogManagerMocks;
 import org.apache.flink.table.utils.ExpressionResolverMocks;
@@ -140,7 +135,7 @@ import static org.assertj.core.api.InstanceOfAssertFactories.type;
 /** Test cases for {@link SqlToOperationConverter}. */
 public class SqlToOperationConverterTest {
     private final boolean isStreamingMode = false;
-    private final TableConfig tableConfig = TableConfig.getDefault();
+    private final TableConfig tableConfig = new TableConfig();
     private final Catalog catalog = new GenericInMemoryCatalog("MockCatalog", "default");
     private final CatalogManager catalogManager =
             CatalogManagerMocks.preparedCatalogManager()
@@ -151,28 +146,35 @@ public class SqlToOperationConverterTest {
                                             ExecutionOptions.RUNTIME_MODE.key(),
                                             RuntimeExecutionMode.BATCH.name())))
                     .build();
-
-    private final PlannerMocks plannerMocks =
-            PlannerMocks.newBuilder()
-                    .withBatchMode(true)
-                    .withTableConfig(tableConfig)
-                    .withCatalogManager(catalogManager)
-                    .withRootSchema(
-                            asRootSchema(
-                                    new CatalogManagerCalciteSchema(
-                                            catalogManager, isStreamingMode)))
-                    .build();
-    private final PlannerContext plannerContext = plannerMocks.getPlannerContext();
-    private final FunctionCatalog functionCatalog = plannerMocks.getFunctionCatalog();
-
-    private final Supplier<FlinkPlannerImpl> plannerSupplier = plannerContext::createFlinkPlanner;
+    private final ModuleManager moduleManager = new ModuleManager();
+    private final FunctionCatalog functionCatalog =
+            new FunctionCatalog(tableConfig, catalogManager, moduleManager);
+    private final Supplier<FlinkPlannerImpl> plannerSupplier =
+            () ->
+                    getPlannerContext()
+                            .createFlinkPlanner(
+                                    catalogManager.getCurrentCatalog(),
+                                    catalogManager.getCurrentDatabase());
+    private final PlannerContext plannerContext =
+            new PlannerContext(
+                    true,
+                    tableConfig,
+                    moduleManager,
+                    functionCatalog,
+                    catalogManager,
+                    asRootSchema(new CatalogManagerCalciteSchema(catalogManager, isStreamingMode)),
+                    Collections.emptyList());
 
     private final Parser parser =
             new ParserImpl(
                     catalogManager,
                     plannerSupplier,
                     () -> plannerSupplier.get().parser(),
-                    plannerContext.getRexFactory());
+                    getPlannerContext().getSqlExprToRexConverterFactory());
+
+    private PlannerContext getPlannerContext() {
+        return plannerContext;
+    }
 
     @BeforeEach
     public void before() throws TableAlreadyExistException, DatabaseNotExistException {
@@ -396,7 +398,7 @@ public class SqlToOperationConverterTest {
     public void testShowTables() {
         final String sql = "SHOW TABLES from cat1.db1 not like 't%'";
         Operation operation = parse(sql, SqlDialect.DEFAULT);
-        assertThat(operation).isInstanceOf(ShowTablesOperation.class);
+        assert operation instanceof ShowTablesOperation;
 
         ShowTablesOperation showTablesOperation = (ShowTablesOperation) operation;
         assertThat(showTablesOperation.getCatalogName()).isEqualTo("cat1");
@@ -1219,47 +1221,6 @@ public class SqlToOperationConverterTest {
     }
 
     @Test
-    public void testCreateFunction() {
-        // test create catalog function
-        String sql =
-                "CREATE FUNCTION test_udf AS 'org.apache.fink.function.function1' "
-                        + "LANGUAGE JAVA USING JAR 'file:///path/to/test.jar'";
-        final FlinkPlannerImpl planner = getPlannerBySqlDialect(SqlDialect.DEFAULT);
-        Operation operation = parse(sql, planner, getParserBySqlDialect(SqlDialect.DEFAULT));
-        assertThat(operation).isInstanceOf(CreateCatalogFunctionOperation.class);
-        CatalogFunction actualFunction =
-                ((CreateCatalogFunctionOperation) operation).getCatalogFunction();
-
-        assertThat(operation.asSummaryString())
-                .isEqualTo(
-                        "CREATE CATALOG FUNCTION: (catalogFunction: [Optional[This is a user-defined function]], "
-                                + "identifier: [`builtin`.`default`.`test_udf`], ignoreIfExists: [false], isTemporary: [false])");
-
-        CatalogFunction expected =
-                new CatalogFunctionImpl(
-                        "org.apache.fink.function.function1",
-                        FunctionLanguage.JAVA,
-                        Collections.singletonList(
-                                new ResourceUri(ResourceType.JAR, "file:///path/to/test.jar")));
-        assertThat(actualFunction).isEqualTo(expected);
-
-        // test create temporary system function
-        sql =
-                "CREATE TEMPORARY SYSTEM FUNCTION test_udf2 AS 'org.apache.fink.function.function2' "
-                        + "LANGUAGE SCALA USING JAR 'file:///path/to/test.jar'";
-        operation = parse(sql, planner, getParserBySqlDialect(SqlDialect.DEFAULT));
-
-        assertThat(operation).isInstanceOf(CreateTempSystemFunctionOperation.class);
-        assertThat(operation.asSummaryString())
-                .isEqualTo(
-                        "CREATE TEMPORARY SYSTEM FUNCTION: (functionName: [test_udf2], "
-                                + "catalogFunction: [CatalogFunctionImpl{className='org.apache.fink.function.function2', "
-                                + "functionLanguage='SCALA', "
-                                + "functionResource='[ResourceUri{resourceType=JAR, uri='file:///path/to/test.jar'}]'}], "
-                                + "ignoreIfExists: [false], functionLanguage: [SCALA])");
-    }
-
-    @Test
     public void testAlterTable() throws Exception {
         prepareNonManagedTable(false);
         final String[] renameTableSqls =
@@ -1769,7 +1730,7 @@ public class SqlToOperationConverterTest {
     // ~ Tool Methods ----------------------------------------------------------
 
     private static TestItem createTestItem(Object... args) {
-        assertThat(args).hasSize(2);
+        assert args.length == 2;
         final String testExpr = (String) args[0];
         TestItem testItem = TestItem.fromTestExpr(testExpr);
         if (args[1] instanceof String) {
@@ -1865,7 +1826,8 @@ public class SqlToOperationConverterTest {
 
     private FlinkPlannerImpl getPlannerBySqlDialect(SqlDialect sqlDialect) {
         tableConfig.setSqlDialect(sqlDialect);
-        return plannerContext.createFlinkPlanner();
+        return plannerContext.createFlinkPlanner(
+                catalogManager.getCurrentCatalog(), catalogManager.getCurrentDatabase());
     }
 
     private CalciteParser getParserBySqlDialect(SqlDialect sqlDialect) {

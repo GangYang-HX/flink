@@ -19,15 +19,9 @@
 package org.apache.flink.kubernetes.kubeclient.services;
 
 import org.apache.flink.kubernetes.configuration.KubernetesConfigOptions;
-import org.apache.flink.kubernetes.kubeclient.Endpoint;
 import org.apache.flink.kubernetes.kubeclient.parameters.KubernetesJobManagerParameters;
-import org.apache.flink.kubernetes.utils.KubernetesUtils;
 
 import io.fabric8.kubernetes.api.model.Service;
-import io.fabric8.kubernetes.api.model.ServicePort;
-import io.fabric8.kubernetes.client.NamespacedKubernetesClient;
-
-import java.util.Optional;
 
 /** The service type of ClusterIP. */
 public class ClusterIPService extends ServiceType {
@@ -38,23 +32,6 @@ public class ClusterIPService extends ServiceType {
     public Service buildUpInternalService(
             KubernetesJobManagerParameters kubernetesJobManagerParameters) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Optional<Endpoint> getRestEndpoint(
-            Service targetService,
-            NamespacedKubernetesClient internalClient,
-            KubernetesConfigOptions.NodePortAddressType nodePortAddressType) {
-        int restPort = getRestPortFromExternalService(targetService);
-
-        // Return the external service.namespace directly when using ClusterIP.
-        return Optional.of(
-                new Endpoint(KubernetesUtils.getNamespacedServiceName(targetService), restPort));
-    }
-
-    @Override
-    public int getRestPort(ServicePort port) {
-        return port.getPort();
     }
 
     @Override

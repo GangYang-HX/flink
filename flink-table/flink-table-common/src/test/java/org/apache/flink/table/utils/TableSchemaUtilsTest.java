@@ -22,16 +22,18 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.ValidationException;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for TableSchemaUtils. */
-class TableSchemaUtilsTest {
+public class TableSchemaUtilsTest {
+    @Rule public ExpectedException exceptionRule = ExpectedException.none();
 
     @Test
-    void testBuilderWithGivenSchema() {
+    public void testBuilderWithGivenSchema() {
         TableSchema oriSchema =
                 TableSchema.builder()
                         .field("a", DataTypes.INT().notNull())
@@ -42,11 +44,11 @@ class TableSchemaUtilsTest {
                         .watermark("t", "t", DataTypes.TIMESTAMP(3))
                         .build();
         TableSchema newSchema = TableSchemaUtils.builderWithGivenSchema(oriSchema).build();
-        assertThat(newSchema).isEqualTo(oriSchema);
+        assertEquals(oriSchema, newSchema);
     }
 
     @Test
-    void testDropConstraint() {
+    public void testDropConstraint() {
         TableSchema originalSchema =
                 TableSchema.builder()
                         .field("a", DataTypes.INT().notNull())
@@ -65,11 +67,11 @@ class TableSchemaUtilsTest {
                         .field("t", DataTypes.TIMESTAMP(3))
                         .watermark("t", "t", DataTypes.TIMESTAMP(3))
                         .build();
-        assertThat(newSchema).isEqualTo(expectedSchema);
+        assertEquals(expectedSchema, newSchema);
 
         // Drop non-exist constraint.
-        assertThatThrownBy(() -> TableSchemaUtils.dropConstraint(originalSchema, "ct2"))
-                .isInstanceOf(ValidationException.class)
-                .hasMessage("Constraint ct2 to drop does not exist");
+        exceptionRule.expect(ValidationException.class);
+        exceptionRule.expectMessage("Constraint ct2 to drop does not exist");
+        TableSchemaUtils.dropConstraint(originalSchema, "ct2");
     }
 }

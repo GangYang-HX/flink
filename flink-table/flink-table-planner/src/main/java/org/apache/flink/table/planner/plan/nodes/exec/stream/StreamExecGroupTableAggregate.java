@@ -117,9 +117,8 @@ public class StreamExecGroupTableAggregate extends ExecNodeBase<RowData>
 
         final AggsHandlerCodeGenerator generator =
                 new AggsHandlerCodeGenerator(
-                                new CodeGeneratorContext(
-                                        config, planner.getFlinkContext().getClassLoader()),
-                                planner.createRelBuilder(),
+                                new CodeGeneratorContext(config.getTableConfig()),
+                                planner.getRelBuilder(),
                                 JavaScalaConversionUtil.toScala(inputRowType.getChildren()),
                                 // TODO: heap state backend do not copy key currently,
                                 //  we have to copy input field
@@ -135,7 +134,6 @@ public class StreamExecGroupTableAggregate extends ExecNodeBase<RowData>
 
         final AggregateInfoList aggInfoList =
                 AggregateUtil.transformToStreamAggregateInfoList(
-                        planner.getTypeFactory(),
                         inputRowType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         aggCallNeedRetractions,
@@ -171,10 +169,7 @@ public class StreamExecGroupTableAggregate extends ExecNodeBase<RowData>
 
         // set KeyType and Selector for state
         final RowDataKeySelector selector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        grouping,
-                        InternalTypeInfo.of(inputRowType));
+                KeySelectorUtil.getRowDataSelector(grouping, InternalTypeInfo.of(inputRowType));
         transform.setStateKeySelector(selector);
         transform.setStateKeyType(selector.getProducedType());
 

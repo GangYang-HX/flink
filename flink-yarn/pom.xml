@@ -23,7 +23,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-parent</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-yarn</artifactId>
@@ -98,7 +99,7 @@ under the License.
 			<artifactId>hadoop-hdfs</artifactId>
 			<scope>test</scope>
 			<type>test-jar</type>
-			<version>${flink.hadoop.version}</version>
+			<version>${hadoop.version}</version>
 			<exclusions>
 				<exclusion>
 					<groupId>log4j</groupId>
@@ -112,7 +113,7 @@ under the License.
 			<artifactId>hadoop-common</artifactId>
 			<scope>test</scope>
 			<type>test-jar</type>
-			<version>${flink.hadoop.version}</version>
+			<version>${hadoop.version}</version>
 			<exclusions>
 				<exclusion>
 					<groupId>log4j</groupId>
@@ -148,7 +149,7 @@ under the License.
 				<dependency>
 					<groupId>org.apache.hadoop</groupId>
 					<artifactId>hadoop-aws</artifactId>
-					<version>${flink.hadoop.version}</version>
+					<version>${hadoop.version}</version>
 					<scope>test</scope>
 					<exclusions>
 						<exclusion>
@@ -210,6 +211,23 @@ under the License.
 						</goals>
 						<configuration>
 							<skip>true</skip>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+						<configuration>
+							<excludes>
+								<exclude>resource-types.xml</exclude>
+							</excludes>
 						</configuration>
 					</execution>
 				</executions>

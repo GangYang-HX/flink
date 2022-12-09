@@ -57,10 +57,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link FactoryUtil}. */
-class FactoryUtilTest {
+public class FactoryUtilTest {
 
     @Test
-    void testManagedConnector() {
+    public void testManagedConnector() {
         final Map<String, String> options = createAllOptions();
         options.remove("connector");
         final DynamicTableSource actualSource = createTableSource(SCHEMA, options);
@@ -68,7 +68,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testInvalidConnector() {
+    public void testInvalidConnector() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.put("connector", "FAIL"),
                 "Could not find any factory for identifier 'FAIL' that implements '"
@@ -79,7 +79,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testConflictingConnector() {
+    public void testConflictingConnector() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.put("connector", TestConflictingDynamicTableFactory1.IDENTIFIER),
                 "Multiple factories for identifier 'conflicting' that implement '"
@@ -94,7 +94,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testMissingConnectorOption() {
+    public void testMissingConnectorOption() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.remove("target"),
                 "One or more required options are missing.\n\n"
@@ -103,21 +103,21 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testInvalidConnectorOption() {
+    public void testInvalidConnectorOption() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.put("buffer-size", "FAIL"),
                 "Invalid value for option 'buffer-size'.");
     }
 
     @Test
-    void testMissingFormat() {
+    public void testMissingFormat() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.remove("value.format"),
                 "Could not find required scan format 'value.format'.");
     }
 
     @Test
-    void testInvalidFormat() {
+    public void testInvalidFormat() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.put("value.format", "FAIL"),
                 "Could not find any factory for identifier 'FAIL' that implements '"
@@ -128,7 +128,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testMissingFormatOption() {
+    public void testMissingFormatOption() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.remove("key.test-format.delimiter"),
                 "One or more required options are missing.\n\n"
@@ -138,14 +138,14 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testInvalidFormatOption() {
+    public void testInvalidFormatOption() {
         assertCreateTableSourceWithOptionModifier(
                 options -> options.put("key.test-format.fail-on-missing", "FAIL"),
                 "Invalid value for option 'fail-on-missing'.");
     }
 
     @Test
-    void testSecretOption() {
+    public void testSecretOption() {
         assertCreateTableSourceWithOptionModifier(
                 options -> {
                     options.remove("target");
@@ -165,7 +165,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testUnconsumedOption() {
+    public void testUnconsumedOption() {
         assertCreateTableSourceWithOptionModifier(
                 options -> {
                     options.put("this-is-not-consumed", "42");
@@ -201,7 +201,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testAllOptions() {
+    public void testAllOptions() {
         final Map<String, String> options = createAllOptions();
         final DynamicTableSource actualSource = createTableSource(SCHEMA, options);
         final DynamicTableSource expectedSource =
@@ -222,7 +222,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testDiscoveryForSeparateSourceSinkFactory() {
+    public void testDiscoveryForSeparateSourceSinkFactory() {
         final Map<String, String> options = createAllOptions();
         // the "test" source and sink factory is not in one factory class
         // see TestDynamicTableSinkFactory and TestDynamicTableSourceFactory
@@ -248,7 +248,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testOptionalFormat() {
+    public void testOptionalFormat() {
         final Map<String, String> options = createAllOptions();
         options.remove("key.format");
         options.remove("key.test-format.delimiter");
@@ -264,7 +264,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testAlternativeValueFormat() {
+    public void testAlternativeValueFormat() {
         final Map<String, String> options = createAllOptions();
         options.remove("value.format");
         options.remove("value.test-format.delimiter");
@@ -291,7 +291,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testConnectorErrorHint() {
+    public void testConnectorErrorHint() {
         assertThatThrownBy(
                         () ->
                                 createTableSource(
@@ -313,7 +313,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testRequiredPlaceholderOption() {
+    public void testRequiredPlaceholderOption() {
         final Set<ConfigOption<?>> requiredOptions = new HashSet<>();
         requiredOptions.add(ConfigOptions.key("fields.#.min").intType().noDefaultValue());
         requiredOptions.add(
@@ -326,7 +326,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testCreateCatalog() {
+    public void testCreateCatalog() {
         final Map<String, String> options = new HashMap<>();
         options.put(CommonCatalogOptions.CATALOG_TYPE.key(), TestCatalogFactory.IDENTIFIER);
         options.put(TestCatalogFactory.DEFAULT_DATABASE.key(), "my-database");
@@ -346,7 +346,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testCatalogFactoryHelper() {
+    public void testCatalogFactoryHelper() {
         final FactoryUtil.CatalogFactoryHelper helper1 =
                 FactoryUtil.createCatalogFactoryHelper(
                         new TestCatalogFactory(),
@@ -376,7 +376,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testFactoryHelperWithDeprecatedOptions() {
+    public void testFactoryHelperWithDeprecatedOptions() {
         final Map<String, String> options = new HashMap<>();
         options.put("deprecated-target", "MyTarget");
         options.put("fallback-buffer-size", "1000");
@@ -394,7 +394,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testFactoryHelperWithEnrichmentOptions() {
+    public void testFactoryHelperWithEnrichmentOptions() {
         final Map<String, String> options = new HashMap<>();
         options.put(TestDynamicTableFactory.TARGET.key(), "abc");
         options.put(TestDynamicTableFactory.BUFFER_SIZE.key(), "1000");
@@ -415,7 +415,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testFactoryHelperWithEnrichmentOptionsAndFormat() {
+    public void testFactoryHelperWithEnrichmentOptionsAndFormat() {
         String keyFormatPrefix =
                 FactoryUtil.getFormatPrefix(
                         TestDynamicTableFactory.KEY_FORMAT, TestFormatFactory.IDENTIFIER);
@@ -474,7 +474,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testFactoryHelperWithEnrichmentOptionsMissingFormatIdentifier() {
+    public void testFactoryHelperWithEnrichmentOptionsMissingFormatIdentifier() {
         final Map<String, String> options = new HashMap<>();
         options.put(TestDynamicTableFactory.TARGET.key(), "abc");
 
@@ -505,7 +505,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testFactoryHelperWithEnrichmentOptionsFormatMismatch() {
+    public void testFactoryHelperWithEnrichmentOptionsFormatMismatch() {
         String keyFormatPrefix =
                 FactoryUtil.getFormatPrefix(
                         TestDynamicTableFactory.KEY_FORMAT, TestFormatFactory.IDENTIFIER);
@@ -542,7 +542,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testFactoryHelperWithEmptyEnrichmentOptions() {
+    public void testFactoryHelperWithEmptyEnrichmentOptions() {
         final Map<String, String> options = new HashMap<>();
         options.put(TestDynamicTableFactory.TARGET.key(), "abc");
         options.put(TestDynamicTableFactory.BUFFER_SIZE.key(), "1000");
@@ -559,7 +559,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testFactoryHelperWithMapOption() {
+    public void testFactoryHelperWithMapOption() {
         final Map<String, String> options = new HashMap<>();
         options.put("properties.prop-1", "value-1");
         options.put("properties.prop-2", "value-2");
@@ -572,7 +572,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testInvalidFactoryHelperWithMapOption() {
+    public void testInvalidFactoryHelperWithMapOption() {
         final Map<String, String> options = new HashMap<>();
         options.put("properties.prop-1", "value-1");
         options.put("properties.prop-2", "value-2");
@@ -598,7 +598,7 @@ class FactoryUtilTest {
     }
 
     @Test
-    void testDiscoverFactoryBadClass(@TempDir Path tempDir) throws IOException {
+    public void testDiscoverFactoryBadClass(@TempDir Path tempDir) throws IOException {
         // Let's prepare the classloader with a factory interface and 2 classes, one implements our
         // sub-interface of SerializationFormatFactory and the other implements only
         // SerializationFormatFactory.

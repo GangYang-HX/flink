@@ -4,8 +4,12 @@
     "baseUrl": "./",
     "downlevelIteration": true,
     "paths": {
-      "*": ["./src/@types/*"],
-      "@flink-runtime-web/*": ["./src/app/*", "./src/environments/*"]
+      "*": ["src/@types/*"],
+      "services": ["src/app/services"],
+      "config": ["src/app/app.config.ts"],
+      "interfaces": ["src/app/interfaces"],
+      "utils": ["src/app/utils"],
+      "share/*": ["src/app/share/*"]
     },
     "outDir": "./dist/out-tsc",
     "sourceMap": true,

@@ -28,14 +28,12 @@ import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.testutils.ClassLoaderUtils;
-import org.apache.flink.testutils.junit.extensions.parameterized.Parameter;
-import org.apache.flink.testutils.junit.extensions.parameterized.ParameterizedTestExtension;
-import org.apache.flink.testutils.junit.extensions.parameterized.Parameters;
-import org.apache.flink.testutils.junit.utils.TempDirUtils;
 
-import org.junit.jupiter.api.TestTemplate;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.net.URL;
@@ -46,20 +44,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
 
 /**
  * Tests for {@link PackagedProgramUtils} methods that should be executed for {@link
  * StreamExecutionEnvironment} and {@link Environment}.
  */
-@ExtendWith(ParameterizedTestExtension.class)
+@RunWith(Parameterized.class)
 public class PackagedProgramUtilsPipelineTest {
 
-    @Parameter public TestParameter testParameter;
+    @Parameterized.Parameter public TestParameter testParameter;
 
-    @TempDir private java.nio.file.Path temporaryFolder;
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-    @Parameters(name = "testParameter-{0}")
+    @Parameterized.Parameters
     public static Collection<TestParameter> parameters() {
         return Arrays.asList(
                 TestParameter.of(
@@ -74,14 +73,14 @@ public class PackagedProgramUtilsPipelineTest {
      * This tests whether configuration forwarding from a {@link Configuration} to the environment
      * works.
      */
-    @TestTemplate
-    void testConfigurationForwarding() throws Exception {
+    @Test
+    public void testConfigurationForwarding() throws Exception {
         // we want to test forwarding with this config, ensure that the default is what we expect.
         assertThat(
-                        ExecutionEnvironment.getExecutionEnvironment()
-                                .getConfig()
-                                .isAutoTypeRegistrationDisabled())
-                .isFalse();
+                ExecutionEnvironment.getExecutionEnvironment()
+                        .getConfig()
+                        .isAutoTypeRegistrationDisabled(),
+                is(false));
 
         PackagedProgram packagedProgram =
                 PackagedProgram.newBuilder()
@@ -98,11 +97,11 @@ public class PackagedProgramUtilsPipelineTest {
         ExecutionConfig executionConfig = testParameter.extractExecutionConfig(pipeline);
 
         // we want to test forwarding with this config, ensure that the default is what we expect.
-        assertThat(executionConfig.isAutoTypeRegistrationDisabled()).isTrue();
+        assertThat(executionConfig.isAutoTypeRegistrationDisabled(), is(true));
     }
 
-    @TestTemplate
-    void testUserClassloaderForConfiguration() throws Exception {
+    @Test
+    public void testUserClassloaderForConfiguration() throws Exception {
         String userSerializerClassName = "UserSerializer";
         List<URL> userUrls = getClassUrls(userSerializerClassName);
 
@@ -128,17 +127,17 @@ public class PackagedProgramUtilsPipelineTest {
         ExecutionConfig executionConfig = testParameter.extractExecutionConfig(pipeline);
 
         assertThat(
-                        executionConfig
-                                .getDefaultKryoSerializerClasses()
-                                .get(PackagedProgramUtilsPipelineTest.class)
-                                .getName())
-                .isEqualTo(userSerializerClassName);
+                executionConfig
+                        .getDefaultKryoSerializerClasses()
+                        .get(PackagedProgramUtilsPipelineTest.class)
+                        .getName(),
+                is(userSerializerClassName));
     }
 
     private List<URL> getClassUrls(String className) throws IOException {
         URLClassLoader urlClassLoader =
                 ClassLoaderUtils.compileAndLoadJava(
-                        TempDirUtils.newFolder(temporaryFolder),
+                        temporaryFolder.newFolder(),
                         className + ".java",
                         "import com.esotericsoftware.kryo.Kryo;\n"
                                 + "import com.esotericsoftware.kryo.Serializer;\n"
@@ -178,11 +177,6 @@ public class PackagedProgramUtilsPipelineTest {
                 @Override
                 public ExecutionConfig extractExecutionConfig(Pipeline pipeline) {
                     return executionConfigExtractor.apply(pipeline);
-                }
-
-                @Override
-                public String toString() {
-                    return entryClass.getSimpleName();
                 }
             };
         }

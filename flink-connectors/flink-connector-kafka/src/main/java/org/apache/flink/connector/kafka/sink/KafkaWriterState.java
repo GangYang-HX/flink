@@ -21,10 +21,11 @@ import java.util.Objects;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
-class KafkaWriterState {
+/** KafkaWriterState. */
+public class KafkaWriterState {
     private final String transactionalIdPrefix;
 
-    KafkaWriterState(String transactionalIdPrefix) {
+    public KafkaWriterState(String transactionalIdPrefix) {
         this.transactionalIdPrefix = checkNotNull(transactionalIdPrefix, "transactionalIdPrefix");
     }
 

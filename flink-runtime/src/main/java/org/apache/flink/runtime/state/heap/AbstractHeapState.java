@@ -44,11 +44,11 @@ public abstract class AbstractHeapState<K, N, SV> implements InternalKvState<K, 
 
     protected final TypeSerializer<K> keySerializer;
 
-    protected TypeSerializer<SV> valueSerializer;
+    protected final TypeSerializer<SV> valueSerializer;
 
-    protected TypeSerializer<N> namespaceSerializer;
+    protected final TypeSerializer<N> namespaceSerializer;
 
-    private SV defaultValue;
+    private final SV defaultValue;
 
     /**
      * Creates a new key/value state for the given hash map of key/value pairs.
@@ -124,22 +124,6 @@ public abstract class AbstractHeapState<K, N, SV> implements InternalKvState<K, 
         } else {
             return null;
         }
-    }
-
-    protected AbstractHeapState<K, N, SV> setNamespaceSerializer(
-            TypeSerializer<N> namespaceSerializer) {
-        this.namespaceSerializer = namespaceSerializer;
-        return this;
-    }
-
-    protected AbstractHeapState<K, N, SV> setValueSerializer(TypeSerializer<SV> valueSerializer) {
-        this.valueSerializer = valueSerializer;
-        return this;
-    }
-
-    protected AbstractHeapState<K, N, SV> setDefaultValue(SV defaultValue) {
-        this.defaultValue = defaultValue;
-        return this;
     }
 
     @Override

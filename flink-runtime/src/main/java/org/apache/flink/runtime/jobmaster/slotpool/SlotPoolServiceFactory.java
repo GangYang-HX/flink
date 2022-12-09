@@ -26,6 +26,5 @@ import javax.annotation.Nonnull;
 public interface SlotPoolServiceFactory {
 
     @Nonnull
-    SlotPoolService createSlotPoolService(
-            @Nonnull JobID jobId, DeclarativeSlotPoolFactory declarativeSlotPoolFactory);
+    SlotPoolService createSlotPoolService(@Nonnull JobID jobId);
 }

@@ -22,7 +22,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeInformationTestBase;
 
 /** Test for {@link StringDataTypeInfo}, {@link DecimalDataTypeInfo}. */
-class InternalTypeInfosTest extends TypeInformationTestBase<TypeInformation<?>> {
+public class InternalTypeInfosTest extends TypeInformationTestBase<TypeInformation<?>> {
 
     @Override
     protected TypeInformation[] getTestData() {

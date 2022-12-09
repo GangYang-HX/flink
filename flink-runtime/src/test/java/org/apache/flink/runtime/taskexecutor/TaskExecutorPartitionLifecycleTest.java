@@ -66,7 +66,6 @@ import org.apache.flink.runtime.taskmanager.NoOpTaskManagerActions;
 import org.apache.flink.runtime.taskmanager.Task;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.testutils.TestFileUtils;
-import org.apache.flink.testutils.TestingUtils;
 import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.Reference;
 import org.apache.flink.util.SerializedValue;
@@ -92,7 +91,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.StreamSupport;
@@ -121,8 +119,8 @@ public class TaskExecutorPartitionLifecycleTest extends TestLogger {
     @Rule public final TemporaryFolder tmp = new TemporaryFolder();
 
     @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService>
-            TEST_EXECUTOR_SERVICE_RESOURCE = TestingUtils.defaultExecutorResource();
+    public static final TestExecutorResource<?> TEST_EXECUTOR_SERVICE_RESOURCE =
+            new TestExecutorResource<>(() -> java.util.concurrent.Executors.newFixedThreadPool(1));
 
     @Before
     public void setup() {
@@ -215,8 +213,10 @@ public class TaskExecutorPartitionLifecycleTest extends TestLogger {
             TaskSubmissionTestEnvironment.registerJobMasterConnection(
                     jobTable,
                     jobId,
+                    rpc,
                     jobMasterGateway,
                     new NoOpTaskManagerActions(),
+                    timeout,
                     taskExecutor.getMainThreadExecutableForTesting());
 
             final TaskExecutorGateway taskExecutorGateway =
@@ -244,7 +244,7 @@ public class TaskExecutorPartitionLifecycleTest extends TestLogger {
 
             disconnectFuture.get();
         } finally {
-            RpcUtils.terminateRpcEndpoint(taskExecutor);
+            RpcUtils.terminateRpcEndpoint(taskExecutor, timeout);
         }
     }
 
@@ -420,7 +420,9 @@ public class TaskExecutorPartitionLifecycleTest extends TestLogger {
                         new SerializedValue<>(new ExecutionConfig()),
                         "Sender",
                         1,
+                        0,
                         1,
+                        0,
                         new Configuration(),
                         new Configuration(),
                         TestingInvokable.class.getName(),
@@ -563,7 +565,7 @@ public class TaskExecutorPartitionLifecycleTest extends TestLogger {
             testAction.accept(
                     jobId, taskResultPartitionDescriptor, taskExecutor, taskExecutorGateway);
         } finally {
-            RpcUtils.terminateRpcEndpoint(taskExecutor);
+            RpcUtils.terminateRpcEndpoint(taskExecutor, timeout);
         }
 
         // the shutdown of the backing shuffle environment releases all partitions
@@ -610,8 +612,7 @@ public class TaskExecutorPartitionLifecycleTest extends TestLogger {
     }
 
     private static TaskSlotTable<Task> createTaskSlotTable() {
-        return TaskSlotUtils.createTaskSlotTable(
-                1, timeout, TEST_EXECUTOR_SERVICE_RESOURCE.getExecutor());
+        return TaskSlotUtils.createTaskSlotTable(1, timeout);
     }
 
     @FunctionalInterface

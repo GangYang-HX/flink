@@ -32,18 +32,17 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Base class for aggregate function test.
  *
- * @param <IN> the type for the aggregation input
  * @param <T> the type for the aggregation result
  * @param <ACC> accumulate type
  */
-public abstract class AggFunctionTestBase<IN, T, ACC> {
+public abstract class AggFunctionTestBase<T, ACC> {
 
-    protected abstract List<List<IN>> getInputValueSets();
+    protected abstract List<List<T>> getInputValueSets();
 
     protected abstract List<T> getExpectedResults();
 
@@ -64,17 +63,16 @@ public abstract class AggFunctionTestBase<IN, T, ACC> {
     public void testAccumulateAndRetractWithoutMerge()
             throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         // iterate over input sets
-        List<List<IN>> inputValueSets = getInputValueSets();
+        List<List<T>> inputValueSets = getInputValueSets();
         List<T> expectedResults = getExpectedResults();
         Preconditions.checkArgument(inputValueSets.size() == expectedResults.size());
         AggregateFunction<T, ACC> aggregator = getAggregator();
         int size = getInputValueSets().size();
         // iterate over input sets
         for (int i = 0; i < size; ++i) {
-            List<IN> inputValues = inputValueSets.get(i);
+            List<T> inputValues = inputValueSets.get(i);
             T expected = expectedResults.get(i);
-            ACC acc = aggregator.createAccumulator();
-            accumulateValues(aggregator, acc, inputValues);
+            ACC acc = accumulateValues(inputValues);
             T result = aggregator.getValue(acc);
             validateResult(expected, result);
 
@@ -94,51 +92,47 @@ public abstract class AggFunctionTestBase<IN, T, ACC> {
         if (UserDefinedFunctionUtils.ifMethodExistInFunction("merge", aggregator)) {
             Method mergeFunc =
                     aggregator.getClass().getMethod("merge", getAccClass(), Iterable.class);
-            List<List<IN>> inputValueSets = getInputValueSets();
+            List<List<T>> inputValueSets = getInputValueSets();
             List<T> expectedResults = getExpectedResults();
             Preconditions.checkArgument(inputValueSets.size() == expectedResults.size());
             int size = getInputValueSets().size();
             // iterate over input sets
             for (int i = 0; i < size; ++i) {
-                List<IN> inputValues = inputValueSets.get(i);
+                List<T> inputValues = inputValueSets.get(i);
                 T expected = expectedResults.get(i);
                 // equally split the vals sequence into two sequences
-                Tuple2<List<IN>, List<IN>> splitValues = splitValues(inputValues);
-                List<IN> firstValues = splitValues.f0;
-                List<IN> secondValues = splitValues.f1;
+                Tuple2<List<T>, List<T>> splitValues = splitValues(inputValues);
+                List<T> firstValues = splitValues.f0;
+                List<T> secondValues = splitValues.f1;
                 // 1. verify merge with accumulate
                 List<ACC> accumulators = new ArrayList<>();
-                ACC secondAcc = aggregator.createAccumulator();
-                accumulateValues(aggregator, secondAcc, secondValues);
-                accumulators.add(secondAcc);
+                accumulators.add(accumulateValues(secondValues));
 
-                ACC firstAcc = aggregator.createAccumulator();
-                accumulateValues(aggregator, firstAcc, firstValues);
+                ACC acc = accumulateValues(firstValues);
 
-                mergeFunc.invoke(aggregator, firstAcc, accumulators);
+                mergeFunc.invoke(aggregator, acc, accumulators);
 
-                T result = aggregator.getValue(firstAcc);
+                T result = aggregator.getValue(acc);
                 validateResult(expected, result);
 
                 // 2. verify merge with accumulate & retract
                 if (UserDefinedFunctionUtils.ifMethodExistInFunction("retract", aggregator)) {
-                    retractValues(firstAcc, inputValues);
+                    retractValues(acc, inputValues);
                     ACC expectedAcc = aggregator.createAccumulator();
                     // The two accumulators should be exactly same
-                    validateResult(expectedAcc, firstAcc);
+                    validateResult(expectedAcc, acc);
                 }
             }
 
             // iterate over input sets
             for (int i = 0; i < size; ++i) {
-                List<IN> inputValues = inputValueSets.get(i);
+                List<T> inputValues = inputValueSets.get(i);
                 T expected = expectedResults.get(i);
                 // 3. test partial merge with an empty accumulator
                 List<ACC> accumulators = new ArrayList<>();
                 accumulators.add(aggregator.createAccumulator());
 
-                ACC acc = aggregator.createAccumulator();
-                accumulateValues(aggregator, acc, inputValues);
+                ACC acc = accumulateValues(inputValues);
                 mergeFunc.invoke(aggregator, acc, accumulators);
 
                 T result = aggregator.getValue(acc);
@@ -160,32 +154,29 @@ public abstract class AggFunctionTestBase<IN, T, ACC> {
         }
 
         Method mergeFunc = aggregator.getClass().getMethod("merge", getAccClass(), Iterable.class);
-        List<List<IN>> inputValueSets = getInputValueSets();
+        List<List<T>> inputValueSets = getInputValueSets();
         int size = getInputValueSets().size();
 
         // iterate over input sets
         for (int i = 0; i < size; ++i) {
-            List<IN> inputValues = inputValueSets.get(i);
+            List<T> inputValues = inputValueSets.get(i);
             List<ACC> accumulators = new ArrayList<>();
             List<ACC> reversedAccumulators = new ArrayList<>();
             // prepare accumulators
-            ACC firstAcc = aggregator.createAccumulator();
-            accumulateValues(aggregator, firstAcc, inputValues);
-            accumulators.add(firstAcc);
+            accumulators.add(accumulateValues(inputValues));
             // prepare reversed accumulators
             ACC retractedAcc = aggregator.createAccumulator();
             retractValues(retractedAcc, inputValues);
             reversedAccumulators.add(retractedAcc);
             // prepare accumulator only contain two elements
-            ACC accWithSubset = aggregator.createAccumulator();
-            accumulateValues(aggregator, accWithSubset, inputValues.subList(0, 2));
+            ACC accWithSubset = accumulateValues(inputValues.subList(0, 2));
             T expectedValue = aggregator.getValue(accWithSubset);
 
             // merge
-            ACC secondAcc = aggregator.createAccumulator();
-            mergeFunc.invoke(aggregator, secondAcc, accumulators);
-            mergeFunc.invoke(aggregator, secondAcc, reversedAccumulators);
-            mergeFunc.invoke(aggregator, accWithSubset, Collections.singleton(secondAcc));
+            ACC acc = aggregator.createAccumulator();
+            mergeFunc.invoke(aggregator, acc, accumulators);
+            mergeFunc.invoke(aggregator, acc, reversedAccumulators);
+            mergeFunc.invoke(aggregator, accWithSubset, Collections.singleton(acc));
 
             // getValue
             T result = aggregator.getValue(accWithSubset);
@@ -201,15 +192,14 @@ public abstract class AggFunctionTestBase<IN, T, ACC> {
             Method resetAccFunc =
                     aggregator.getClass().getMethod("resetAccumulator", getAccClass());
 
-            List<List<IN>> inputValueSets = getInputValueSets();
+            List<List<T>> inputValueSets = getInputValueSets();
             List<T> expectedResults = getExpectedResults();
             Preconditions.checkArgument(inputValueSets.size() == expectedResults.size());
             int size = getInputValueSets().size();
             // iterate over input sets
             for (int i = 0; i < size; ++i) {
-                List<IN> inputValues = inputValueSets.get(i);
-                ACC acc = aggregator.createAccumulator();
-                accumulateValues(aggregator, acc, inputValues);
+                List<T> inputValues = inputValueSets.get(i);
+                ACC acc = accumulateValues(inputValues);
                 resetAccFunc.invoke(aggregator, acc);
                 ACC expectedAcc = aggregator.createAccumulator();
                 // The accumulator after reset should be exactly same as the new accumulator
@@ -219,14 +209,15 @@ public abstract class AggFunctionTestBase<IN, T, ACC> {
     }
 
     protected <E> void validateResult(E expected, E result) {
-        assertThat(result).isEqualTo(expected);
+        assertEquals(expected, result);
     }
 
-    protected void accumulateValues(
-            AggregateFunction<T, ACC> aggregator, ACC accumulator, List<IN> values)
+    protected ACC accumulateValues(List<T> values)
             throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        AggregateFunction<T, ACC> aggregator = getAggregator();
+        ACC accumulator = getAggregator().createAccumulator();
         Method accumulateFunc = getAccumulateFunc();
-        for (IN value : values) {
+        for (T value : values) {
             if (accumulateFunc.getParameterCount() == 1) {
                 accumulateFunc.invoke(aggregator, accumulator);
             } else if (accumulateFunc.getParameterCount() == 2) {
@@ -235,13 +226,14 @@ public abstract class AggFunctionTestBase<IN, T, ACC> {
                 throw new TableException("Unsupported now");
             }
         }
+        return accumulator;
     }
 
-    protected void retractValues(ACC accumulator, List<IN> values)
+    protected void retractValues(ACC accumulator, List<T> values)
             throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         AggregateFunction<T, ACC> aggregator = getAggregator();
         Method retractFunc = getRetractFunc();
-        for (IN value : values) {
+        for (T value : values) {
             if (retractFunc.getParameterCount() == 1) {
                 retractFunc.invoke(aggregator, accumulator);
             } else if (retractFunc.getParameterCount() == 2) {
@@ -252,13 +244,13 @@ public abstract class AggFunctionTestBase<IN, T, ACC> {
         }
     }
 
-    protected Tuple2<List<IN>, List<IN>> splitValues(List<IN> values) {
+    protected Tuple2<List<T>, List<T>> splitValues(List<T> values) {
         return splitValues(values, values.size() / 2);
     }
 
-    protected Tuple2<List<IN>, List<IN>> splitValues(List<IN> values, int index) {
-        List<IN> firstValues = new ArrayList<>();
-        List<IN> secondValues = new ArrayList<>();
+    protected Tuple2<List<T>, List<T>> splitValues(List<T> values, int index) {
+        List<T> firstValues = new ArrayList<>();
+        List<T> secondValues = new ArrayList<>();
         int i;
         for (i = 0; i < values.size(); ++i) {
             if (i < index) {

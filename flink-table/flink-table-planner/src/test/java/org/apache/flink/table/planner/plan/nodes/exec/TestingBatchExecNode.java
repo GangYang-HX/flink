@@ -107,11 +107,6 @@ public class TestingBatchExecNode implements BatchExecNode<RowData> {
     }
 
     @Override
-    public void setCompiled(boolean isCompiled) {
-        throw new TableException("Unsupported operation.");
-    }
-
-    @Override
     public String toString() {
         return description;
     }

@@ -47,8 +47,6 @@ public class TestingOperatorCoordinator implements OperatorCoordinator {
     @Nullable private byte[] lastRestoredCheckpointState;
     private long lastRestoredCheckpointId;
 
-    private long lastTriggeredCheckpointId;
-
     private final BlockingQueue<CompletableFuture<byte[]>> triggeredCheckpoints;
 
     private final BlockingQueue<Long> lastCheckpointComplete;
@@ -90,12 +88,12 @@ public class TestingOperatorCoordinator implements OperatorCoordinator {
     }
 
     @Override
-    public void handleEventFromOperator(int subtask, int attemptNumber, OperatorEvent event) {
+    public void handleEventFromOperator(int subtask, OperatorEvent event) {
         receivedOperatorEvents.add(event);
     }
 
     @Override
-    public void executionAttemptFailed(int subtask, int attemptNumber, @Nullable Throwable reason) {
+    public void subtaskFailed(int subtask, @Nullable Throwable reason) {
         failedTasks.add(subtask);
         subtaskGateways.remove(subtask);
     }
@@ -106,13 +104,12 @@ public class TestingOperatorCoordinator implements OperatorCoordinator {
     }
 
     @Override
-    public void executionAttemptReady(int subtask, int attemptNumber, SubtaskGateway gateway) {
+    public void subtaskReady(int subtask, SubtaskGateway gateway) {
         subtaskGateways.put(subtask, gateway);
     }
 
     @Override
     public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> result) {
-        lastTriggeredCheckpointId = checkpointId;
         boolean added = triggeredCheckpoints.offer(result);
         assert added; // guard the test assumptions
     }
@@ -165,10 +162,6 @@ public class TestingOperatorCoordinator implements OperatorCoordinator {
 
     public CompletableFuture<byte[]> getLastTriggeredCheckpoint() throws InterruptedException {
         return triggeredCheckpoints.take();
-    }
-
-    public long getLastTriggeredCheckpointId() {
-        return lastTriggeredCheckpointId;
     }
 
     public boolean hasTriggeredCheckpoint() {

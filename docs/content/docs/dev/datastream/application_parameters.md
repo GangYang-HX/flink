@@ -48,13 +48,13 @@ The `ParameterTool` provides a set of predefined static methods for reading the 
 The following method will read a [Properties](https://docs.oracle.com/javase/tutorial/essential/environment/properties.html) file and provide the key/value pairs:
 ```java
 String propertiesFilePath = "/home/sam/flink/myjob.properties";
-ParameterTool parameters = ParameterTool.fromPropertiesFile(propertiesFilePath);
+ParameterTool parameter = ParameterTool.fromPropertiesFile(propertiesFilePath);
 
 File propertiesFile = new File(propertiesFilePath);
-ParameterTool parameters = ParameterTool.fromPropertiesFile(propertiesFile);
+ParameterTool parameter = ParameterTool.fromPropertiesFile(propertiesFile);
 
 InputStream propertiesFileInputStream = new FileInputStream(file);
-ParameterTool parameters = ParameterTool.fromPropertiesFile(propertiesFileInputStream);
+ParameterTool parameter = ParameterTool.fromPropertiesFile(propertiesFileInputStream);
 ```
 
 
@@ -63,7 +63,7 @@ ParameterTool parameters = ParameterTool.fromPropertiesFile(propertiesFileInputS
 This allows getting arguments like `--input hdfs:///mydata --elements 42` from the command line.
 ```java
 public static void main(String[] args) {
-    ParameterTool parameters = ParameterTool.fromArgs(args);
+    ParameterTool parameter = ParameterTool.fromArgs(args);
     // .. regular code ..
 ```
 
@@ -73,7 +73,7 @@ public static void main(String[] args) {
 When starting a JVM, you can pass system properties to it: `-Dinput=hdfs:///mydata`. You can also initialize the `ParameterTool` from these system properties:
 
 ```java
-ParameterTool parameters = ParameterTool.fromSystemProperties();
+ParameterTool parameter = ParameterTool.fromSystemProperties();
 ```
 
 
@@ -86,10 +86,10 @@ Now that we've got the parameters from somewhere (see above) we can use them in 
 The `ParameterTool` itself has methods for accessing the values.
 ```java
 ParameterTool parameters = // ...
-parameters.getRequired("input");
-parameters.get("output", "myDefaultValue");
-parameters.getLong("expectedCount", -1L);
-parameters.getNumberOfParameters();
+parameter.getRequired("input");
+parameter.get("output", "myDefaultValue");
+parameter.getLong("expectedCount", -1L);
+parameter.getNumberOfParameters();
 // .. there are more methods available.
 ```
 

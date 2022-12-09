@@ -33,6 +33,8 @@ import org.apache.flink.util.StringUtils;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 
 import javax.annotation.Nullable;
 
@@ -50,9 +52,12 @@ import java.util.stream.Collectors;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** The base class for json plan testing. */
 public abstract class JsonPlanTestBase extends AbstractTestBase {
+
+    @Rule public ExpectedException exception = ExpectedException.none();
 
     protected TableEnvironment tableEnv;
 
@@ -263,7 +268,7 @@ public abstract class JsonPlanTestBase extends AbstractTestBase {
     protected void assertResult(List<String> expected, List<String> actual) {
         Collections.sort(expected);
         Collections.sort(actual);
-        assertThat(actual).isEqualTo(expected);
+        assertEquals(expected, actual);
     }
 
     protected List<String> readLines(File path) throws IOException {

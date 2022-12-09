@@ -118,8 +118,7 @@ public class DefaultOperatorCoordinatorHandler implements OperatorCoordinatorHan
         }
 
         try {
-            coordinator.handleEventFromOperator(
-                    exec.getParallelSubtaskIndex(), exec.getAttemptNumber(), evt);
+            coordinator.handleEventFromOperator(exec.getParallelSubtaskIndex(), evt);
         } catch (Throwable t) {
             ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
             globalFailureHandler.handleGlobalFailure(t);

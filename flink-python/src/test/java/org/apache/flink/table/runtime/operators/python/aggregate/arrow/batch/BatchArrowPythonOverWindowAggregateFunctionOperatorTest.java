@@ -25,6 +25,7 @@ import org.apache.flink.python.PythonOptions;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.python.PythonFunctionInfo;
@@ -39,13 +40,13 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Test for {@link BatchArrowPythonOverWindowAggregateFunctionOperator}. These test that:
@@ -55,11 +56,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>FinishBundle is called when bundled time reach to max bundle time
  * </ul>
  */
-class BatchArrowPythonOverWindowAggregateFunctionOperatorTest
+public class BatchArrowPythonOverWindowAggregateFunctionOperatorTest
         extends AbstractBatchArrowPythonAggregateFunctionOperatorTest {
 
     @Test
-    void testOverWindowAggregateFunction() throws Exception {
+    public void testOverWindowAggregateFunction() throws Exception {
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness =
                 getTestHarness(new Configuration());
 
@@ -88,7 +89,7 @@ class BatchArrowPythonOverWindowAggregateFunctionOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByCount() throws Exception {
+    public void testFinishBundleTriggeredByCount() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 3);
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = getTestHarness(conf);
@@ -123,7 +124,7 @@ class BatchArrowPythonOverWindowAggregateFunctionOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByTime() throws Exception {
+    public void testFinishBundleTriggeredByTime() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         conf.setLong(PythonOptions.MAX_BUNDLE_TIME_MILLS, 1000L);
@@ -160,27 +161,27 @@ class BatchArrowPythonOverWindowAggregateFunctionOperatorTest
     }
 
     @Test
-    void testUserDefinedFunctionsProto() throws Exception {
+    public void testUserDefinedFunctionsProto() throws Exception {
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness =
                 getTestHarness(new Configuration());
         testHarness.open();
         BatchArrowPythonOverWindowAggregateFunctionOperator operator =
                 (BatchArrowPythonOverWindowAggregateFunctionOperator)
                         testHarness.getOneInputOperator();
-        FlinkFnApi.UserDefinedFunctions functionsProto = operator.createUserDefinedFunctionsProto();
+        FlinkFnApi.UserDefinedFunctions functionsProto = operator.getUserDefinedFunctionsProto();
         List<FlinkFnApi.OverWindow> windows = functionsProto.getWindowsList();
-        assertThat(windows).hasSize(2);
+        assertEquals(2, windows.size());
 
         // first window is a range sliding window.
         FlinkFnApi.OverWindow firstWindow = windows.get(0);
-        assertThat(firstWindow.getWindowType())
-                .isEqualTo(FlinkFnApi.OverWindow.WindowType.RANGE_SLIDING);
+        assertEquals(firstWindow.getWindowType(), FlinkFnApi.OverWindow.WindowType.RANGE_SLIDING);
 
         // second window is a row unbounded preceding window.
         FlinkFnApi.OverWindow secondWindow = windows.get(1);
-        assertThat(secondWindow.getWindowType())
-                .isEqualTo(FlinkFnApi.OverWindow.WindowType.ROW_UNBOUNDED_PRECEDING);
-        assertThat(secondWindow.getUpperBoundary()).isEqualTo(2L);
+        assertEquals(
+                secondWindow.getWindowType(),
+                FlinkFnApi.OverWindow.WindowType.ROW_UNBOUNDED_PRECEDING);
+        assertEquals(secondWindow.getUpperBoundary(), 2L);
     }
 
     @Override
@@ -243,25 +244,19 @@ class BatchArrowPythonOverWindowAggregateFunctionOperatorTest
                 3,
                 true,
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "UdafInputProjection",
                         inputRowType,
                         udfInputType,
                         udafInputOffsets),
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "GroupKey",
                         inputRowType,
                         (RowType) Projection.of(groupingSet).project(inputRowType),
                         groupingSet),
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "GroupSet",
                         inputRowType,
                         (RowType) Projection.of(groupingSet).project(inputRowType),
@@ -311,7 +306,7 @@ class BatchArrowPythonOverWindowAggregateFunctionOperatorTest
                     udfInputType,
                     udfOutputType,
                     getFunctionUrn(),
-                    createUserDefinedFunctionsProto(),
+                    getUserDefinedFunctionsProto(),
                     PythonTestUtils.createMockFlinkMetricContainer(),
                     true);
         }

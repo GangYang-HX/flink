@@ -30,13 +30,13 @@ import org.apache.flink.connector.testutils.source.reader.TestingReaderOutput;
 import org.apache.flink.core.io.InputStatus;
 import org.apache.flink.mock.Whitebox;
 
+import org.hamcrest.Matchers;
+import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link HybridSourceReader}. */
 public class HybridSourceReaderTest {
@@ -55,11 +55,11 @@ public class HybridSourceReaderTest {
 
         HybridSourceReader<Integer> reader = new HybridSourceReader<>(readerContext);
 
-        assertThat(readerContext.getSentEvents()).isEmpty();
+        Assert.assertThat(readerContext.getSentEvents(), Matchers.emptyIterable());
         reader.start();
         assertAndClearSourceReaderFinishedEvent(readerContext, -1);
-        assertThat(currentReader(reader)).isNull();
-        assertThat(reader.pollNext(readerOutput)).isEqualTo(InputStatus.NOTHING_AVAILABLE);
+        Assert.assertNull(currentReader(reader));
+        Assert.assertEquals(InputStatus.NOTHING_AVAILABLE, reader.pollNext(readerOutput));
 
         Source source1 =
                 new MockSource(null, 0) {
@@ -85,19 +85,19 @@ public class HybridSourceReaderTest {
             status = reader.pollNext(readerOutput);
             Thread.sleep(10);
         }
-        assertThat(readerOutput.getEmittedRecords()).contains(0);
+        Assert.assertThat(readerOutput.getEmittedRecords(), Matchers.contains(0));
         reader.pollNext(readerOutput);
-        assertThat(reader.pollNext(readerOutput))
-                .as("before notifyNoMoreSplits")
-                .isEqualTo(InputStatus.NOTHING_AVAILABLE);
+        Assert.assertEquals(
+                "before notifyNoMoreSplits",
+                InputStatus.NOTHING_AVAILABLE,
+                reader.pollNext(readerOutput));
 
         reader.notifyNoMoreSplits();
         reader.pollNext(readerOutput);
         assertAndClearSourceReaderFinishedEvent(readerContext, 0);
 
-        assertThat(currentReader(reader))
-                .as("reader before switch source event")
-                .isEqualTo(mockSplitReader1);
+        Assert.assertEquals(
+                "reader before switch source event", mockSplitReader1, currentReader(reader));
 
         Source source2 =
                 new MockSource(null, 0) {
@@ -108,14 +108,14 @@ public class HybridSourceReaderTest {
                     }
                 };
         reader.handleSourceEvents(new SwitchSourceEvent(1, source2, true));
-        assertThat(currentReader(reader))
-                .as("reader after switch source event")
-                .isEqualTo(mockSplitReader2);
+        Assert.assertEquals(
+                "reader after switch source event", mockSplitReader2, currentReader(reader));
 
         reader.notifyNoMoreSplits();
-        assertThat(reader.pollNext(readerOutput))
-                .as("reader 1 after notifyNoMoreSplits")
-                .isEqualTo(InputStatus.END_OF_INPUT);
+        Assert.assertEquals(
+                "reader 1 after notifyNoMoreSplits",
+                InputStatus.END_OF_INPUT,
+                reader.pollNext(readerOutput));
 
         reader.close();
     }
@@ -140,22 +140,22 @@ public class HybridSourceReaderTest {
         reader.addSplits(Collections.singletonList(hybridSplit));
 
         List<HybridSourceSplit> snapshot = reader.snapshotState(0);
-        assertThat(snapshot).contains(hybridSplit);
+        Assert.assertThat(snapshot, Matchers.contains(hybridSplit));
 
         // reader recovery
         readerContext.clearSentEvents();
         reader = new HybridSourceReader<>(readerContext);
 
         reader.addSplits(snapshot);
-        assertThat(currentReader(reader)).isNull();
+        Assert.assertNull(currentReader(reader));
 
         reader.start();
-        assertThat(currentReader(reader)).isNull();
+        Assert.assertNull(currentReader(reader));
 
         assertAndClearSourceReaderFinishedEvent(readerContext, -1);
         reader.handleSourceEvents(new SwitchSourceEvent(0, source, false));
-        assertThat(currentReader(reader)).isNotNull();
-        assertThat(reader.snapshotState(1)).contains(hybridSplit);
+        Assert.assertNotNull(currentReader(reader));
+        Assert.assertThat(reader.snapshotState(1), Matchers.contains(hybridSplit));
 
         reader.close();
     }
@@ -196,9 +196,10 @@ public class HybridSourceReaderTest {
 
     private static void assertAndClearSourceReaderFinishedEvent(
             TestingReaderContext context, int sourceIndex) {
-        assertThat(context.getSentEvents()).hasSize(1);
-        assertThat(((SourceReaderFinishedEvent) context.getSentEvents().get(0)).sourceIndex())
-                .isEqualTo(sourceIndex);
+        Assert.assertThat(context.getSentEvents(), Matchers.iterableWithSize(1));
+        Assert.assertEquals(
+                sourceIndex,
+                ((SourceReaderFinishedEvent) context.getSentEvents().get(0)).sourceIndex());
         context.clearSentEvents();
     }
 }

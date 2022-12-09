@@ -26,11 +26,10 @@ import org.apache.flink.runtime.deployment.TaskDeploymentDescriptorFactory;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.failover.flip1.partitionrelease.PartitionGroupReleaseStrategy;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
-import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
-import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.types.Either;
 import org.apache.flink.util.SerializedValue;
@@ -38,6 +37,7 @@ import org.apache.flink.util.SerializedValue;
 import javax.annotation.Nonnull;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 
 /**
@@ -66,7 +66,7 @@ public interface InternalExecutionGraphAccessor {
     @Nonnull
     ComponentMainThreadExecutor getJobMasterMainThreadExecutor();
 
-    ShuffleMaster<? extends ShuffleDescriptor> getShuffleMaster();
+    ShuffleMaster<?> getShuffleMaster();
 
     JobMasterPartitionTracker getPartitionTracker();
 
@@ -115,9 +115,7 @@ public interface InternalExecutionGraphAccessor {
 
     boolean isDynamic();
 
-    ExecutionGraphID getExecutionGraphID();
-
-    /** Get the shuffle descriptors of the cluster partitions ordered by partition number. */
-    List<ShuffleDescriptor> getClusterPartitionShuffleDescriptors(
-            IntermediateDataSetID intermediateResultPartition);
+    default Map<OperatorID, String> getOperatorDescriptions() {
+        return null;
+    }
 }

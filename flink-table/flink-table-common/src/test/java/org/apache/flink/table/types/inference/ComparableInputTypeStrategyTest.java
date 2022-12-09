@@ -33,22 +33,24 @@ import org.apache.flink.table.types.logical.DistinctType;
 import org.apache.flink.table.types.logical.StructuredType;
 import org.apache.flink.table.types.logical.StructuredType.StructuredComparison;
 
+import org.junit.runners.Parameterized;
+
 import javax.annotation.Nonnull;
 
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 
 /** Tests for {@link ComparableTypeStrategy}. */
-class ComparableInputTypeStrategyTest extends InputTypeStrategiesTestBase {
+public class ComparableInputTypeStrategyTest extends InputTypeStrategiesTestBase {
 
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return asList(
                 TestSpec.forStrategy(
                                 "Numeric types are comparable",
                                 InputTypeStrategies.comparable(

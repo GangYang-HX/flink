@@ -37,7 +37,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Utilities for file sinks that writes a sequence of continues integers into files starting from 0.
@@ -115,25 +117,25 @@ public class IntegerFileSinkTestDataUtils {
             String path, int numRecords, int numBuckets, int numSources) throws Exception {
         File dir = new File(path);
         String[] subDirNames = dir.list();
-        assertThat(subDirNames).isNotNull();
+        assertNotNull(subDirNames);
 
         Arrays.sort(subDirNames, Comparator.comparingInt(Integer::parseInt));
-        assertThat(subDirNames).hasSize(numBuckets);
+        assertEquals(numBuckets, subDirNames.length);
         for (int i = 0; i < numBuckets; ++i) {
-            assertThat(subDirNames[i]).isEqualTo(Integer.toString(i));
+            assertEquals(Integer.toString(i), subDirNames[i]);
 
             // now check its content
             File bucketDir = new File(path, subDirNames[i]);
-            assertThat(bucketDir)
-                    .as(bucketDir.getAbsolutePath() + " Should be a existing directory")
-                    .isDirectory();
+            assertTrue(
+                    bucketDir.getAbsolutePath() + " Should be a existing directory",
+                    bucketDir.isDirectory());
 
             Map<Integer, Integer> counts = new HashMap<>();
             File[] files = bucketDir.listFiles(f -> !f.getName().startsWith("."));
-            assertThat(files).isNotNull();
+            assertNotNull(files);
 
             for (File file : files) {
-                assertThat(file).isFile();
+                assertTrue(file.isFile());
 
                 try (DataInputStream dataInputStream =
                         new DataInputStream(new FileInputStream(file))) {
@@ -147,20 +149,20 @@ public class IntegerFileSinkTestDataUtils {
             }
 
             int expectedCount = numRecords / numBuckets + (i < numRecords % numBuckets ? 1 : 0);
-            assertThat(counts).hasSize(expectedCount);
+            assertEquals(expectedCount, counts.size());
 
             for (int j = i; j < numRecords; j += numBuckets) {
-                assertThat(counts.getOrDefault(j, 0).intValue())
-                        .as(
-                                "The record "
-                                        + j
-                                        + " should occur "
-                                        + numSources
-                                        + " times, "
-                                        + " but only occurs "
-                                        + counts.getOrDefault(j, 0)
-                                        + "time")
-                        .isEqualTo(numSources);
+                assertEquals(
+                        "The record "
+                                + j
+                                + " should occur "
+                                + numSources
+                                + " times, "
+                                + " but only occurs "
+                                + counts.getOrDefault(j, 0)
+                                + "time",
+                        numSources,
+                        counts.getOrDefault(j, 0).intValue());
             }
         }
     }

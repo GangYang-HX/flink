@@ -19,33 +19,36 @@
 package org.apache.flink.kubernetes.kubeclient.resources;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.kubernetes.KubernetesExtension;
+import org.apache.flink.kubernetes.KubernetesResource;
 import org.apache.flink.kubernetes.configuration.KubernetesLeaderElectionConfiguration;
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClient;
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClientFactory;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.ClassRule;
+import org.junit.Test;
 
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 
 /**
  * IT Tests for the {@link KubernetesLeaderElector}. Start multiple leader contenders currently, one
  * should elect successfully. And if current leader dies, a new one could take over.
  */
-class KubernetesLeaderElectorITCase {
-    @RegisterExtension
-    private static final KubernetesExtension kubernetesExtension = new KubernetesExtension();
+public class KubernetesLeaderElectorITCase extends TestLogger {
+
+    @ClassRule public static KubernetesResource kubernetesResource = new KubernetesResource();
 
     private final FlinkKubeClientFactory kubeClientFactory = new FlinkKubeClientFactory();
 
     private static final String LEADER_CONFIGMAP_NAME_PREFIX = "leader-test-cluster";
 
     @Test
-    void testMultipleKubernetesLeaderElectors() throws Exception {
-        final Configuration configuration = kubernetesExtension.getConfiguration();
+    public void testMultipleKubernetesLeaderElectors() throws Exception {
+        final Configuration configuration = kubernetesResource.getConfiguration();
 
         final String leaderConfigMapName =
                 LEADER_CONFIGMAP_NAME_PREFIX + System.currentTimeMillis();
@@ -82,21 +85,21 @@ class KubernetesLeaderElectorITCase {
                 if (leaderCallbackHandlers[i].getLockIdentity().equals(firstLockIdentity)) {
                     // Check the callback isLeader is called.
                     leaderCallbackHandlers[i].waitForNewLeader();
-                    assertThat(leaderCallbackHandlers[i].hasLeadership()).isTrue();
+                    assertThat(leaderCallbackHandlers[i].hasLeadership(), is(true));
                     // Current leader died
                     leaderElectors[i].stop();
                     // Check the callback notLeader is called.
                     leaderCallbackHandlers[i].waitForRevokeLeader();
-                    assertThat(leaderCallbackHandlers[i].hasLeadership()).isFalse();
+                    assertThat(leaderCallbackHandlers[i].hasLeadership(), is(false));
                 } else {
-                    assertThat(leaderCallbackHandlers[i].hasLeadership()).isFalse();
+                    assertThat(leaderCallbackHandlers[i].hasLeadership(), is(false));
                 }
             }
 
             // Another leader should be elected successfully and update the lock identity
             final String anotherLockIdentity =
                     TestingLeaderCallbackHandler.waitUntilNewLeaderAppears();
-            assertThat(anotherLockIdentity).isNotEqualTo(firstLockIdentity);
+            assertThat(anotherLockIdentity, is(not(firstLockIdentity)));
         } finally {
             // Cleanup the resources
             for (int i = 0; i < leaderNum; i++) {
@@ -107,7 +110,7 @@ class KubernetesLeaderElectorITCase {
                     kubeClients[i].close();
                 }
             }
-            kubernetesExtension.getFlinkKubeClient().deleteConfigMap(leaderConfigMapName).get();
+            kubernetesResource.getFlinkKubeClient().deleteConfigMap(leaderConfigMapName).get();
         }
     }
 }

@@ -31,7 +31,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** An embedded in-memory checkpoint store, which supports shutdown and suspend. */
@@ -47,8 +46,6 @@ public class EmbeddedCompletedCheckpointStore extends AbstractCompleteCheckpoint
     private final AtomicReference<JobStatus> shutdownStatus = new AtomicReference<>();
 
     private final int maxRetainedCheckpoints;
-
-    private final Executor ioExecutor = Executors.directExecutor();
 
     @VisibleForTesting
     public EmbeddedCompletedCheckpointStore() {
@@ -100,20 +97,11 @@ public class EmbeddedCompletedCheckpointStore extends AbstractCompleteCheckpoint
                 CheckpointSubsumeHelper.subsume(
                                 checkpoints,
                                 maxRetainedCheckpoints,
-                                cc -> {
-                                    cc.markAsDiscardedOnSubsume();
-                                    checkpointsCleaner.addSubsumedCheckpoint(cc);
-                                })
+                                cc -> cc.markAsDiscardedOnSubsume().discard())
                         .orElse(null);
 
-        findLowest(checkpoints)
-                .ifPresent(
-                        id ->
-                                checkpointsCleaner.cleanSubsumedCheckpoints(
-                                        id,
-                                        getSharedStateRegistry().unregisterUnusedState(id),
-                                        postCleanup,
-                                        ioExecutor));
+        unregisterUnusedState(checkpoints);
+
         return completedCheckpoint;
     }
 

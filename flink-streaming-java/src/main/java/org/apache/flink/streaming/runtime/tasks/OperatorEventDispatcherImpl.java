@@ -32,7 +32,6 @@ import org.apache.flink.util.SerializedValue;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -81,10 +80,6 @@ public final class OperatorEventDispatcherImpl implements OperatorEventDispatche
         if (prior != null) {
             throw new IllegalStateException("already a handler registered for this operatorId");
         }
-    }
-
-    Set<OperatorID> getRegisteredOperators() {
-        return handlers.keySet();
     }
 
     @Override

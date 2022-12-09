@@ -29,6 +29,7 @@ import org.apache.flink.connector.file.src.assigners.FileSplitAssigner;
 import org.apache.flink.connector.file.src.enumerate.FileEnumerator;
 import org.apache.flink.connector.file.src.reader.BulkFormat;
 import org.apache.flink.connector.file.table.ContinuousPartitionFetcher;
+import org.apache.flink.connectors.hive.bili.ContinuousHiveSplitEnumeratorNew;
 import org.apache.flink.connectors.hive.read.HiveSourceSplit;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
@@ -38,6 +39,8 @@ import org.apache.flink.util.Preconditions;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.mapred.JobConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -45,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * A unified data source that reads a hive table. HiveSource works on {@link HiveSourceSplit} and
@@ -57,14 +61,13 @@ import java.util.List;
 @PublicEvolving
 public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(HiveSource.class);
+
     private static final long serialVersionUID = 1L;
 
+    private final int threadNum;
     private final JobConfWrapper jobConfWrapper;
     private final List<String> partitionKeys;
-
-    private final String hiveVersion;
-    private final List<String> dynamicFilterPartitionKeys;
-    private final List<HiveTablePartition> partitions;
     private final ContinuousPartitionFetcher<Partition, ?> fetcher;
     private final HiveTableSource.HiveContinuousPartitionFetcherContext<?> fetcherContext;
     private final ObjectPath tablePath;
@@ -75,12 +78,10 @@ public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
             FileSplitAssigner.Provider splitAssigner,
             BulkFormat<T, HiveSourceSplit> readerFormat,
             @Nullable ContinuousEnumerationSettings continuousEnumerationSettings,
+            int threadNum,
             JobConf jobConf,
             ObjectPath tablePath,
             List<String> partitionKeys,
-            String hiveVersion,
-            @Nullable List<String> dynamicFilterPartitionKeys,
-            List<HiveTablePartition> partitions,
             @Nullable ContinuousPartitionFetcher<Partition, ?> fetcher,
             @Nullable HiveTableSource.HiveContinuousPartitionFetcherContext<?> fetcherContext) {
         super(
@@ -89,12 +90,14 @@ public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
                 splitAssigner,
                 readerFormat,
                 continuousEnumerationSettings);
+        Preconditions.checkArgument(
+                threadNum >= 1,
+                HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM.key()
+                        + " cannot be less than 1");
+        this.threadNum = threadNum;
         this.jobConfWrapper = new JobConfWrapper(jobConf);
         this.tablePath = tablePath;
         this.partitionKeys = partitionKeys;
-        this.hiveVersion = hiveVersion;
-        this.dynamicFilterPartitionKeys = dynamicFilterPartitionKeys;
-        this.partitions = partitions;
         this.fetcher = fetcher;
         this.fetcherContext = fetcherContext;
     }
@@ -106,7 +109,7 @@ public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
 
     @Override
     public SimpleVersionedSerializer<PendingSplitsCheckpoint<HiveSourceSplit>>
-            getEnumeratorCheckpointSerializer() {
+    getEnumeratorCheckpointSerializer() {
         if (continuousPartitionedEnumerator()) {
             return new ContinuousHivePendingSplitsCheckpointSerializer(getSplitSerializer());
         } else {
@@ -115,16 +118,15 @@ public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
     }
 
     @Override
-    public SplitEnumerator<HiveSourceSplit, PendingSplitsCheckpoint<HiveSourceSplit>>
-            createEnumerator(SplitEnumeratorContext<HiveSourceSplit> enumContext) {
+    public SplitEnumerator<HiveSourceSplit, PendingSplitsCheckpoint<HiveSourceSplit>> createEnumerator(
+            SplitEnumeratorContext<HiveSourceSplit> enumContext) {
         if (continuousPartitionedEnumerator()) {
-            return createContinuousSplitEnumerator(
+            return createContinuousSplitEnumeratorNew(
                     enumContext,
                     fetcherContext.getConsumeStartOffset(),
                     Collections.emptyList(),
+                    Collections.emptyList(),
                     Collections.emptyList());
-        } else if (dynamicFilterPartitionKeys != null) {
-            return createDynamicSplitEnumerator(enumContext);
         } else {
             return super.createEnumerator(enumContext);
         }
@@ -132,9 +134,9 @@ public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
 
     @Override
     public SplitEnumerator<HiveSourceSplit, PendingSplitsCheckpoint<HiveSourceSplit>>
-            restoreEnumerator(
-                    SplitEnumeratorContext<HiveSourceSplit> enumContext,
-                    PendingSplitsCheckpoint<HiveSourceSplit> checkpoint) {
+    restoreEnumerator(
+            SplitEnumeratorContext<HiveSourceSplit> enumContext,
+            PendingSplitsCheckpoint<HiveSourceSplit> checkpoint) {
         if (continuousPartitionedEnumerator()) {
             Preconditions.checkState(
                     checkpoint instanceof ContinuousHivePendingSplitsCheckpoint,
@@ -142,11 +144,19 @@ public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
                     checkpoint.getClass().getName());
             ContinuousHivePendingSplitsCheckpoint hiveCheckpoint =
                     (ContinuousHivePendingSplitsCheckpoint) checkpoint;
-            return createContinuousSplitEnumerator(
+            LOG.info(
+                    "restoreEnumerator pathsAlreadyProcessed detail,{}",
+                    hiveCheckpoint
+                            .getAlreadyProcessedPaths()
+                            .stream()
+                            .map(item -> item.getPath())
+                            .collect(
+                                    Collectors.toSet()));
+            return createContinuousSplitEnumeratorNew(
                     enumContext,
                     hiveCheckpoint.getCurrentReadOffset(),
                     hiveCheckpoint.getSeenPartitionsSinceOffset(),
-                    hiveCheckpoint.getSplits());
+                    hiveCheckpoint.getSplits(), hiveCheckpoint.getAlreadyProcessedPaths());
         } else {
             return super.restoreEnumerator(enumContext, checkpoint);
         }
@@ -156,34 +166,22 @@ public class HiveSource<T> extends AbstractFileSource<T, HiveSourceSplit> {
         return getBoundedness() == Boundedness.CONTINUOUS_UNBOUNDED && !partitionKeys.isEmpty();
     }
 
-    private SplitEnumerator<HiveSourceSplit, PendingSplitsCheckpoint<HiveSourceSplit>>
-            createContinuousSplitEnumerator(
-                    SplitEnumeratorContext<HiveSourceSplit> enumContext,
-                    Comparable<?> currentReadOffset,
-                    Collection<List<String>> seenPartitions,
-                    Collection<HiveSourceSplit> splits) {
-        return new ContinuousHiveSplitEnumerator(
+    private SplitEnumerator<HiveSourceSplit, PendingSplitsCheckpoint<HiveSourceSplit>> createContinuousSplitEnumeratorNew(
+            SplitEnumeratorContext<HiveSourceSplit> enumContext,
+            Comparable<?> currentReadOffset,
+            Collection<List<String>> seenPartitions,
+            Collection<HiveSourceSplit> splits,
+            Collection<Path> alreadyProcessedPaths) {
+        return new ContinuousHiveSplitEnumeratorNew(
                 enumContext,
                 currentReadOffset,
                 seenPartitions,
                 getAssignerFactory().create(new ArrayList<>(splits)),
                 getContinuousEnumerationSettings().getDiscoveryInterval().toMillis(),
+                threadNum,
                 jobConfWrapper.conf(),
                 tablePath,
                 fetcher,
-                fetcherContext);
-    }
-
-    private SplitEnumerator<HiveSourceSplit, PendingSplitsCheckpoint<HiveSourceSplit>>
-            createDynamicSplitEnumerator(SplitEnumeratorContext<HiveSourceSplit> enumContext) {
-        return new DynamicHiveSplitEnumerator(
-                enumContext,
-                new HiveSourceDynamicFileEnumerator.Provider(
-                        tablePath.getFullName(),
-                        dynamicFilterPartitionKeys,
-                        partitions,
-                        hiveVersion,
-                        jobConfWrapper),
-                getAssignerFactory());
+                fetcherContext, alreadyProcessedPaths);
     }
 }

@@ -52,161 +52,153 @@ import org.apache.calcite.test.MockSqlOperatorTable;
 import org.apache.calcite.test.catalog.MockCatalogReaderSimple;
 import org.apache.calcite.util.SourceStringReader;
 import org.apache.calcite.util.Util;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import javax.annotation.Nullable;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.params.provider.Arguments.of;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for all the supported Flink DDL data types. */
-class FlinkDDLDataTypeTest {
+@RunWith(Parameterized.class)
+public class FlinkDDLDataTypeTest {
     private static final Fixture FIXTURE = new Fixture(TestFactory.INSTANCE.getTypeFactory());
     private static final String DDL_FORMAT =
             "create table t1 (\n" + "  f0 %s\n" + ") with (\n" + "  'k1' = 'v1'\n" + ")";
 
-    static Stream<Arguments> testData() {
-        return Stream.of(
-                createArgumentsTestItem("CHAR", nullable(FIXTURE.char1Type), "CHAR"),
-                createArgumentsTestItem("CHAR NOT NULL", FIXTURE.char1Type, "CHAR NOT NULL"),
-                createArgumentsTestItem("CHAR   NOT \t\nNULL", FIXTURE.char1Type, "CHAR NOT NULL"),
-                createArgumentsTestItem("char not null", FIXTURE.char1Type, "CHAR NOT NULL"),
-                createArgumentsTestItem("CHAR NULL", nullable(FIXTURE.char1Type), "CHAR"),
-                createArgumentsTestItem("CHAR(33)", nullable(FIXTURE.char33Type), "CHAR(33)"),
-                createArgumentsTestItem("VARCHAR", nullable(FIXTURE.varcharType), "VARCHAR"),
-                createArgumentsTestItem(
-                        "VARCHAR(33)", nullable(FIXTURE.varchar33Type), "VARCHAR(33)"),
-                createArgumentsTestItem(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestItem> testData() {
+        return Arrays.asList(
+                createTestItem("CHAR", nullable(FIXTURE.char1Type), "CHAR"),
+                createTestItem("CHAR NOT NULL", FIXTURE.char1Type, "CHAR NOT NULL"),
+                createTestItem("CHAR   NOT \t\nNULL", FIXTURE.char1Type, "CHAR NOT NULL"),
+                createTestItem("char not null", FIXTURE.char1Type, "CHAR NOT NULL"),
+                createTestItem("CHAR NULL", nullable(FIXTURE.char1Type), "CHAR"),
+                createTestItem("CHAR(33)", nullable(FIXTURE.char33Type), "CHAR(33)"),
+                createTestItem("VARCHAR", nullable(FIXTURE.varcharType), "VARCHAR"),
+                createTestItem("VARCHAR(33)", nullable(FIXTURE.varchar33Type), "VARCHAR(33)"),
+                createTestItem(
                         "STRING",
                         nullable(FIXTURE.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE)),
                         "STRING"),
-                createArgumentsTestItem("BOOLEAN", nullable(FIXTURE.booleanType), "BOOLEAN"),
-                createArgumentsTestItem("BINARY", nullable(FIXTURE.binaryType), "BINARY"),
-                createArgumentsTestItem("BINARY(33)", nullable(FIXTURE.binary33Type), "BINARY(33)"),
-                createArgumentsTestItem("VARBINARY", nullable(FIXTURE.varbinaryType), "VARBINARY"),
-                createArgumentsTestItem(
-                        "VARBINARY(33)", nullable(FIXTURE.varbinary33Type), "VARBINARY(33)"),
-                createArgumentsTestItem(
+                createTestItem("BOOLEAN", nullable(FIXTURE.booleanType), "BOOLEAN"),
+                createTestItem("BINARY", nullable(FIXTURE.binaryType), "BINARY"),
+                createTestItem("BINARY(33)", nullable(FIXTURE.binary33Type), "BINARY(33)"),
+                createTestItem("VARBINARY", nullable(FIXTURE.varbinaryType), "VARBINARY"),
+                createTestItem("VARBINARY(33)", nullable(FIXTURE.varbinary33Type), "VARBINARY(33)"),
+                createTestItem(
                         "BYTES",
                         nullable(FIXTURE.createSqlType(SqlTypeName.VARBINARY, Integer.MAX_VALUE)),
                         "BYTES"),
-                createArgumentsTestItem("DECIMAL", nullable(FIXTURE.decimalType), "DECIMAL"),
-                createArgumentsTestItem("DEC", nullable(FIXTURE.decimalType), "DECIMAL"),
-                createArgumentsTestItem("NUMERIC", nullable(FIXTURE.decimalType), "DECIMAL"),
-                createArgumentsTestItem(
-                        "DECIMAL(10)", nullable(FIXTURE.decimalP10S0Type), "DECIMAL(10)"),
-                createArgumentsTestItem(
-                        "DEC(10)", nullable(FIXTURE.decimalP10S0Type), "DECIMAL(10)"),
-                createArgumentsTestItem(
-                        "NUMERIC(10)", nullable(FIXTURE.decimalP10S0Type), "DECIMAL(10)"),
-                createArgumentsTestItem(
+                createTestItem("DECIMAL", nullable(FIXTURE.decimalType), "DECIMAL"),
+                createTestItem("DEC", nullable(FIXTURE.decimalType), "DECIMAL"),
+                createTestItem("NUMERIC", nullable(FIXTURE.decimalType), "DECIMAL"),
+                createTestItem("DECIMAL(10)", nullable(FIXTURE.decimalP10S0Type), "DECIMAL(10)"),
+                createTestItem("DEC(10)", nullable(FIXTURE.decimalP10S0Type), "DECIMAL(10)"),
+                createTestItem("NUMERIC(10)", nullable(FIXTURE.decimalP10S0Type), "DECIMAL(10)"),
+                createTestItem(
                         "DECIMAL(10, 3)", nullable(FIXTURE.decimalP10S3Type), "DECIMAL(10, 3)"),
-                createArgumentsTestItem(
-                        "DEC(10, 3)", nullable(FIXTURE.decimalP10S3Type), "DECIMAL(10, 3)"),
-                createArgumentsTestItem(
+                createTestItem("DEC(10, 3)", nullable(FIXTURE.decimalP10S3Type), "DECIMAL(10, 3)"),
+                createTestItem(
                         "NUMERIC(10, 3)", nullable(FIXTURE.decimalP10S3Type), "DECIMAL(10, 3)"),
-                createArgumentsTestItem("TINYINT", nullable(FIXTURE.tinyintType), "TINYINT"),
-                createArgumentsTestItem("SMALLINT", nullable(FIXTURE.smallintType), "SMALLINT"),
-                createArgumentsTestItem("INTEGER", nullable(FIXTURE.intType), "INTEGER"),
-                createArgumentsTestItem("INT", nullable(FIXTURE.intType), "INTEGER"),
-                createArgumentsTestItem("BIGINT", nullable(FIXTURE.bigintType), "BIGINT"),
-                createArgumentsTestItem("FLOAT", nullable(FIXTURE.floatType), "FLOAT"),
-                createArgumentsTestItem("DOUBLE", nullable(FIXTURE.doubleType), "DOUBLE"),
-                createArgumentsTestItem("DOUBLE PRECISION", nullable(FIXTURE.doubleType), "DOUBLE"),
-                createArgumentsTestItem("DATE", nullable(FIXTURE.dateType), "DATE"),
-                createArgumentsTestItem("TIME", nullable(FIXTURE.timeType), "TIME"),
-                createArgumentsTestItem(
-                        "TIME WITHOUT TIME ZONE", nullable(FIXTURE.timeType), "TIME"),
-                createArgumentsTestItem("TIME(3)", nullable(FIXTURE.time3Type), "TIME(3)"),
-                createArgumentsTestItem(
-                        "TIME(3) WITHOUT TIME ZONE", nullable(FIXTURE.time3Type), "TIME(3)"),
-                createArgumentsTestItem("TIMESTAMP", nullable(FIXTURE.timestampType), "TIMESTAMP"),
-                createArgumentsTestItem(
+                createTestItem("TINYINT", nullable(FIXTURE.tinyintType), "TINYINT"),
+                createTestItem("SMALLINT", nullable(FIXTURE.smallintType), "SMALLINT"),
+                createTestItem("INTEGER", nullable(FIXTURE.intType), "INTEGER"),
+                createTestItem("INT", nullable(FIXTURE.intType), "INTEGER"),
+                createTestItem("BIGINT", nullable(FIXTURE.bigintType), "BIGINT"),
+                createTestItem("FLOAT", nullable(FIXTURE.floatType), "FLOAT"),
+                createTestItem("DOUBLE", nullable(FIXTURE.doubleType), "DOUBLE"),
+                createTestItem("DOUBLE PRECISION", nullable(FIXTURE.doubleType), "DOUBLE"),
+                createTestItem("DATE", nullable(FIXTURE.dateType), "DATE"),
+                createTestItem("TIME", nullable(FIXTURE.timeType), "TIME"),
+                createTestItem("TIME WITHOUT TIME ZONE", nullable(FIXTURE.timeType), "TIME"),
+                createTestItem("TIME(3)", nullable(FIXTURE.time3Type), "TIME(3)"),
+                createTestItem("TIME(3) WITHOUT TIME ZONE", nullable(FIXTURE.time3Type), "TIME(3)"),
+                createTestItem("TIMESTAMP", nullable(FIXTURE.timestampType), "TIMESTAMP"),
+                createTestItem(
                         "TIMESTAMP WITHOUT TIME ZONE",
                         nullable(FIXTURE.timestampType),
                         "TIMESTAMP"),
-                createArgumentsTestItem(
-                        "TIMESTAMP(3)", nullable(FIXTURE.timestamp3Type), "TIMESTAMP(3)"),
-                createArgumentsTestItem(
+                createTestItem("TIMESTAMP(3)", nullable(FIXTURE.timestamp3Type), "TIMESTAMP(3)"),
+                createTestItem(
                         "TIMESTAMP(3) WITHOUT TIME ZONE",
                         nullable(FIXTURE.timestamp3Type),
                         "TIMESTAMP(3)"),
-                createArgumentsTestItem(
+                createTestItem(
                         "TIMESTAMP WITH LOCAL TIME ZONE",
                         nullable(FIXTURE.timestampWithLocalTimeZoneType),
                         "TIMESTAMP WITH LOCAL TIME ZONE"),
-                createArgumentsTestItem(
+                createTestItem(
                         "TIMESTAMP_LTZ",
                         nullable(FIXTURE.timestampWithLocalTimeZoneType),
                         "TIMESTAMP_LTZ"),
-                createArgumentsTestItem(
+                createTestItem(
                         "TIMESTAMP(3) WITH LOCAL TIME ZONE",
                         nullable(FIXTURE.timestamp3WithLocalTimeZoneType),
                         "TIMESTAMP(3) WITH LOCAL TIME ZONE"),
-                createArgumentsTestItem(
+                createTestItem(
                         "TIMESTAMP_LTZ(3)",
                         nullable(FIXTURE.timestamp3WithLocalTimeZoneType),
                         "TIMESTAMP_LTZ(3)"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ARRAY<TIMESTAMP(3) WITH LOCAL TIME ZONE>",
                         nullable(
                                 FIXTURE.createArrayType(
                                         nullable(FIXTURE.timestamp3WithLocalTimeZoneType))),
                         "ARRAY< TIMESTAMP(3) WITH LOCAL TIME ZONE >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ARRAY<TIMESTAMP_LTZ(3)>",
                         nullable(
                                 FIXTURE.createArrayType(
                                         nullable(FIXTURE.timestamp3WithLocalTimeZoneType))),
                         "ARRAY< TIMESTAMP_LTZ(3) >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ARRAY<INT NOT NULL>",
                         nullable(FIXTURE.createArrayType(FIXTURE.intType)),
                         "ARRAY< INTEGER NOT NULL >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "INT ARRAY",
                         nullable(FIXTURE.createArrayType(nullable(FIXTURE.intType))),
                         "INTEGER ARRAY"),
-                createArgumentsTestItem(
+                createTestItem(
                         "INT NOT NULL ARRAY",
                         nullable(FIXTURE.createArrayType(FIXTURE.intType)),
                         "INTEGER NOT NULL ARRAY"),
-                createArgumentsTestItem(
+                createTestItem(
                         "INT ARRAY NOT NULL",
                         FIXTURE.createArrayType(nullable(FIXTURE.intType)),
                         "INTEGER ARRAY NOT NULL"),
-                createArgumentsTestItem(
+                createTestItem(
                         "MULTISET<INT NOT NULL>",
                         nullable(FIXTURE.createMultisetType(FIXTURE.intType)),
                         "MULTISET< INTEGER NOT NULL >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "INT MULTISET",
                         nullable(FIXTURE.createMultisetType(nullable(FIXTURE.intType))),
                         "INTEGER MULTISET"),
-                createArgumentsTestItem(
+                createTestItem(
                         "INT NOT NULL MULTISET",
                         nullable(FIXTURE.createMultisetType(FIXTURE.intType)),
                         "INTEGER NOT NULL MULTISET"),
-                createArgumentsTestItem(
+                createTestItem(
                         "INT MULTISET NOT NULL",
                         FIXTURE.createMultisetType(nullable(FIXTURE.intType)),
                         "INTEGER MULTISET NOT NULL"),
-                createArgumentsTestItem(
+                createTestItem(
                         "MAP<BIGINT, BOOLEAN>",
                         nullable(
                                 FIXTURE.createMapType(
                                         nullable(FIXTURE.bigintType),
                                         nullable(FIXTURE.booleanType))),
                         "MAP< BIGINT, BOOLEAN >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ROW<f0 INT NOT NULL, f1 BOOLEAN>",
                         nullable(
                                 FIXTURE.createStructType(
@@ -214,7 +206,7 @@ class FlinkDDLDataTypeTest {
                                                 FIXTURE.intType, nullable(FIXTURE.booleanType)),
                                         Arrays.asList("f0", "f1"))),
                         "ROW< `f0` INTEGER NOT NULL, `f1` BOOLEAN >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ROW(f0 INT NOT NULL, f1 BOOLEAN)",
                         nullable(
                                 FIXTURE.createStructType(
@@ -222,33 +214,33 @@ class FlinkDDLDataTypeTest {
                                                 FIXTURE.intType, nullable(FIXTURE.booleanType)),
                                         Arrays.asList("f0", "f1"))),
                         "ROW(`f0` INTEGER NOT NULL, `f1` BOOLEAN)"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ROW<`f0` INT>",
                         nullable(
                                 FIXTURE.createStructType(
                                         Collections.singletonList(nullable(FIXTURE.intType)),
                                         Collections.singletonList("f0"))),
                         "ROW< `f0` INTEGER >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ROW(`f0` INT)",
                         nullable(
                                 FIXTURE.createStructType(
                                         Collections.singletonList(nullable(FIXTURE.intType)),
                                         Collections.singletonList("f0"))),
                         "ROW(`f0` INTEGER)"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ROW<>",
                         nullable(
                                 FIXTURE.createStructType(
                                         Collections.emptyList(), Collections.emptyList())),
                         "ROW<>"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ROW()",
                         nullable(
                                 FIXTURE.createStructType(
                                         Collections.emptyList(), Collections.emptyList())),
                         "ROW()"),
-                createArgumentsTestItem(
+                createTestItem(
                         "ROW<f0 INT NOT NULL 'This is a comment.', "
                                 + "f1 BOOLEAN 'This as well.'>",
                         nullable(
@@ -258,7 +250,7 @@ class FlinkDDLDataTypeTest {
                                         Arrays.asList("f0", "f1"))),
                         "ROW< `f0` INTEGER NOT NULL 'This is a comment.', "
                                 + "`f1` BOOLEAN 'This as well.' >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "RAW(    '"
                                 + Fixture.RAW_TYPE_INT_CLASS
                                 + "'   ,   '"
@@ -270,7 +262,7 @@ class FlinkDDLDataTypeTest {
                                 + "', '"
                                 + Fixture.RAW_TYPE_INT_SERIALIZER_STRING
                                 + "')"),
-                createArgumentsTestItem(
+                createTestItem(
                         "RAW('"
                                 + Fixture.RAW_TYPE_INT_CLASS
                                 + "', '"
@@ -282,7 +274,7 @@ class FlinkDDLDataTypeTest {
                                 + "', '"
                                 + Fixture.RAW_TYPE_INT_SERIALIZER_STRING
                                 + "') NOT NULL"),
-                createArgumentsTestItem(
+                createTestItem(
                         "RAW('"
                                 + Fixture.RAW_TYPE_INT_CLASS
                                 + "', '"
@@ -294,25 +286,23 @@ class FlinkDDLDataTypeTest {
                         FIXTURE.rawTypeOfInteger),
 
                 // Test parse throws error.
-                createArgumentsTestItem(
-                        "TIMESTAMP WITH ^TIME^ ZONE", "(?s).*Encountered \"TIME\" at .*"),
-                createArgumentsTestItem(
-                        "TIMESTAMP(3) WITH ^TIME^ ZONE", "(?s).*Encountered \"TIME\" at .*"),
-                createArgumentsTestItem(
+                createTestItem("TIMESTAMP WITH ^TIME^ ZONE", "(?s).*Encountered \"TIME\" at .*"),
+                createTestItem("TIMESTAMP(3) WITH ^TIME^ ZONE", "(?s).*Encountered \"TIME\" at .*"),
+                createTestItem(
                         "^NULL^",
                         "(?s).*Incorrect syntax near the keyword 'NULL' at line 2, column 6..*"),
-                createArgumentsTestItem("cat.db.MyType", null, "`cat`.`db`.`MyType`"),
-                createArgumentsTestItem("`db`.`MyType`", null, "`db`.`MyType`"),
-                createArgumentsTestItem("MyType", null, "`MyType`"),
-                createArgumentsTestItem("ARRAY<MyType>", null, "ARRAY< `MyType` >"),
-                createArgumentsTestItem(
+                createTestItem("cat.db.MyType", null, "`cat`.`db`.`MyType`"),
+                createTestItem("`db`.`MyType`", null, "`db`.`MyType`"),
+                createTestItem("MyType", null, "`MyType`"),
+                createTestItem("ARRAY<MyType>", null, "ARRAY< `MyType` >"),
+                createTestItem(
                         "ROW<f0 MyType, f1 `c`.`d`.`t`>",
                         null,
                         "ROW< `f0` `MyType`, `f1` `c`.`d`.`t` >"),
-                createArgumentsTestItem(
+                createTestItem(
                         "^INTERVAL^ YEAR",
                         "(?s).*Incorrect syntax near the keyword 'INTERVAL' at line 2, column 6..*"),
-                createArgumentsTestItem(
+                createTestItem(
                         "RAW(^)^",
                         "(?s).*Encountered \"\\)\" at line 2, column 10.\n.*"
                                 + "Was expecting one of:\n"
@@ -321,7 +311,7 @@ class FlinkDDLDataTypeTest {
                                 + "    <PREFIXED_STRING_LITERAL> \\.\\.\\.\n"
                                 + "    <UNICODE_STRING_LITERAL> \\.\\.\\.\n"
                                 + ".*"),
-                createArgumentsTestItem(
+                createTestItem(
                         "RAW('java.lang.Integer', ^)^",
                         "(?s).*Encountered \"\\)\" at line 2, column 31\\.\n"
                                 + "Was expecting one of:\n"
@@ -332,8 +322,8 @@ class FlinkDDLDataTypeTest {
                                 + ".*"));
     }
 
-    private static Arguments createArgumentsTestItem(Object... args) {
-        assertThat(args.length).isGreaterThanOrEqualTo(2);
+    private static TestItem createTestItem(Object... args) {
+        assert args.length >= 2;
         final String testExpr = (String) args[0];
         TestItem testItem = TestItem.fromTestExpr(testExpr);
         if (args[1] instanceof String) {
@@ -344,28 +334,27 @@ class FlinkDDLDataTypeTest {
         if (args.length == 3) {
             testItem.withExpectedUnparsed((String) args[2]);
         }
-        return of(testItem);
+        return testItem;
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testDataTypeParsing(TestItem testItem) {
+    @Parameterized.Parameter public TestItem testItem;
+
+    @Test
+    public void testDataTypeParsing() {
         if (testItem.expectedType != null) {
             checkType(testItem.testExpr, testItem.expectedType);
         }
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testThrowsError(TestItem testItem) {
+    @Test
+    public void testThrowsError() {
         if (testItem.expectedError != null) {
             checkFails(testItem.testExpr, testItem.expectedError);
         }
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testDataTypeUnparsing(TestItem testItem) {
+    @Test
+    public void testDataTypeUnparsing() {
         if (testItem.expectedUnparsed != null) {
             checkUnparseTo(testItem.testExpr, testItem.expectedUnparsed);
         }
@@ -474,15 +463,15 @@ class FlinkDDLDataTypeTest {
 
         public void checkType(String sql, RelDataType type) {
             final SqlNode sqlNode = parseStmtAndHandleEx(sql);
-            assertThat(sqlNode).isInstanceOf(SqlCreateTable.class);
+            assert sqlNode instanceof SqlCreateTable;
             final SqlCreateTable sqlCreateTable = (SqlCreateTable) sqlNode;
             SqlNodeList columns = sqlCreateTable.getColumnList();
-            assertThat(columns.size()).isEqualTo(1);
+            assert columns.size() == 1;
             RelDataType columnType =
                     ((SqlRegularColumn) columns.get(0))
                             .getType()
                             .deriveType(factory.getValidator());
-            assertThat(columnType).isEqualTo(type);
+            assertEquals(type, columnType);
         }
 
         private SqlNode parseStmtAndHandleEx(String sql) {
@@ -511,10 +500,10 @@ class FlinkDDLDataTypeTest {
 
         public void checkUnparsed(String sql, String expectedUnparsed) {
             final SqlNode sqlNode = parseStmtAndHandleEx(sql);
-            assertThat(sqlNode).isInstanceOf(SqlCreateTable.class);
+            assert sqlNode instanceof SqlCreateTable;
             final SqlCreateTable sqlCreateTable = (SqlCreateTable) sqlNode;
             SqlNodeList columns = sqlCreateTable.getColumnList();
-            assertThat(columns.size()).isEqualTo(1);
+            assert columns.size() == 1;
             SqlDataTypeSpec dataTypeSpec = ((SqlRegularColumn) columns.get(0)).getType();
             SqlWriter sqlWriter = new SqlPrettyWriter(factory.createSqlDialect(), false);
             dataTypeSpec.unparse(sqlWriter, 0, 0);
@@ -524,7 +513,7 @@ class FlinkDDLDataTypeTest {
             if (dataTypeSpec.getNullable() != null && !dataTypeSpec.getNullable()) {
                 sqlWriter.keyword("NOT NULL");
             }
-            assertThat(sqlWriter.toSqlString().getSql()).isEqualTo(expectedUnparsed);
+            assertEquals(expectedUnparsed, sqlWriter.toSqlString().getSql());
         }
 
         private void checkEx(String expectedMsgPattern, StringAndPos sap, Throwable thrown) {

@@ -19,7 +19,6 @@
 package org.apache.flink.connector.pulsar.common.schema;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.util.IOUtils;
 
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.impl.schema.SchemaInfoImpl;
@@ -164,7 +163,8 @@ public final class PulsarSchema<T> implements Serializable {
         // Schema
         int byteLen = ois.readInt();
         byte[] schemaBytes = new byte[byteLen];
-        IOUtils.readFully(ois, schemaBytes, 0, byteLen);
+        int read = ois.read(schemaBytes);
+        checkState(read == byteLen);
 
         // Type
         int typeIdx = ois.readInt();

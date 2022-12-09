@@ -18,7 +18,6 @@
 package org.apache.flink.runtime.resourcemanager.slotmanager;
 
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.runtime.blocklist.BlockedTaskManagerChecker;
 import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.util.Preconditions;
 
@@ -47,8 +46,7 @@ public class TestingResourceAllocationStrategy implements ResourceAllocationStra
     @Override
     public ResourceAllocationResult tryFulfillRequirements(
             Map<JobID, Collection<ResourceRequirement>> missingResources,
-            TaskManagerResourceInfoProvider taskManagerResourceInfoProvider,
-            BlockedTaskManagerChecker blockedTaskManagerChecker) {
+            TaskManagerResourceInfoProvider taskManagerResourceInfoProvider) {
         return tryFulfillRequirementsFunction.apply(
                 missingResources, taskManagerResourceInfoProvider);
     }

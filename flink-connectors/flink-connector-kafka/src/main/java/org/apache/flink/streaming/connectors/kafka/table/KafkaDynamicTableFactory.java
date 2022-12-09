@@ -21,6 +21,7 @@ package org.apache.flink.streaming.connectors.kafka.table;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.bili.external.keeper.KeeperOperator;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
@@ -47,6 +48,7 @@ import org.apache.flink.table.factories.SerializationFormatFactory;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.types.RowKind;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -165,6 +167,7 @@ public class KafkaDynamicTableFactory
 
     @Override
     public DynamicTableSource createDynamicTableSource(Context context) {
+        autoFillingBrokerInfo(context);
         final TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
 
         final Optional<DecodingFormat<DeserializationSchema<RowData>>> keyDecodingFormat =
@@ -222,6 +225,7 @@ public class KafkaDynamicTableFactory
 
     @Override
     public DynamicTableSink createDynamicTableSink(Context context) {
+        autoFillingBrokerInfo(context);
         final TableFactoryHelper helper =
                 FactoryUtil.createTableFactoryHelper(
                         this, autoCompleteSchemaRegistrySubject(context));
@@ -293,7 +297,7 @@ public class KafkaDynamicTableFactory
         return keyDecodingFormat;
     }
 
-    private static Optional<EncodingFormat<SerializationSchema<RowData>>> getKeyEncodingFormat(
+    protected static Optional<EncodingFormat<SerializationSchema<RowData>>> getKeyEncodingFormat(
             TableFactoryHelper helper) {
         final Optional<EncodingFormat<SerializationSchema<RowData>>> keyEncodingFormat =
                 helper.discoverOptionalEncodingFormat(SerializationFormatFactory.class, KEY_FORMAT);
@@ -321,7 +325,7 @@ public class KafkaDynamicTableFactory
                                         DeserializationFormatFactory.class, VALUE_FORMAT));
     }
 
-    private static EncodingFormat<SerializationSchema<RowData>> getValueEncodingFormat(
+    protected static EncodingFormat<SerializationSchema<RowData>> getValueEncodingFormat(
             TableFactoryHelper helper) {
         return helper.discoverOptionalEncodingFormat(
                         SerializationFormatFactory.class, FactoryUtil.FORMAT)
@@ -331,7 +335,7 @@ public class KafkaDynamicTableFactory
                                         SerializationFormatFactory.class, VALUE_FORMAT));
     }
 
-    private static void validatePKConstraints(
+    protected static void validatePKConstraints(
             ObjectIdentifier tableName,
             int[] primaryKeyIndexes,
             Map<String, String> options,
@@ -351,7 +355,7 @@ public class KafkaDynamicTableFactory
         }
     }
 
-    private static DeliveryGuarantee validateDeprecatedSemantic(ReadableConfig tableOptions) {
+    protected static DeliveryGuarantee validateDeprecatedSemantic(ReadableConfig tableOptions) {
         if (tableOptions.getOptional(SINK_SEMANTIC).isPresent()) {
             LOG.warn(
                     "{} is deprecated and will be removed. Please use {} instead.",
@@ -361,6 +365,17 @@ public class KafkaDynamicTableFactory
                     tableOptions.get(SINK_SEMANTIC).toUpperCase().replace("-", "_"));
         }
         return tableOptions.get(DELIVERY_GUARANTEE);
+    }
+
+    protected static void autoFillingBrokerInfo(Context context) {
+        Map<String, String> options = context.getCatalogTable().getOptions();
+        if (StringUtils.isBlank(options.get(PROPS_BOOTSTRAP_SERVERS.key()))
+                && StringUtils.isNotBlank(options.get(TOPIC.key()))) {
+            String kafkaBrokerInfo = KeeperOperator.getKafkaBrokerInfo(options.get(TOPIC.key()));
+            if (StringUtils.isNotBlank(kafkaBrokerInfo)) {
+                options.put(PROPS_BOOTSTRAP_SERVERS.key(), kafkaBrokerInfo);
+            }
+        }
     }
 
     // --------------------------------------------------------------------------------------------

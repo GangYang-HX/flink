@@ -19,18 +19,16 @@
 package org.apache.flink.table.planner.plan.nodes.exec.serde;
 
 import org.apache.flink.table.planner.plan.nodes.exec.spec.SortSpec;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test SortSpec json ser/de. */
 public class SortSpecSerdeTest {
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
 
     @Test
     public void testSortSpec() throws JsonProcessingException {
@@ -41,17 +39,16 @@ public class SortSpecSerdeTest {
                         .addField(3, false, true)
                         .addField(4, false, false)
                         .build();
-        assertThat(
-                        OBJECT_MAPPER.readValue(
-                                OBJECT_MAPPER.writeValueAsString(sortSpec), SortSpec.class))
-                .isEqualTo(sortSpec);
+        ObjectMapper mapper = new ObjectMapper();
+        assertEquals(
+                sortSpec, mapper.readValue(mapper.writeValueAsString(sortSpec), SortSpec.class));
     }
 
     @Test
     public void testAny() throws JsonProcessingException {
-        assertThat(
-                        OBJECT_MAPPER.readValue(
-                                OBJECT_MAPPER.writeValueAsString(SortSpec.ANY), SortSpec.class))
-                .isEqualTo(SortSpec.ANY);
+        ObjectMapper mapper = new ObjectMapper();
+        assertEquals(
+                SortSpec.ANY,
+                mapper.readValue(mapper.writeValueAsString(SortSpec.ANY), SortSpec.class));
     }
 }

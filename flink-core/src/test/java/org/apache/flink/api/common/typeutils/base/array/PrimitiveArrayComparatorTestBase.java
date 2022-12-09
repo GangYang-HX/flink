@@ -22,7 +22,7 @@ import org.apache.flink.api.common.typeutils.ComparatorTestBase;
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 
-abstract class PrimitiveArrayComparatorTestBase<T> extends ComparatorTestBase<T> {
+public abstract class PrimitiveArrayComparatorTestBase<T> extends ComparatorTestBase<T> {
     private PrimitiveArrayTypeInfo<T> info;
 
     public PrimitiveArrayComparatorTestBase(PrimitiveArrayTypeInfo<T> info) {

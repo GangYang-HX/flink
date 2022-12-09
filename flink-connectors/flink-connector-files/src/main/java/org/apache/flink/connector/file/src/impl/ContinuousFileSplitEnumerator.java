@@ -66,7 +66,6 @@ public class ContinuousFileSplitEnumerator
     private final Path[] paths;
 
     private final long discoveryInterval;
-
     // ------------------------------------------------------------------------
 
     public ContinuousFileSplitEnumerator(
@@ -129,7 +128,6 @@ public class ContinuousFileSplitEnumerator
         final PendingSplitsCheckpoint<FileSourceSplit> checkpoint =
                 PendingSplitsCheckpoint.fromCollectionSnapshot(
                         splitAssigner.remainingSplits(), pathsAlreadyProcessed);
-
         LOG.debug("Source Checkpoint is {}", checkpoint);
         return checkpoint;
     }

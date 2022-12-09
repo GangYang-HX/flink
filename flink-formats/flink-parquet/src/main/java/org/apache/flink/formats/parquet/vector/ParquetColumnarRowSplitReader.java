@@ -18,6 +18,7 @@
 
 package org.apache.flink.formats.parquet.vector;
 
+import org.apache.flink.formats.parquet.vector.reader.AbstractColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.columnar.ColumnarRowData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
@@ -185,15 +186,12 @@ public class ParquetColumnarRowSplitReader implements Closeable {
 
     private WritableColumnVector[] createWritableVectors() {
         WritableColumnVector[] columns = new WritableColumnVector[selectedTypes.length];
-        List<Type> types = requestedSchema.getFields();
         for (int i = 0; i < selectedTypes.length; i++) {
             columns[i] =
                     createWritableColumnVector(
                             batchSize,
                             selectedTypes[i],
-                            types.get(i),
-                            requestedSchema.getColumns(),
-                            0);
+                            requestedSchema.getColumns().get(i).getPrimitiveType());
         }
         return columns;
     }
@@ -223,6 +221,11 @@ public class ParquetColumnarRowSplitReader implements Closeable {
          * Check that the requested schema is supported.
          */
         for (int i = 0; i < requestedSchema.getFieldCount(); ++i) {
+            Type t = requestedSchema.getFields().get(i);
+            if (!t.isPrimitive() || t.isRepetition(Type.Repetition.REPEATED)) {
+                throw new UnsupportedOperationException("Complex types not supported.");
+            }
+
             String[] colPath = requestedSchema.getPaths().get(i);
             if (fileSchema.containsPath(colPath)) {
                 ColumnDescriptor fd = fileSchema.getColumnDescription(colPath);
@@ -311,17 +314,15 @@ public class ParquetColumnarRowSplitReader implements Closeable {
                             + " out of "
                             + totalRowCount);
         }
-        List<Type> types = requestedSchema.getFields();
-        columnReaders = new ColumnReader[types.size()];
-        for (int i = 0; i < types.size(); ++i) {
+        List<ColumnDescriptor> columns = requestedSchema.getColumns();
+        columnReaders = new AbstractColumnReader[columns.size()];
+        for (int i = 0; i < columns.size(); ++i) {
             columnReaders[i] =
                     createColumnReader(
                             utcTimestamp,
                             selectedTypes[i],
-                            types.get(i),
-                            requestedSchema.getColumns(),
-                            pages,
-                            0);
+                            columns.get(i),
+                            pages.getPageReader(columns.get(i)));
         }
         totalCountLoadedSoFar += pages.getRowCount();
     }

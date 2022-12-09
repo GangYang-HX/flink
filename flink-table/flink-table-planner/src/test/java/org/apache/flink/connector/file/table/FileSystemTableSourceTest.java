@@ -38,36 +38,44 @@ public class FileSystemTableSourceTest extends TableTestBase {
 
         String srcTableDdl =
                 "CREATE TABLE MyTable (\n"
-                        + "  a bigint,\n"
-                        + "  b int,\n"
-                        + "  c varchar\n"
+                        + "  word varchar,\n"
+                        + "  num bigint\n"
                         + ") with (\n"
                         + " 'connector' = 'filesystem',"
                         + " 'format' = 'testcsv',"
-                        + " 'path' = '/tmp')";
+                        + " 'partition.default-name' = 'log_date,log_hour',"
+//                        + " 'partitionKeys' = 'log_date,log_hour',"
+                        + " 'source.monitor-interval' = '10s',"
+//                        + " 'path' = '/tmp/TestFileSource'"
+                        + " 'path' = 'hdfs://bili-test-ns1/warehouse1/yg_test_db.db/test_four_part_table'"
+                        + ")";
         tEnv.executeSql(srcTableDdl);
 
         String srcTableWithMetaDdl =
                 "CREATE TABLE MyTableWithMeta (\n"
-                        + "  a bigint,\n"
-                        + "  b int,\n"
-                        + "  c varchar,\n"
+                        + "  word varchar,\n"
+                        + "  num bigint,\n"
                         + "  filemeta STRING METADATA FROM 'file.path'\n"
                         + ") with (\n"
                         + " 'connector' = 'filesystem',"
                         + " 'format' = 'testcsv',"
-                        + " 'path' = '/tmp')";
+                        + " 'path' = '/tmp/TestFileSource')";
         tEnv.executeSql(srcTableWithMetaDdl);
 
         String sinkTableDdl =
                 "CREATE TABLE MySink (\n"
-                        + "  a bigint,\n"
-                        + "  b int,\n"
-                        + "  c varchar\n"
+                        + "  word varchar,\n"
+                        + "  num bigint\n"
                         + ") with (\n"
                         + "  'connector' = 'values',\n"
                         + "  'table-sink-class' = 'DEFAULT')";
         tEnv.executeSql(sinkTableDdl);
+    }
+
+    @Test
+    public void printFileData() {
+        TableEnvironment tEnv = util.getTableEnv();
+        tEnv.executeSql("select * from MyTable").print();
     }
 
     @Test

@@ -24,8 +24,8 @@ import com.amazonaws.services.schemaregistry.exception.AWSSchemaRegistryExceptio
 import com.amazonaws.services.schemaregistry.serializers.json.JsonDataWithSchema;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import lombok.NonNull;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 
@@ -40,7 +40,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link GlueSchemaRegistryJsonDeserializationSchema}. */
-class GlueSchemaRegistryJsonDeserializationSchemaTest {
+public class GlueSchemaRegistryJsonDeserializationSchemaTest {
     private static final String testTopic = "Test-Topic";
     private static final Map<String, Object> configs = new HashMap<>();
     private static final AwsCredentialsProvider credentialsProvider =
@@ -65,8 +65,8 @@ class GlueSchemaRegistryJsonDeserializationSchemaTest {
     private static GlueSchemaRegistryDeserializationFacade mockDeserializationFacadeForSpecific;
     private static GlueSchemaRegistryDeserializationFacade mockDeserializationFacadeForGeneric;
 
-    @BeforeAll
-    static void setup() {
+    @BeforeClass
+    public static void setup() {
         configs.put(AWSSchemaRegistryConstants.AWS_REGION, "us-west-2");
         configs.put(AWSSchemaRegistryConstants.AWS_ENDPOINT, "https://test");
         configs.put(AWSSchemaRegistryConstants.SCHEMA_AUTO_REGISTRATION_SETTING, true);
@@ -94,23 +94,29 @@ class GlueSchemaRegistryJsonDeserializationSchemaTest {
 
     /** Test initialization for generic type JSON Schema works. */
     @Test
-    void testForGeneric_withValidParams_succeeds() {
+    public void testForGeneric_withValidParams_succeeds() {
         assertThat(
                         new GlueSchemaRegistryJsonDeserializationSchema<>(
                                 JsonDataWithSchema.class, testTopic, configs))
                 .isNotNull();
+        assertThat(
+                        new GlueSchemaRegistryJsonDeserializationSchema<>(
+                                JsonDataWithSchema.class, testTopic, configs))
+                .isInstanceOf(GlueSchemaRegistryJsonDeserializationSchema.class);
     }
 
     /** Test initialization for specific type JSON Schema works. */
     @Test
-    void testForSpecific_withValidParams_succeeds() {
+    public void testForSpecific_withValidParams_succeeds() {
         assertThat(new GlueSchemaRegistryJsonDeserializationSchema<>(Car.class, testTopic, configs))
                 .isNotNull();
+        assertThat(new GlueSchemaRegistryJsonDeserializationSchema<>(Car.class, testTopic, configs))
+                .isInstanceOf(GlueSchemaRegistryJsonDeserializationSchema.class);
     }
 
     /** Test whether deserialize method for specific type JSON Schema data works. */
     @Test
-    void testDeserializePOJO_withValidParams_succeeds() {
+    public void testDeserializePOJO_withValidParams_succeeds() {
         GlueSchemaRegistryJsonSchemaCoder glueSchemaRegistryJsonSchemaCoder =
                 new GlueSchemaRegistryJsonSchemaCoder(
                         testTopic, configs, null, mockDeserializationFacadeForSpecific);
@@ -122,12 +128,13 @@ class GlueSchemaRegistryJsonDeserializationSchemaTest {
 
         Object deserializedObject =
                 glueSchemaRegistryJsonDeserializationSchema.deserialize(serializedBytes);
-        assertThat(deserializedObject).isInstanceOf(Car.class).isEqualTo(userDefinedPojo);
+        assertThat(deserializedObject).isInstanceOf(Car.class);
+        assertThat(deserializedObject).isEqualTo(userDefinedPojo);
     }
 
     /** Test whether deserialize method for generic type JSON Schema data works. */
     @Test
-    void testDeserializeGenericData_withValidParams_succeeds() {
+    public void testDeserializeGenericData_withValidParams_succeeds() {
         GlueSchemaRegistryJsonSchemaCoder glueSchemaRegistryJsonSchemaCoder =
                 new GlueSchemaRegistryJsonSchemaCoder(
                         testTopic, configs, null, mockDeserializationFacadeForGeneric);
@@ -139,12 +146,13 @@ class GlueSchemaRegistryJsonDeserializationSchemaTest {
 
         Object deserializedObject =
                 glueSchemaRegistryJsonDeserializationSchema.deserialize(serializedBytes);
-        assertThat(deserializedObject).isInstanceOf(JsonDataWithSchema.class).isEqualTo(userSchema);
+        assertThat(deserializedObject).isInstanceOf(JsonDataWithSchema.class);
+        assertThat(deserializedObject).isEqualTo(userSchema);
     }
 
     /** Test whether deserialize method returns null when input byte array is null. */
     @Test
-    void testDeserialize_withNullObject_returnNull() {
+    public void testDeserialize_withNullObject_returnNull() {
         GlueSchemaRegistryJsonDeserializationSchema<Car>
                 glueSchemaRegistryJsonDeserializationSchema =
                         new GlueSchemaRegistryJsonDeserializationSchema<>(

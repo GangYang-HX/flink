@@ -44,7 +44,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Integration test case for writing bulk encoded files with the {@link StreamingFileSink} with
@@ -115,18 +117,18 @@ public class SequenceStreamingFileSinkITCase extends AbstractTestBase {
     private void validateResults(File folder, List<Tuple2<Long, String>> expected)
             throws Exception {
         File[] buckets = folder.listFiles();
-        assertThat(buckets).isNotNull();
-        assertThat(buckets).hasSize(1);
+        assertNotNull(buckets);
+        assertEquals(1, buckets.length);
 
         final File[] partFiles = buckets[0].listFiles();
-        assertThat(partFiles).isNotNull();
-        assertThat(partFiles).hasSize(2);
+        assertNotNull(partFiles);
+        assertEquals(2, partFiles.length);
 
         for (File partFile : partFiles) {
-            assertThat(partFile.length()).isGreaterThan(0);
+            assertTrue(partFile.length() > 0);
 
             final List<Tuple2<Long, String>> fileContent = readSequenceFile(partFile);
-            assertThat(fileContent).isEqualTo(expected);
+            assertEquals(expected, fileContent);
         }
     }
 }

@@ -63,8 +63,8 @@ public class InternalMiniClusterExtension
         return miniClusterResource.getClientConfiguration();
     }
 
-    public URI getRestAddress() {
-        return miniClusterResource.getRestAddress();
+    public URI getRestAddres() {
+        return miniClusterResource.getRestAddres();
     }
 
     @Override
@@ -105,7 +105,7 @@ public class InternalMiniClusterExtension
             return miniClusterResource.getClientConfiguration();
         }
         if (parameterContext.isAnnotated(InjectClusterRESTAddress.class)) {
-            return miniClusterResource.getRestAddress();
+            return miniClusterResource.getRestAddres();
         }
         throw new ParameterResolutionException("Unsupported parameter");
     }

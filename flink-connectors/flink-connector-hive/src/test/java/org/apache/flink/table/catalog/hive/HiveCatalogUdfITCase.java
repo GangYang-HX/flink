@@ -48,6 +48,7 @@ import org.apache.hadoop.hive.ql.udf.UDFMonth;
 import org.apache.hadoop.hive.ql.udf.UDFYear;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFSum;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -68,7 +69,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * IT case for HiveCatalog. TODO: move to flink-connector-hive-test end-to-end test module once it's
@@ -223,7 +223,7 @@ public class HiveCatalogUdfITCase extends AbstractTestBase {
 
         results = new ArrayList<>(results);
         results.sort(String::compareTo);
-        assertThat(results).isEqualTo(Arrays.asList("1,1,2,2", "2,2,4,4", "3,3,6,6"));
+        Assert.assertEquals(Arrays.asList("1,1,2,2", "2,2,4,4", "3,3,6,6"), results);
     }
 
     @Test
@@ -246,8 +246,8 @@ public class HiveCatalogUdfITCase extends AbstractTestBase {
                             tableEnv.sqlQuery("select myyear(ts) as y from src")
                                     .execute()
                                     .collect());
-            assertThat(results).hasSize(2);
-            assertThat(results.toString()).isEqualTo("[+I[2013], +I[2019]]");
+            Assert.assertEquals(2, results.size());
+            Assert.assertEquals("[+I[2013], +I[2019]]", results.toString());
         } finally {
             tableEnv.executeSql("drop table src");
         }
@@ -273,8 +273,8 @@ public class HiveCatalogUdfITCase extends AbstractTestBase {
                             tableEnv.sqlQuery("select mymonth(dt) as m from src order by m")
                                     .execute()
                                     .collect());
-            assertThat(results).hasSize(2);
-            assertThat(results.toString()).isEqualTo("[+I[1], +I[3]]");
+            Assert.assertEquals(2, results.size());
+            Assert.assertEquals("[+I[1], +I[3]]", results.toString());
         } finally {
             tableEnv.executeSql("drop table src");
         }

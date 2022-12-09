@@ -30,7 +30,7 @@ import java.util.List;
  *
  * @param <P> The type of partition.
  * @param <T> The type of partition offset, the type could be Long when fetches in partition-time or
- *     create-time order, be String when fetches in partition-name order.
+ *         create-time order, be String when fetches in partition-name order.
  */
 @Internal
 public interface ContinuousPartitionFetcher<P, T extends Comparable<T>>
@@ -44,11 +44,13 @@ public interface ContinuousPartitionFetcher<P, T extends Comparable<T>>
      *
      * @param <P> The type of partition.
      * @param <T> The type of partition offset, the type could be Long when fetches in
-     *     partition-time or create-time order, be String when fetches in partition-name order.
+     *         partition-time or create-time order, be String when fetches in partition-name order.
      */
     interface Context<P, T extends Comparable<T>> extends PartitionFetcher.Context<P> {
         /** The table full path. */
         ObjectPath getTablePath();
+
+        List getPartitionKey();
 
         /** Get the Serializer of partition order. */
         TypeSerializer<T> getTypeSerializer();

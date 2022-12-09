@@ -41,9 +41,9 @@ class StreamPhysicalPythonGroupAggregate(
     traitSet: RelTraitSet,
     inputRel: RelNode,
     outputRowType: RelDataType,
-    grouping: Array[Int],
-    aggCalls: Seq[AggregateCall])
-  extends StreamPhysicalGroupAggregateBase(cluster, traitSet, inputRel, grouping, aggCalls) {
+    val grouping: Array[Int],
+    val aggCalls: Seq[AggregateCall])
+  extends StreamPhysicalGroupAggregateBase(cluster, traitSet, inputRel) {
 
   private lazy val aggInfoList =
     AggregateUtil.deriveAggregateInfoList(this, grouping.length, aggCalls)

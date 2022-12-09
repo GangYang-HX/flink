@@ -24,7 +24,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 
 import java.sql.Time;
 
-class SqlTimeComparatorTest extends ComparatorTestBase<Time> {
+public class SqlTimeComparatorTest extends ComparatorTestBase<Time> {
 
     @SuppressWarnings("unchecked")
     @Override

@@ -73,19 +73,22 @@ public class DynamicTableSinkSpec extends DynamicTableSpecBase {
         return sinkAbilities;
     }
 
-    public DynamicTableSink getTableSink(FlinkContext context) {
+    public DynamicTableSink getTableSink(FlinkContext flinkContext) {
         if (tableSink == null) {
             final DynamicTableSinkFactory factory =
-                    context.getModuleManager().getFactory(Module::getTableSinkFactory).orElse(null);
+                    flinkContext
+                            .getModuleManager()
+                            .getFactory(Module::getTableSinkFactory)
+                            .orElse(null);
 
             tableSink =
                     FactoryUtil.createDynamicTableSink(
                             factory,
                             contextResolvedTable.getIdentifier(),
                             contextResolvedTable.getResolvedTable(),
-                            loadOptionsFromCatalogTable(contextResolvedTable, context),
-                            context.getTableConfig(),
-                            context.getClassLoader(),
+                            loadOptionsFromCatalogTable(contextResolvedTable, flinkContext),
+                            flinkContext.getTableConfig(),
+                            flinkContext.getClassLoader(),
                             contextResolvedTable.isTemporary());
             if (sinkAbilities != null) {
                 sinkAbilities.forEach(spec -> spec.apply(tableSink));

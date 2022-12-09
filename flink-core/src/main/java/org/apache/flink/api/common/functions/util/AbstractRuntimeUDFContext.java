@@ -119,7 +119,7 @@ public abstract class AbstractRuntimeUDFContext implements RuntimeContext {
 
     @Override
     public String getTaskNameWithSubtasks() {
-        return taskInfo.getTaskNameWithSubtasks();
+        return taskInfo.getTaskNameWithSubtasks(true);
     }
 
     @Override

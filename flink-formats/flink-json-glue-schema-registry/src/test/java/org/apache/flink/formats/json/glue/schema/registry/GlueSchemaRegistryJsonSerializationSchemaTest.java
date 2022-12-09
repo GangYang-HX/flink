@@ -24,8 +24,8 @@ import com.amazonaws.services.schemaregistry.serializers.GlueSchemaRegistrySeria
 import com.amazonaws.services.schemaregistry.serializers.json.JsonDataWithSchema;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import lombok.NonNull;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.glue.model.DataFormat;
@@ -43,7 +43,7 @@ import static com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConst
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link GlueSchemaRegistryJsonSerializationSchema}. */
-class GlueSchemaRegistryJsonSerializationSchemaTest {
+public class GlueSchemaRegistryJsonSerializationSchemaTest {
     private static final String testTopic = "Test-Topic";
     private static final String schemaName = "User-Topic";
     private static final String JSON_SCHEMA =
@@ -71,8 +71,8 @@ class GlueSchemaRegistryJsonSerializationSchemaTest {
             DefaultCredentialsProvider.builder().build();
     private static GlueSchemaRegistrySerializationFacade mockSerializationFacade;
 
-    @BeforeAll
-    static void setup() {
+    @BeforeClass
+    public static void setup() {
         metadata.put("test-key", "test-value");
         metadata.put(AWSSchemaRegistryConstants.TRANSPORT_METADATA_KEY, testTopic);
 
@@ -103,7 +103,7 @@ class GlueSchemaRegistryJsonSerializationSchemaTest {
 
     /** Test initialization works. */
     @Test
-    void testForGeneric_withValidParams_succeeds() {
+    public void testForGeneric_withValidParams_succeeds() {
         assertThat(new GlueSchemaRegistryJsonSerializationSchema<>(testTopic, configs)).isNotNull();
         assertThat(new GlueSchemaRegistryJsonSerializationSchema<>(testTopic, configs))
                 .isInstanceOf(GlueSchemaRegistryJsonSerializationSchema.class);
@@ -114,7 +114,7 @@ class GlueSchemaRegistryJsonSerializationSchemaTest {
      * enabled works.
      */
     @Test
-    void testSerializePOJO_withValidParams_withoutCompression_succeeds() {
+    public void testSerializePOJO_withValidParams_withoutCompression_succeeds() {
         configs.put(AWSSchemaRegistryConstants.COMPRESSION_TYPE, NONE.name());
 
         GlueSchemaRegistryJsonSchemaCoder glueSchemaRegistryJsonSchemaCoder =
@@ -134,7 +134,7 @@ class GlueSchemaRegistryJsonSerializationSchemaTest {
      * enabled works.
      */
     @Test
-    void testSerializeGenericData_withValidParams_withoutCompression_succeeds() {
+    public void testSerializeGenericData_withValidParams_withoutCompression_succeeds() {
         configs.put(AWSSchemaRegistryConstants.COMPRESSION_TYPE, NONE.name());
 
         GlueSchemaRegistryJsonSchemaCoder glueSchemaRegistryJsonSchemaCoder =
@@ -155,7 +155,7 @@ class GlueSchemaRegistryJsonSerializationSchemaTest {
      * works.
      */
     @Test
-    void testSerializePOJO_withValidParams_withCompression_succeeds() {
+    public void testSerializePOJO_withValidParams_withCompression_succeeds() {
         AWSSchemaRegistryConstants.COMPRESSION compressionType =
                 AWSSchemaRegistryConstants.COMPRESSION.ZLIB;
         configs.put(AWSSchemaRegistryConstants.COMPRESSION_TYPE, compressionType.name());
@@ -177,7 +177,7 @@ class GlueSchemaRegistryJsonSerializationSchemaTest {
      * works.
      */
     @Test
-    void testSerializeGenericData_withValidParams_withCompression_succeeds() {
+    public void testSerializeGenericData_withValidParams_withCompression_succeeds() {
         AWSSchemaRegistryConstants.COMPRESSION compressionType =
                 AWSSchemaRegistryConstants.COMPRESSION.ZLIB;
         configs.put(AWSSchemaRegistryConstants.COMPRESSION_TYPE, compressionType.name());
@@ -197,7 +197,7 @@ class GlueSchemaRegistryJsonSerializationSchemaTest {
 
     /** Test whether serialize method returns null when input object is null. */
     @Test
-    void testSerialize_withNullObject_returnNull() {
+    public void testSerialize_withNullObject_returnNull() {
         GlueSchemaRegistryJsonSerializationSchema<Car> glueSchemaRegistryJsonSerializationSchema =
                 new GlueSchemaRegistryJsonSerializationSchema<>(testTopic, configs);
         assertThat(glueSchemaRegistryJsonSerializationSchema.serialize(null)).isNull();

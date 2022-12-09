@@ -26,7 +26,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-parent</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-tests</artifactId>
@@ -34,18 +35,15 @@ under the License.
 
 	<packaging>jar</packaging>
 
+	<properties>
+		<maven.test.skip>true</maven.test.skip>
+	</properties>
+
 	<dependencies>
 	
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-core</artifactId>
-			<version>${project.version}</version>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-table-test-utils</artifactId>
 			<version>${project.version}</version>
 			<scope>test</scope>
 		</dependency>
@@ -259,14 +257,6 @@ under the License.
 			<scope>test</scope>
 		</dependency>
 
-		<!-- For UpsertTestDynamicTableSinkITCase -->
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-json</artifactId>
-			<version>${project.version}</version>
-			<scope>test</scope>
-		</dependency>
-
 		<!-- utility to scan classpaths -->
 		<dependency>
 			<groupId>org.reflections</groupId>
@@ -433,6 +423,10 @@ under the License.
 						<classpathDependencyExclude>org.apache.curator:curator-client</classpathDependencyExclude>
 						<classpathDependencyExclude>org.apache.curator:curator-framework</classpathDependencyExclude>
 					</classpathDependencyExcludes>
+					<!-- We override the fork behaviour for those expensive tests to avoid process
+					kills due to container limits on travis -->
+					<forkCount>${flink.forkCountTestPackage}</forkCount>
+					<reuseForks>false</reuseForks>
 					<environmentVariables>
 						<!-- Make sure external hadoop environment will not affect maven building -->
 						<HADOOP_HOME />

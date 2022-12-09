@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -41,7 +40,7 @@ public class TaskExecutionStateTest {
     @Test
     public void testEqualsHashCode() {
         try {
-            final ExecutionAttemptID executionId = createExecutionAttemptId();
+            final ExecutionAttemptID executionId = new ExecutionAttemptID();
             final ExecutionState state = ExecutionState.RUNNING;
             final Throwable error = new RuntimeException("some test error message");
 
@@ -59,7 +58,7 @@ public class TaskExecutionStateTest {
     @Test
     public void testSerialization() {
         try {
-            final ExecutionAttemptID executionId = createExecutionAttemptId();
+            final ExecutionAttemptID executionId = new ExecutionAttemptID();
             final ExecutionState state = ExecutionState.DEPLOYING;
             final Throwable error = new IOException("fubar");
 
@@ -109,7 +108,7 @@ public class TaskExecutionStateTest {
                         }
                     };
 
-            new TaskExecutionState(createExecutionAttemptId(), ExecutionState.FAILED, hostile);
+            new TaskExecutionState(new ExecutionAttemptID(), ExecutionState.FAILED, hostile);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());

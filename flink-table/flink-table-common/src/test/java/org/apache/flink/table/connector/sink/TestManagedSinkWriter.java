@@ -34,8 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /** Managed {@link SinkWriter} for testing compaction. */
 public class TestManagedSinkWriter implements SinkWriter<RowData, TestManagedCommittable, Void> {
 
@@ -45,7 +43,7 @@ public class TestManagedSinkWriter implements SinkWriter<RowData, TestManagedCom
 
     @Override
     public void write(RowData element, Context context) throws IOException, InterruptedException {
-        assertThat(element.getArity()).isEqualTo(3);
+        assert element.getArity() == 3;
         String partition = element.getString(0).toString();
         Path filePath = new Path(element.getString(1).toString());
         RowData rowData = GenericRowData.of(element.getString(2));

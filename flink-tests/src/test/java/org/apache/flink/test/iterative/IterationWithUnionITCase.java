@@ -32,8 +32,6 @@ import org.apache.flink.util.Collector;
 
 import java.io.Serializable;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultsByLinesInMemory;
-
 /** Test iteration with union. */
 public class IterationWithUnionITCase extends JavaProgramTestBase {
 

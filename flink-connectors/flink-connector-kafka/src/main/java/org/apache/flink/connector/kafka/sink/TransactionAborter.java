@@ -43,7 +43,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * transactions of subtask S+P where P is the current parallelism until it finds a subtask without
  * transactions.
  */
-class TransactionAborter implements Closeable {
+public class TransactionAborter implements Closeable {
     private final int subtaskId;
     private final int parallelism;
     private final Function<String, FlinkKafkaInternalProducer<byte[], byte[]>> producerFactory;
@@ -61,7 +61,7 @@ class TransactionAborter implements Closeable {
         this.closeAction = closeAction;
     }
 
-    void abortLingeringTransactions(List<String> prefixesToAbort, long startCheckpointId) {
+    public void abortLingeringTransactions(List<String> prefixesToAbort, long startCheckpointId) {
         for (String prefix : prefixesToAbort) {
             abortTransactionsWithPrefix(prefix, startCheckpointId);
         }

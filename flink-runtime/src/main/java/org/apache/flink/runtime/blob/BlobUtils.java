@@ -32,6 +32,7 @@ import org.apache.flink.util.Reference;
 import org.apache.flink.util.StringUtils;
 
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -59,6 +60,8 @@ import java.util.stream.Collectors;
 /** Utility class to work with blob data. */
 public class BlobUtils {
 
+    private static final Logger LOG = LoggerFactory.getLogger(BlobUtils.class);
+
     /** Algorithm to be used for calculating the BLOB keys. */
     private static final String HASHING_ALGORITHM = "SHA-1";
 
@@ -70,6 +73,23 @@ public class BlobUtils {
 
     /** The prefix of all job-unrelated directories created by the BLOB server. */
     static final String NO_JOB_DIR_PREFIX = "no_job";
+
+    /**
+     * The env to specify local working dirs in YARN container.
+     *
+     * <p>This variable is from org.apache.hadoop.yarn.api.ApplicationConstants.LOCAL_DIRS, we
+     * define here again to avoid importing yarn's dependency.
+     */
+    static final String ENV_LOCAL_DIRS = "LOCAL_DIRS";
+
+    /** The env to specify appId in the YARN container. */
+    static final String ENV_APP_ID = "_APP_ID";
+
+    /**
+     * Environment variable name of the final container id used by the YarnResourceManager.
+     * Container ID generation may vary across Hadoop versions.
+     */
+    static final String ENV_FLINK_CONTAINER_ID = "_FLINK_CONTAINER_ID";
 
     private static final Random RANDOM = new Random();
 
@@ -154,7 +174,22 @@ public class BlobUtils {
     static Reference<File> createBlobStorageDirectory(
             Configuration configuration, @Nullable Reference<File> fallbackStorageDirectory)
             throws IOException {
-        final String basePath = configuration.getString(BlobServerOptions.STORAGE_DIRECTORY);
+        String basePath = configuration.getString(BlobServerOptions.STORAGE_DIRECTORY);
+
+        // yarn mode
+        String localDirs = System.getenv(ENV_LOCAL_DIRS);
+        String appId = System.getenv(ENV_APP_ID);
+        String containerId = System.getenv(ENV_FLINK_CONTAINER_ID);
+
+        boolean yarnMode =
+                !StringUtils.isNullOrWhitespaceOnly(appId)
+                        || !StringUtils.isNullOrWhitespaceOnly(containerId);
+
+        if (yarnMode && !StringUtils.isNullOrWhitespaceOnly(localDirs)) {
+            String[] localDirArr = localDirs.split(",");
+            basePath = localDirArr[RANDOM.nextInt(localDirArr.length)];
+            LOG.info("blob base path: {}", basePath);
+        }
 
         File baseDir = null;
         if (StringUtils.isNullOrWhitespaceOnly(basePath)) {

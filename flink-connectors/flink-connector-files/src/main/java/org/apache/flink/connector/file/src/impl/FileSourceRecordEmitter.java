@@ -35,7 +35,6 @@ import org.apache.flink.connector.file.src.util.RecordAndPosition;
 @Internal
 final class FileSourceRecordEmitter<T, SplitT extends FileSourceSplit>
         implements RecordEmitter<RecordAndPosition<T>, T, FileSourceSplitState<SplitT>> {
-
     @Override
     public void emitRecord(
             final RecordAndPosition<T> element,

@@ -57,22 +57,20 @@ import org.junit.Assert._
 
 class BatchTestBase extends BatchAbstractTestBase {
 
-  protected var settings = EnvironmentSettings.newInstance().inBatchMode().build()
-  protected var testingTableEnv: TestingTableEnvironment = TestingTableEnvironment
-    .create(settings, catalogManager = None, TableConfig.getDefault)
-  protected var tEnv: TableEnvironment = testingTableEnv
-  protected var planner =
-    tEnv.asInstanceOf[TableEnvironmentImpl].getPlanner.asInstanceOf[PlannerBase]
-  protected var env: StreamExecutionEnvironment = planner.getExecEnv
+  private val settings = EnvironmentSettings.newInstance().inBatchMode().build()
+  private val testingTableEnv: TestingTableEnvironment = TestingTableEnvironment
+    .create(settings, catalogManager = None, new TableConfig)
+  val tEnv: TableEnvironment = testingTableEnv
+  private val planner = tEnv.asInstanceOf[TableEnvironmentImpl].getPlanner.asInstanceOf[PlannerBase]
+  val env: StreamExecutionEnvironment = planner.getExecEnv
   env.getConfig.enableObjectReuse()
-  protected var tableConfig: TableConfig = tEnv.getConfig
+  val tableConfig: TableConfig = tEnv.getConfig
 
   val LINE_COL_PATTERN: Pattern = Pattern.compile("At line ([0-9]+), column ([0-9]+)")
   val LINE_COL_TWICE_PATTERN: Pattern = Pattern.compile(
     "(?s)From line ([0-9]+),"
       + " column ([0-9]+) to line ([0-9]+), column ([0-9]+): (.*)")
 
-  @throws(classOf[Exception])
   @Before
   def before(): Unit = {
     BatchTestBase.configForMiniCluster(tableConfig)
@@ -441,7 +439,7 @@ class BatchTestBase extends BatchAbstractTestBase {
       tEnv,
       name,
       newRangeSource(start, end),
-      Some(Array($"id")),
+      Some[Array[String]](Array[String]("id")),
       None,
       None)
   }

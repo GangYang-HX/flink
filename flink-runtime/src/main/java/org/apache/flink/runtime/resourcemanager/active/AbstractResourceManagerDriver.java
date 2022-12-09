@@ -19,7 +19,6 @@
 package org.apache.flink.runtime.resourcemanager.active;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.blocklist.BlockedNodeRetriever;
 import org.apache.flink.runtime.clusterframework.types.ResourceIDRetrievable;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
@@ -41,7 +40,6 @@ public abstract class AbstractResourceManagerDriver<WorkerType extends ResourceI
     private ResourceEventHandler<WorkerType> resourceEventHandler = null;
     private ScheduledExecutor mainThreadExecutor = null;
     private Executor ioExecutor = null;
-    private BlockedNodeRetriever blockedNodeRetriever = null;
 
     public AbstractResourceManagerDriver(
             final Configuration flinkConfig, final Configuration flinkClientConfig) {
@@ -70,24 +68,15 @@ public abstract class AbstractResourceManagerDriver<WorkerType extends ResourceI
         return ioExecutor;
     }
 
-    protected final BlockedNodeRetriever getBlockedNodeRetriever() {
-        Preconditions.checkState(
-                blockedNodeRetriever != null,
-                "Cannot get the blocked node retriever. Resource manager driver is not initialized.");
-        return blockedNodeRetriever;
-    }
-
     @Override
     public final void initialize(
             ResourceEventHandler<WorkerType> resourceEventHandler,
             ScheduledExecutor mainThreadExecutor,
-            Executor ioExecutor,
-            BlockedNodeRetriever blockedNodeRetriever)
+            Executor ioExecutor)
             throws Exception {
         this.resourceEventHandler = Preconditions.checkNotNull(resourceEventHandler);
         this.mainThreadExecutor = Preconditions.checkNotNull(mainThreadExecutor);
         this.ioExecutor = Preconditions.checkNotNull(ioExecutor);
-        this.blockedNodeRetriever = Preconditions.checkNotNull(blockedNodeRetriever);
 
         initializeInternal();
     }

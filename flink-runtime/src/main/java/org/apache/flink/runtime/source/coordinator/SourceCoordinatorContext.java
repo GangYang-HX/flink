@@ -38,21 +38,14 @@ import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.ThrowableCatchingRunnable;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -63,7 +56,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 
 import static org.apache.flink.runtime.operators.coordination.ComponentClosingUtils.shutdownExecutorForcefully;
-import static org.apache.flink.util.Preconditions.checkState;
 
 /**
  * A context class for the {@link OperatorCoordinator}. Compared with {@link SplitEnumeratorContext}
@@ -96,22 +88,19 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
     private final ExecutorNotifier notifier;
     private final OperatorCoordinator.Context operatorCoordinatorContext;
     private final SimpleVersionedSerializer<SplitT> splitSerializer;
-    private final ConcurrentMap<Integer, ConcurrentMap<Integer, ReaderInfo>> registeredReaders;
+    private final ConcurrentMap<Integer, ReaderInfo> registeredReaders;
     private final SplitAssignmentTracker<SplitT> assignmentTracker;
     private final SourceCoordinatorProvider.CoordinatorExecutorThreadFactory
             coordinatorThreadFactory;
-    private final SubtaskGateways subtaskGateways;
+    private final OperatorCoordinator.SubtaskGateway[] subtaskGateways;
     private final String coordinatorThreadName;
-    private final boolean supportsConcurrentExecutionAttempts;
-    private final boolean[] subtaskHasNoMoreSplits;
     private volatile boolean closed;
 
     public SourceCoordinatorContext(
             SourceCoordinatorProvider.CoordinatorExecutorThreadFactory coordinatorThreadFactory,
             int numWorkerThreads,
             OperatorCoordinator.Context operatorCoordinatorContext,
-            SimpleVersionedSerializer<SplitT> splitSerializer,
-            boolean supportsConcurrentExecutionAttempts) {
+            SimpleVersionedSerializer<SplitT> splitSerializer) {
         this(
                 Executors.newScheduledThreadPool(1, coordinatorThreadFactory),
                 Executors.newScheduledThreadPool(
@@ -121,8 +110,7 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
                 coordinatorThreadFactory,
                 operatorCoordinatorContext,
                 splitSerializer,
-                new SplitAssignmentTracker<>(),
-                supportsConcurrentExecutionAttempts);
+                new SplitAssignmentTracker<>());
     }
 
     // Package private method for unit test.
@@ -133,8 +121,7 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
             SourceCoordinatorProvider.CoordinatorExecutorThreadFactory coordinatorThreadFactory,
             OperatorCoordinator.Context operatorCoordinatorContext,
             SimpleVersionedSerializer<SplitT> splitSerializer,
-            SplitAssignmentTracker<SplitT> splitAssignmentTracker,
-            boolean supportsConcurrentExecutionAttempts) {
+            SplitAssignmentTracker<SplitT> splitAssignmentTracker) {
         this.workerExecutor = workerExecutor;
         this.coordinatorExecutor = coordinatorExecutor;
         this.coordinatorThreadFactory = coordinatorThreadFactory;
@@ -143,12 +130,9 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
         this.registeredReaders = new ConcurrentHashMap<>();
         this.assignmentTracker = splitAssignmentTracker;
         this.coordinatorThreadName = coordinatorThreadFactory.getCoordinatorThreadName();
-        this.supportsConcurrentExecutionAttempts = supportsConcurrentExecutionAttempts;
-
-        final int parallelism = operatorCoordinatorContext.currentParallelism();
-        this.subtaskGateways = new SubtaskGateways(parallelism);
-        this.subtaskHasNoMoreSplits = new boolean[parallelism];
-        Arrays.fill(subtaskHasNoMoreSplits, false);
+        this.subtaskGateways =
+                new OperatorCoordinator.SubtaskGateway
+                        [operatorCoordinatorContext.currentParallelism()];
 
         final Executor errorHandlingCoordinatorExecutor =
                 (runnable) ->
@@ -159,10 +143,6 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
         this.notifier = new ExecutorNotifier(workerExecutor, errorHandlingCoordinatorExecutor);
     }
 
-    boolean isConcurrentExecutionAttemptsSupported() {
-        return supportsConcurrentExecutionAttempts;
-    }
-
     @Override
     public SplitEnumeratorMetricGroup metricGroup() {
         return null;
@@ -170,39 +150,16 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
 
     @Override
     public void sendEventToSourceReader(int subtaskId, SourceEvent event) {
-        checkState(
-                !supportsConcurrentExecutionAttempts,
-                "The split enumerator must invoke SplitEnumeratorContext"
-                        + "#sendEventToSourceReader(int, int, SourceEvent) instead of "
-                        + "SplitEnumeratorContext#sendEventToSourceReader(int, SourceEvent) "
-                        + "to send custom source events in concurrent execution attempts scenario "
-                        + "(e.g. if speculative execution is enabled).");
         checkSubtaskIndex(subtaskId);
 
         callInCoordinatorThread(
                 () -> {
                     final OperatorCoordinator.SubtaskGateway gateway =
-                            subtaskGateways.getOnlyGatewayAndCheckReady(subtaskId);
+                            getGatewayAndCheckReady(subtaskId);
                     gateway.sendEvent(new SourceEventWrapper(event));
                     return null;
                 },
                 String.format("Failed to send event %s to subtask %d", event, subtaskId));
-    }
-
-    @Override
-    public void sendEventToSourceReader(int subtaskId, int attemptNumber, SourceEvent event) {
-        checkSubtaskIndex(subtaskId);
-
-        callInCoordinatorThread(
-                () -> {
-                    final OperatorCoordinator.SubtaskGateway gateway =
-                            subtaskGateways.getGatewayAndCheckReady(subtaskId, attemptNumber);
-                    gateway.sendEvent(new SourceEventWrapper(event));
-                    return null;
-                },
-                String.format(
-                        "Failed to send event %s to subtask %d (#%d)",
-                        event, subtaskId, attemptNumber));
     }
 
     void sendEventToSourceOperator(int subtaskId, OperatorEvent event) {
@@ -211,7 +168,7 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
         callInCoordinatorThread(
                 () -> {
                     final OperatorCoordinator.SubtaskGateway gateway =
-                            subtaskGateways.getOnlyGatewayAndCheckReady(subtaskId);
+                            getGatewayAndCheckReady(subtaskId);
                     gateway.sendEvent(event);
                     return null;
                 },
@@ -229,24 +186,6 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
 
     @Override
     public Map<Integer, ReaderInfo> registeredReaders() {
-        final Map<Integer, ReaderInfo> readers = new HashMap<>();
-        for (Map.Entry<Integer, ConcurrentMap<Integer, ReaderInfo>> entry :
-                registeredReaders.entrySet()) {
-            final int subtaskIndex = entry.getKey();
-            final Map<Integer, ReaderInfo> attemptReaders = entry.getValue();
-            int earliestAttempt = Integer.MAX_VALUE;
-            for (int attemptNumber : attemptReaders.keySet()) {
-                if (attemptNumber < earliestAttempt) {
-                    earliestAttempt = attemptNumber;
-                }
-            }
-            readers.put(subtaskIndex, attemptReaders.get(earliestAttempt));
-        }
-        return Collections.unmodifiableMap(readers);
-    }
-
-    @Override
-    public Map<Integer, Map<Integer, ReaderInfo>> registeredReadersOfAttempts() {
         return Collections.unmodifiableMap(registeredReaders);
     }
 
@@ -269,7 +208,24 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
                                     });
 
                     assignmentTracker.recordSplitAssignment(assignment);
-                    assignSplitsToAttempts(assignment);
+                    assignment
+                            .assignment()
+                            .forEach(
+                                    (id, splits) -> {
+                                        final OperatorCoordinator.SubtaskGateway gateway =
+                                                getGatewayAndCheckReady(id);
+
+                                        final AddSplitEvent<SplitT> addSplitEvent;
+                                        try {
+                                            addSplitEvent =
+                                                    new AddSplitEvent<>(splits, splitSerializer);
+                                        } catch (IOException e) {
+                                            throw new FlinkRuntimeException(
+                                                    "Failed to serialize splits.", e);
+                                        }
+
+                                        gateway.sendEvent(addSplitEvent);
+                                    });
                     return null;
                 },
                 String.format("Failed to assign splits %s due to ", assignment));
@@ -282,8 +238,9 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
         // Ensure the split assignment is done by the coordinator executor.
         callInCoordinatorThread(
                 () -> {
-                    subtaskHasNoMoreSplits[subtask] = true;
-                    signalNoMoreSplitsToAttempts(subtask);
+                    final OperatorCoordinator.SubtaskGateway gateway =
+                            getGatewayAndCheckReady(subtask);
+                    gateway.sendEvent(new NoMoreSplitsEvent());
                     return null; // void return value
                 },
                 "Failed to send 'NoMoreSplits' to reader " + subtask);
@@ -327,28 +284,27 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
 
     // --------- Package private additional methods for the SourceCoordinator ------------
 
-    void attemptReady(OperatorCoordinator.SubtaskGateway gateway) {
-        checkState(coordinatorThreadFactory.isCurrentThreadCoordinatorThread());
-
-        subtaskGateways.registerSubtaskGateway(gateway);
+    void subtaskReady(OperatorCoordinator.SubtaskGateway gateway) {
+        final int subtask = gateway.getSubtask();
+        if (subtaskGateways[subtask] == null) {
+            subtaskGateways[gateway.getSubtask()] = gateway;
+        } else {
+            throw new IllegalStateException("Already have a subtask gateway for " + subtask);
+        }
     }
 
-    void attemptFailed(int subtaskIndex, int attemptNumber) {
-        checkState(coordinatorThreadFactory.isCurrentThreadCoordinatorThread());
-
-        subtaskGateways.unregisterSubtaskGateway(subtaskIndex, attemptNumber);
+    void subtaskNotReady(int subtaskIndex) {
+        subtaskGateways[subtaskIndex] = null;
     }
 
-    void subtaskReset(int subtaskIndex) {
-        checkState(coordinatorThreadFactory.isCurrentThreadCoordinatorThread());
+    OperatorCoordinator.SubtaskGateway getGatewayAndCheckReady(int subtaskIndex) {
+        final OperatorCoordinator.SubtaskGateway gateway = subtaskGateways[subtaskIndex];
+        if (gateway != null) {
+            return gateway;
+        }
 
-        subtaskGateways.reset(subtaskIndex);
-        registeredReaders.remove(subtaskIndex);
-        subtaskHasNoMoreSplits[subtaskIndex] = false;
-    }
-
-    boolean hasNoMoreSplits(int subtaskIndex) {
-        return subtaskHasNoMoreSplits[subtaskIndex];
+        throw new IllegalStateException(
+                String.format("Subtask %d is not ready yet to receive events.", subtaskIndex));
     }
 
     /**
@@ -385,38 +341,24 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
     /**
      * Register a source reader.
      *
-     * @param subtaskId the subtask id of the source reader.
-     * @param attemptNumber the attempt number of the source reader.
-     * @param location the location of the source reader.
+     * @param readerInfo the reader information of the source reader.
      */
-    void registerSourceReader(int subtaskId, int attemptNumber, String location) {
-        final Map<Integer, ReaderInfo> attemptReaders =
-                registeredReaders.computeIfAbsent(subtaskId, k -> new ConcurrentHashMap<>());
-        checkState(
-                !attemptReaders.containsKey(attemptNumber),
-                "ReaderInfo of subtask %s (#%s) already exists.",
-                subtaskId,
-                attemptNumber);
-        attemptReaders.put(attemptNumber, new ReaderInfo(subtaskId, location));
-
-        sendCachedSplitsToNewlyRegisteredReader(subtaskId, attemptNumber);
+    void registerSourceReader(ReaderInfo readerInfo) {
+        final ReaderInfo previousReader =
+                registeredReaders.put(readerInfo.getSubtaskId(), readerInfo);
+        if (previousReader != null) {
+            throw new IllegalStateException(
+                    "Overwriting " + previousReader + " with " + readerInfo);
+        }
     }
 
     /**
      * Unregister a source reader.
      *
      * @param subtaskId the subtask id of the source reader.
-     * @param attemptNumber the attempt number of the source reader.
      */
-    void unregisterSourceReader(int subtaskId, int attemptNumber) {
-        final Map<Integer, ReaderInfo> attemptReaders = registeredReaders.get(subtaskId);
-        if (attemptReaders != null) {
-            attemptReaders.remove(attemptNumber);
-
-            if (attemptReaders.isEmpty()) {
-                registeredReaders.remove(subtaskId);
-            }
-        }
+    void unregisterSourceReader(int subtaskId) {
+        registeredReaders.remove(subtaskId);
     }
 
     /**
@@ -487,131 +429,6 @@ public class SourceCoordinatorContext<SplitT extends SourceSplit>
         } catch (Throwable t) {
             LOG.error("Uncaught Exception in Source Coordinator Executor", t);
             throw new FlinkRuntimeException(errorMessage, t);
-        }
-    }
-
-    private void assignSplitsToAttempts(SplitsAssignment<SplitT> assignment) {
-        assignment.assignment().forEach((index, splits) -> assignSplitsToAttempts(index, splits));
-    }
-
-    private void assignSplitsToAttempts(int subtaskIndex, List<SplitT> splits) {
-        getRegisteredAttempts(subtaskIndex)
-                .forEach(attempt -> assignSplitsToAttempt(subtaskIndex, attempt, splits));
-    }
-
-    private void assignSplitsToAttempt(int subtaskIndex, int attemptNumber, List<SplitT> splits) {
-        if (splits.isEmpty()) {
-            return;
-        }
-
-        checkAttemptReaderReady(subtaskIndex, attemptNumber);
-
-        final AddSplitEvent<SplitT> addSplitEvent;
-        try {
-            addSplitEvent = new AddSplitEvent<>(splits, splitSerializer);
-        } catch (IOException e) {
-            throw new FlinkRuntimeException("Failed to serialize splits.", e);
-        }
-
-        final OperatorCoordinator.SubtaskGateway gateway =
-                subtaskGateways.getGatewayAndCheckReady(subtaskIndex, attemptNumber);
-        gateway.sendEvent(addSplitEvent);
-    }
-
-    private void signalNoMoreSplitsToAttempts(int subtaskIndex) {
-        getRegisteredAttempts(subtaskIndex)
-                .forEach(attemptNumber -> signalNoMoreSplitsToAttempt(subtaskIndex, attemptNumber));
-    }
-
-    private void signalNoMoreSplitsToAttempt(int subtaskIndex, int attemptNumber) {
-        checkAttemptReaderReady(subtaskIndex, attemptNumber);
-
-        final OperatorCoordinator.SubtaskGateway gateway =
-                subtaskGateways.getGatewayAndCheckReady(subtaskIndex, attemptNumber);
-        gateway.sendEvent(new NoMoreSplitsEvent());
-    }
-
-    private void checkAttemptReaderReady(int subtaskIndex, int attemptNumber) {
-        checkState(registeredReaders.containsKey(subtaskIndex));
-        checkState(getRegisteredAttempts(subtaskIndex).contains(attemptNumber));
-    }
-
-    private Set<Integer> getRegisteredAttempts(int subtaskIndex) {
-        return registeredReaders.get(subtaskIndex).keySet();
-    }
-
-    private void sendCachedSplitsToNewlyRegisteredReader(int subtaskIndex, int attemptNumber) {
-        // For batch jobs, checkpoints will never happen so that the un-checkpointed assignments in
-        // assignmentTracker can be seen as cached splits. For streaming jobs,
-        // #supportsConcurrentExecutionAttempts should be false and un-checkpointed assignments
-        // should be empty when a new reader is registered (cleared when the last reader failed).
-        final LinkedHashSet<SplitT> cachedSplits =
-                assignmentTracker.uncheckpointedAssignments().get(subtaskIndex);
-
-        if (cachedSplits != null) {
-            if (supportsConcurrentExecutionAttempts) {
-                assignSplitsToAttempt(subtaskIndex, attemptNumber, new ArrayList<>(cachedSplits));
-                if (hasNoMoreSplits(subtaskIndex)) {
-                    signalNoMoreSplitsToAttempt(subtaskIndex, attemptNumber);
-                }
-            } else {
-                throw new IllegalStateException("No cached split is expected.");
-            }
-        }
-    }
-
-    /** Maintains the subtask gateways for different execution attempts of different subtasks. */
-    private static class SubtaskGateways {
-        private final Map<Integer, OperatorCoordinator.SubtaskGateway>[] gateways;
-
-        private SubtaskGateways(int parallelism) {
-            gateways = new Map[parallelism];
-            for (int i = 0; i < parallelism; i++) {
-                gateways[i] = new HashMap<>();
-            }
-        }
-
-        private void registerSubtaskGateway(OperatorCoordinator.SubtaskGateway gateway) {
-            final int subtaskIndex = gateway.getSubtask();
-            final int attemptNumber = gateway.getExecution().getAttemptNumber();
-
-            checkState(
-                    !gateways[subtaskIndex].containsKey(attemptNumber),
-                    "Already have a subtask gateway for %s (#%s).",
-                    subtaskIndex,
-                    attemptNumber);
-            gateways[subtaskIndex].put(attemptNumber, gateway);
-        }
-
-        private void unregisterSubtaskGateway(int subtaskIndex, int attemptNumber) {
-            gateways[subtaskIndex].remove(attemptNumber);
-        }
-
-        private OperatorCoordinator.SubtaskGateway getOnlyGatewayAndCheckReady(int subtaskIndex) {
-            checkState(
-                    gateways[subtaskIndex].size() > 0,
-                    "Subtask %s is not ready yet to receive events.",
-                    subtaskIndex);
-
-            return Iterables.getOnlyElement(gateways[subtaskIndex].values());
-        }
-
-        private OperatorCoordinator.SubtaskGateway getGatewayAndCheckReady(
-                int subtaskIndex, int attemptNumber) {
-            final OperatorCoordinator.SubtaskGateway gateway =
-                    gateways[subtaskIndex].get(attemptNumber);
-            if (gateway != null) {
-                return gateway;
-            }
-
-            throw new IllegalStateException(
-                    String.format(
-                            "Subtask %d (#%d) is not ready yet to receive events.",
-                            subtaskIndex, attemptNumber));
-        }
-
-        private void reset(int subtaskIndex) {
-            gateways[subtaskIndex].clear();
         }
     }
 }

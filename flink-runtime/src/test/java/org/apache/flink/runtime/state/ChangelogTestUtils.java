@@ -21,7 +21,6 @@
 package org.apache.flink.runtime.state;
 
 import org.apache.flink.core.fs.FSDataInputStream;
-import org.apache.flink.runtime.checkpoint.StateHandleDummyUtil;
 import org.apache.flink.runtime.checkpoint.metadata.CheckpointTestUtils;
 import org.apache.flink.runtime.state.changelog.ChangelogStateBackendHandle;
 import org.apache.flink.runtime.state.changelog.ChangelogStateBackendHandle.ChangelogStateBackendHandleImpl;
@@ -36,18 +35,12 @@ import java.util.concurrent.ThreadLocalRandom;
 /** Test utils for changelog * */
 public class ChangelogTestUtils {
 
-    public static ChangelogStateBackendHandle createChangelogStateBackendHandle() {
-        return createChangelogStateBackendHandle(
-                StateHandleDummyUtil.createNewKeyedStateHandle(new KeyGroupRange(0, 1)));
-    }
-
     public static ChangelogStateBackendHandle createChangelogStateBackendHandle(
             KeyedStateHandle keyedStateHandle) {
         return new ChangelogStateBackendHandleImpl(
                 Collections.singletonList(keyedStateHandle),
                 Collections.emptyList(),
                 new KeyGroupRange(0, 1),
-                1L,
                 1L,
                 0L);
     }
@@ -112,7 +105,7 @@ public class ChangelogTestUtils {
     }
 
     public static class ChangelogStateHandleWrapper extends InMemoryChangelogStateHandle
-            implements TestStreamStateHandle {
+            implements StreamStateHandle {
         private static final long serialVersionUID = 1L;
         private volatile boolean isDiscarded;
 

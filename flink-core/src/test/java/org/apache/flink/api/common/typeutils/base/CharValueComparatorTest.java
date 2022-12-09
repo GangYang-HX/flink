@@ -25,7 +25,7 @@ import org.apache.flink.types.CharValue;
 
 import java.util.Random;
 
-class CharValueComparatorTest extends ComparatorTestBase<CharValue> {
+public class CharValueComparatorTest extends ComparatorTestBase<CharValue> {
 
     @Override
     protected TypeComparator<CharValue> createComparator(boolean ascending) {

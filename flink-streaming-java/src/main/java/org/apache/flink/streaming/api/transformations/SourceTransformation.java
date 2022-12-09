@@ -27,8 +27,6 @@ import org.apache.flink.api.connector.source.SourceSplit;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.streaming.api.operators.ChainingStrategy;
 
-import javax.annotation.Nullable;
-
 import java.util.Collections;
 import java.util.List;
 
@@ -43,7 +41,6 @@ public class SourceTransformation<OUT, SplitT extends SourceSplit, EnumChkT>
     private final WatermarkStrategy<OUT> watermarkStrategy;
 
     private ChainingStrategy chainingStrategy = ChainingStrategy.DEFAULT_CHAINING_STRATEGY;
-    private @Nullable String coordinatorListeningID;
 
     /**
      * Creates a new {@code Transformation} with the given name, output type and parallelism.
@@ -96,14 +93,5 @@ public class SourceTransformation<OUT, SplitT extends SourceSplit, EnumChkT>
 
     public ChainingStrategy getChainingStrategy() {
         return chainingStrategy;
-    }
-
-    public void setCoordinatorListeningID(@Nullable String coordinatorListeningID) {
-        this.coordinatorListeningID = coordinatorListeningID;
-    }
-
-    @Nullable
-    public String getCoordinatorListeningID() {
-        return coordinatorListeningID;
     }
 }

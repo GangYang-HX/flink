@@ -20,7 +20,6 @@ package org.apache.flink.table.planner.`match`
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.typeutils.RowTypeInfo
 import org.apache.flink.cep.pattern.Pattern
-import org.apache.flink.configuration.Configuration
 import org.apache.flink.streaming.api.datastream.{DataStream => JDataStream}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.table.api._
@@ -30,7 +29,7 @@ import org.apache.flink.table.data.RowData
 import org.apache.flink.table.expressions.Expression
 import org.apache.flink.table.planner.calcite.FlinkPlannerImpl
 import org.apache.flink.table.planner.delegation.PlannerBase
-import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecMatch
+import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecMatch
 import org.apache.flink.table.planner.plan.nodes.physical.stream.{StreamPhysicalDataStreamScan, StreamPhysicalMatch}
 import org.apache.flink.table.planner.plan.utils.MatchUtil
 import org.apache.flink.table.planner.utils.TableTestUtil
@@ -79,7 +78,7 @@ abstract class PatternTranslatorTestBase extends TestLogger {
 
     // prepare RelBuilder
     val planner = tEnv.asInstanceOf[TableEnvironmentImpl].getPlanner.asInstanceOf[PlannerBase]
-    val relBuilder: RelBuilder = planner.createRelBuilder
+    val relBuilder: RelBuilder = planner.getRelBuilder
     relBuilder.scan(tableName)
 
     (relBuilder, planner, env)
@@ -105,11 +104,10 @@ abstract class PatternTranslatorTestBase extends TestLogger {
     }
 
     val dataMatch = optimized.asInstanceOf[StreamPhysicalMatch]
-    val p = CommonExecMatch
+    val p = StreamExecMatch
       .translatePattern(
-        MatchUtil.createMatchSpec(dataMatch.getLogicalMatch),
-        new Configuration,
-        Thread.currentThread().getContextClassLoader,
+        MatchUtil.createMatchSpec(dataMatch.logicalMatch),
+        new TableConfig,
         context._1,
         testTableRowType)
       .f0

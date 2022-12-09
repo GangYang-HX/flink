@@ -21,7 +21,6 @@ package org.apache.flink.runtime.checkpoint.metadata;
 import org.apache.flink.core.io.Versioned;
 
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 
 /**
@@ -44,11 +43,4 @@ public interface MetadataSerializer extends Versioned {
     CheckpointMetadata deserialize(
             DataInputStream dis, ClassLoader userCodeClassLoader, String externalPointer)
             throws IOException;
-
-    /**
-     * Serializes a savepoint or checkpoint metadata to an output stream.
-     *
-     * @throws IOException Serialization failures are forwarded
-     */
-    void serialize(CheckpointMetadata checkpointMetadata, DataOutputStream dos) throws IOException;
 }

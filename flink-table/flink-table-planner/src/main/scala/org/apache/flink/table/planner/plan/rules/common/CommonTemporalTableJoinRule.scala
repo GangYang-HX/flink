@@ -17,18 +17,17 @@
  */
 package org.apache.flink.table.planner.plan.rules.common
 
+import org.apache.calcite.plan.hep.HepRelVertex
+import org.apache.calcite.rel.RelNode
+import org.apache.calcite.rel.core.TableScan
+import org.apache.calcite.rel.logical.{LogicalProject, LogicalTableScan}
+import org.apache.calcite.rex.{RexCall, RexCorrelVariable, RexFieldAccess}
 import org.apache.flink.table.api.TableException
 import org.apache.flink.table.connector.source.LookupTableSource
 import org.apache.flink.table.planner.plan.nodes.logical.{FlinkLogicalLegacyTableSourceScan, FlinkLogicalRel, FlinkLogicalSnapshot, FlinkLogicalTableSourceScan}
 import org.apache.flink.table.planner.plan.nodes.physical.stream.{StreamPhysicalLookupJoin, StreamPhysicalTemporalJoin}
 import org.apache.flink.table.planner.plan.schema.{LegacyTableSourceTable, TableSourceTable, TimeIndicatorRelDataType}
 import org.apache.flink.table.sources.LookupableTableSource
-
-import org.apache.calcite.plan.hep.HepRelVertex
-import org.apache.calcite.rel.RelNode
-import org.apache.calcite.rel.core.TableScan
-import org.apache.calcite.rel.logical.{LogicalProject, LogicalTableScan}
-import org.apache.calcite.rex.{RexCorrelVariable, RexFieldAccess}
 
 /**
  * Base implementation that matches temporal join node.
@@ -45,8 +44,9 @@ trait CommonTemporalTableJoinRule {
     snapshot.getPeriod match {
       // it should be left table's field and is a time attribute
       case r: RexFieldAccess
-          if r.getType.isInstanceOf[TimeIndicatorRelDataType] &&
-            r.getReferenceExpr.isInstanceOf[RexCorrelVariable] => // pass
+        if r.getType.isInstanceOf[TimeIndicatorRelDataType] &&
+          r.getReferenceExpr.isInstanceOf[RexCorrelVariable] => // pass
+      case r: RexCall if "NOW".equals(r.op.getName) =>
       case _ =>
         throw new TableException(
           "Temporal table join currently only supports " +
@@ -57,8 +57,8 @@ trait CommonTemporalTableJoinRule {
   }
 
   protected def canConvertToLookupJoin(
-      snapshot: FlinkLogicalSnapshot,
-      snapshotInput: FlinkLogicalRel): Boolean = {
+                                        snapshot: FlinkLogicalSnapshot,
+                                        snapshotInput: FlinkLogicalRel): Boolean = {
     val isProcessingTime = snapshot.getPeriod.getType match {
       case t: TimeIndicatorRelDataType if !t.isEventTime => true
       case _ => false

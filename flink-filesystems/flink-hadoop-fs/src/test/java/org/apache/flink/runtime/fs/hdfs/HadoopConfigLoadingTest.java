@@ -50,14 +50,6 @@ public class HadoopConfigLoadingTest {
     @Rule public final TemporaryFolder tempFolder = new TemporaryFolder();
 
     @Test
-    public void loadFromClasspathByDefault() {
-        org.apache.hadoop.conf.Configuration hadoopConf =
-                HadoopUtils.getHadoopConfiguration(new Configuration());
-
-        assertEquals(IN_CP_CONFIG_VALUE, hadoopConf.get(IN_CP_CONFIG_KEY, null));
-    }
-
-    @Test
     public void loadFromLegacyConfigEntries() throws Exception {
         final String k1 = "shipmate";
         final String v1 = "smooth sailing";
@@ -299,9 +291,6 @@ public class HadoopConfigLoadingTest {
         assertEquals(v3, hadoopConf.get(k3, null));
         assertEquals(v4, hadoopConf.get(k4, null));
         assertTrue(hadoopConf.get(k5) == null);
-
-        // also contains classpath defaults
-        assertEquals(IN_CP_CONFIG_VALUE, hadoopConf.get(IN_CP_CONFIG_KEY, null));
     }
 
     private static void printConfig(File file, String key, String value) throws IOException {

@@ -18,12 +18,10 @@
 
 package org.apache.flink.connector.kafka.source.reader.deserializer;
 
-import org.apache.flink.connector.testutils.formats.DummyInitializationContext;
 import org.apache.flink.connector.testutils.source.deserialization.TestingDeserializationContext;
-import org.apache.flink.formats.json.JsonDeserializationSchema;
+import org.apache.flink.formats.json.JsonNodeDeserializationSchema;
 import org.apache.flink.streaming.util.serialization.JSONKeyValueDeserializationSchema;
 import org.apache.flink.util.Collector;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
@@ -36,18 +34,21 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Unit tests for KafkaRecordDeserializationSchema. */
 public class KafkaRecordDeserializationSchemaTest {
-
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
 
     private static Map<String, ?> configurableConfiguration;
     private static Map<String, ?> configuration;
@@ -61,40 +62,37 @@ public class KafkaRecordDeserializationSchemaTest {
     }
 
     @Test
-    public void testKafkaDeserializationSchemaWrapper() throws Exception {
+    public void testKafkaDeserializationSchemaWrapper() throws IOException {
         final ConsumerRecord<byte[], byte[]> consumerRecord = getConsumerRecord();
         KafkaRecordDeserializationSchema<ObjectNode> schema =
                 KafkaRecordDeserializationSchema.of(new JSONKeyValueDeserializationSchema(true));
-        schema.open(new DummyInitializationContext());
         SimpleCollector<ObjectNode> collector = new SimpleCollector<>();
         schema.deserialize(consumerRecord, collector);
 
-        assertThat(collector.list).hasSize(1);
+        assertEquals(1, collector.list.size());
         ObjectNode deserializedValue = collector.list.get(0);
 
-        assertThat(deserializedValue.get("key").get("index").asInt()).isEqualTo(4);
-        assertThat(deserializedValue.get("value").get("word").asText()).isEqualTo("world");
-        assertThat(deserializedValue.get("metadata").get("topic").asText()).isEqualTo("topic#1");
-        assertThat(deserializedValue.get("metadata").get("offset").asInt()).isEqualTo(4);
-        assertThat(deserializedValue.get("metadata").get("partition").asInt()).isEqualTo(3);
+        assertEquals(4, deserializedValue.get("key").get("index").asInt());
+        assertEquals("world", deserializedValue.get("value").get("word").asText());
+        assertEquals("topic#1", deserializedValue.get("metadata").get("topic").asText());
+        assertEquals(4, deserializedValue.get("metadata").get("offset").asInt());
+        assertEquals(3, deserializedValue.get("metadata").get("partition").asInt());
     }
 
     @Test
-    public void testKafkaValueDeserializationSchemaWrapper() throws Exception {
+    public void testKafkaValueDeserializationSchemaWrapper() throws IOException {
         final ConsumerRecord<byte[], byte[]> consumerRecord = getConsumerRecord();
         KafkaRecordDeserializationSchema<ObjectNode> schema =
-                KafkaRecordDeserializationSchema.valueOnly(
-                        new JsonDeserializationSchema<>(ObjectNode.class));
-        schema.open(new DummyInitializationContext());
+                KafkaRecordDeserializationSchema.valueOnly(new JsonNodeDeserializationSchema());
         SimpleCollector<ObjectNode> collector = new SimpleCollector<>();
         schema.deserialize(consumerRecord, collector);
 
-        assertThat(collector.list).hasSize(1);
+        assertEquals(1, collector.list.size());
         ObjectNode deserializedValue = collector.list.get(0);
 
-        assertThat(deserializedValue.get("word").asText()).isEqualTo("world");
-        assertThat(deserializedValue.get("key")).isNull();
-        assertThat(deserializedValue.get("metadata")).isNull();
+        assertEquals("world", deserializedValue.get("word").asText());
+        assertNull(deserializedValue.get("key"));
+        assertNull(deserializedValue.get("metadata"));
     }
 
     @Test
@@ -110,8 +108,8 @@ public class KafkaRecordDeserializationSchemaTest {
         SimpleCollector<String> collector = new SimpleCollector<>();
         schema.deserialize(consumerRecord, collector);
 
-        assertThat(collector.list).hasSize(1);
-        assertThat(collector.list.get(0)).isEqualTo("world");
+        assertEquals(1, collector.list.size());
+        assertEquals("world", collector.list.get(0));
     }
 
     @Test
@@ -120,9 +118,9 @@ public class KafkaRecordDeserializationSchemaTest {
         KafkaRecordDeserializationSchema<String> schema =
                 KafkaRecordDeserializationSchema.valueOnly(SimpleStringSerializer.class, config);
         schema.open(new TestingDeserializationContext());
-        assertThat(config).isEqualTo(configuration);
-        assertThat(isKeyDeserializer).isFalse();
-        assertThat(configurableConfiguration).isEmpty();
+        Assertions.assertEquals(configuration, config);
+        assertFalse(isKeyDeserializer);
+        assertTrue(configurableConfiguration.isEmpty());
     }
 
     @Test
@@ -132,19 +130,20 @@ public class KafkaRecordDeserializationSchemaTest {
                 KafkaRecordDeserializationSchema.valueOnly(
                         ConfigurableStringSerializer.class, config);
         schema.open(new TestingDeserializationContext());
-        assertThat(config).isEqualTo(configurableConfiguration);
-        assertThat(isKeyDeserializer).isFalse();
-        assertThat(configuration).isEmpty();
+        Assertions.assertEquals(configurableConfiguration, config);
+        assertFalse(isKeyDeserializer);
+        assertTrue(configuration.isEmpty());
     }
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecord() throws JsonProcessingException {
-        ObjectNode initialKey = OBJECT_MAPPER.createObjectNode();
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode initialKey = mapper.createObjectNode();
         initialKey.put("index", 4);
-        byte[] serializedKey = OBJECT_MAPPER.writeValueAsBytes(initialKey);
+        byte[] serializedKey = mapper.writeValueAsBytes(initialKey);
 
-        ObjectNode initialValue = OBJECT_MAPPER.createObjectNode();
+        ObjectNode initialValue = mapper.createObjectNode();
         initialValue.put("word", "world");
-        byte[] serializedValue = OBJECT_MAPPER.writeValueAsBytes(initialValue);
+        byte[] serializedValue = mapper.writeValueAsBytes(initialValue);
 
         return new ConsumerRecord<>("topic#1", 3, 4L, serializedKey, serializedValue);
     }

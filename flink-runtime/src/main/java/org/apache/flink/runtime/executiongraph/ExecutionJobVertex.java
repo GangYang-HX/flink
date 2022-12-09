@@ -156,7 +156,7 @@ public class ExecutionJobVertex
     }
 
     protected void initialize(
-            int executionHistorySizeLimit,
+            int maxPriorAttemptsHistoryLength,
             Time timeout,
             long createTimestamp,
             SubtaskAttemptNumberStore initialAttemptCounts,
@@ -188,13 +188,13 @@ public class ExecutionJobVertex
         // create all task vertices
         for (int i = 0; i < this.parallelismInfo.getParallelism(); i++) {
             ExecutionVertex vertex =
-                    createExecutionVertex(
+                    new ExecutionVertex(
                             this,
                             i,
                             producedDataSets,
                             timeout,
                             createTimestamp,
-                            executionHistorySizeLimit,
+                            maxPriorAttemptsHistoryLength,
                             initialAttemptCounts.getAttemptCount(i));
 
             this.taskVertices[i] = vertex;
@@ -220,8 +220,8 @@ public class ExecutionJobVertex
                 for (final SerializedValue<OperatorCoordinator.Provider> provider :
                         coordinatorProviders) {
                     coordinators.add(
-                            createOperatorCoordinatorHolder(
-                                    provider, graph.getUserClassLoader(), coordinatorStore));
+                            OperatorCoordinatorHolder.create(
+                                    provider, this, graph.getUserClassLoader(), coordinatorStore));
                 }
             } catch (Exception | LinkageError e) {
                 IOUtils.closeAllQuietly(coordinators);
@@ -260,33 +260,6 @@ public class ExecutionJobVertex
         }
     }
 
-    protected ExecutionVertex createExecutionVertex(
-            ExecutionJobVertex jobVertex,
-            int subTaskIndex,
-            IntermediateResult[] producedDataSets,
-            Time timeout,
-            long createTimestamp,
-            int executionHistorySizeLimit,
-            int initialAttemptCount) {
-        return new ExecutionVertex(
-                jobVertex,
-                subTaskIndex,
-                producedDataSets,
-                timeout,
-                createTimestamp,
-                executionHistorySizeLimit,
-                initialAttemptCount);
-    }
-
-    protected OperatorCoordinatorHolder createOperatorCoordinatorHolder(
-            SerializedValue<OperatorCoordinator.Provider> provider,
-            ClassLoader classLoader,
-            CoordinatorStore coordinatorStore)
-            throws Exception {
-        return OperatorCoordinatorHolder.create(
-                provider, this, classLoader, coordinatorStore, false);
-    }
-
     public boolean isInitialized() {
         return taskVertices != null;
     }
@@ -307,6 +280,14 @@ public class ExecutionJobVertex
 
     public void setMaxParallelism(int maxParallelism) {
         parallelismInfo.setMaxParallelism(maxParallelism);
+    }
+
+    /**
+     * update the max parallelism of this job vertex without check even the maxParallelismConfigured
+     * was set true.
+     */
+    public void updateMaxParallelism(int maxParallelismDerived) {
+        parallelismInfo.setMaxParallelism(maxParallelismDerived);
     }
 
     public InternalExecutionGraphAccessor getGraph() {
@@ -621,17 +602,6 @@ public class ExecutionJobVertex
         } else {
             // all else collapses under created
             return ExecutionState.CREATED;
-        }
-    }
-
-    /** Factory to create {@link ExecutionJobVertex}. */
-    public static class Factory {
-        ExecutionJobVertex createExecutionJobVertex(
-                InternalExecutionGraphAccessor graph,
-                JobVertex jobVertex,
-                VertexParallelismInformation parallelismInfo)
-                throws JobException {
-            return new ExecutionJobVertex(graph, jobVertex, parallelismInfo);
         }
     }
 }

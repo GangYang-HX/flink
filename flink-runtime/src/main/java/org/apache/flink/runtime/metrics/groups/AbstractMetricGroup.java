@@ -26,6 +26,7 @@ import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.metrics.Metric;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.metrics.SimpleCounter;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.metrics.dump.QueryScopeInfo;
@@ -435,15 +436,27 @@ public abstract class AbstractMetricGroup<A extends AbstractMetricGroup<?>> impl
 
     @Override
     public MetricGroup addGroup(String name) {
-        return addGroup(name, ChildType.GENERIC);
+        return addGroup(String.valueOf(name), ChildType.GENERIC, QueryServiceMode.INHERIT);
+    }
+
+    @Override
+    public MetricGroup addGroup(String name, QueryServiceMode mode) {
+        return addGroup(name, ChildType.GENERIC, mode);
+    }
+
+    @Override
+    public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
+        return addGroup(key, ChildType.KEY, mode).addGroup(value, ChildType.VALUE, mode);
     }
 
     @Override
     public MetricGroup addGroup(String key, String value) {
-        return addGroup(key, ChildType.KEY).addGroup(value, ChildType.VALUE);
+        return addGroup(key, ChildType.KEY, QueryServiceMode.INHERIT)
+                .addGroup(value, ChildType.VALUE, QueryServiceMode.INHERIT);
     }
 
-    private AbstractMetricGroup<?> addGroup(String name, ChildType childType) {
+    private AbstractMetricGroup<?> addGroup(
+            String name, ChildType childType, QueryServiceMode mode) {
         synchronized (this) {
             if (!closed) {
                 // adding a group with the same name as a metric creates problems in many
@@ -459,7 +472,10 @@ public abstract class AbstractMetricGroup<A extends AbstractMetricGroup<?>> impl
                                     + Arrays.toString(scopeComponents));
                 }
 
-                AbstractMetricGroup newGroup = createChildGroup(name, childType);
+                // if the parent group is disabled, child group should be disabled too.
+                QueryServiceMode childMode =
+                        QueryServiceMode.INHERIT == mode ? this.getQueryServiceMode() : mode;
+                AbstractMetricGroup newGroup = createChildGroup(name, childType, childMode);
                 AbstractMetricGroup prior = groups.put(name, newGroup);
                 if (prior == null) {
                     // no prior group with that name
@@ -478,12 +494,13 @@ public abstract class AbstractMetricGroup<A extends AbstractMetricGroup<?>> impl
         }
     }
 
-    protected GenericMetricGroup createChildGroup(String name, ChildType childType) {
+    protected GenericMetricGroup createChildGroup(
+            String name, ChildType childType, QueryServiceMode childMode) {
         switch (childType) {
             case KEY:
-                return new GenericKeyMetricGroup(registry, this, name);
+                return new GenericKeyMetricGroup(registry, this, name, childMode);
             default:
-                return new GenericMetricGroup(registry, this, name);
+                return new GenericMetricGroup(registry, this, name, childMode);
         }
     }
 

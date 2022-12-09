@@ -21,7 +21,7 @@ package org.apache.flink.runtime.webmonitor.handlers;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.rest.messages.RestResponseMarshallingTestBase;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link JarRunResponseBody}. */
 public class JarRunResponseBodyTest extends RestResponseMarshallingTestBase<JarRunResponseBody> {
@@ -39,6 +39,6 @@ public class JarRunResponseBodyTest extends RestResponseMarshallingTestBase<JarR
     @Override
     protected void assertOriginalEqualsToUnmarshalled(
             final JarRunResponseBody expected, final JarRunResponseBody actual) {
-        assertThat(actual.getJobId()).isEqualTo(expected.getJobId());
+        assertEquals(expected.getJobId(), actual.getJobId());
     }
 }

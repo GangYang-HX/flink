@@ -37,13 +37,11 @@ import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.highavailability.ClientHighAvailabilityServices;
 import org.apache.flink.runtime.highavailability.ClientHighAvailabilityServicesFactory;
 import org.apache.flink.runtime.highavailability.DefaultClientHighAvailabilityServicesFactory;
-import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmaster.JobResult;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 import org.apache.flink.runtime.messages.Acknowledge;
-import org.apache.flink.runtime.messages.webmonitor.JobStatusInfo;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.rest.FileUpload;
@@ -67,16 +65,9 @@ import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.runtime.rest.messages.TerminationModeQueryParameter;
 import org.apache.flink.runtime.rest.messages.TriggerId;
 import org.apache.flink.runtime.rest.messages.cluster.ShutdownHeaders;
-import org.apache.flink.runtime.rest.messages.dataset.ClusterDataSetDeleteStatusHeaders;
-import org.apache.flink.runtime.rest.messages.dataset.ClusterDataSetDeleteStatusMessageParameters;
-import org.apache.flink.runtime.rest.messages.dataset.ClusterDataSetDeleteTriggerHeaders;
-import org.apache.flink.runtime.rest.messages.dataset.ClusterDataSetDeleteTriggerMessageParameters;
-import org.apache.flink.runtime.rest.messages.dataset.ClusterDataSetEntry;
-import org.apache.flink.runtime.rest.messages.dataset.ClusterDataSetListHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobDetailsHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobDetailsInfo;
 import org.apache.flink.runtime.rest.messages.job.JobExecutionResultHeaders;
-import org.apache.flink.runtime.rest.messages.job.JobStatusInfoHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobSubmitHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobSubmitRequestBody;
 import org.apache.flink.runtime.rest.messages.job.JobSubmitResponseBody;
@@ -100,14 +91,11 @@ import org.apache.flink.runtime.rest.messages.queue.QueueStatus;
 import org.apache.flink.runtime.rest.util.RestClientException;
 import org.apache.flink.runtime.rest.util.RestConstants;
 import org.apache.flink.runtime.webmonitor.retriever.LeaderRetriever;
-import org.apache.flink.util.AbstractID;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.ExecutorUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.SerializedValue;
-import org.apache.flink.util.StringUtils;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
-import org.apache.flink.util.concurrent.FixedRetryStrategy;
 import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
 import org.apache.flink.util.function.CheckedSupplier;
@@ -124,16 +112,15 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -357,6 +344,18 @@ public class RestClusterClient<T> implements ClusterClient<T> {
                                         new FileUpload(
                                                 Paths.get(jar.toUri()),
                                                 RestConstants.CONTENT_TYPE_JAR));
+                            }
+
+                            for (URL jarUrl : jobGraph.getClasspaths()) {
+                                try {
+                                    jarFileNames.add(new Path(jarUrl.toURI()).getName());
+                                    filesToUpload.add(
+                                            new FileUpload(
+                                                    Paths.get(jarUrl.toURI()),
+                                                    RestConstants.CONTENT_TYPE_JAR));
+                                } catch (URISyntaxException e) {
+                                    throw new RuntimeException(e);
+                                }
                             }
 
                             for (Map.Entry<String, DistributedCache.DistributedCacheEntry>
@@ -678,56 +677,6 @@ public class RestClusterClient<T> implements ClusterClient<T> {
     }
 
     @Override
-    public CompletableFuture<Set<AbstractID>> listCompletedClusterDatasetIds() {
-        return sendRequest(ClusterDataSetListHeaders.INSTANCE)
-                .thenApply(
-                        clusterDataSetListResponseBody ->
-                                clusterDataSetListResponseBody.getDataSets().stream()
-                                        .filter(ClusterDataSetEntry::isComplete)
-                                        .map(ClusterDataSetEntry::getDataSetId)
-                                        .map(id -> new AbstractID(StringUtils.hexStringToByte(id)))
-                                        .collect(Collectors.toSet()));
-    }
-
-    @Override
-    public CompletableFuture<Void> invalidateClusterDataset(AbstractID clusterDatasetId) {
-
-        final ClusterDataSetDeleteTriggerHeaders triggerHeader =
-                ClusterDataSetDeleteTriggerHeaders.INSTANCE;
-        final ClusterDataSetDeleteTriggerMessageParameters parameters =
-                triggerHeader.getUnresolvedMessageParameters();
-        parameters.clusterDataSetIdPathParameter.resolve(
-                new IntermediateDataSetID(clusterDatasetId));
-
-        final CompletableFuture<TriggerResponse> triggerFuture =
-                sendRequest(triggerHeader, parameters);
-
-        final CompletableFuture<AsynchronousOperationInfo> clusterDatasetDeleteFuture =
-                triggerFuture.thenCompose(
-                        triggerResponse -> {
-                            final TriggerId triggerId = triggerResponse.getTriggerId();
-                            final ClusterDataSetDeleteStatusHeaders statusHeaders =
-                                    ClusterDataSetDeleteStatusHeaders.INSTANCE;
-                            final ClusterDataSetDeleteStatusMessageParameters
-                                    statusMessageParameters =
-                                            statusHeaders.getUnresolvedMessageParameters();
-                            statusMessageParameters.triggerIdPathParameter.resolve(triggerId);
-
-                            return pollResourceAsync(
-                                    () -> sendRequest(statusHeaders, statusMessageParameters));
-                        });
-
-        return clusterDatasetDeleteFuture.thenApply(
-                asynchronousOperationInfo -> {
-                    if (asynchronousOperationInfo.getFailureCause() == null) {
-                        return null;
-                    } else {
-                        throw new CompletionException(asynchronousOperationInfo.getFailureCause());
-                    }
-                });
-    }
-
-    @Override
     public void shutDownCluster() {
         try {
             sendRequest(ShutdownHeaders.getInstance()).get();
@@ -808,12 +757,8 @@ public class RestClusterClient<T> implements ClusterClient<T> {
     // -------------------------------------------------------------------------
 
     private CompletableFuture<JobStatus> requestJobStatus(JobID jobId) {
-        final JobStatusInfoHeaders jobStatusInfoHeaders = JobStatusInfoHeaders.getInstance();
-        final JobMessageParameters params = new JobMessageParameters();
-        params.jobPathParameter.resolve(jobId);
-
-        return sendRequest(jobStatusInfoHeaders, params)
-                .thenApply(JobStatusInfo::getJobStatus)
+        return getJobDetails(jobId)
+                .thenApply(JobDetailsInfo::getJobStatus)
                 .thenApply(
                         jobStatus -> {
                             if (jobStatus == JobStatus.SUSPENDED) {
@@ -953,9 +898,8 @@ public class RestClusterClient<T> implements ClusterClient<T> {
             CheckedSupplier<CompletableFuture<C>> operation, Predicate<Throwable> retryPredicate) {
         return FutureUtils.retryWithDelay(
                 CheckedSupplier.unchecked(operation),
-                new FixedRetryStrategy(
-                        restClusterClientConfiguration.getRetryMaxAttempts(),
-                        Duration.ofMillis(restClusterClientConfiguration.getRetryDelay())),
+                restClusterClientConfiguration.getRetryMaxAttempts(),
+                Time.milliseconds(restClusterClientConfiguration.getRetryDelay()),
                 retryPredicate,
                 new ScheduledExecutorServiceAdapter(retryExecutorService));
     }

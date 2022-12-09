@@ -26,6 +26,7 @@ import org.apache.flink.table.expressions.{Expression, ValueLiteralExpression}
 import org.apache.flink.table.expressions.ExpressionUtils.extractValue
 import org.apache.flink.table.functions.AggregateFunction
 import org.apache.flink.table.planner.JLong
+import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 import org.apache.flink.table.planner.codegen._
 import org.apache.flink.table.planner.codegen.CodeGenUtils.{boxedTypeTermForType, newName, BINARY_ROW, TIMESTAMP_DATA}
 import org.apache.flink.table.planner.codegen.GeneratedExpression.{NEVER_NULL, NO_CODE}
@@ -38,7 +39,6 @@ import org.apache.flink.table.planner.expressions.ExpressionBuilder._
 import org.apache.flink.table.planner.expressions.converter.ExpressionConverter
 import org.apache.flink.table.planner.plan.logical.{LogicalWindow, SlidingGroupWindow, TumblingGroupWindow}
 import org.apache.flink.table.planner.plan.utils.{AggregateInfo, AggregateInfoList, AggregateUtil}
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTypeFactory
 import org.apache.flink.table.runtime.groupwindow.NamedWindowProperty
 import org.apache.flink.table.runtime.operators.window.TimeWindow
 import org.apache.flink.table.runtime.operators.window.grouping.{HeapWindowsGrouping, WindowsGrouping}
@@ -68,7 +68,7 @@ abstract class WindowCodeGenerator(
     val isFinal: Boolean) {
 
   protected lazy val builder: RelBuilder =
-    relBuilder.values(unwrapTypeFactory(relBuilder).buildRelNodeRowType(inputRowType))
+    relBuilder.values(FlinkTypeFactory.INSTANCE.buildRelNodeRowType(inputRowType))
 
   protected lazy val aggInfos: Array[AggregateInfo] = aggInfoList.aggInfos
 
@@ -696,7 +696,7 @@ abstract class WindowCodeGenerator(
       new CallExpressionResolver(relBuilder)
         .resolve(expr)
         .accept(new ExpressionConverter(
-          relBuilder.values(unwrapTypeFactory(relBuilder).buildRelNodeRowType(inputRowType)))))
+          relBuilder.values(FlinkTypeFactory.INSTANCE.buildRelNodeRowType(inputRowType)))))
   }
 
   def getGrouping: Array[Int] = grouping

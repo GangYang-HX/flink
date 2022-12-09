@@ -49,7 +49,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber.SENTINEL_SHARD_ENDING_SEQUENCE_NUM;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for the {@link ShardConsumer}. */
 public class ShardConsumerTestUtils {
@@ -150,9 +150,10 @@ public class ShardConsumerTestUtils {
                         deserializationSchema)
                 .run();
 
-        assertThat(sourceContext.getCollectedOutputs()).hasSize(expectedNumberOfMessages);
-        assertThat(subscribedShardsStateUnderTest.get(0).getLastProcessedSequenceNum())
-                .isEqualTo(expectedLastProcessedSequenceNum);
+        assertEquals(expectedNumberOfMessages, sourceContext.getCollectedOutputs().size());
+        assertEquals(
+                expectedLastProcessedSequenceNum,
+                subscribedShardsStateUnderTest.get(0).getLastProcessedSequenceNum());
 
         return shardMetricsReporter;
     }

@@ -36,9 +36,7 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -74,8 +72,8 @@ public class JobVertex implements java.io.Serializable {
      */
     private final List<OperatorIDPair> operatorIDs;
 
-    /** Produced data sets, one per writer. */
-    private final Map<IntermediateDataSetID, IntermediateDataSet> results = new LinkedHashMap<>();
+    /** List of produced data sets, one per writer. */
+    private final ArrayList<IntermediateDataSet> results = new ArrayList<>();
 
     /** List of edges with incoming data. One per Reader. */
     private final ArrayList<JobEdge> inputs = new ArrayList<>();
@@ -143,17 +141,6 @@ public class JobVertex implements java.io.Serializable {
      * JSON plan.
      */
     private String resultOptimizerProperties;
-
-    /**
-     * The intermediateDataSetId of the cached intermediate dataset that the job vertex consumes.
-     */
-    private final List<IntermediateDataSetID> intermediateDataSetIdsToConsume = new ArrayList<>();
-
-    /** Indicates whether this job vertex contains source operators. */
-    private boolean containsSourceOperators = false;
-
-    /** Indicates whether this job vertex contains sink operators. */
-    private boolean containsSinkOperators = false;
 
     // --------------------------------------------------------------------------------------------
 
@@ -310,11 +297,8 @@ public class JobVertex implements java.io.Serializable {
      * @param parallelism The parallelism for the task.
      */
     public void setParallelism(int parallelism) {
-        if (parallelism < 1 && parallelism != ExecutionConfig.PARALLELISM_DEFAULT) {
-            throw new IllegalArgumentException(
-                    "The parallelism must be at least one, or "
-                            + ExecutionConfig.PARALLELISM_DEFAULT
-                            + " (unset).");
+        if (parallelism < 1) {
+            throw new IllegalArgumentException("The parallelism must be at least one.");
         }
         this.parallelism = parallelism;
     }
@@ -376,7 +360,7 @@ public class JobVertex implements java.io.Serializable {
     }
 
     public List<IntermediateDataSet> getProducedDataSets() {
-        return new ArrayList<>(results.values());
+        return this.results;
     }
 
     public List<JobEdge> getInputs() {
@@ -483,37 +467,24 @@ public class JobVertex implements java.io.Serializable {
     }
 
     // --------------------------------------------------------------------------------------------
-    public IntermediateDataSet getOrCreateResultDataSet(
+    private IntermediateDataSet createAndAddResultDataSet(ResultPartitionType partitionType) {
+        return createAndAddResultDataSet(new IntermediateDataSetID(), partitionType);
+    }
+
+    public IntermediateDataSet createAndAddResultDataSet(
             IntermediateDataSetID id, ResultPartitionType partitionType) {
-        return this.results.computeIfAbsent(
-                id, key -> new IntermediateDataSet(id, partitionType, this));
+
+        IntermediateDataSet result = new IntermediateDataSet(id, partitionType, this);
+        this.results.add(result);
+        return result;
     }
 
     public JobEdge connectNewDataSetAsInput(
             JobVertex input, DistributionPattern distPattern, ResultPartitionType partitionType) {
-        return connectNewDataSetAsInput(input, distPattern, partitionType, false);
-    }
 
-    public JobEdge connectNewDataSetAsInput(
-            JobVertex input,
-            DistributionPattern distPattern,
-            ResultPartitionType partitionType,
-            boolean isBroadcast) {
-        return connectNewDataSetAsInput(
-                input, distPattern, partitionType, new IntermediateDataSetID(), isBroadcast);
-    }
+        IntermediateDataSet dataSet = input.createAndAddResultDataSet(partitionType);
 
-    public JobEdge connectNewDataSetAsInput(
-            JobVertex input,
-            DistributionPattern distPattern,
-            ResultPartitionType partitionType,
-            IntermediateDataSetID intermediateDataSetId,
-            boolean isBroadcast) {
-
-        IntermediateDataSet dataSet =
-                input.getOrCreateResultDataSet(intermediateDataSetId, partitionType);
-
-        JobEdge edge = new JobEdge(dataSet, this, distPattern, isBroadcast);
+        JobEdge edge = new JobEdge(dataSet, this, distPattern);
         this.inputs.add(edge);
         dataSet.addConsumer(edge);
         return edge;
@@ -534,23 +505,13 @@ public class JobVertex implements java.io.Serializable {
     }
 
     public boolean hasNoConnectedInputs() {
-        return inputs.isEmpty();
-    }
+        for (JobEdge edge : inputs) {
+            if (!edge.isIdReference()) {
+                return false;
+            }
+        }
 
-    public void markContainsSources() {
-        this.containsSourceOperators = true;
-    }
-
-    public boolean containsSources() {
-        return containsSourceOperators;
-    }
-
-    public void markContainsSinks() {
-        this.containsSinkOperators = true;
-    }
-
-    public boolean containsSinks() {
-        return containsSinkOperators;
+        return true;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -605,14 +566,6 @@ public class JobVertex implements java.io.Serializable {
 
     public void setResultOptimizerProperties(String resultOptimizerProperties) {
         this.resultOptimizerProperties = resultOptimizerProperties;
-    }
-
-    public void addIntermediateDataSetIdToConsume(IntermediateDataSetID intermediateDataSetId) {
-        intermediateDataSetIdsToConsume.add(intermediateDataSetId);
-    }
-
-    public List<IntermediateDataSetID> getIntermediateDataSetIdsToConsume() {
-        return intermediateDataSetIdsToConsume;
     }
 
     // --------------------------------------------------------------------------------------------

@@ -26,6 +26,7 @@ import org.apache.flink.runtime.checkpoint.MasterState;
 import org.apache.flink.runtime.checkpoint.OperatorState;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.runtime.checkpoint.StateObjectCollection;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.IncrementalRemoteKeyedStateHandle;
 import org.apache.flink.runtime.state.InputChannelStateHandle;
 import org.apache.flink.runtime.state.KeyGroupRange;
@@ -117,10 +118,6 @@ public abstract class MetadataV2V3SerializerBase {
     private static final byte INCREMENTAL_KEY_GROUPS_HANDLE_V2 = 11;
     // KEY_GROUPS_HANDLE_V2 is introduced to add new field of stateHandleId.
     private static final byte KEY_GROUPS_HANDLE_V2 = 12;
-    // CHANGELOG_FILE_INCREMENT_HANDLE_V2 is introduced to add new field of storageIdentifier.
-    private static final byte CHANGELOG_FILE_INCREMENT_HANDLE_V2 = 13;
-    // CHANGELOG_HANDLE_V2 is introduced to add new field of checkpointId.
-    private static final byte CHANGELOG_HANDLE_V2 = 14;
 
     // ------------------------------------------------------------------------
     //  (De)serialization entry points
@@ -145,6 +142,35 @@ public abstract class MetadataV2V3SerializerBase {
         for (OperatorState operatorState : operatorStates) {
             serializeOperatorState(operatorState, dos);
         }
+
+        // forth: operator descriptions
+        Map<OperatorID, String> operatorDescriptions = checkpointMetadata.getOperatorDescriptions();
+        dos.writeInt(operatorDescriptions.size());
+        for (Map.Entry<OperatorID, String> entry : operatorDescriptions.entrySet()) {
+            OperatorID operatorID = entry.getKey();
+            String operatorDescription = entry.getValue();
+            serializeOperatorDescription(operatorID, operatorDescription, dos);
+        }
+    }
+
+    private void serializeOperatorDescription(
+            OperatorID operatorID, String operatorDescription, DataOutputStream dos)
+            throws IOException {
+        // operatorID
+        dos.writeLong(operatorID.getLowerPart());
+        dos.writeLong(operatorID.getUpperPart());
+
+        // operatorDescription
+        // for safety, we serialize by UTF and then write the array and its
+        // length into the checkpoint
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        final DataOutputStream out = new DataOutputStream(baos);
+        out.writeUTF(operatorDescription);
+        out.close();
+        byte[] data = baos.toByteArray();
+
+        dos.writeInt(data.length);
+        dos.write(data, 0, data.length);
     }
 
     protected CheckpointMetadata deserializeMetadata(
@@ -182,7 +208,39 @@ public abstract class MetadataV2V3SerializerBase {
             operatorStates.add(deserializeOperatorState(dis, context));
         }
 
-        return new CheckpointMetadata(checkpointId, operatorStates, masterStates);
+        // forth: operator descriptions
+        final Map<OperatorID, String> operatorDescriptions = new HashMap<>();
+        byte[] intBytes = new byte[4];
+        if (dis.read(intBytes) != -1) {
+            int numOperatorDescriptions =
+                    (intBytes[0] << 24) + (intBytes[1] << 16) + (intBytes[2] << 8) + (intBytes[3]);
+            if (numOperatorDescriptions > 0) {
+                for (int i = 0; i < numOperatorDescriptions; i++) {
+                    Tuple2<OperatorID, String> operatorIdDscription =
+                            deserializeOperatorDescription(dis);
+                    operatorDescriptions.put(operatorIdDscription.f0, operatorIdDscription.f1);
+                }
+            }
+        }
+
+        return new CheckpointMetadata(
+                checkpointId, operatorStates, masterStates, operatorDescriptions);
+    }
+
+    private Tuple2<OperatorID, String> deserializeOperatorDescription(DataInputStream dis)
+            throws IOException {
+        long lowerPart = dis.readLong();
+        long upperPart = dis.readLong();
+        final OperatorID operatorID = new OperatorID(lowerPart, upperPart);
+
+        int numBytes = dis.readInt();
+
+        byte[] data = new byte[numBytes];
+        dis.readFully(data);
+        final DataInputStream in = new DataInputStream(new ByteArrayInputStream(data));
+
+        String operatorDescription = in.readUTF();
+        return Tuple2.of(operatorID, operatorDescription);
     }
 
     // ------------------------------------------------------------------------
@@ -348,7 +406,7 @@ public abstract class MetadataV2V3SerializerBase {
         } else if (stateHandle instanceof ChangelogStateBackendHandle) {
             ChangelogStateBackendHandle handle = (ChangelogStateBackendHandle) stateHandle;
 
-            dos.writeByte(CHANGELOG_HANDLE_V2);
+            dos.writeByte(CHANGELOG_HANDLE);
             dos.writeInt(handle.getKeyGroupRange().getStartKeyGroup());
             dos.writeInt(handle.getKeyGroupRange().getNumberOfKeyGroups());
 
@@ -365,7 +423,6 @@ public abstract class MetadataV2V3SerializerBase {
             }
 
             dos.writeLong(handle.getMaterializationID());
-            dos.writeLong(handle.getCheckpointId());
             writeStateHandleId(handle, dos);
 
         } else if (stateHandle instanceof InMemoryChangelogStateHandle) {
@@ -384,7 +441,7 @@ public abstract class MetadataV2V3SerializerBase {
             writeStateHandleId(handle, dos);
         } else if (stateHandle instanceof ChangelogStateHandleStreamImpl) {
             ChangelogStateHandleStreamImpl handle = (ChangelogStateHandleStreamImpl) stateHandle;
-            dos.writeByte(CHANGELOG_FILE_INCREMENT_HANDLE_V2);
+            dos.writeByte(CHANGELOG_FILE_INCREMENT_HANDLE);
             dos.writeInt(handle.getKeyGroupRange().getStartKeyGroup());
             dos.writeInt(handle.getKeyGroupRange().getNumberOfKeyGroups());
             dos.writeInt(handle.getHandlesAndOffsets().size());
@@ -396,7 +453,7 @@ public abstract class MetadataV2V3SerializerBase {
             dos.writeLong(handle.getStateSize());
             dos.writeLong(handle.getCheckpointedSize());
             writeStateHandleId(handle, dos);
-            dos.writeUTF(handle.getStorageIdentifier());
+
         } else {
             throw new IllegalStateException(
                     "Unknown KeyedStateHandle type: " + stateHandle.getClass());
@@ -444,7 +501,7 @@ public abstract class MetadataV2V3SerializerBase {
         } else if (INCREMENTAL_KEY_GROUPS_HANDLE == type
                 || INCREMENTAL_KEY_GROUPS_HANDLE_V2 == type) {
             return deserializeIncrementalStateHandle(dis, context, type);
-        } else if (CHANGELOG_HANDLE == type || CHANGELOG_HANDLE_V2 == type) {
+        } else if (CHANGELOG_HANDLE == type) {
 
             int startKeyGroup = dis.readInt();
             int numKeyGroups = dis.readInt();
@@ -470,16 +527,9 @@ public abstract class MetadataV2V3SerializerBase {
             }
 
             long materializationID = dis.readLong();
-            long checkpointId = CHANGELOG_HANDLE_V2 == type ? dis.readLong() : materializationID;
             StateHandleID stateHandleId = new StateHandleID(dis.readUTF());
             return ChangelogStateBackendHandleImpl.restore(
-                    base,
-                    delta,
-                    keyGroupRange,
-                    checkpointId,
-                    materializationID,
-                    checkpointedSize,
-                    stateHandleId);
+                    base, delta, keyGroupRange, materializationID, checkpointedSize, stateHandleId);
 
         } else if (CHANGELOG_BYTE_INCREMENT_HANDLE == type) {
             int start = dis.readInt();
@@ -504,8 +554,7 @@ public abstract class MetadataV2V3SerializerBase {
                     keyGroupRange,
                     stateHandleId);
 
-        } else if (CHANGELOG_FILE_INCREMENT_HANDLE == type
-                || CHANGELOG_FILE_INCREMENT_HANDLE_V2 == type) {
+        } else if (CHANGELOG_FILE_INCREMENT_HANDLE == type) {
             int start = dis.readInt();
             int numKeyGroups = dis.readInt();
             KeyGroupRange keyGroupRange = KeyGroupRange.of(start, start + numKeyGroups - 1);
@@ -520,15 +569,8 @@ public abstract class MetadataV2V3SerializerBase {
             long size = dis.readLong();
             long checkpointedSize = dis.readLong();
             StateHandleID stateHandleId = new StateHandleID(dis.readUTF());
-            String storageIdentifier =
-                    CHANGELOG_FILE_INCREMENT_HANDLE_V2 == type ? dis.readUTF() : "filesystem";
             return ChangelogStateHandleStreamImpl.restore(
-                    streamHandleAndOffset,
-                    keyGroupRange,
-                    size,
-                    checkpointedSize,
-                    storageIdentifier,
-                    stateHandleId);
+                    streamHandleAndOffset, keyGroupRange, size, checkpointedSize, stateHandleId);
         } else {
             throw new IllegalStateException("Reading invalid KeyedStateHandle, type: " + type);
         }

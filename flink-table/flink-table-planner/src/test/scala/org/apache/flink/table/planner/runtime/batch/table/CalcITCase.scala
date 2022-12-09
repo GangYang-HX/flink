@@ -20,7 +20,6 @@ package org.apache.flink.table.planner.runtime.batch.table
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.DataTypes._
-import org.apache.flink.table.catalog.CatalogDatabaseImpl
 import org.apache.flink.table.data.DecimalDataUtils
 import org.apache.flink.table.functions.ScalarFunction
 import org.apache.flink.table.planner.expressions.utils._
@@ -334,8 +333,9 @@ class CalcITCase extends BatchTestBase {
 
   @Test
   def testUserDefinedScalarFunction() {
+    registerFunction("hashCode", HashCode)
     val table = BatchTableEnvUtil.fromElements(tEnv, "a", "b", "c")
-    val result = table.select(HashCode($"f0"))
+    val result = table.select("f0.hashCode()")
     val results = executeQuery(result)
     val expected = "97\n98\n99"
     TestBaseUtils.compareResultAsText(results.asJava, expected)
@@ -641,31 +641,6 @@ class CalcITCase extends BatchTestBase {
     TestBaseUtils.compareResultAsText(results.asJava, expected)
   }
 
-  @Test
-  def testCurrentDatabase(): Unit = {
-    val result1 = executeQuery(
-      tEnv
-        .from("Table3")
-        .limit(1)
-        .select(currentDatabase()))
-    TestBaseUtils.compareResultAsText(result1.asJava, "default_database")
-
-    // switch to another database
-    tEnv
-      .getCatalog(tEnv.getCurrentCatalog)
-      .get()
-      .createDatabase(
-        "db1",
-        new CatalogDatabaseImpl(new util.HashMap[String, String](), "db1"),
-        false)
-    tEnv.useDatabase("db1")
-    val result2 = executeQuery(
-      tEnv
-        .from("default_database.Table3")
-        .limit(1)
-        .select(currentDatabase()))
-    TestBaseUtils.compareResultAsText(result1.asJava, "default_database")
-  }
 }
 
 @SerialVersionUID(1L)

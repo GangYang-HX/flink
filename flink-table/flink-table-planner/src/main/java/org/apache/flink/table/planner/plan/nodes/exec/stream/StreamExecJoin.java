@@ -145,27 +145,15 @@ public class StreamExecJoin extends ExecNodeBase<RowData>
 
         final InternalTypeInfo<RowData> leftTypeInfo = InternalTypeInfo.of(leftType);
         final JoinInputSideSpec leftInputSpec =
-                JoinUtil.analyzeJoinInput(
-                        planner.getFlinkContext().getClassLoader(),
-                        leftTypeInfo,
-                        leftJoinKey,
-                        leftUniqueKeys);
+                JoinUtil.analyzeJoinInput(leftTypeInfo, leftJoinKey, leftUniqueKeys);
 
         final InternalTypeInfo<RowData> rightTypeInfo = InternalTypeInfo.of(rightType);
         final JoinInputSideSpec rightInputSpec =
-                JoinUtil.analyzeJoinInput(
-                        planner.getFlinkContext().getClassLoader(),
-                        rightTypeInfo,
-                        rightJoinKey,
-                        rightUniqueKeys);
+                JoinUtil.analyzeJoinInput(rightTypeInfo, rightJoinKey, rightUniqueKeys);
 
         GeneratedJoinCondition generatedCondition =
                 JoinUtil.generateConditionFunction(
-                        config,
-                        planner.getFlinkContext().getClassLoader(),
-                        joinSpec,
-                        leftType,
-                        rightType);
+                        config.getTableConfig(), joinSpec, leftType, rightType);
 
         long minRetentionTime = config.getStateRetentionTime();
 
@@ -211,11 +199,9 @@ public class StreamExecJoin extends ExecNodeBase<RowData>
 
         // set KeyType and Selector for state
         RowDataKeySelector leftSelect =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(), leftJoinKey, leftTypeInfo);
+                KeySelectorUtil.getRowDataSelector(leftJoinKey, leftTypeInfo);
         RowDataKeySelector rightSelect =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(), rightJoinKey, rightTypeInfo);
+                KeySelectorUtil.getRowDataSelector(rightJoinKey, rightTypeInfo);
         transform.setStateKeySelectors(leftSelect, rightSelect);
         transform.setStateKeyType(leftSelect.getProducedType());
         return transform;

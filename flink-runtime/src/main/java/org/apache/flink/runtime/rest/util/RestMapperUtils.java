@@ -18,8 +18,6 @@
 
 package org.apache.flink.runtime.rest.util;
 
-import org.apache.flink.util.jackson.JacksonMapperFactory;
-
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.DeserializationFeature;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.SerializationFeature;
@@ -29,7 +27,7 @@ public class RestMapperUtils {
     private static final ObjectMapper objectMapper;
 
     static {
-        objectMapper = JacksonMapperFactory.createObjectMapper();
+        objectMapper = new ObjectMapper();
         objectMapper.enable(
                 DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES,
                 DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES,

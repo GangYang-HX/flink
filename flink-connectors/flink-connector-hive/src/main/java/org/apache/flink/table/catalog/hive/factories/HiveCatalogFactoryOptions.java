@@ -47,5 +47,8 @@ public final class HiveCatalogFactoryOptions {
     public static final ConfigOption<String> HADOOP_CONF_DIR =
             ConfigOptions.key("hadoop-conf-dir").stringType().noDefaultValue();
 
+    public static final ConfigOption<String> HIVE_MV_PATH =
+            ConfigOptions.key("hive-mv-path").stringType().noDefaultValue();
+
     private HiveCatalogFactoryOptions() {}
 }

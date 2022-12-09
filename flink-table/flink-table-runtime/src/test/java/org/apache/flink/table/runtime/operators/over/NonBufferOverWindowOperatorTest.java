@@ -39,6 +39,7 @@ import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.OutputTag;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,7 +47,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -163,7 +163,7 @@ public class NonBufferOverWindowOperatorTest {
         addRow(2, 5L, 4L);
         addRow(2, 6L, 2L);
         GenericRowData[] outputs = this.collect.toArray(new GenericRowData[0]);
-        assertThat(outputs).isEqualTo(expect);
+        Assert.assertArrayEquals(expect, outputs);
     }
 
     private void addRow(Object... fields) throws Exception {

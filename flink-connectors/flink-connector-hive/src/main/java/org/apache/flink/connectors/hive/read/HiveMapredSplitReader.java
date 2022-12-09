@@ -50,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hadoop.mapreduce.lib.input.FileInputFormat.INPUT_DIR;
 
@@ -98,9 +99,9 @@ public class HiveMapredSplitReader implements SplitReader {
             mapredInputFormat =
                     (InputFormat)
                             Class.forName(
-                                            sd.getInputFormat(),
-                                            true,
-                                            Thread.currentThread().getContextClassLoader())
+                                    sd.getInputFormat(),
+                                    true,
+                                    Thread.currentThread().getContextClassLoader())
                                     .newInstance();
         } catch (Exception e) {
             throw new FlinkHiveException("Unable to instantiate the hadoop input format", e);
@@ -139,6 +140,10 @@ public class HiveMapredSplitReader implements SplitReader {
                         .mapToObj(i -> fieldTypes[i])
                         .map(DataFormatConverters::getConverterForDataType)
                         .toArray(DataFormatConverters.DataFormatConverter[]::new);
+        LOG.info(
+                "converters details info : {}",
+                Arrays.stream(converters).map(item -> item.toString()).collect(
+                        Collectors.toList()));
         this.hiveShim = hiveShim;
 
         // construct reuse row

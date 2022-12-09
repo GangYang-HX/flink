@@ -23,7 +23,7 @@ package org.apache.flink.runtime.operators.coordination;
  * an {@link OperatorCoordinator} and a runtime operator (which registers this handler).
  *
  * <p>The counterpart to this handler is the {@link OperatorCoordinator#handleEventFromOperator(int,
- * int, OperatorEvent)} method.
+ * OperatorEvent)} method.
  */
 public interface OperatorEventHandler {
 

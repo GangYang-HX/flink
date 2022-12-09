@@ -27,9 +27,9 @@ import org.apache.flink.connectors.hive.HiveTablePartition;
 import org.apache.flink.connectors.hive.HiveTablePartitionSplits;
 import org.apache.flink.connectors.hive.JobConfWrapper;
 import org.apache.flink.connectors.hive.MRSplitsGetter;
+import org.apache.flink.connectors.hive.util.HiveTypeUtil;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.catalog.hive.client.HiveShimLoader;
-import org.apache.flink.table.catalog.hive.util.HiveTypeUtil;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
@@ -93,7 +93,8 @@ public class HiveTableInputFormat extends HadoopInputFormatCommonBase<RowData, H
 
     private transient long currentReadCount = 0L;
 
-    @VisibleForTesting protected transient SplitReader reader;
+    @VisibleForTesting
+    protected transient SplitReader reader;
 
     public HiveTableInputFormat(
             int threadNum,
@@ -126,7 +127,8 @@ public class HiveTableInputFormat extends HadoopInputFormatCommonBase<RowData, H
     }
 
     @Override
-    public void configure(org.apache.flink.configuration.Configuration parameters) {}
+    public void configure(org.apache.flink.configuration.Configuration parameters) {
+    }
 
     @Override
     public void open(HiveTableInputSplit split) throws IOException {

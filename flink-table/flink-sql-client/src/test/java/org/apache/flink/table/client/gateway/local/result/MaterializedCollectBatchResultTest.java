@@ -37,7 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link MaterializedCollectBatchResult}. */
 public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTest {
@@ -67,7 +67,7 @@ public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTe
             result.processRecord(Row.of("A", 1));
             result.processRecord(Row.of("C", 2));
 
-            assertThat(result.snapshot(1)).isEqualTo(TypedResult.payload(4));
+            assertEquals(TypedResult.payload(4), result.snapshot(1));
 
             assertRowEquals(
                     Collections.singletonList(Row.of("A", 1)),
@@ -88,7 +88,7 @@ public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTe
 
             result.processRecord(Row.of("A", 1));
 
-            assertThat(result.snapshot(1)).isEqualTo(TypedResult.payload(5));
+            assertEquals(TypedResult.payload(5), result.snapshot(1));
 
             assertRowEquals(
                     Collections.singletonList(Row.of("A", 1)),
@@ -145,7 +145,7 @@ public class MaterializedCollectBatchResultTest extends BaseMaterializedResultTe
                     result.getMaterializedTable(),
                     rowConverter);
 
-            assertThat(result.snapshot(1)).isEqualTo(TypedResult.payload(2));
+            assertEquals(TypedResult.payload(2), result.snapshot(1));
 
             assertRowEquals(
                     Collections.singletonList(Row.of("B", 1)),

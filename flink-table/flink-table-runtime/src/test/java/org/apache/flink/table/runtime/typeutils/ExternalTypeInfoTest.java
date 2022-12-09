@@ -27,7 +27,7 @@ import java.nio.ByteBuffer;
 import java.time.DayOfWeek;
 
 /** Test for {@link ExternalTypeInfo}. */
-class ExternalTypeInfoTest extends TypeInformationTestBase<ExternalTypeInfo<?>> {
+public class ExternalTypeInfoTest extends TypeInformationTestBase<ExternalTypeInfo<?>> {
 
     @Override
     protected ExternalTypeInfo<?>[] getTestData() {

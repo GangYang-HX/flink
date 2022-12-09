@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<artifactId>flink-parent</artifactId>
+		<groupId>org.apache.flink</groupId>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
+	</parent>
+
+	<artifactId>flink-connectors-bilibili</artifactId>
+	<name>Flink : Connector: Bilibili</name>
+	<packaging>pom</packaging>
+
+	<properties>
+		<kafka.version>2.8.1</kafka.version>
+		<io.vertx.version>3.5.2</io.vertx.version>
+		<clickhouse.version>0.2</clickhouse.version>
+		<lombok.version>1.18.24</lombok.version>
+		<hadoop.version>2.8.4</hadoop.version>
+		<jedis.version>3.1.0</jedis.version>
+		<databus.version>1.0.24.RELEASE</databus.version>
+		<kafka.clients.version>0.11.0.3</kafka.clients.version>
+		<elasticsearch.version>6.3.1</elasticsearch.version>
+		<fastjson.version>1.2.72</fastjson.version>
+		<hbase.shaded.client.version>1.3.1</hbase.shaded.client.version>
+		<quartz.version>2.3.2</quartz.version>
+		<rocksdb.version>5.17.2-artisans-2.0</rocksdb.version>
+		<hadoop.lzo.version>0.4.20</hadoop.lzo.version>
+		<bilifilesink.version>1.11.2.1-SNAPSHOT</bilifilesink.version>
+		<parquet.avro.version>1.10.0</parquet.avro.version>
+		<orc.version>1.6.11-bili-SNAPSHOT</orc.version> <!--1.5.6-->
+		<brpc.version>2.5.8.3</brpc.version>
+		<protobuf.java.version>3.12.2</protobuf.java.version>
+		<lancer2.sdk.version>1.0.10</lancer2.sdk.version>
+		<sharding.jdbc.version>4.0.0</sharding.jdbc.version>
+		<dbcp.version>1.4</dbcp.version>
+		<mysql.connector.version>5.1.46</mysql.connector.version>
+		<lettuce.version>5.0.5.RELEASE</lettuce.version>
+		<projectreactor.version>3.1.6.RELEASE</projectreactor.version>
+		<http.server.version>1.0.17.RELEASE</http.server.version>
+		<rpc.client.version>1.0.25.RELEASE</rpc.client.version>
+		<trace.client.version>1.0.25.RELEASE</trace.client.version>
+		<taishan.version>1.0.0-SNAPSHOT</taishan.version>
+		<naming.discovery.shaded.version>1.0.27-SNAPSHOT</naming.discovery.shaded.version>
+		<c3p0.version>0.9.5.4</c3p0.version>
+		<hystrix.version>1.5.12</hystrix.version>
+		<clickhouse.collector.version>1.11.0</clickhouse.collector.version>
+		<common.lang3.version>3.6</common.lang3.version>
+		<maven.test.skip>true</maven.test.skip>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.google.code.findbugs</groupId>
+			<artifactId>jsr305</artifactId>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-test-utils-junit</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-table-common</artifactId>
+			<version>${project.version}</version>
+			<scope>compile</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.mchange</groupId>
+			<artifactId>c3p0</artifactId>
+			<version>${c3p0.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>io.vertx</groupId>
+			<artifactId>vertx-jdbc-client</artifactId>
+			<version>${io.vertx.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>io.vertx</groupId>
+			<artifactId>vertx-core</artifactId>
+			<version>${io.vertx.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>${common.lang3.version}</version>
+		</dependency>
+	</dependencies>
+
+	<modules>
+		<module>flink-bsql-kafka-diversion</module>
+		<module>flink-bsql-kafka</module>
+		<module>flink-bsql-common</module>
+		<module>flink-bsql-mysql</module>
+	</modules>
+
+
+	<!-- See main pom.xml for explanation of profiles -->
+	<profiles>
+
+		<!-- Create SQL Client uber jars by default -->
+		<profile>
+			<id>sql-jars</id>
+			<activation>
+				<property>
+					<name>!skipSqlJars</name>
+				</property>
+			</activation>
+			<modules>
+			</modules>
+		</profile>
+	</profiles>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>dependency-convergence</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<skip>true</skip>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+
+</project>

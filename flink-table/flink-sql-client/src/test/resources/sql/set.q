@@ -61,41 +61,6 @@ CREATE TABLE foo as select 1;
 1 row in set
 !ok
 
-# test add jar
-ADD JAR $VAR_UDF_JAR_PATH;
-[INFO] Execute statement succeed.
-!info
-
-SHOW JARS;
-+-$VAR_UDF_JAR_PATH_DASH-----+
-| $VAR_UDF_JAR_PATH_SPACEjars |
-+-$VAR_UDF_JAR_PATH_DASH-----+
-| $VAR_UDF_JAR_PATH |
-+-$VAR_UDF_JAR_PATH_DASH-----+
-1 row in set
-!ok
-
-CREATE FUNCTION hive_add_one as 'HiveAddOneFunc';
-[INFO] Execute statement succeed.
-!info
-
-SELECT hive_add_one(1);
-+----+-------------+
-| op |      _o__c0 |
-+----+-------------+
-| +I |           2 |
-+----+-------------+
-Received a total of 1 row
-!ok
-
-REMOVE JAR '$VAR_UDF_JAR_PATH';
-[INFO] The specified jar is removed from session classloader.
-!info
-
-SHOW JARS;
-Empty set
-!ok
-
 # list the configured configuration
 set;
 'execution.attached' = 'true'
@@ -104,7 +69,6 @@ set;
 'execution.shutdown-on-attached-exit' = 'false'
 'execution.target' = 'remote'
 'jobmanager.rpc.address' = '$VAR_JOBMANAGER_RPC_ADDRESS'
-'pipeline.classpaths' = ''
 'pipeline.jars' = ''
 'rest.port' = '$VAR_REST_PORT'
 'sql-client.execution.result-mode' = 'tableau'
@@ -124,7 +88,6 @@ set;
 'execution.shutdown-on-attached-exit' = 'false'
 'execution.target' = 'remote'
 'jobmanager.rpc.address' = '$VAR_JOBMANAGER_RPC_ADDRESS'
-'pipeline.classpaths' = ''
 'pipeline.jars' = ''
 'rest.port' = '$VAR_REST_PORT'
 'table.exec.legacy-cast-behaviour' = 'DISABLED'
@@ -151,10 +114,6 @@ Was expecting one of:
 
 !error
 
-set 'sql-client.verbose' = 'true';
-[INFO] Session property has been set.
-!info
-
 set;
 'execution.attached' = 'true'
 'execution.savepoint-restore-mode' = 'NO_CLAIM'
@@ -162,10 +121,8 @@ set;
 'execution.shutdown-on-attached-exit' = 'false'
 'execution.target' = 'remote'
 'jobmanager.rpc.address' = '$VAR_JOBMANAGER_RPC_ADDRESS'
-'pipeline.classpaths' = ''
 'pipeline.jars' = ''
 'rest.port' = '$VAR_REST_PORT'
-'sql-client.verbose' = 'true'
 'table.exec.legacy-cast-behaviour' = 'DISABLED'
 !ok
 
@@ -184,25 +141,18 @@ set;
 'execution.shutdown-on-attached-exit' = 'false'
 'execution.target' = 'remote'
 'jobmanager.rpc.address' = '$VAR_JOBMANAGER_RPC_ADDRESS'
-'pipeline.classpaths' = ''
 'pipeline.jars' = ''
 'rest.port' = '$VAR_REST_PORT'
-'sql-client.verbose' = 'true'
 'table.exec.legacy-cast-behaviour' = 'DISABLED'
 !ok
 
 # test reset can work with add jar
 ADD JAR '$VAR_UDF_JAR_PATH';
-[INFO] Execute statement succeed.
+[INFO] The specified jar is added into session classloader.
 !info
 
 SHOW JARS;
-+-$VAR_UDF_JAR_PATH_DASH-----+
-| $VAR_UDF_JAR_PATH_SPACEjars |
-+-$VAR_UDF_JAR_PATH_DASH-----+
-| $VAR_UDF_JAR_PATH |
-+-$VAR_UDF_JAR_PATH_DASH-----+
-1 row in set
+$VAR_UDF_JAR_PATH
 !ok
 
 set;
@@ -212,10 +162,8 @@ set;
 'execution.shutdown-on-attached-exit' = 'false'
 'execution.target' = 'remote'
 'jobmanager.rpc.address' = 'localhost'
-'pipeline.classpaths' = ''
-'pipeline.jars' = ''
+'pipeline.jars' = '$VAR_PIPELINE_JARS_URL'
 'rest.port' = '$VAR_REST_PORT'
-'sql-client.verbose' = 'true'
 'table.exec.legacy-cast-behaviour' = 'DISABLED'
 !ok
 
@@ -224,12 +172,7 @@ reset;
 !info
 
 SHOW JARS;
-+-$VAR_UDF_JAR_PATH_DASH-----+
-| $VAR_UDF_JAR_PATH_SPACEjars |
-+-$VAR_UDF_JAR_PATH_DASH-----+
-| $VAR_UDF_JAR_PATH |
-+-$VAR_UDF_JAR_PATH_DASH-----+
-1 row in set
+$VAR_UDF_JAR_PATH
 !ok
 
 SET 'sql-client.execution.result-mode' = 'tableau';

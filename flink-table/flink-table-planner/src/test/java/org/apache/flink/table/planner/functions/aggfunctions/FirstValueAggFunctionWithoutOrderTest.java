@@ -253,7 +253,7 @@ public final class FirstValueAggFunctionWithoutOrderTest {
 
     /** Test base for {@link FirstValueAggFunction} without order. */
     public abstract static class FirstValueAggFunctionWithoutOrderTestBase<T>
-            extends AggFunctionTestBase<T, T, RowData> {
+            extends AggFunctionTestBase<T, RowData> {
 
         @Override
         protected Class<?> getAccClass() {

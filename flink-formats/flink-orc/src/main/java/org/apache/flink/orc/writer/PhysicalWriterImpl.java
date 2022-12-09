@@ -31,6 +31,8 @@ import org.apache.orc.impl.HadoopShims;
 import org.apache.orc.impl.OrcCodecPool;
 import org.apache.orc.impl.OutStream;
 import org.apache.orc.impl.StreamName;
+import org.apache.orc.impl.writer.StreamOptions;
+import org.apache.orc.impl.writer.WriterEncryptionVariant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,13 +100,22 @@ public class PhysicalWriterImpl implements PhysicalWriter {
         this.compress = opts.getCompress();
         this.codec = OrcCodecPool.getCodec(this.compress);
         this.streams = new TreeMap<>();
-        this.writer =
-                new OutStream("metadata", this.bufferSize, this.codec, new DirectStream(this.out));
+//        this.writer =
+//                new OutStream("metadata", this.bufferSize, this.codec, new DirectStream(this.out));
+        this.writer = new OutStream("metadata", getStreamOptions(), new DirectStream(this.out));
         this.shims = opts.getHadoopShims();
         this.addBlockPadding = opts.getBlockPadding();
         this.protobufWriter = CodedOutputStream.newInstance(this.writer);
         this.writeVariableLengthBlocks = opts.getWriteVariableLengthBlocks();
     }
+
+    @Override
+    public StreamOptions getStreamOptions() {
+        return new StreamOptions(bufferSize).withCodec(
+                codec,
+                OrcCodecPool.getCodec(compress).getDefaultOptions());
+    }
+
 
     @Override
     public void writeHeader() throws IOException {
@@ -124,21 +135,43 @@ public class PhysicalWriterImpl implements PhysicalWriter {
         return result;
     }
 
+//    @Override
+//    public void writeIndex(StreamName name, OrcProto.RowIndex.Builder index, CompressionCodec codec)
+//            throws IOException {
+//        OutputStream stream =
+//                new OutStream(this.toString(), bufferSize, codec, createDataStream(name));
+//        index.build().writeTo(stream);
+//        stream.flush();
+//    }
+
     @Override
-    public void writeIndex(StreamName name, OrcProto.RowIndex.Builder index, CompressionCodec codec)
-            throws IOException {
-        OutputStream stream =
-                new OutStream(this.toString(), bufferSize, codec, createDataStream(name));
+    public void writeIndex(StreamName name, OrcProto.RowIndex.Builder index) throws IOException {
+        OutputStream stream = new OutStream(
+                this.toString(),
+                getStreamOptions(),
+                createDataStream(name));
         index.build().writeTo(stream);
         stream.flush();
     }
 
+//    @Override
+//    public void writeBloomFilter(
+//            StreamName name, OrcProto.BloomFilterIndex.Builder bloom, CompressionCodec codec)
+//            throws IOException {
+//        OutputStream stream =
+//                new OutStream(this.toString(), bufferSize, codec, createDataStream(name));
+//        bloom.build().writeTo(stream);
+//        stream.flush();
+//    }
+
     @Override
     public void writeBloomFilter(
-            StreamName name, OrcProto.BloomFilterIndex.Builder bloom, CompressionCodec codec)
-            throws IOException {
-        OutputStream stream =
-                new OutStream(this.toString(), bufferSize, codec, createDataStream(name));
+            StreamName name,
+            OrcProto.BloomFilterIndex.Builder bloom) throws IOException {
+        OutputStream stream = new OutStream(
+                this.toString(),
+                getStreamOptions(),
+                createDataStream(name));
         bloom.build().writeTo(stream);
         stream.flush();
     }
@@ -259,12 +292,37 @@ public class PhysicalWriterImpl implements PhysicalWriter {
     }
 
     @Override
-    public CompressionCodec getCompressionCodec() {
-        return this.codec;
+    public void writeStatistics(
+            StreamName streamName,
+            OrcProto.ColumnStatistics.Builder builder) throws IOException {
+
     }
 
+//    @Override
+//    public CompressionCodec getCompressionCodec() {
+//        return this.codec;
+//    }
+//
+//    @Override
+//    public long getFileBytes(int column) {
+//        long size = 0;
+//
+//        for (final Map.Entry<StreamName, BufferedStream> pair : streams.entrySet()) {
+//            final BufferedStream receiver = pair.getValue();
+//            if (!receiver.isSuppressed) {
+//
+//                final StreamName name = pair.getKey();
+//                if (name.getColumn() == column && name.getArea() != StreamName.Area.INDEX) {
+//                    size += receiver.getOutputSize();
+//                }
+//            }
+//        }
+//
+//        return size;
+//    }
+
     @Override
-    public long getFileBytes(int column) {
+    public long getFileBytes(int column, WriterEncryptionVariant writerEncryptionVariant) {
         long size = 0;
 
         for (final Map.Entry<StreamName, BufferedStream> pair : streams.entrySet()) {
@@ -276,6 +334,7 @@ public class PhysicalWriterImpl implements PhysicalWriter {
                     size += receiver.getOutputSize();
                 }
             }
+
         }
 
         return size;

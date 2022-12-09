@@ -33,7 +33,7 @@ import org.apache.flink.table.types.logical.TimestampKind;
 import org.apache.flink.table.types.utils.DataTypeFactoryMock;
 import org.apache.flink.table.utils.ExpressionResolverMocks;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.annotation.Nullable;
 
@@ -46,12 +46,14 @@ import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.isPro
 import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.isRowtimeAttribute;
 import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.isTimeAttribute;
 import static org.apache.flink.table.types.utils.TypeConversions.fromLogicalToDataType;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
-import static org.assertj.core.api.HamcrestCondition.matching;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for {@link Schema}, {@link DefaultSchemaResolver}, and {@link ResolvedSchema}. */
-class SchemaResolutionTest {
+public class SchemaResolutionTest {
 
     private static final String COMPUTED_SQL = "orig_ts - INTERVAL '60' MINUTE";
 
@@ -113,7 +115,7 @@ class SchemaResolutionTest {
                     .build();
 
     @Test
-    void testSchemaResolution() {
+    public void testSchemaResolution() {
         final ResolvedSchema expectedSchema =
                 new ResolvedSchema(
                         Arrays.asList(
@@ -143,21 +145,21 @@ class SchemaResolutionTest {
 
         final ResolvedSchema actualStreamSchema = resolveSchema(SCHEMA, true);
         {
-            assertThat(actualStreamSchema).isEqualTo(expectedSchema);
-            assertThat(isRowtimeAttribute(getType(actualStreamSchema, "ts"))).isTrue();
-            assertThat(isProctimeAttribute(getType(actualStreamSchema, "proctime"))).isTrue();
+            assertThat(actualStreamSchema, equalTo(expectedSchema));
+            assertTrue(isRowtimeAttribute(getType(actualStreamSchema, "ts")));
+            assertTrue(isProctimeAttribute(getType(actualStreamSchema, "proctime")));
         }
 
         final ResolvedSchema actualBatchSchema = resolveSchema(SCHEMA, false);
         {
-            assertThat(actualBatchSchema).isEqualTo(expectedSchema);
-            assertThat(isRowtimeAttribute(getType(actualBatchSchema, "ts"))).isFalse();
-            assertThat(isProctimeAttribute(getType(actualBatchSchema, "proctime"))).isTrue();
+            assertThat(actualBatchSchema, equalTo(expectedSchema));
+            assertFalse(isRowtimeAttribute(getType(actualBatchSchema, "ts")));
+            assertTrue(isProctimeAttribute(getType(actualBatchSchema, "proctime")));
         }
     }
 
     @Test
-    void testSchemaResolutionWithTimestampLtzRowtime() {
+    public void testSchemaResolutionWithTimestampLtzRowtime() {
         final ResolvedSchema expectedSchema =
                 new ResolvedSchema(
                         Arrays.asList(
@@ -171,19 +173,19 @@ class SchemaResolutionTest {
 
         final ResolvedSchema actualStreamSchema = resolveSchema(SCHEMA_WITH_TS_LTZ, true);
         {
-            assertThat(actualStreamSchema).isEqualTo(expectedSchema);
-            assertThat(isRowtimeAttribute(getType(actualStreamSchema, "ts1"))).isTrue();
+            assertThat(actualStreamSchema, equalTo(expectedSchema));
+            assertTrue(isRowtimeAttribute(getType(actualStreamSchema, "ts1")));
         }
 
         final ResolvedSchema actualBatchSchema = resolveSchema(SCHEMA_WITH_TS_LTZ, false);
         {
-            assertThat(actualBatchSchema).isEqualTo(expectedSchema);
-            assertThat(isRowtimeAttribute(getType(actualBatchSchema, "ts1"))).isFalse();
+            assertThat(actualBatchSchema, equalTo(expectedSchema));
+            assertFalse(isRowtimeAttribute(getType(actualBatchSchema, "ts1")));
         }
     }
 
     @Test
-    void testSchemaResolutionWithSourceWatermark() {
+    public void testSchemaResolutionWithSourceWatermark() {
         final ResolvedSchema expectedSchema =
                 new ResolvedSchema(
                         Collections.singletonList(
@@ -203,11 +205,11 @@ class SchemaResolutionTest {
                                 .watermark("ts_ltz", sourceWatermark())
                                 .build());
 
-        assertThat(resolvedSchema).isEqualTo(expectedSchema);
+        assertThat(resolvedSchema, equalTo(expectedSchema));
     }
 
     @Test
-    void testSchemaResolutionErrors() {
+    public void testSchemaResolutionErrors() {
 
         // columns
 
@@ -309,9 +311,10 @@ class SchemaResolutionTest {
     }
 
     @Test
-    void testUnresolvedSchemaString() {
-        assertThat(SCHEMA.toString())
-                .isEqualTo(
+    public void testUnresolvedSchemaString() {
+        assertThat(
+                SCHEMA.toString(),
+                equalTo(
                         "(\n"
                                 + "  `id` INT NOT NULL COMMENT 'people id',\n"
                                 + "  `counter` INT NOT NULL,\n"
@@ -322,14 +325,15 @@ class SchemaResolutionTest {
                                 + "  `proctime` AS [PROCTIME()],\n"
                                 + "  WATERMARK FOR `ts` AS [ts - INTERVAL '5' SECOND],\n"
                                 + "  CONSTRAINT `primary_constraint` PRIMARY KEY (`id`) NOT ENFORCED\n"
-                                + ")");
+                                + ")"));
     }
 
     @Test
-    void testResolvedSchemaString() {
+    public void testResolvedSchemaString() {
         final ResolvedSchema resolvedSchema = resolveSchema(SCHEMA);
-        assertThat(resolvedSchema.toString())
-                .isEqualTo(
+        assertThat(
+                resolvedSchema.toString(),
+                equalTo(
                         "(\n"
                                 + "  `id` INT NOT NULL COMMENT 'people id',\n"
                                 + "  `counter` INT NOT NULL,\n"
@@ -340,11 +344,11 @@ class SchemaResolutionTest {
                                 + "  `proctime` TIMESTAMP_LTZ(3) NOT NULL *PROCTIME* AS PROCTIME(),\n"
                                 + "  WATERMARK FOR `ts`: TIMESTAMP(3) AS ts - INTERVAL '5' SECOND,\n"
                                 + "  CONSTRAINT `primary_constraint` PRIMARY KEY (`id`) NOT ENFORCED\n"
-                                + ")");
+                                + ")"));
     }
 
     @Test
-    void testGeneratedConstraintName() {
+    public void testGeneratedConstraintName() {
         final Schema schema =
                 Schema.newBuilder()
                         .column("a", DataTypes.INT())
@@ -353,14 +357,12 @@ class SchemaResolutionTest {
                         .primaryKey("b", "a")
                         .build();
         assertThat(
-                        schema.getPrimaryKey()
-                                .orElseThrow(IllegalStateException::new)
-                                .getConstraintName())
-                .isEqualTo("PK_b_a");
+                schema.getPrimaryKey().orElseThrow(IllegalStateException::new).getConstraintName(),
+                equalTo("PK_b_a"));
     }
 
     @Test
-    void testSinkRowDataType() {
+    public void testSinkRowDataType() {
         final ResolvedSchema resolvedSchema = resolveSchema(SCHEMA);
         final DataType expectedDataType =
                 DataTypes.ROW(
@@ -374,11 +376,11 @@ class SchemaResolutionTest {
                                                 DataTypes.FIELD("flag", DataTypes.BOOLEAN()))),
                                 DataTypes.FIELD("orig_ts", DataTypes.TIMESTAMP(3)))
                         .notNull();
-        assertThat(resolvedSchema.toSinkRowDataType()).isEqualTo(expectedDataType);
+        assertThat(resolvedSchema.toSinkRowDataType(), equalTo(expectedDataType));
     }
 
     @Test
-    void testPhysicalRowDataType() {
+    public void testPhysicalRowDataType() {
         final ResolvedSchema resolvedSchema1 = resolveSchema(SCHEMA);
         final DataType expectedDataType =
                 DataTypes.ROW(
@@ -393,15 +395,15 @@ class SchemaResolutionTest {
                         .notNull();
 
         final DataType physicalDataType1 = resolvedSchema1.toPhysicalRowDataType();
-        assertThat(physicalDataType1).isEqualTo(expectedDataType);
+        assertThat(physicalDataType1, equalTo(expectedDataType));
 
         final ResolvedSchema resolvedSchema2 =
                 resolveSchema(Schema.newBuilder().fromRowDataType(physicalDataType1).build());
-        assertThat(resolvedSchema2.toPhysicalRowDataType()).isEqualTo(physicalDataType1);
+        assertThat(resolvedSchema2.toPhysicalRowDataType(), equalTo(physicalDataType1));
     }
 
     @Test
-    void testSourceRowDataType() {
+    public void testSourceRowDataType() {
         final ResolvedSchema resolvedSchema = resolveSchema(SCHEMA);
         final DataType expectedDataType =
                 DataTypes.ROW(
@@ -419,12 +421,10 @@ class SchemaResolutionTest {
                                 DataTypes.FIELD("proctime", DataTypes.TIMESTAMP_LTZ(3).notNull()))
                         .notNull();
         final DataType sourceRowDataType = resolvedSchema.toSourceRowDataType();
-        assertThat(sourceRowDataType).isEqualTo(expectedDataType);
+        assertThat(sourceRowDataType, equalTo(expectedDataType));
 
-        assertThat(isTimeAttribute(sourceRowDataType.getChildren().get(4).getLogicalType()))
-                .isFalse();
-        assertThat(isTimeAttribute(sourceRowDataType.getChildren().get(6).getLogicalType()))
-                .isFalse();
+        assertFalse(isTimeAttribute(sourceRowDataType.getChildren().get(4).getLogicalType()));
+        assertFalse(isTimeAttribute(sourceRowDataType.getChildren().get(6).getLogicalType()));
     }
 
     // --------------------------------------------------------------------------------------------
@@ -438,7 +438,7 @@ class SchemaResolutionTest {
             resolveSchema(schema, isStreaming);
             fail("Error message expected: " + errorMessage);
         } catch (Throwable t) {
-            assertThat(t).satisfies(matching(FlinkMatchers.containsMessage(errorMessage)));
+            assertThat(t, FlinkMatchers.containsMessage(errorMessage));
         }
     }
 
@@ -460,20 +460,24 @@ class SchemaResolutionTest {
             String sqlExpression, RowType inputRowType, @Nullable LogicalType outputType) {
         switch (sqlExpression) {
             case COMPUTED_SQL:
-                assertThat(getType(inputRowType, "orig_ts"))
-                        .isEqualTo(DataTypes.TIMESTAMP(3).getLogicalType());
+                assertThat(
+                        getType(inputRowType, "orig_ts"),
+                        equalTo(DataTypes.TIMESTAMP(3).getLogicalType()));
                 return COMPUTED_COLUMN_RESOLVED;
             case COMPUTED_SQL_WITH_TS_LTZ:
-                assertThat(getType(inputRowType, "ts_ltz"))
-                        .isEqualTo(DataTypes.TIMESTAMP_LTZ(3).getLogicalType());
+                assertThat(
+                        getType(inputRowType, "ts_ltz"),
+                        equalTo(DataTypes.TIMESTAMP_LTZ(3).getLogicalType()));
                 return COMPUTED_COLUMN_RESOLVED_WITH_TS_LTZ;
             case WATERMARK_SQL:
-                assertThat(getType(inputRowType, "ts"))
-                        .isEqualTo(DataTypes.TIMESTAMP(3).getLogicalType());
+                assertThat(
+                        getType(inputRowType, "ts"),
+                        equalTo(DataTypes.TIMESTAMP(3).getLogicalType()));
                 return WATERMARK_RESOLVED;
             case WATERMARK_SQL_WITH_TS_LTZ:
-                assertThat(getType(inputRowType, "ts1"))
-                        .isEqualTo(DataTypes.TIMESTAMP_LTZ(3).getLogicalType());
+                assertThat(
+                        getType(inputRowType, "ts1"),
+                        equalTo(DataTypes.TIMESTAMP_LTZ(3).getLogicalType()));
                 return WATERMARK_RESOLVED_WITH_TS_LTZ;
             case PROCTIME_SQL:
                 return PROCTIME_RESOLVED;

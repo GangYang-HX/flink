@@ -169,6 +169,8 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
      */
     private boolean useSnapshotCompression = false;
 
+    private boolean useStreamGraphHasherV3 = true;
+
     // ------------------------------- User code values --------------------------------------------
 
     private GlobalJobParameters globalJobParameters = new GlobalJobParameters();
@@ -750,6 +752,14 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
         this.globalJobParameters = globalJobParameters;
     }
 
+    public boolean useStreamGraphHasherV3() {
+        return this.useStreamGraphHasherV3;
+    }
+
+    public void setUseStreamGraphHasherV3(boolean useStreamGraphHasherV3) {
+        this.useStreamGraphHasherV3 = useStreamGraphHasherV3;
+    }
+
     // --------------------------------------------------------------------------------------------
     //  Registry for types and serializers
     // --------------------------------------------------------------------------------------------
@@ -951,7 +961,8 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                     && registeredPojoTypes.equals(other.registeredPojoTypes)
                     && taskCancellationIntervalMillis == other.taskCancellationIntervalMillis
                     && useSnapshotCompression == other.useSnapshotCompression
-                    && isDynamicGraph == other.isDynamicGraph;
+                    && isDynamicGraph == other.isDynamicGraph
+                    && useStreamGraphHasherV3 == other.useStreamGraphHasherV3;
 
         } else {
             return false;
@@ -978,7 +989,8 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                 registeredPojoTypes,
                 taskCancellationIntervalMillis,
                 useSnapshotCompression,
-                isDynamicGraph);
+                isDynamicGraph,
+                useStreamGraphHasherV3);
     }
 
     @Override
@@ -1038,6 +1050,8 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                 + registeredPojoTypes
                 + ", isDynamicGraph="
                 + isDynamicGraph
+                + ", useStreamGraphHasherV3="
+                + useStreamGraphHasherV3
                 + '}';
     }
 
@@ -1205,6 +1219,10 @@ public class ExecutionConfig implements Serializable, Archiveable<ArchivedExecut
                                 this.setDynamicGraph(
                                         schedulerType
                                                 == JobManagerOptions.SchedulerType.AdaptiveBatch));
+
+        configuration
+                .getOptional(PipelineOptions.USE_STREAM_GRAPH_HASHER_V3)
+                .ifPresent(this::setUseStreamGraphHasherV3);
     }
 
     private LinkedHashSet<Class<?>> loadClasses(

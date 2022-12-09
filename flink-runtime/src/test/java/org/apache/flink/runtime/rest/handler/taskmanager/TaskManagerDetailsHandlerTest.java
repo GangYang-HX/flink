@@ -39,13 +39,13 @@ import org.apache.flink.runtime.rest.messages.taskmanager.TaskManagerInfo;
 import org.apache.flink.runtime.rest.messages.taskmanager.TaskManagerMetricsInfo;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorMemoryConfiguration;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,10 +54,11 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /** Tests the {@link TaskManagerDetailsHandler} implementation. */
-class TaskManagerDetailsHandlerTest {
+public class TaskManagerDetailsHandlerTest extends TestLogger {
 
     private static final ResourceID TASK_MANAGER_ID = ResourceID.generate();
 
@@ -66,8 +67,8 @@ class TaskManagerDetailsHandlerTest {
 
     private TaskManagerDetailsHandler testInstance;
 
-    @BeforeEach
-    void setup() throws HandlerRequestException {
+    @Before
+    public void setup() throws HandlerRequestException {
         resourceManagerGateway = new TestingResourceManagerGateway();
         metricFetcher = new TestingMetricFetcher();
 
@@ -82,7 +83,7 @@ class TaskManagerDetailsHandlerTest {
     }
 
     @Test
-    void testTaskManagerMetricsInfoExtraction()
+    public void testTaskManagerMetricsInfoExtraction()
             throws RestHandlerException, ExecutionException, InterruptedException,
                     JsonProcessingException, HandlerRequestException {
         initializeMetricStore(metricFetcher.getMetricStore());
@@ -119,11 +120,11 @@ class TaskManagerDetailsHandlerTest {
                         20L,
                         Collections.emptyList());
 
-        ObjectMapper objectMapper = JacksonMapperFactory.createObjectMapper();
+        ObjectMapper objectMapper = new ObjectMapper();
         String actualJson = objectMapper.writeValueAsString(actual);
         String expectedJson = objectMapper.writeValueAsString(expected);
 
-        assertThat(actualJson).isEqualTo(expectedJson);
+        assertThat(actualJson, is(expectedJson));
     }
 
     private static void initializeMetricStore(MetricStore metricStore) {
@@ -173,8 +174,7 @@ class TaskManagerDetailsHandlerTest {
                 ResourceProfile.ZERO,
                 ResourceProfile.ZERO,
                 new HardwareDescription(0, 0L, 0L, 0L),
-                new TaskExecutorMemoryConfiguration(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L),
-                false);
+                new TaskExecutorMemoryConfiguration(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
     }
 
     private static HandlerRequest<EmptyRequestBody> createRequest() throws HandlerRequestException {

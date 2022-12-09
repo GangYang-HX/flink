@@ -26,13 +26,14 @@ import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.io.DiscardingOutputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.PipelineOptions;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.Serializable;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static junit.framework.TestCase.fail;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for {@link ExecutionEnvironment}.
@@ -41,7 +42,7 @@ import static org.assertj.core.api.Assertions.fail;
  * the JSON plan generator is not available. Making it available, by depending on flink-optimizer
  * would create a cyclic dependency.
  */
-class ExecutionEnvironmentTest implements Serializable {
+public class ExecutionEnvironmentTest extends TestLogger implements Serializable {
 
     /**
      * Tests that verifies consecutive calls to {@link ExecutionEnvironment#getExecutionPlan()} do
@@ -49,7 +50,7 @@ class ExecutionEnvironmentTest implements Serializable {
      * state of the plan
      */
     @Test
-    void testExecuteAfterGetExecutionPlanContextEnvironment() {
+    public void testExecuteAfterGetExecutionPlanContextEnvironment() {
         ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
         DataSet<Integer> baseSet = env.fromElements(1, 2);
@@ -66,13 +67,13 @@ class ExecutionEnvironmentTest implements Serializable {
     }
 
     @Test
-    void testDefaultJobName() {
+    public void testDefaultJobName() {
         ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
         testJobName("Flink Java Job at", env);
     }
 
     @Test
-    void testUserDefinedJobName() {
+    public void testUserDefinedJobName() {
         String jobName = "MyTestJob";
         Configuration config = new Configuration();
         config.set(PipelineOptions.NAME, jobName);
@@ -81,7 +82,7 @@ class ExecutionEnvironmentTest implements Serializable {
     }
 
     @Test
-    void testUserDefinedJobNameWithConfigure() {
+    public void testUserDefinedJobNameWithConfigure() {
         String jobName = "MyTestJob";
         Configuration config = new Configuration();
         config.set(PipelineOptions.NAME, jobName);
@@ -93,6 +94,6 @@ class ExecutionEnvironmentTest implements Serializable {
     private void testJobName(String prefixOfExpectedJobName, ExecutionEnvironment env) {
         env.fromElements(1, 2, 3).writeAsText("/dev/null");
         Plan plan = env.createProgramPlan();
-        assertThat(plan.getJobName()).startsWith(prefixOfExpectedJobName);
+        assertTrue(plan.getJobName().startsWith(prefixOfExpectedJobName));
     }
 }

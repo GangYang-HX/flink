@@ -96,10 +96,6 @@ class CatalogFunctionAPICompletenessTests(PythonAPICompletenessTestCase, PyFlink
     def java_class(cls):
         return "org.apache.flink.table.catalog.CatalogFunction"
 
-    @classmethod
-    def excluded_methods(cls):
-        return {'getFunctionResources'}
-
 
 class CatalogPartitionAPICompletenessTests(PythonAPICompletenessTestCase, PyFlinkTestCase):
     """

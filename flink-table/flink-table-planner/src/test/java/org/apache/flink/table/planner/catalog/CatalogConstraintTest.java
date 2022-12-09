@@ -39,7 +39,8 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 /** Test for Catalog constraints. */
 public class CatalogConstraintTest {
@@ -54,7 +55,7 @@ public class CatalogConstraintTest {
         EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
         tEnv = TableEnvironment.create(settings);
         catalog = tEnv.getCatalog(tEnv.getCurrentCatalog()).orElse(null);
-        assertThat(catalog).isNotNull();
+        assertNotNull(catalog);
     }
 
     @Test
@@ -80,7 +81,7 @@ public class CatalogConstraintTest {
         RelNode t1 = TableTestUtil.toRelNode(tEnv.sqlQuery("select * from T1"));
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
-        assertThat(mq.getUniqueKeys(t1)).isEqualTo(ImmutableSet.of(ImmutableBitSet.of(1)));
+        assertEquals(ImmutableSet.of(ImmutableBitSet.of(1)), mq.getUniqueKeys(t1));
     }
 
     @Test
@@ -103,7 +104,7 @@ public class CatalogConstraintTest {
         RelNode t1 = TableTestUtil.toRelNode(tEnv.sqlQuery("select * from T1"));
         FlinkRelMetadataQuery mq =
                 FlinkRelMetadataQuery.reuseOrCreate(t1.getCluster().getMetadataQuery());
-        assertThat(mq.getUniqueKeys(t1)).isEqualTo(ImmutableSet.of());
+        assertEquals(ImmutableSet.of(), mq.getUniqueKeys(t1));
     }
 
     private Map<String, String> buildCatalogTableProperties(TableSchema tableSchema) {

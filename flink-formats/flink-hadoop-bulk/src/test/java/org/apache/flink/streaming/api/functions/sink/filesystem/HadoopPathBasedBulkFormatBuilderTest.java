@@ -32,7 +32,7 @@ import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertNotNull;
 
 /** Tests the behaviors of {@link HadoopPathBasedBulkFormatBuilder}. */
 public class HadoopPathBasedBulkFormatBuilderTest {
@@ -75,7 +75,7 @@ public class HadoopPathBasedBulkFormatBuilderTest {
                         userHadoopFormatBuildClass
                                 .getMethod("createBuckets", int.class)
                                 .invoke(hadoopFormatBuilder, 0);
-        assertThat(buckets).isNotNull();
+        assertNotNull(buckets);
     }
 
     private static class SpecifiedChildFirstUserClassLoader extends FlinkUserCodeClassLoader {

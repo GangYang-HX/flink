@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -102,14 +101,14 @@ public class DefaultPackagedProgramRetriever implements PackagedProgramRetriever
         List<URL> userClasspaths;
         try {
             final List<URL> classpathsFromUserLibDir = getClasspathsFromUserLibDir(userLibDir);
-            final List<URL> classpathsFromConfiguration =
-                    getClasspathsFromConfiguration(configuration);
+            //            final List<URL> classpathsFromConfiguration =
+            //                    getClasspathsFromConfiguration(configuration);
 
-            final List<URL> classpaths = new ArrayList<>();
-            classpaths.addAll(classpathsFromUserLibDir);
-            classpaths.addAll(classpathsFromConfiguration);
+            //            final List<URL> classpaths = new ArrayList<>();
+            //            classpaths.addAll(classpathsFromUserLibDir);
+            //            classpaths.addAll(classpathsFromConfiguration);
 
-            userClasspaths = Collections.unmodifiableList(classpaths);
+            userClasspaths = Collections.unmodifiableList(classpathsFromUserLibDir);
         } catch (IOException e) {
             throw new FlinkException("An error occurred while extracting the user classpath.", e);
         }

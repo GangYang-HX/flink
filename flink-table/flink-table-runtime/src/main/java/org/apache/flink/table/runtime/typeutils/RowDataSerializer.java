@@ -40,6 +40,9 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.InstantiationUtil;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.stream.IntStream;
@@ -48,6 +51,7 @@ import java.util.stream.IntStream;
 @Internal
 public class RowDataSerializer extends AbstractRowDataSerializer<RowData> {
     private static final long serialVersionUID = 1L;
+    private static final Logger LOG = LoggerFactory.getLogger(RowDataSerializer.class);
 
     private BinaryRowDataSerializer binarySerializer;
     private final LogicalType[] types;
@@ -346,10 +350,10 @@ public class RowDataSerializer extends AbstractRowDataSerializer<RowData> {
 
             CompositeTypeSerializerUtil.IntermediateCompatibilityResult<RowData>
                     intermediateResult =
-                            CompositeTypeSerializerUtil.constructIntermediateCompatibilityResult(
-                                    newRowSerializer.fieldSerializers,
-                                    nestedSerializersSnapshotDelegate
-                                            .getNestedSerializerSnapshots());
+                    CompositeTypeSerializerUtil.constructIntermediateCompatibilityResult(
+                            newRowSerializer.fieldSerializers,
+                            nestedSerializersSnapshotDelegate
+                                    .getNestedSerializerSnapshots());
 
             if (intermediateResult.isCompatibleWithReconfiguredSerializer()) {
                 RowDataSerializer reconfiguredCompositeSerializer = restoreSerializer();

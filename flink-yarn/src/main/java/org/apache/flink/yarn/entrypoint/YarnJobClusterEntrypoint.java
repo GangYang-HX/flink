@@ -29,6 +29,7 @@ import org.apache.flink.runtime.util.EnvironmentInformation;
 import org.apache.flink.runtime.util.JvmShutdownSafeguard;
 import org.apache.flink.runtime.util.SignalHandler;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.yarn.YarnEnvironmentUtils;
 import org.apache.flink.yarn.configuration.YarnConfigOptions;
 
 import org.apache.hadoop.yarn.api.ApplicationConstants;
@@ -74,14 +75,13 @@ public class YarnJobClusterEntrypoint extends JobClusterEntrypoint {
 
         LOG.warn(
                 "Job Clusters are deprecated since Flink 1.15. Please use an Application Cluster/Application Mode instead.");
-
+        Map<String, String> env = System.getenv();
+        YarnEnvironmentUtils.overwriteProps(env, LOG);
         // startup checks and logging
         EnvironmentInformation.logEnvironmentInfo(
                 LOG, YarnJobClusterEntrypoint.class.getSimpleName(), args);
         SignalHandler.register(LOG);
         JvmShutdownSafeguard.installAsShutdownHook(LOG);
-
-        Map<String, String> env = System.getenv();
 
         final String workingDirectory = env.get(ApplicationConstants.Environment.PWD.key());
         Preconditions.checkArgument(

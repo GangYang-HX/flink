@@ -23,10 +23,10 @@ import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
-import org.apache.flink.util.TestLoggerExtension;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,16 +34,17 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Abstract test base for comparators.
  *
  * @param <T>
  */
-@ExtendWith(TestLoggerExtension.class)
-public abstract class ComparatorTestBase<T> {
+public abstract class ComparatorTestBase<T> extends TestLogger {
 
     // Same as in the NormalizedKeySorter
     private static final int DEFAULT_MAX_NORMALIZED_KEY_LEN = 8;
@@ -78,14 +79,13 @@ public abstract class ComparatorTestBase<T> {
             comparator.setReference(data[0]);
             clone.setReference(data[1]);
 
-            assertThat(comparator.equalToReference(data[0]) && clone.equalToReference(data[1]))
-                    .as(
-                            "Comparator duplication does not work: Altering the reference in a duplicated comparator alters the original comparator's reference.")
-                    .isTrue();
+            assertTrue(
+                    "Comparator duplication does not work: Altering the reference in a duplicated comparator alters the original comparator's reference.",
+                    comparator.equalToReference(data[0]) && clone.equalToReference(data[1]));
         } catch (Exception e) {
             System.err.println(e.getMessage());
             e.printStackTrace();
-            fail(e.getMessage());
+            Assert.fail(e.getMessage());
         }
     }
 
@@ -121,7 +121,7 @@ public abstract class ComparatorTestBase<T> {
                 writeSortedData(d, out1);
                 in1 = out1.getInputView();
 
-                assertThat(comparator.compareSerialized(in1, in2)).isEqualTo(0);
+                assertTrue(comparator.compareSerialized(in1, in2) == 0);
             }
         } catch (Exception e) {
             System.err.println(e.getMessage());
@@ -144,9 +144,9 @@ public abstract class ComparatorTestBase<T> {
                 T copy = serializer.copy(d, serializer.createInstance());
 
                 // And then test equalTo and compareToReference method of comparator
-                assertThat(comparator.equalToReference(d)).isTrue();
+                assertTrue(comparator.equalToReference(d));
                 comparator2.setReference(copy);
-                assertThat(comparator.compareToReference(comparator2)).isEqualTo(0);
+                assertTrue(comparator.compareToReference(comparator2) == 0);
             }
         } catch (Exception e) {
             System.err.println(e.getMessage());
@@ -188,16 +188,16 @@ public abstract class ComparatorTestBase<T> {
                     in2 = out2.getInputView();
 
                     if (greater && ascending) {
-                        assertThat(comparator.compareSerialized(in1, in2)).isLessThan(0);
+                        assertTrue(comparator.compareSerialized(in1, in2) < 0);
                     }
                     if (greater && !ascending) {
-                        assertThat(comparator.compareSerialized(in1, in2)).isGreaterThan(0);
+                        assertTrue(comparator.compareSerialized(in1, in2) > 0);
                     }
                     if (!greater && ascending) {
-                        assertThat(comparator.compareSerialized(in2, in1)).isGreaterThan(0);
+                        assertTrue(comparator.compareSerialized(in2, in1) > 0);
                     }
                     if (!greater && !ascending) {
-                        assertThat(comparator.compareSerialized(in2, in1)).isLessThan(0);
+                        assertTrue(comparator.compareSerialized(in2, in1) < 0);
                     }
                 }
             }
@@ -231,18 +231,16 @@ public abstract class ComparatorTestBase<T> {
                     comparatorHigh.setReference(data[y]);
 
                     if (greater && ascending) {
-                        assertThat(comparatorLow.compareToReference(comparatorHigh))
-                                .isGreaterThan(0);
+                        assertTrue(comparatorLow.compareToReference(comparatorHigh) > 0);
                     }
                     if (greater && !ascending) {
-                        assertThat(comparatorLow.compareToReference(comparatorHigh)).isLessThan(0);
+                        assertTrue(comparatorLow.compareToReference(comparatorHigh) < 0);
                     }
                     if (!greater && ascending) {
-                        assertThat(comparatorHigh.compareToReference(comparatorLow)).isLessThan(0);
+                        assertTrue(comparatorHigh.compareToReference(comparatorLow) < 0);
                     }
                     if (!greater && !ascending) {
-                        assertThat(comparatorHigh.compareToReference(comparatorLow))
-                                .isGreaterThan(0);
+                        assertTrue(comparatorHigh.compareToReference(comparatorLow) > 0);
                     }
                 }
             }
@@ -276,12 +274,12 @@ public abstract class ComparatorTestBase<T> {
         // Same as in the NormalizedKeySorter
         int keyLen = Math.min(comparator.getNormalizeKeyLen(), DEFAULT_MAX_NORMALIZED_KEY_LEN);
         if (keyLen < comparator.getNormalizeKeyLen()) {
-            assertThat(comparator.isNormalizedKeyPrefixOnly(keyLen)).isTrue();
+            assertTrue(comparator.isNormalizedKeyPrefixOnly(keyLen));
         }
 
         if (halfLength) {
             keyLen = keyLen / 2;
-            assertThat(comparator.isNormalizedKeyPrefixOnly(keyLen)).isTrue();
+            assertTrue(comparator.isNormalizedKeyPrefixOnly(keyLen));
         }
         return keyLen;
     }
@@ -318,8 +316,8 @@ public abstract class ComparatorTestBase<T> {
             MemorySegment memSeg2 = setupNormalizedKeysMemSegment(data, normKeyLen, comparator);
 
             for (int i = 0; i < data.length; i++) {
-                assertThat(memSeg1.compare(memSeg2, i * normKeyLen, i * normKeyLen, normKeyLen))
-                        .isEqualTo(0);
+                assertTrue(
+                        memSeg1.compare(memSeg2, i * normKeyLen, i * normKeyLen, normKeyLen) == 0);
             }
         } catch (Exception e) {
             System.err.println(e.getMessage());
@@ -374,18 +372,18 @@ public abstract class ComparatorTestBase<T> {
                                 memSegLow.compare(
                                         memSegHigh, l * normKeyLen, h * normKeyLen, normKeyLen);
                         if (fullyDetermines) {
-                            assertThat(cmp).isLessThan(0);
+                            assertTrue(cmp < 0);
                         } else {
-                            assertThat(cmp).isLessThanOrEqualTo(0);
+                            assertTrue(cmp <= 0);
                         }
                     } else {
                         cmp =
                                 memSegHigh.compare(
                                         memSegLow, h * normKeyLen, l * normKeyLen, normKeyLen);
                         if (fullyDetermines) {
-                            assertThat(cmp).isGreaterThan(0);
+                            assertTrue(cmp > 0);
                         } else {
-                            assertThat(cmp).isGreaterThanOrEqualTo(0);
+                            assertTrue(cmp >= 0);
                         }
                     }
                 }
@@ -420,7 +418,7 @@ public abstract class ComparatorTestBase<T> {
                 in = out.getInputView();
                 comp1.readWithKeyDenormalization(reuse, in);
 
-                assertThat(comp1.compareToReference(comp2)).isEqualTo(0);
+                assertTrue(comp1.compareToReference(comp2) == 0);
             }
         } catch (Exception e) {
             System.err.println(e.getMessage());
@@ -442,16 +440,16 @@ public abstract class ComparatorTestBase<T> {
             TypeComparator[] comparators = comparator.getFlatComparators();
             Object[] extractedKeys = new Object[comparators.length];
             int insertedKeys = comparator.extractKeys(value, extractedKeys, 0);
-            assertThat(insertedKeys).isEqualTo(comparators.length);
+            assertTrue(insertedKeys == comparators.length);
 
             for (int i = 0; i < insertedKeys; i++) {
                 // check if some keys are null, although this is not supported
                 if (!supportsNullKeys()) {
-                    assertThat(extractedKeys[i]).isNotNull();
+                    assertNotNull(extractedKeys[i]);
                 }
                 // compare the extracted key with itself as a basic check
                 // if the extracted key corresponds to the comparator
-                assertThat(comparators[i].compare(extractedKeys[i], extractedKeys[i])).isEqualTo(0);
+                assertTrue(comparators[i].compare(extractedKeys[i], extractedKeys[i]) == 0);
             }
         }
     }
@@ -459,7 +457,7 @@ public abstract class ComparatorTestBase<T> {
     // --------------------------------------------------------------------------------------------
 
     protected void deepEquals(String message, T should, T is) {
-        assertThat(is).as(message).isEqualTo(should);
+        assertEquals(message, should, is);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -501,7 +499,7 @@ public abstract class ComparatorTestBase<T> {
         // Just look if the data is really there after serialization, before testing comparator on
         // it
         TestInputView in = out.getInputView();
-        assertThat(in.available()).as("No data available during deserialization.").isGreaterThan(0);
+        assertTrue("No data available during deserialization.", in.available() > 0);
 
         T deserialized = serializer.deserialize(serializer.createInstance(), in);
         deepEquals("Deserialized value is wrong.", value, deserialized);

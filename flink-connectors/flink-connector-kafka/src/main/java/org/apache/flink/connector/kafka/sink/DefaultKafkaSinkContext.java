@@ -17,6 +17,9 @@
 
 package org.apache.flink.connector.kafka.sink;
 
+import org.apache.flink.util.StringUtils;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.PartitionInfo;
@@ -62,7 +65,38 @@ public class DefaultKafkaSinkContext implements KafkaRecordSerializationSchema.K
         return cachedPartitions.computeIfAbsent(topic, this::fetchPartitionsForTopic);
     }
 
+    @Override
+    public int[] getPartitionsForTopic(String topic, String brokers) {
+        if (StringUtils.isNullOrWhitespaceOnly(brokers)) {
+            return getPartitionsForTopic(topic);
+        }
+
+        int[] partitions = cachedPartitions.get(topic + brokers);
+        if (partitions == null) {
+            partitions = fetchPartitionsForTopic(topic, brokers);
+            cachedPartitions.put(topic + brokers, partitions);
+        }
+        return partitions;
+    }
+
     private int[] fetchPartitionsForTopic(String topic) {
+        try (final Producer<?, ?> producer = new KafkaProducer<>(kafkaProducerConfig)) {
+            // the fetched list is immutable, so we're creating a mutable copy in order to sort
+            // it
+            final List<PartitionInfo> partitionsList =
+                    new ArrayList<>(producer.partitionsFor(topic));
+
+            return partitionsList.stream()
+                    .sorted(Comparator.comparing(PartitionInfo::partition))
+                    .map(PartitionInfo::partition)
+                    .mapToInt(Integer::intValue)
+                    .toArray();
+        }
+    }
+
+    private int[] fetchPartitionsForTopic(String topic, String brokers) {
+        Properties kafkaProducerConfig = this.kafkaProducerConfig;
+        kafkaProducerConfig.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
         try (final Producer<?, ?> producer = new KafkaProducer<>(kafkaProducerConfig)) {
             // the fetched list is immutable, so we're creating a mutable copy in order to sort
             // it

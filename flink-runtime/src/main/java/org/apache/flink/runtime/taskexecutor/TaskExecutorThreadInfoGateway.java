@@ -23,22 +23,20 @@ import org.apache.flink.runtime.messages.TaskThreadInfoResponse;
 import org.apache.flink.runtime.rpc.RpcTimeout;
 import org.apache.flink.runtime.webmonitor.threadinfo.ThreadInfoSamplesRequest;
 
-import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
 /** RPC gateway for requesting {@link org.apache.flink.runtime.messages.ThreadInfoSample}. */
 public interface TaskExecutorThreadInfoGateway {
-
     /**
-     * Request a thread info sample from the given tasks.
+     * Request a thread info sample from the given task.
      *
-     * @param taskExecutionAttemptIds identifying the task to sample
+     * @param taskExecutionAttemptId identifying the task to sample
      * @param requestParams parameters of the request
      * @param timeout of the request
      * @return Future of stack trace sample response
      */
     CompletableFuture<TaskThreadInfoResponse> requestThreadInfoSamples(
-            Collection<ExecutionAttemptID> taskExecutionAttemptIds,
+            ExecutionAttemptID taskExecutionAttemptId,
             ThreadInfoSamplesRequest requestParams,
             @RpcTimeout Time timeout);
 }

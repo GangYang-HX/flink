@@ -61,17 +61,17 @@ public class OperationResult<R> implements Serializable {
         return throwable;
     }
 
-    public static <R extends Serializable> OperationResult<R> failure(Throwable throwable) {
+    public static <R> OperationResult<R> failure(Throwable throwable) {
         checkNotNull(throwable);
         return new OperationResult<>(OperationResultStatus.FAILURE, null, throwable);
     }
 
-    public static <R extends Serializable> OperationResult<R> success(R result) {
+    public static <R> OperationResult<R> success(R result) {
         checkNotNull(result);
         return new OperationResult<>(OperationResultStatus.SUCCESS, result, null);
     }
 
-    public static <R extends Serializable> OperationResult<R> inProgress() {
+    public static <R> OperationResult<R> inProgress() {
         return new OperationResult<>(OperationResultStatus.IN_PROGRESS, null, null);
     }
 

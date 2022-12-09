@@ -25,15 +25,18 @@ import org.apache.flink.table.types.inference.TypeStrategiesTestBase;
 import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.StructuredType;
 
+import org.junit.runners.Parameterized;
+
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.stream.Stream;
+import java.util.List;
 
 /** Tests for {@link GetTypeStrategy}. */
-class GetTypeStrategyTest extends TypeStrategiesTestBase {
+public class GetTypeStrategyTest extends TypeStrategiesTestBase {
 
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
                 TestSpec.forStrategy(
                                 "Access field of a row nullable type by name",
                                 SpecificTypeStrategies.GET)

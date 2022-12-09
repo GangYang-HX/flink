@@ -48,8 +48,6 @@ import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
-
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexInputRef;
@@ -68,8 +66,6 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
         implements SingleTransformationTranslator<RowData> {
 
-    public static final String PYTHON_CALC_TRANSFORMATION = "python-calc";
-
     public static final String FIELD_NAME_PROJECTION = "projection";
 
     private static final String PYTHON_SCALAR_FUNCTION_OPERATOR_NAME =
@@ -84,7 +80,6 @@ public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
             "org.apache.flink.table.runtime.operators.python.scalar.arrow."
                     + "ArrowPythonScalarFunctionOperator";
 
-    @JsonProperty(FIELD_NAME_PROJECTION)
     private final List<RexNode> projection;
 
     public CommonExecPythonCalc(
@@ -110,11 +105,7 @@ public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
         final Configuration pythonConfig =
                 CommonPythonUtil.extractPythonConfiguration(planner.getExecEnv(), config);
         OneInputTransformation<RowData, RowData> ret =
-                createPythonOneInputTransformation(
-                        inputTransform,
-                        config,
-                        planner.getFlinkContext().getClassLoader(),
-                        pythonConfig);
+                createPythonOneInputTransformation(inputTransform, config, pythonConfig);
         if (CommonPythonUtil.isPythonWorkerUsingManagedMemory(pythonConfig)) {
             ret.declareManagedMemoryUseCaseAtSlotScope(ManagedMemoryUseCase.PYTHON);
         }
@@ -124,7 +115,6 @@ public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
     private OneInputTransformation<RowData, RowData> createPythonOneInputTransformation(
             Transformation<RowData> inputTransform,
             ExecNodeConfig config,
-            ClassLoader classLoader,
             Configuration pythonConfig) {
         List<RexCall> pythonRexCalls =
                 projection.stream()
@@ -163,7 +153,6 @@ public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
         OneInputStreamOperator<RowData, RowData> pythonOperator =
                 getPythonScalarFunctionOperator(
                         config,
-                        classLoader,
                         pythonConfig,
                         pythonOperatorInputTypeInfo,
                         pythonOperatorResultTyeInfo,
@@ -178,7 +167,8 @@ public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
 
         return ExecNodeUtil.createOneInputTransformation(
                 inputTransform,
-                createTransformationMeta(PYTHON_CALC_TRANSFORMATION, config),
+                createTransformationName(config),
+                createTransformationDescription(config),
                 pythonOperator,
                 pythonOperatorResultTyeInfo,
                 inputTransform.getParallelism());
@@ -212,7 +202,6 @@ public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
     @SuppressWarnings("unchecked")
     private OneInputStreamOperator<RowData, RowData> getPythonScalarFunctionOperator(
             ExecNodeConfig config,
-            ClassLoader classLoader,
             Configuration pythonConfig,
             InternalTypeInfo<RowData> inputRowTypeInfo,
             InternalTypeInfo<RowData> outputRowTypeInfo,
@@ -261,46 +250,60 @@ public abstract class CommonExecPythonCalc extends ExecNodeBase<RowData>
                                 udfInputType,
                                 udfOutputType,
                                 ProjectionCodeGenerator.generateProjection(
-                                        new CodeGeneratorContext(config, classLoader),
+                                        CodeGeneratorContext.apply(config.getTableConfig()),
                                         "UdfInputProjection",
                                         inputType,
                                         udfInputType,
                                         udfInputOffsets),
                                 ProjectionCodeGenerator.generateProjection(
-                                        new CodeGeneratorContext(config, classLoader),
+                                        CodeGeneratorContext.apply(config.getTableConfig()),
                                         "ForwardedFieldProjection",
                                         inputType,
                                         forwardedFieldType,
                                         forwardedFields));
             } else {
-                GeneratedProjection forwardedFieldGeneratedProjection = null;
                 if (forwardedFields.length > 0) {
-                    forwardedFieldGeneratedProjection =
-                            ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
-                                    "ForwardedFieldProjection",
+                    Constructor<?> ctor =
+                            clazz.getConstructor(
+                                    Configuration.class,
+                                    PythonFunctionInfo[].class,
+                                    RowType.class,
+                                    RowType.class,
+                                    RowType.class,
+                                    int[].class,
+                                    GeneratedProjection.class);
+                    return (OneInputStreamOperator<RowData, RowData>)
+                            ctor.newInstance(
+                                    pythonConfig,
+                                    pythonFunctionInfos,
                                     inputType,
-                                    forwardedFieldType,
-                                    forwardedFields);
+                                    udfInputType,
+                                    udfOutputType,
+                                    udfInputOffsets,
+                                    ProjectionCodeGenerator.generateProjection(
+                                            CodeGeneratorContext.apply(config.getTableConfig()),
+                                            "ForwardedFieldProjection",
+                                            inputType,
+                                            forwardedFieldType,
+                                            forwardedFields));
+                } else {
+                    Constructor<?> ctor =
+                            clazz.getConstructor(
+                                    Configuration.class,
+                                    PythonFunctionInfo[].class,
+                                    RowType.class,
+                                    RowType.class,
+                                    RowType.class,
+                                    int[].class);
+                    return (OneInputStreamOperator<RowData, RowData>)
+                            ctor.newInstance(
+                                    pythonConfig,
+                                    pythonFunctionInfos,
+                                    inputType,
+                                    udfInputType,
+                                    udfOutputType,
+                                    udfInputOffsets);
                 }
-                Constructor<?> ctor =
-                        clazz.getConstructor(
-                                Configuration.class,
-                                PythonFunctionInfo[].class,
-                                RowType.class,
-                                RowType.class,
-                                RowType.class,
-                                int[].class,
-                                GeneratedProjection.class);
-                return (OneInputStreamOperator<RowData, RowData>)
-                        ctor.newInstance(
-                                pythonConfig,
-                                pythonFunctionInfos,
-                                inputType,
-                                udfInputType,
-                                udfOutputType,
-                                udfInputOffsets,
-                                forwardedFieldGeneratedProjection);
             }
         } catch (Exception e) {
             throw new TableException("Python Scalar Function Operator constructed failed.", e);

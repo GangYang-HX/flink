@@ -188,8 +188,7 @@ public class StreamExecOverAggregate extends ExecNodeBase<RowData>
                 RowType.of(
                         fieldTypes.toArray(new LogicalType[0]), fieldNames.toArray(new String[0]));
 
-        final CodeGeneratorContext ctx =
-                new CodeGeneratorContext(config, planner.getFlinkContext().getClassLoader());
+        final CodeGeneratorContext ctx = new CodeGeneratorContext(config.getTableConfig());
         final KeyedProcessFunction<RowData, RowData, RowData> overProcessFunction;
         if (group.getLowerBound().isPreceding()
                 && group.getLowerBound().isUnbounded()
@@ -205,8 +204,7 @@ public class StreamExecOverAggregate extends ExecNodeBase<RowData>
                             rowTimeIdx,
                             group.isRows(),
                             config,
-                            planner.createRelBuilder(),
-                            planner.getTypeFactory());
+                            planner.getRelBuilder());
         } else if (group.getLowerBound().isPreceding()
                 && !group.getLowerBound().isUnbounded()
                 && group.getUpperBound().isCurrentRow()) {
@@ -230,8 +228,7 @@ public class StreamExecOverAggregate extends ExecNodeBase<RowData>
                             group.isRows(),
                             precedingOffset,
                             config,
-                            planner.createRelBuilder(),
-                            planner.getTypeFactory());
+                            planner.getRelBuilder());
         } else {
             throw new TableException("OVER RANGE FOLLOWING windows are not supported yet.");
         }
@@ -250,9 +247,7 @@ public class StreamExecOverAggregate extends ExecNodeBase<RowData>
         // set KeyType and Selector for state
         final RowDataKeySelector selector =
                 KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        partitionKeys,
-                        InternalTypeInfo.of(inputRowType));
+                        partitionKeys, InternalTypeInfo.of(inputRowType));
         transform.setStateKeySelector(selector);
         transform.setStateKeyType(selector.getProducedType());
 
@@ -279,11 +274,9 @@ public class StreamExecOverAggregate extends ExecNodeBase<RowData>
             int rowTimeIdx,
             boolean isRowsClause,
             ExecNodeConfig config,
-            RelBuilder relBuilder,
-            FlinkTypeFactory typeFactory) {
+            RelBuilder relBuilder) {
         AggregateInfoList aggInfoList =
                 AggregateUtil.transformToStreamAggregateInfoList(
-                        typeFactory,
                         // use aggInputType which considers constants as input instead of
                         // inputSchema.relDataType
                         aggInputRowType,
@@ -364,14 +357,12 @@ public class StreamExecOverAggregate extends ExecNodeBase<RowData>
             boolean isRowsClause,
             long precedingOffset,
             ExecNodeConfig config,
-            RelBuilder relBuilder,
-            FlinkTypeFactory typeFactory) {
+            RelBuilder relBuilder) {
 
         boolean[] aggCallNeedRetractions = new boolean[aggCalls.size()];
         Arrays.fill(aggCallNeedRetractions, true);
         AggregateInfoList aggInfoList =
                 AggregateUtil.transformToStreamAggregateInfoList(
-                        typeFactory,
                         // use aggInputType which considers constants as input instead of
                         // inputSchema.relDataType
                         aggInputType,

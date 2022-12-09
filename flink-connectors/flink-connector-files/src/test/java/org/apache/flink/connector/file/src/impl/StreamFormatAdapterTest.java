@@ -28,17 +28,17 @@ import org.apache.flink.connector.file.src.reader.SimpleStreamFormat;
 import org.apache.flink.connector.file.src.reader.StreamFormat;
 import org.apache.flink.core.fs.FSDataInputStream;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Unit and behavior tests for the {@link StreamFormatAdapter}. */
 @SuppressWarnings("serial")
-class StreamFormatAdapterTest extends AdapterTestBase<StreamFormat<Integer>> {
+public class StreamFormatAdapterTest extends AdapterTestBase<StreamFormat<Integer>> {
 
     // ------------------------------------------------------------------------
     //  Factories for Shared Tests
@@ -69,17 +69,17 @@ class StreamFormatAdapterTest extends AdapterTestBase<StreamFormat<Integer>> {
     // ------------------------------------------------------------------------
 
     @Test
-    void testReadSmallBatchSize() throws IOException {
+    public void testReadSmallBatchSize() throws IOException {
         simpleReadTest(1);
     }
 
     @Test
-    void testBatchSizeMatchesOneRecord() throws IOException {
+    public void testBatchSizeMatchesOneRecord() throws IOException {
         simpleReadTest(4);
     }
 
     @Test
-    void testBatchSizeIsRecordMultiple() throws IOException {
+    public void testBatchSizeIsRecordMultiple() throws IOException {
         simpleReadTest(20);
     }
 
@@ -110,7 +110,7 @@ class StreamFormatAdapterTest extends AdapterTestBase<StreamFormat<Integer>> {
                 Configuration config, FSDataInputStream stream, long fileLen, long splitEnd)
                 throws IOException {
 
-            assertThat(fileLen % 4).as("invalid file length").isEqualTo(0);
+            assertEquals("invalid file length", 0, fileLen % 4);
 
             // round all positions to the next integer boundary
             // to simulate common split behavior, we round up to the next int boundary even when we
@@ -132,7 +132,7 @@ class StreamFormatAdapterTest extends AdapterTestBase<StreamFormat<Integer>> {
                 long splitEnd)
                 throws IOException {
 
-            assertThat(fileLen % 4).as("invalid file length").isEqualTo(0);
+            assertEquals("invalid file length", 0, fileLen % 4);
 
             // round end position to the next integer boundary
             final long end = splitEnd == fileLen ? fileLen : splitEnd + 4 - splitEnd % 4;

@@ -152,7 +152,7 @@ public class CoreOptions {
                             "Fail Flink JVM processes if 'OutOfMemoryError: Metaspace' is "
                                     + "thrown while trying to load a user code class.");
 
-    public static String[] getParentFirstLoaderPatterns(ReadableConfig config) {
+    public static String[] getParentFirstLoaderPatterns(Configuration config) {
         List<String> base = config.get(ALWAYS_PARENT_FIRST_LOADER_PATTERNS);
         List<String> append = config.get(ALWAYS_PARENT_FIRST_LOADER_PATTERNS_ADDITIONAL);
         return mergeListsToArray(base, append);
@@ -483,4 +483,13 @@ public class CoreOptions {
                 .longType()
                 .defaultValue(0L);
     }
+
+    // ------------------------------------------------------------------------
+    //  dispatcher
+    // ------------------------------------------------------------------------
+    public static final ConfigOption<String> EXTEND_DISPATCHER_CLASSNAME =
+            ConfigOptions.key("extend.dispatcher.classname")
+                    .stringType()
+                    .defaultValue("org.apache.flink.runtime.dispatcher.StandaloneDispatcher")
+                    .withDescription("Default parallelism for jobs.");
 }

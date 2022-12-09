@@ -38,7 +38,9 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.table.utils.HandwrittenSelectorUtil;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.Matchers;
 import org.mockito.Mockito;
 
@@ -48,7 +50,7 @@ import java.util.Collections;
 
 import static org.apache.flink.table.runtime.util.StreamRecordUtils.insertRecord;
 import static org.apache.flink.table.runtime.util.StreamRecordUtils.row;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
@@ -66,6 +68,7 @@ import static org.powermock.api.mockito.PowerMockito.when;
 public class WindowOperatorContractTest {
 
     private static final ZoneId UTC_ZONE_ID = ZoneId.of("UTC");
+    @Rule public ExpectedException thrown = ExpectedException.none();
 
     @Test
     public void testAssignerIsInvokedOncePerElement() throws Exception {
@@ -172,7 +175,7 @@ public class WindowOperatorContractTest {
         when(mockAssigner.assignWindows(anyGenericRow(), anyLong()))
                 .thenReturn(Arrays.asList(new TimeWindow(2, 4), new TimeWindow(0, 2)));
 
-        assertThat(testHarness.getOutput()).isEmpty();
+        assertEquals(0, testHarness.getOutput().size());
 
         testHarness.processElement(insertRecord("String", 42, 0L));
 

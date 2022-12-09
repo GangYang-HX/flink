@@ -37,7 +37,7 @@ public class ArchivedExecution implements AccessExecution, Serializable {
 
     private final long[] stateTimestamps;
 
-    private final long[] stateEndTimestamps;
+    private final int attemptNumber;
 
     private final ExecutionState state;
 
@@ -50,6 +50,8 @@ public class ArchivedExecution implements AccessExecution, Serializable {
     /* Continuously updated map of user-defined accumulators */
     private final StringifiedAccumulatorResult[] userAccumulators;
 
+    private final int parallelSubtaskIndex;
+
     private final IOMetrics ioMetrics;
 
     public ArchivedExecution(Execution execution) {
@@ -57,32 +59,35 @@ public class ArchivedExecution implements AccessExecution, Serializable {
                 execution.getUserAccumulatorsStringified(),
                 execution.getIOMetrics(),
                 execution.getAttemptId(),
+                execution.getAttemptNumber(),
                 execution.getState(),
                 execution.getFailureInfo().orElse(null),
                 execution.getAssignedResourceLocation(),
                 execution.getAssignedAllocationID(),
-                execution.getStateTimestamps(),
-                execution.getStateEndTimestamps());
+                execution.getVertex().getParallelSubtaskIndex(),
+                execution.getStateTimestamps());
     }
 
     public ArchivedExecution(
             StringifiedAccumulatorResult[] userAccumulators,
             IOMetrics ioMetrics,
             ExecutionAttemptID attemptId,
+            int attemptNumber,
             ExecutionState state,
             @Nullable ErrorInfo failureCause,
             TaskManagerLocation assignedResourceLocation,
             AllocationID assignedAllocationID,
-            long[] stateTimestamps,
-            long[] stateEndTimestamps) {
+            int parallelSubtaskIndex,
+            long[] stateTimestamps) {
         this.userAccumulators = userAccumulators;
         this.ioMetrics = ioMetrics;
         this.failureInfo = failureCause;
         this.assignedResourceLocation = assignedResourceLocation;
+        this.attemptNumber = attemptNumber;
         this.attemptId = attemptId;
         this.state = state;
         this.stateTimestamps = stateTimestamps;
-        this.stateEndTimestamps = stateEndTimestamps;
+        this.parallelSubtaskIndex = parallelSubtaskIndex;
         this.assignedAllocationID = assignedAllocationID;
     }
 
@@ -97,17 +102,12 @@ public class ArchivedExecution implements AccessExecution, Serializable {
 
     @Override
     public int getAttemptNumber() {
-        return attemptId.getAttemptNumber();
+        return attemptNumber;
     }
 
     @Override
     public long[] getStateTimestamps() {
         return stateTimestamps;
-    }
-
-    @Override
-    public long[] getStateEndTimestamps() {
-        return stateEndTimestamps;
     }
 
     @Override
@@ -135,18 +135,13 @@ public class ArchivedExecution implements AccessExecution, Serializable {
     }
 
     @Override
-    public long getStateEndTimestamp(ExecutionState state) {
-        return this.stateEndTimestamps[state.ordinal()];
-    }
-
-    @Override
     public StringifiedAccumulatorResult[] getUserAccumulatorsStringified() {
         return userAccumulators;
     }
 
     @Override
     public int getParallelSubtaskIndex() {
-        return attemptId.getSubtaskIndex();
+        return parallelSubtaskIndex;
     }
 
     @Override

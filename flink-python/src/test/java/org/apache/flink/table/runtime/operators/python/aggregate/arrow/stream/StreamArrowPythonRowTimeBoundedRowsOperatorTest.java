@@ -25,6 +25,7 @@ import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.python.PythonFunctionInfo;
@@ -39,7 +40,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -54,11 +55,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *   <li>Watermarks are buffered and only sent to downstream when finishedBundle is triggered
  * </ul>
  */
-class StreamArrowPythonRowTimeBoundedRowsOperatorTest
+public class StreamArrowPythonRowTimeBoundedRowsOperatorTest
         extends AbstractStreamArrowPythonAggregateFunctionOperatorTest {
 
     @Test
-    void testOverWindowAggregateFunction() throws Exception {
+    public void testOverWindowAggregateFunction() throws Exception {
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness =
                 getTestHarness(new Configuration());
 
@@ -89,7 +90,7 @@ class StreamArrowPythonRowTimeBoundedRowsOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredOnCheckpoint() throws Exception {
+    public void testFinishBundleTriggeredOnCheckpoint() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = getTestHarness(conf);
@@ -126,7 +127,7 @@ class StreamArrowPythonRowTimeBoundedRowsOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByCount() throws Exception {
+    public void testFinishBundleTriggeredByCount() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 6);
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = getTestHarness(conf);
@@ -161,7 +162,7 @@ class StreamArrowPythonRowTimeBoundedRowsOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByTime() throws Exception {
+    public void testFinishBundleTriggeredByTime() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         conf.setLong(PythonOptions.MAX_BUNDLE_TIME_MILLS, 1000L);
@@ -251,9 +252,7 @@ class StreamArrowPythonRowTimeBoundedRowsOperatorTest
                 3,
                 1,
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "UdafInputProjection",
                         inputType,
                         udfInputType,
@@ -293,7 +292,7 @@ class StreamArrowPythonRowTimeBoundedRowsOperatorTest
                     udfInputType,
                     udfOutputType,
                     getFunctionUrn(),
-                    createUserDefinedFunctionsProto(),
+                    getUserDefinedFunctionsProto(),
                     PythonTestUtils.createMockFlinkMetricContainer(),
                     false);
         }

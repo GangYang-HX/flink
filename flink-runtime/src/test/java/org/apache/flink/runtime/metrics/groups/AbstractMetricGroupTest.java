@@ -152,20 +152,30 @@ public class AbstractMetricGroupTest extends TestLogger {
         config.setString(MetricOptions.SCOPE_NAMING_TM, "A.B.C.D");
 
         MetricConfig metricConfig1 = new MetricConfig();
-        metricConfig1.setProperty(MetricOptions.REPORTER_SCOPE_DELIMITER.key(), "-");
+        metricConfig1.setProperty(ConfigConstants.METRICS_REPORTER_SCOPE_DELIMITER, "-");
 
         MetricConfig metricConfig2 = new MetricConfig();
-        metricConfig2.setProperty(MetricOptions.REPORTER_SCOPE_DELIMITER.key(), "!");
+        metricConfig2.setProperty(ConfigConstants.METRICS_REPORTER_SCOPE_DELIMITER, "!");
 
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test1."
-                        + MetricOptions.REPORTER_SCOPE_DELIMITER.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
+                CollectingMetricsReporter.class.getName());
+        config.setString(
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + "test1."
+                        + ConfigConstants.METRICS_REPORTER_SCOPE_DELIMITER,
                 "-");
         config.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "test2."
-                        + MetricOptions.REPORTER_SCOPE_DELIMITER.key(),
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
+                CollectingMetricsReporter.class.getName());
+        config.setString(
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + "test2."
+                        + ConfigConstants.METRICS_REPORTER_SCOPE_DELIMITER,
                 "!");
 
         CollectingMetricsReporter reporter1 = new CollectingMetricsReporter(FILTER_B);

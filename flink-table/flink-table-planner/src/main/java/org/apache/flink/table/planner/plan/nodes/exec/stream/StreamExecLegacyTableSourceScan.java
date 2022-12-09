@@ -26,6 +26,7 @@ import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
 import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
 import org.apache.flink.table.planner.codegen.OperatorCodeGenerator;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
@@ -47,6 +48,7 @@ import org.apache.flink.table.sources.wmstrategies.WatermarkStrategy;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexNode;
 
 import javax.annotation.Nullable;
@@ -83,7 +85,6 @@ public class StreamExecLegacyTableSourceScan extends CommonExecLegacyTableSource
     protected Transformation<RowData> createConversionTransformationIfNeeded(
             StreamExecutionEnvironment streamExecEnv,
             ExecNodeConfig config,
-            ClassLoader classLoader,
             Transformation<?> sourceTransform,
             @Nullable RexNode rowtimeExpression) {
 
@@ -102,7 +103,7 @@ public class StreamExecLegacyTableSourceScan extends CommonExecLegacyTableSource
             }
 
             final CodeGeneratorContext ctx =
-                    new CodeGeneratorContext(config, classLoader)
+                    new CodeGeneratorContext(config.getTableConfig())
                             .setOperatorBaseClass(TableStreamOperator.class);
             // the produced type may not carry the correct precision user defined in DDL, because
             // it may be converted from legacy type. Fix precision using logical schema from DDL.
@@ -129,17 +130,18 @@ public class StreamExecLegacyTableSourceScan extends CommonExecLegacyTableSource
             transformation = (Transformation<RowData>) sourceTransform;
         }
 
+        final RelDataType relDataType = FlinkTypeFactory.INSTANCE().buildRelNodeRowType(outputType);
         final DataStream<RowData> ingestedTable = new DataStream<>(streamExecEnv, transformation);
         final Optional<RowtimeAttributeDescriptor> rowtimeDesc =
                 JavaScalaConversionUtil.toJava(
-                        TableSourceUtil.getRowtimeAttributeDescriptor(tableSource, outputType));
+                        TableSourceUtil.getRowtimeAttributeDescriptor(tableSource, relDataType));
 
         final DataStream<RowData> withWatermarks =
                 rowtimeDesc
                         .map(
                                 desc -> {
                                     int rowtimeFieldIdx =
-                                            outputType
+                                            relDataType
                                                     .getFieldNames()
                                                     .indexOf(desc.getAttributeName());
                                     WatermarkStrategy strategy = desc.getWatermarkStrategy();

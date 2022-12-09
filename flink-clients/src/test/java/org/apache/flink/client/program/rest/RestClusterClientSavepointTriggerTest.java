@@ -50,15 +50,17 @@ import org.apache.flink.runtime.rest.util.TestRestServerEndpoint;
 import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.webmonitor.TestingDispatcherGateway;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
+import org.apache.flink.util.ConfigurationException;
 import org.apache.flink.util.SerializedThrowable;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
 import org.apache.flink.util.function.FunctionWithException;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import javax.annotation.Nonnull;
 
@@ -69,7 +71,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for the {@link RestClusterClient} for operations that trigger savepoints.
@@ -77,7 +85,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>These tests verify that the client uses the appropriate headers for each request, properly
  * constructs the request bodies/parameters and processes the responses correctly.
  */
-class RestClusterClientSavepointTriggerTest {
+public class RestClusterClientSavepointTriggerTest extends TestLogger {
 
     private static final DispatcherGateway mockRestfulGateway =
             TestingDispatcherGateway.newBuilder().build();
@@ -99,35 +107,35 @@ class RestClusterClientSavepointTriggerTest {
         REST_CONFIG = new UnmodifiableConfiguration(config);
     }
 
-    @BeforeAll
-    static void setUp() {
+    @BeforeClass
+    public static void setUp() throws ConfigurationException {
         executor =
                 Executors.newSingleThreadExecutor(
                         new ExecutorThreadFactory(
                                 RestClusterClientSavepointTriggerTest.class.getSimpleName()));
     }
 
-    @AfterAll
-    static void tearDown() {
+    @AfterClass
+    public static void tearDown() {
         if (executor != null) {
             executor.shutdown();
         }
     }
 
     @Test
-    void testTriggerSavepointDefaultDirectory() throws Exception {
+    public void testTriggerSavepointDefaultDirectory() throws Exception {
         final TriggerId triggerId = new TriggerId();
         final String expectedReturnedSavepointDir = "hello";
 
         try (final RestServerEndpoint restServerEndpoint =
                 createRestServerEndpoint(
                         request -> {
-                            assertThat(request.getTargetDirectory()).isEmpty();
-                            assertThat(request.isCancelJob()).isFalse();
+                            assertThat(request.getTargetDirectory().isPresent(), is(false));
+                            assertFalse(request.isCancelJob());
                             return triggerId;
                         },
                         trigger -> {
-                            assertThat(triggerId).isEqualTo(trigger);
+                            assertEquals(triggerId, trigger);
                             return new SavepointInfo(expectedReturnedSavepointDir, null);
                         })) {
 
@@ -138,12 +146,12 @@ class RestClusterClientSavepointTriggerTest {
                     restClusterClient
                             .triggerSavepoint(new JobID(), null, SavepointFormatType.CANONICAL)
                             .get();
-            assertThat(savepointPath).isEqualTo(expectedReturnedSavepointDir);
+            assertEquals(expectedReturnedSavepointDir, savepointPath);
         }
     }
 
     @Test
-    void testTriggerSavepointTargetDirectory() throws Exception {
+    public void testTriggerSavepointTargetDirectory() throws Exception {
         final TriggerId triggerId = new TriggerId();
         final String expectedSubmittedSavepointDir = "world";
         final String expectedReturnedSavepointDir = "hello";
@@ -151,14 +159,14 @@ class RestClusterClientSavepointTriggerTest {
         try (final RestServerEndpoint restServerEndpoint =
                 createRestServerEndpoint(
                         triggerRequestBody -> {
-                            assertThat(triggerRequestBody.getTargetDirectory())
-                                    .get()
-                                    .isEqualTo(expectedSubmittedSavepointDir);
-                            assertThat(triggerRequestBody.isCancelJob()).isFalse();
+                            assertEquals(
+                                    expectedSubmittedSavepointDir,
+                                    triggerRequestBody.getTargetDirectory().get());
+                            assertFalse(triggerRequestBody.isCancelJob());
                             return triggerId;
                         },
                         statusRequestTriggerId -> {
-                            assertThat(statusRequestTriggerId).isEqualTo(triggerId);
+                            assertEquals(triggerId, statusRequestTriggerId);
                             return new SavepointInfo(expectedReturnedSavepointDir, null);
                         })) {
 
@@ -172,23 +180,23 @@ class RestClusterClientSavepointTriggerTest {
                                     expectedSubmittedSavepointDir,
                                     SavepointFormatType.CANONICAL)
                             .get();
-            assertThat(savepointPath).isEqualTo(expectedReturnedSavepointDir);
+            assertEquals(expectedReturnedSavepointDir, savepointPath);
         }
     }
 
     @Test
-    void testTriggerSavepointCancelJob() throws Exception {
+    public void testTriggerSavepointCancelJob() throws Exception {
         final TriggerId triggerId = new TriggerId();
         final String expectedSavepointDir = "hello";
 
         try (final RestServerEndpoint restServerEndpoint =
                 createRestServerEndpoint(
                         request -> {
-                            assertThat(request.isCancelJob()).isTrue();
+                            assertTrue(request.isCancelJob());
                             return triggerId;
                         },
                         trigger -> {
-                            assertThat(trigger).isEqualTo(triggerId);
+                            assertEquals(triggerId, trigger);
                             return new SavepointInfo(expectedSavepointDir, null);
                         })) {
 
@@ -199,12 +207,12 @@ class RestClusterClientSavepointTriggerTest {
                     restClusterClient
                             .cancelWithSavepoint(new JobID(), null, SavepointFormatType.CANONICAL)
                             .get();
-            assertThat(savepointPath).isEqualTo(expectedSavepointDir);
+            assertEquals(expectedSavepointDir, savepointPath);
         }
     }
 
     @Test
-    void testTriggerSavepointFailure() throws Exception {
+    public void testTriggerSavepointFailure() throws Exception {
         final TriggerId triggerId = new TriggerId();
 
         try (final RestServerEndpoint restServerEndpoint =
@@ -225,18 +233,18 @@ class RestClusterClientSavepointTriggerTest {
                         .get();
             } catch (ExecutionException e) {
                 final Throwable cause = e.getCause();
-                assertThat(cause).isInstanceOf(SerializedThrowable.class);
+                assertThat(cause, instanceOf(SerializedThrowable.class));
                 assertThat(
-                                ((SerializedThrowable) cause)
-                                        .deserializeError(ClassLoader.getSystemClassLoader())
-                                        .getMessage())
-                        .isEqualTo("expected");
+                        ((SerializedThrowable) cause)
+                                .deserializeError(ClassLoader.getSystemClassLoader())
+                                .getMessage(),
+                        equalTo("expected"));
             }
         }
     }
 
     @Test
-    void testTriggerSavepointRetry() throws Exception {
+    public void testTriggerSavepointRetry() throws Exception {
         final TriggerId triggerId = new TriggerId();
         final String expectedSavepointDir = "hello";
 
@@ -260,7 +268,7 @@ class RestClusterClientSavepointTriggerTest {
                     restClusterClient
                             .triggerSavepoint(new JobID(), null, SavepointFormatType.CANONICAL)
                             .get();
-            assertThat(savepointPath).isEqualTo(expectedSavepointDir);
+            assertEquals(expectedSavepointDir, savepointPath);
         }
     }
 

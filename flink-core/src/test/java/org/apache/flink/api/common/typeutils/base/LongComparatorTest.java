@@ -24,7 +24,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 
 import java.util.Random;
 
-class LongComparatorTest extends ComparatorTestBase<Long> {
+public class LongComparatorTest extends ComparatorTestBase<Long> {
 
     @Override
     protected TypeComparator<Long> createComparator(boolean ascending) {

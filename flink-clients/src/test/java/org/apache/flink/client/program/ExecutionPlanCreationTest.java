@@ -32,19 +32,20 @@ import org.apache.flink.optimizer.costs.DefaultCostEstimator;
 import org.apache.flink.optimizer.plan.OptimizedPlan;
 import org.apache.flink.optimizer.plandump.PlanJSONDumpGenerator;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 /** Tests for the generation of execution plans. */
-class ExecutionPlanCreationTest {
+public class ExecutionPlanCreationTest {
 
     @Test
-    void testGetExecutionPlan() {
+    public void testGetExecutionPlan() {
         try {
             PackagedProgram prg =
                     PackagedProgram.newBuilder()
@@ -64,17 +65,17 @@ class ExecutionPlanCreationTest {
                     new Optimizer(new DataStatistics(), new DefaultCostEstimator(), config);
             Plan plan = (Plan) PackagedProgramUtils.getPipelineFromProgram(prg, config, -1, true);
             OptimizedPlan op = optimizer.compile(plan);
-            assertThat(op).isNotNull();
+            assertNotNull(op);
 
             PlanJSONDumpGenerator dumper = new PlanJSONDumpGenerator();
-            assertThat(dumper.getOptimizerPlanAsJSON(op)).isNotNull();
+            assertNotNull(dumper.getOptimizerPlanAsJSON(op));
 
             // test HTML escaping
             PlanJSONDumpGenerator dumper2 = new PlanJSONDumpGenerator();
             dumper2.setEncodeForHTML(true);
             String htmlEscaped = dumper2.getOptimizerPlanAsJSON(op);
 
-            assertThat(htmlEscaped).doesNotContain("\\");
+            assertEquals(-1, htmlEscaped.indexOf('\\'));
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());

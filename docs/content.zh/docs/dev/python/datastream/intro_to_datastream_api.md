@@ -43,8 +43,7 @@ from pyflink.common import WatermarkStrategy, Row
 from pyflink.common.serialization import Encoder
 from pyflink.common.typeinfo import Types
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.datastream.connectors.file_system import FileSink, OutputFileConfig
-from pyflink.datastream.connectors.number_seq import NumberSequenceSource
+from pyflink.datastream.connectors import FileSink, OutputFileConfig, NumberSequenceSource
 from pyflink.datastream.functions import RuntimeContext, MapFunction
 from pyflink.datastream.state import ValueStateDescriptor
 
@@ -154,10 +153,10 @@ will be `Types.PICKLED_BYTE_ARRAY()`.
 You can also create a `DataStream` using DataStream connectors with method `add_source` as following:
 
 ```python
+from pyflink.common.serialization import JsonRowDeserializationSchema
 from pyflink.common.typeinfo import Types
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.datastream.connectors.kafka import FlinkKafkaConsumer
-from pyflink.datastream.format.json import JsonRowDeserializationSchema
+from pyflink.datastream.connectors import FlinkKafkaConsumer
 
 env = StreamExecutionEnvironment.get_execution_environment()
 # the sql connector for kafka is used here as it's a fat jar and could avoid dependency issues
@@ -187,7 +186,7 @@ source connectors:
 from pyflink.common.typeinfo import Types
 from pyflink.common.watermark_strategy import WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.datastream.connectors.number_seq import NumberSequenceSource
+from pyflink.datastream.connectors import NumberSequenceSource
 
 env = StreamExecutionEnvironment.get_execution_environment()
 seq_num_source = NumberSequenceSource(1, 1000)
@@ -304,8 +303,8 @@ You can call the `add_sink` method to emit the data of a `DataStream` to a DataS
 
 ```python
 from pyflink.common.typeinfo import Types
-from pyflink.datastream.connectors.kafka import FlinkKafkaProducer
-from pyflink.datastream.formats.json import JsonRowSerializationSchema
+from pyflink.datastream.connectors import FlinkKafkaProducer
+from pyflink.common.serialization import JsonRowSerializationSchema
 
 serialization_schema = JsonRowSerializationSchema.builder().with_type_info(
     type_info=Types.ROW([Types.INT(), Types.STRING()])).build()
@@ -318,8 +317,8 @@ kafka_producer = FlinkKafkaProducer(
 ds.add_sink(kafka_producer)
 ```
 
-<span class="label label-info">Note</span> It currently only supports FlinkKafkaProducer and
-JdbcSink to be used as DataStream sink connectors with method `add_sink`.
+<span class="label label-info">Note</span> It currently only supports FlinkKafkaProducer,
+JdbcSink and StreamingFileSink to be used as DataStream sink connectors with method `add_sink`.
 
 <span class="label label-info">Note</span> The method `add_sink` could only be used in `streaming`
 executing mode.
@@ -328,7 +327,7 @@ You could also call the `sink_to` method to emit the data of a `DataStream` to a
 sink connector:
 
 ```python
-from pyflink.datastream.connectors.file_system import FileSink, OutputFileConfig
+from pyflink.datastream.connectors import FileSink, OutputFileConfig
 from pyflink.common.serialization import Encoder
 
 output_path = '/opt/output/'

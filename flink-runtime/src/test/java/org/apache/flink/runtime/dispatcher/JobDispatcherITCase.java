@@ -46,14 +46,12 @@ import org.apache.flink.runtime.rest.JobRestEndpointFactory;
 import org.apache.flink.runtime.scheduler.adaptive.AdaptiveSchedulerClusterITCase;
 import org.apache.flink.runtime.testutils.CommonTestUtils;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorExtension;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.TestLoggerExtension;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -64,7 +62,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Supplier;
 
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -73,9 +70,6 @@ import static org.apache.flink.runtime.entrypoint.component.FileJobGraphRetrieve
 /** An integration test which recovers from checkpoint after regaining the leadership. */
 @ExtendWith(TestLoggerExtension.class)
 public class JobDispatcherITCase {
-    @RegisterExtension
-    static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorExtension();
 
     private Supplier<DispatcherResourceManagerComponentFactory>
             createJobModeDispatcherResourceManagerComponentFactorySupplier(
@@ -104,7 +98,7 @@ public class JobDispatcherITCase {
                         .setConfiguration(configuration)
                         .build();
         final EmbeddedHaServicesWithLeadershipControl haServices =
-                new EmbeddedHaServicesWithLeadershipControl(EXECUTOR_RESOURCE.getExecutor());
+                new EmbeddedHaServicesWithLeadershipControl(TestingUtils.defaultExecutor());
 
         final Configuration newConfiguration =
                 new Configuration(clusterConfiguration.getConfiguration());

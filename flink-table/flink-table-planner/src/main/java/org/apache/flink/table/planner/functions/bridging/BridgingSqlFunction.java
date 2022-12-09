@@ -25,11 +25,9 @@ import org.apache.flink.table.functions.BuiltInFunctionDefinition;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.functions.FunctionIdentifier;
 import org.apache.flink.table.functions.FunctionKind;
-import org.apache.flink.table.functions.SpecializedFunction.ExpressionEvaluatorFactory;
 import org.apache.flink.table.planner.calcite.FlinkContext;
 import org.apache.flink.table.planner.calcite.FlinkRelBuilder;
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
-import org.apache.flink.table.planner.calcite.RexFactory;
 import org.apache.flink.table.planner.utils.ShortcutUtils;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.inference.TypeInference;
@@ -61,18 +59,17 @@ import static org.apache.flink.util.Preconditions.checkState;
 @Internal
 public class BridgingSqlFunction extends SqlFunction {
 
-    // it would be great to inject the factories from the outside, but since the code generation
-    // stack is too complex, we pass context with every function
     private final DataTypeFactory dataTypeFactory;
+
     private final FlinkTypeFactory typeFactory;
-    private final RexFactory rexFactory;
+
     private final ContextResolvedFunction resolvedFunction;
+
     private final TypeInference typeInference;
 
     private BridgingSqlFunction(
             DataTypeFactory dataTypeFactory,
             FlinkTypeFactory typeFactory,
-            RexFactory rexFactory,
             SqlKind kind,
             ContextResolvedFunction resolvedFunction,
             TypeInference typeInference) {
@@ -91,7 +88,6 @@ public class BridgingSqlFunction extends SqlFunction {
 
         this.dataTypeFactory = dataTypeFactory;
         this.typeFactory = typeFactory;
-        this.rexFactory = rexFactory;
         this.resolvedFunction = resolvedFunction;
         this.typeInference = typeInference;
     }
@@ -101,7 +97,6 @@ public class BridgingSqlFunction extends SqlFunction {
      *
      * @param dataTypeFactory used for creating {@link DataType}
      * @param typeFactory used for bridging to {@link RelDataType}
-     * @param rexFactory used for {@link ExpressionEvaluatorFactory}
      * @param kind commonly used SQL standard function; use {@link SqlKind#OTHER_FUNCTION} if this
      *     function cannot be mapped to a common function kind.
      * @param resolvedFunction system or user-defined {@link FunctionDefinition} with context
@@ -110,7 +105,6 @@ public class BridgingSqlFunction extends SqlFunction {
     public static BridgingSqlFunction of(
             DataTypeFactory dataTypeFactory,
             FlinkTypeFactory typeFactory,
-            RexFactory rexFactory,
             SqlKind kind,
             ContextResolvedFunction resolvedFunction,
             TypeInference typeInference) {
@@ -121,15 +115,10 @@ public class BridgingSqlFunction extends SqlFunction {
 
         if (functionKind == FunctionKind.TABLE) {
             return new BridgingSqlFunction.WithTableFunction(
-                    dataTypeFactory,
-                    typeFactory,
-                    rexFactory,
-                    kind,
-                    resolvedFunction,
-                    typeInference);
+                    dataTypeFactory, typeFactory, kind, resolvedFunction, typeInference);
         }
         return new BridgingSqlFunction(
-                dataTypeFactory, typeFactory, rexFactory, kind, resolvedFunction, typeInference);
+                dataTypeFactory, typeFactory, kind, resolvedFunction, typeInference);
     }
 
     /** Creates an instance of a scalar or table function during translation. */
@@ -143,7 +132,6 @@ public class BridgingSqlFunction extends SqlFunction {
         return of(
                 dataTypeFactory,
                 typeFactory,
-                context.getRexFactory(),
                 SqlKind.OTHER_FUNCTION,
                 resolvedFunction,
                 typeInference);
@@ -172,10 +160,6 @@ public class BridgingSqlFunction extends SqlFunction {
 
     public FlinkTypeFactory getTypeFactory() {
         return typeFactory;
-    }
-
-    public RexFactory getRexFactory() {
-        return rexFactory;
     }
 
     public ContextResolvedFunction getResolvedFunction() {
@@ -213,11 +197,10 @@ public class BridgingSqlFunction extends SqlFunction {
         private WithTableFunction(
                 DataTypeFactory dataTypeFactory,
                 FlinkTypeFactory typeFactory,
-                RexFactory rexFactory,
                 SqlKind kind,
                 ContextResolvedFunction resolvedFunction,
                 TypeInference typeInference) {
-            super(dataTypeFactory, typeFactory, rexFactory, kind, resolvedFunction, typeInference);
+            super(dataTypeFactory, typeFactory, kind, resolvedFunction, typeInference);
         }
 
         /**

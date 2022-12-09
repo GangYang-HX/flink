@@ -20,6 +20,7 @@ package org.apache.flink.runtime.metrics.groups;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.metrics.CharacterFilter;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.metrics.dump.QueryScopeInfo;
 
@@ -30,11 +31,23 @@ import org.apache.flink.runtime.metrics.dump.QueryScopeInfo;
 @Internal
 public class GenericMetricGroup extends AbstractMetricGroup<AbstractMetricGroup<?>> {
     /** The name of this group. */
-    private String name;
+    private final String name;
 
-    public GenericMetricGroup(MetricRegistry registry, AbstractMetricGroup parent, String name) {
+    /** Flag indicating which mode does the metric group belong to. */
+    private final QueryServiceMode mode;
+
+    public GenericMetricGroup(
+            MetricRegistry registry,
+            AbstractMetricGroup parent,
+            String name,
+            QueryServiceMode mode) {
         super(registry, makeScopeComponents(parent, name), parent);
         this.name = name;
+        this.mode = mode;
+    }
+
+    public GenericMetricGroup(MetricRegistry registry, AbstractMetricGroup parent, String name) {
+        this(registry, parent, name, QueryServiceMode.ENABLE);
     }
 
     @Override
@@ -60,5 +73,10 @@ public class GenericMetricGroup extends AbstractMetricGroup<AbstractMetricGroup<
     @Override
     protected String getGroupName(CharacterFilter filter) {
         return filter.filterCharacters(name);
+    }
+
+    @Override
+    public QueryServiceMode getQueryServiceMode() {
+        return mode;
     }
 }

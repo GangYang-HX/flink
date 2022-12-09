@@ -29,13 +29,12 @@ import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 import org.apache.flink.testutils.CustomEqualityMatcher;
 import org.apache.flink.testutils.DeeplyEqualsChecker;
 import org.apache.flink.util.InstantiationUtil;
-import org.apache.flink.util.TestLoggerExtension;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.commons.lang3.SerializationException;
 import org.apache.commons.lang3.SerializationUtils;
 import org.junit.Assert;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -60,8 +59,7 @@ import static org.junit.Assert.fail;
  * to pass this test but the internal state would be corrupt, which becomes evident when toString is
  * called.
  */
-@ExtendWith(TestLoggerExtension.class)
-public abstract class SerializerTestBase<T> {
+public abstract class SerializerTestBase<T> extends TestLogger {
 
     private final DeeplyEqualsChecker checker;
 
@@ -99,7 +97,7 @@ public abstract class SerializerTestBase<T> {
     // --------------------------------------------------------------------------------------------
 
     @Test
-    protected void testInstantiate() {
+    public void testInstantiate() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T instance = serializer.createInstance();
@@ -127,14 +125,14 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    protected void testConfigSnapshotInstantiation() {
+    public void testConfigSnapshotInstantiation() {
         TypeSerializerSnapshot<T> configSnapshot = getSerializer().snapshotConfiguration();
 
         InstantiationUtil.instantiate(configSnapshot.getClass());
     }
 
     @Test
-    protected void testSnapshotConfigurationAndReconfigure() throws Exception {
+    public void testSnapshotConfigurationAndReconfigure() throws Exception {
         final TypeSerializer<T> serializer = getSerializer();
         final TypeSerializerSnapshot<T> configSnapshot = serializer.snapshotConfiguration();
 
@@ -168,7 +166,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testGetLength() {
+    public void testGetLength() {
         final int len = getLength();
 
         if (len == 0) {
@@ -186,7 +184,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    protected void testCopy() {
+    public void testCopy() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -204,7 +202,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testCopyIntoNewElements() {
+    public void testCopyIntoNewElements() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -222,7 +220,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testCopyIntoReusedElements() {
+    public void testCopyIntoReusedElements() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -243,7 +241,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testSerializeIndividually() {
+    public void testSerializeIndividually() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -270,7 +268,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testSerializeIndividuallyReusingValues() {
+    public void testSerializeIndividuallyReusingValues() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -301,7 +299,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testSerializeAsSequenceNoReuse() {
+    public void testSerializeAsSequenceNoReuse() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -331,7 +329,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testSerializeAsSequenceReusingValues() {
+    public void testSerializeAsSequenceReusingValues() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -363,7 +361,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testSerializedCopyIndividually() {
+    public void testSerializedCopyIndividually() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -397,7 +395,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testSerializedCopyAsSequence() {
+    public void testSerializedCopyAsSequence() {
         try {
             TypeSerializer<T> serializer = getSerializer();
             T[] testData = getData();
@@ -433,7 +431,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testSerializabilityAndEquals() {
+    public void testSerializabilityAndEquals() {
         try {
             TypeSerializer<T> ser1 = getSerializer();
             TypeSerializer<T> ser2;
@@ -454,7 +452,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testNullability() {
+    public void testNullability() {
         TypeSerializer<T> serializer = getSerializer();
         try {
             NullableSerializer.checkIfNullSupported(serializer);
@@ -466,7 +464,7 @@ public abstract class SerializerTestBase<T> {
     }
 
     @Test
-    void testDuplicate() throws Exception {
+    public void testDuplicate() throws Exception {
         final int numThreads = 10;
         final TypeSerializer<T> serializer = getSerializer();
         final CyclicBarrier startLatch = new CyclicBarrier(numThreads);

@@ -17,16 +17,22 @@
  */
 package org.apache.flink.table.planner.plan.metadata
 
+import org.apache.flink.table.api.TableConfig
+import org.apache.flink.table.catalog.FunctionCatalog
+import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.plan.stats.{ColumnStats, TableStats}
 import org.apache.flink.table.planner.{JDouble, JLong}
-import org.apache.flink.table.planner.calcite.{FlinkRexBuilder, FlinkTypeFactory}
+import org.apache.flink.table.planner.calcite.{FlinkRexBuilder, FlinkTypeFactory, FlinkTypeSystem}
 import org.apache.flink.table.planner.delegation.PlannerContext
+import org.apache.flink.table.planner.plan.`trait`.FlinkRelDistributionTraitDef
 import org.apache.flink.table.planner.plan.stats.FlinkStatistic
-import org.apache.flink.table.planner.utils.PlannerMocks
+import org.apache.flink.table.utils.CatalogManagerMocks
 import org.apache.flink.util.Preconditions
 
 import org.apache.calcite.jdbc.CalciteSchema
+import org.apache.calcite.plan.ConventionTraitDef
 import org.apache.calcite.rel.`type`.RelDataType
+import org.apache.calcite.rel.RelCollationTraitDef
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rel.metadata.{JaninoRelMetadataProvider, RelMetadataQueryBase}
 import org.apache.calcite.rex.{RexInputRef, RexLiteral, RexNode}
@@ -59,8 +65,7 @@ class SelectivityEstimatorTest {
     time_idx,
     timestamp_idx) = (0, 1, 2, 3, 4, 5, 6, 7)
 
-  val typeFactory: FlinkTypeFactory = new FlinkTypeFactory(
-    Thread.currentThread().getContextClassLoader)
+  val typeFactory: FlinkTypeFactory = new FlinkTypeFactory(new FlinkTypeSystem())
   var rexBuilder = new FlinkRexBuilder(typeFactory)
   val relDataType: RelDataType = typeFactory.createStructType(
     allFieldTypes.map(typeFactory.createSqlType).asJava,
@@ -74,16 +79,30 @@ class SelectivityEstimatorTest {
     scan = mockScan()
   }
 
-  private def mockScan(statistic: FlinkStatistic = FlinkStatistic.UNKNOWN): TableScan = {
+  private def mockScan(
+      statistic: FlinkStatistic = FlinkStatistic.UNKNOWN,
+      tableConfig: TableConfig = TableConfig.getDefault): TableScan = {
+    val moduleManager = new ModuleManager
+    val catalogManager = CatalogManagerMocks.createEmptyCatalogManager()
     val rootSchema = CalciteSchema.createRootSchema(true, false).plus()
     val table = new MockMetaTable(relDataType, statistic)
     rootSchema.add("test", table)
-    val plannerContext: PlannerContext = PlannerMocks.newBuilder
-      .withRootSchema(CalciteSchema.from(rootSchema))
-      .build()
-      .getPlannerContext
+    val plannerContext: PlannerContext =
+      new PlannerContext(
+        false,
+        tableConfig,
+        moduleManager,
+        new FunctionCatalog(tableConfig, catalogManager, moduleManager),
+        catalogManager,
+        CalciteSchema.from(rootSchema),
+        util.Arrays.asList(
+          ConventionTraitDef.INSTANCE,
+          FlinkRelDistributionTraitDef.INSTANCE,
+          RelCollationTraitDef.INSTANCE
+        )
+      )
 
-    val relBuilder = plannerContext.createRelBuilder()
+    val relBuilder = plannerContext.createRelBuilder("default_catalog", "default_database")
     relBuilder.clear()
     relBuilder.scan(util.Arrays.asList("test")).build().asInstanceOf[TableScan]
   }
@@ -112,6 +131,10 @@ class SelectivityEstimatorTest {
     rexBuilder.makeTimeLiteral(new TimeString(str), 0)
   }
 
+  private def createTimeStampLiteral(str: String): RexLiteral = {
+    rexBuilder.makeTimestampLiteral(new TimestampString(str), 0)
+  }
+
   private def createTimeStampLiteral(millis: Long): RexLiteral = {
     rexBuilder.makeTimestampLiteral(TimestampString.fromMillisSinceEpoch(millis), 0)
   }
@@ -131,8 +154,8 @@ class SelectivityEstimatorTest {
     rexBuilder.makeCall(operator, exprs: _*)
   }
 
-  private def createCast(expr: RexNode): RexNode = {
-    val relDataType = typeFactory.createSqlType(allFieldTypes(1))
+  private def createCast(expr: RexNode, indexInAllFieldTypes: Int): RexNode = {
+    val relDataType = typeFactory.createSqlType(allFieldTypes(indexInAllFieldTypes))
     rexBuilder.makeCast(relDataType, expr)
   }
 
@@ -972,7 +995,7 @@ class SelectivityEstimatorTest {
   @Test
   def testIsNull(): Unit = {
     // name is null
-    val predicate = createCall(IS_NULL, createInputRefWithNullability(name_idx, isNullable = true))
+    val predicate = createCall(IS_NULL, createInputRefWithNullability(name_idx, true))
     // test without statistics
     val estimator = new SelectivityEstimator(scan, mq)
     assertEquals(estimator.defaultIsNullSelectivity, estimator.evaluate(predicate))
@@ -992,8 +1015,7 @@ class SelectivityEstimatorTest {
     val estimator = new SelectivityEstimator(scan, mq)
     assertEquals(Some(1.0), estimator.evaluate(predicate))
 
-    val predicate2 =
-      createCall(IS_NOT_NULL, createInputRefWithNullability(name_idx, isNullable = true))
+    val predicate2 = createCall(IS_NOT_NULL, createInputRefWithNullability(name_idx, true))
     assertEquals(estimator.defaultIsNotNullSelectivity, estimator.evaluate(predicate2))
 
     val colStats = createColumnStats(Some(80L), Some(10L), Some(16.0), Some(32), None, None)
@@ -1285,7 +1307,7 @@ class SelectivityEstimatorTest {
       createCall(LESS_THAN_OR_EQUAL, createInputRef(amount_idx), createNumericLiteral(45)),
       createCall(GREATER_THAN, createInputRef(amount_idx), createNumericLiteral(40)),
       createCall(GREATER_THAN, createInputRef(price_idx), createNumericLiteral(4.5)),
-      createCall(LESS_THAN, createCast(createInputRef(price_idx)), createNumericLiteral(5))
+      createCall(LESS_THAN, createCast(createInputRef(price_idx), 1), createNumericLiteral(5))
     )
 
     // test without statistics

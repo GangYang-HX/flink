@@ -25,7 +25,6 @@ import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 
 import java.io.Serializable;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionAttemptID.randomId;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -45,7 +44,7 @@ public final class ResultPartitionID implements Serializable {
 
     @VisibleForTesting
     public ResultPartitionID() {
-        this(new IntermediateResultPartitionID(), randomId());
+        this(new IntermediateResultPartitionID(), new ExecutionAttemptID());
     }
 
     public ResultPartitionID(

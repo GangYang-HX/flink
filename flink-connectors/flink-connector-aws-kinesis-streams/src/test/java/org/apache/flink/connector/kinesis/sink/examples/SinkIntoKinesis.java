@@ -22,7 +22,6 @@ import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.kinesis.sink.KinesisStreamsSink;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -40,9 +39,8 @@ import java.util.Properties;
  */
 public class SinkIntoKinesis {
 
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
-
     public static void main(String[] args) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(10_000);
 
@@ -50,10 +48,7 @@ public class SinkIntoKinesis {
                 env.fromSequence(1, 10_000_000L)
                         .map(Object::toString)
                         .returns(String.class)
-                        .map(
-                                data ->
-                                        OBJECT_MAPPER.writeValueAsString(
-                                                ImmutableMap.of("data", data)));
+                        .map(data -> mapper.writeValueAsString(ImmutableMap.of("data", data)));
 
         Properties sinkProperties = new Properties();
         sinkProperties.put(AWSConfigConstants.AWS_REGION, "your-region-here");

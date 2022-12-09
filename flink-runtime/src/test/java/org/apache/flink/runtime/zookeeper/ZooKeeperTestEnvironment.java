@@ -21,7 +21,6 @@ package org.apache.flink.runtime.zookeeper;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.runtime.highavailability.zookeeper.CuratorFrameworkWithUnhandledErrorListener;
-import org.apache.flink.runtime.testutils.ZooKeeperTestUtils;
 import org.apache.flink.runtime.util.ExitJVMFatalErrorHandler;
 import org.apache.flink.runtime.util.ZooKeeperUtils;
 
@@ -62,7 +61,7 @@ public class ZooKeeperTestEnvironment {
 
         try {
             if (numberOfZooKeeperQuorumPeers == 1) {
-                zooKeeperServer = ZooKeeperTestUtils.createAndStartZookeeperTestingServer();
+                zooKeeperServer = new TestingServer(true);
                 zooKeeperCluster = null;
 
                 conf.setString(

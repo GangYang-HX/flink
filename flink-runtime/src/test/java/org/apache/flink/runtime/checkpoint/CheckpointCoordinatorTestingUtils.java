@@ -84,9 +84,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -652,7 +652,7 @@ public class CheckpointCoordinatorTestingUtils {
             return this;
         }
 
-        ExecutionGraph build(ScheduledExecutorService executorService) throws Exception {
+        ExecutionGraph build() throws Exception {
             // Lets connect source vertices and non-source vertices
             for (JobVertex source : sourceVertices) {
                 for (JobVertex nonSource : nonSourceVertices) {
@@ -666,8 +666,8 @@ public class CheckpointCoordinatorTestingUtils {
             allVertices.addAll(nonSourceVertices);
 
             ExecutionGraph executionGraph =
-                    ExecutionGraphTestUtils.createExecutionGraph(
-                            executorService, allVertices.toArray(new JobVertex[0]));
+                    ExecutionGraphTestUtils.createSimpleTestGraph(
+                            allVertices.toArray(new JobVertex[0]));
             executionGraph.start(mainThreadExecutor);
 
             if (taskManagerGateway != null) {
@@ -704,6 +704,8 @@ public class CheckpointCoordinatorTestingUtils {
                         .setMaxConcurrentCheckpoints(Integer.MAX_VALUE)
                         .build();
 
+        private ExecutionGraph executionGraph;
+
         private Collection<OperatorCoordinatorCheckpointContext> coordinatorsToCheckpoint =
                 Collections.emptyList();
 
@@ -737,6 +739,11 @@ public class CheckpointCoordinatorTestingUtils {
         public CheckpointCoordinatorBuilder setCheckpointCoordinatorConfiguration(
                 CheckpointCoordinatorConfiguration checkpointCoordinatorConfiguration) {
             this.checkpointCoordinatorConfiguration = checkpointCoordinatorConfiguration;
+            return this;
+        }
+
+        public CheckpointCoordinatorBuilder setExecutionGraph(ExecutionGraph executionGraph) {
+            this.executionGraph = executionGraph;
             return this;
         }
 
@@ -813,15 +820,13 @@ public class CheckpointCoordinatorTestingUtils {
             return this;
         }
 
-        public CheckpointCoordinator build(ScheduledExecutorService executorService)
-                throws Exception {
-            return build(
-                    new CheckpointExecutionGraphBuilder()
-                            .addJobVertex(new JobVertexID())
-                            .build(executorService));
-        }
-
-        public CheckpointCoordinator build(ExecutionGraph executionGraph) throws Exception {
+        public CheckpointCoordinator build() throws Exception {
+            if (executionGraph == null) {
+                executionGraph =
+                        new CheckpointExecutionGraphBuilder()
+                                .addJobVertex(new JobVertexID())
+                                .build();
+            }
 
             DefaultCheckpointPlanCalculator checkpointPlanCalculator =
                     new DefaultCheckpointPlanCalculator(
@@ -834,6 +839,7 @@ public class CheckpointCoordinatorTestingUtils {
                     executionGraph.getJobID(),
                     checkpointCoordinatorConfiguration,
                     coordinatorsToCheckpoint,
+                    Collections.emptyMap(),
                     checkpointIDCounter,
                     completedCheckpointStore,
                     checkpointStorage,
@@ -877,7 +883,7 @@ public class CheckpointCoordinatorTestingUtils {
 
     static final class MockOperatorCheckpointCoordinatorContextBuilder {
         private BiConsumer<Long, CompletableFuture<byte[]>> onCallingCheckpointCoordinator = null;
-        private Runnable onCallingAbortCurrentTriggering = null;
+        private Consumer<Long> onCallingAfterSourceBarrierInjection = null;
         private OperatorID operatorID = null;
 
         public MockOperatorCheckpointCoordinatorContextBuilder setOnCallingCheckpointCoordinator(
@@ -886,9 +892,10 @@ public class CheckpointCoordinatorTestingUtils {
             return this;
         }
 
-        public MockOperatorCheckpointCoordinatorContextBuilder setOnCallingAbortCurrentTriggering(
-                Runnable onCallingAbortCurrentTriggering) {
-            this.onCallingAbortCurrentTriggering = onCallingAbortCurrentTriggering;
+        public MockOperatorCheckpointCoordinatorContextBuilder
+                setOnCallingAfterSourceBarrierInjection(
+                        Consumer<Long> onCallingAfterSourceBarrierInjection) {
+            this.onCallingAfterSourceBarrierInjection = onCallingAfterSourceBarrierInjection;
             return this;
         }
 
@@ -900,7 +907,9 @@ public class CheckpointCoordinatorTestingUtils {
 
         public MockOperatorCoordinatorCheckpointContext build() {
             return new MockOperatorCoordinatorCheckpointContext(
-                    onCallingCheckpointCoordinator, onCallingAbortCurrentTriggering, operatorID);
+                    onCallingCheckpointCoordinator,
+                    onCallingAfterSourceBarrierInjection,
+                    operatorID);
         }
     }
 
@@ -913,17 +922,17 @@ public class CheckpointCoordinatorTestingUtils {
     public static final class MockOperatorCoordinatorCheckpointContext
             implements OperatorCoordinatorCheckpointContext {
         private final BiConsumer<Long, CompletableFuture<byte[]>> onCallingCheckpointCoordinator;
-        private final Runnable onCallingAbortCurrentTriggering;
+        private final Consumer<Long> onCallingAfterSourceBarrierInjection;
         private final OperatorID operatorID;
         private final List<Long> completedCheckpoints;
         private final List<Long> abortedCheckpoints;
 
         private MockOperatorCoordinatorCheckpointContext(
                 BiConsumer<Long, CompletableFuture<byte[]>> onCallingCheckpointCoordinator,
-                Runnable onCallingAbortCurrentTriggering,
+                Consumer<Long> onCallingAfterSourceBarrierInjection,
                 OperatorID operatorID) {
             this.onCallingCheckpointCoordinator = onCallingCheckpointCoordinator;
-            this.onCallingAbortCurrentTriggering = onCallingAbortCurrentTriggering;
+            this.onCallingAfterSourceBarrierInjection = onCallingAfterSourceBarrierInjection;
             this.operatorID = operatorID;
             this.completedCheckpoints = new ArrayList<>();
             this.abortedCheckpoints = new ArrayList<>();
@@ -938,11 +947,14 @@ public class CheckpointCoordinatorTestingUtils {
         }
 
         @Override
-        public void abortCurrentTriggering() {
-            if (onCallingAbortCurrentTriggering != null) {
-                onCallingAbortCurrentTriggering.run();
+        public void afterSourceBarrierInjection(long checkpointId) {
+            if (onCallingAfterSourceBarrierInjection != null) {
+                onCallingAfterSourceBarrierInjection.accept(checkpointId);
             }
         }
+
+        @Override
+        public void abortCurrentTriggering() {}
 
         @Override
         public void notifyCheckpointComplete(long checkpointId) {

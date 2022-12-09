@@ -26,8 +26,6 @@ import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.TestingStreamStateHandle;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.FlinkRuntimeException;
 
 import org.junit.ClassRule;
@@ -40,7 +38,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.apache.flink.runtime.checkpoint.CheckpointCoordinatorTestingUtils.createSubtaskStateWithUnionListState;
 import static org.junit.Assert.assertEquals;
@@ -49,10 +46,6 @@ import static org.junit.Assert.assertTrue;
 
 /** Tests the behavior of the {@link DefaultCheckpointPlan}. */
 public class DefaultCheckpointPlanTest {
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
 
@@ -72,7 +65,7 @@ public class DefaultCheckpointPlanTest {
                                 Collections.singletonList(
                                         OperatorIDPair.generatedIDOnly(operatorId)),
                                 true)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
         ExecutionVertex[] tasks = executionGraph.getJobVertex(jobVertexId).getTaskVertices();
         tasks[0].getCurrentExecutionAttempt().markFinished();
 
@@ -107,7 +100,7 @@ public class DefaultCheckpointPlanTest {
                                 Collections.singletonList(
                                         OperatorIDPair.generatedIDOnly(operatorId)),
                                 true)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
         ExecutionVertex[] tasks = executionGraph.getJobVertex(jobVertexId).getTaskVertices();
 
         CheckpointPlan checkpointPlan = createCheckpointPlan(executionGraph);
@@ -163,7 +156,7 @@ public class DefaultCheckpointPlanTest {
                                         OperatorIDPair.generatedIDOnly(
                                                 partiallyFinishedOperatorId)),
                                 true)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
         ExecutionVertex[] fullyFinishedVertexTasks =
                 executionGraph.getJobVertex(fullyFinishedVertexId).getTaskVertices();
         ExecutionVertex[] finishedOnRestoreVertexTasks =
@@ -203,7 +196,7 @@ public class DefaultCheckpointPlanTest {
                                 Collections.singletonList(
                                         OperatorIDPair.generatedIDOnly(finishedOperatorID)),
                                 true)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
         executionGraph
                 .getJobVertex(finishedJobVertexID)
                 .getTaskVertices()[0]

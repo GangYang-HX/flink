@@ -45,7 +45,4 @@ public interface RecordWriterDelegate<T extends IOReadableWritable>
      * @param outputIndex the index respective to the record writer instance.
      */
     RecordWriter<T> getRecordWriter(int outputIndex);
-
-    /** Sets the max overdraft buffer size of per gate. */
-    void setMaxOverdraftBuffersPerGate(int maxOverdraftBuffersPerGate);
 }

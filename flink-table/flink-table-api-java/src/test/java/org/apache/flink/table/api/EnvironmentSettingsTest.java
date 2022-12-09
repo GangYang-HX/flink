@@ -21,29 +21,30 @@ package org.apache.flink.table.api;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.Configuration;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import static org.apache.flink.configuration.ExecutionOptions.RUNTIME_MODE;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 /** Test {@link EnvironmentSettings}. */
-class EnvironmentSettingsTest {
+public class EnvironmentSettingsTest {
 
     @Test
-    void testFromConfiguration() {
+    public void testFromConfiguration() {
         Configuration configuration = new Configuration();
         configuration.setString("execution.runtime-mode", "batch");
         EnvironmentSettings settings =
                 EnvironmentSettings.newInstance().withConfiguration(configuration).build();
 
-        assertThat(settings.isStreamingMode()).as("Expect batch mode.").isFalse();
+        assertFalse("Expect batch mode.", settings.isStreamingMode());
     }
 
     @Test
-    void testGetConfiguration() {
+    public void testGetConfiguration() {
         EnvironmentSettings settings = new EnvironmentSettings.Builder().inBatchMode().build();
         Configuration configuration = settings.getConfiguration();
 
-        assertThat(configuration.get(RUNTIME_MODE)).isEqualTo(RuntimeExecutionMode.BATCH);
+        assertEquals(RuntimeExecutionMode.BATCH, configuration.get(RUNTIME_MODE));
     }
 }

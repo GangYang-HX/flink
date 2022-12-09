@@ -21,7 +21,7 @@ package org.apache.flink.api.common.typeinfo;
 import org.apache.flink.api.common.typeutils.TypeInformationTestBase;
 
 /** Test for {@link IntegerTypeInfo}. */
-class IntegerTypeInfoTest extends TypeInformationTestBase<IntegerTypeInfo<?>> {
+public class IntegerTypeInfoTest extends TypeInformationTestBase<IntegerTypeInfo<?>> {
 
     @Override
     protected IntegerTypeInfo<?>[] getTestData() {

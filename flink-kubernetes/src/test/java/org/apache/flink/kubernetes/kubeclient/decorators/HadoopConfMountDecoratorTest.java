@@ -30,7 +30,7 @@ import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.KeyToPath;
 import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeMount;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -38,10 +38,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** General tests for the {@link HadoopConfMountDecorator}. */
-class HadoopConfMountDecoratorTest extends KubernetesJobManagerTestBase {
+public class HadoopConfMountDecoratorTest extends KubernetesJobManagerTestBase {
 
     private static final String EXISTING_HADOOP_CONF_CONFIG_MAP = "hadoop-conf";
 
@@ -56,24 +58,25 @@ class HadoopConfMountDecoratorTest extends KubernetesJobManagerTestBase {
     }
 
     @Test
-    void testExistingHadoopConfigMap() throws IOException {
+    public void testExistingHadoopConfigMap() throws IOException {
         flinkConfig.set(
                 KubernetesConfigOptions.HADOOP_CONF_CONFIG_MAP, EXISTING_HADOOP_CONF_CONFIG_MAP);
-        assertThat(hadoopConfMountDecorator.buildAccompanyingKubernetesResources()).isEmpty();
+        assertEquals(0, hadoopConfMountDecorator.buildAccompanyingKubernetesResources().size());
 
         final FlinkPod resultFlinkPod = hadoopConfMountDecorator.decorateFlinkPod(baseFlinkPod);
         final List<Volume> volumes =
                 resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes();
-        assertThat(volumes)
-                .anyMatch(
-                        volume ->
-                                volume.getConfigMap()
-                                        .getName()
-                                        .equals(EXISTING_HADOOP_CONF_CONFIG_MAP));
+        assertTrue(
+                volumes.stream()
+                        .anyMatch(
+                                volume ->
+                                        volume.getConfigMap()
+                                                .getName()
+                                                .equals(EXISTING_HADOOP_CONF_CONFIG_MAP)));
     }
 
     @Test
-    void testExistingConfigMapPrecedeOverHadoopConfEnv() throws IOException {
+    public void testExistingConfigMapPrecedeOverHadoopConfEnv() throws IOException {
         // set existing ConfigMap
         flinkConfig.set(
                 KubernetesConfigOptions.HADOOP_CONF_CONFIG_MAP, EXISTING_HADOOP_CONF_CONFIG_MAP);
@@ -82,86 +85,93 @@ class HadoopConfMountDecoratorTest extends KubernetesJobManagerTestBase {
         setHadoopConfDirEnv();
         generateHadoopConfFileItems();
 
-        assertThat(hadoopConfMountDecorator.buildAccompanyingKubernetesResources()).isEmpty();
+        assertEquals(0, hadoopConfMountDecorator.buildAccompanyingKubernetesResources().size());
 
         final FlinkPod resultFlinkPod = hadoopConfMountDecorator.decorateFlinkPod(baseFlinkPod);
         final List<Volume> volumes =
                 resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes();
-        assertThat(volumes)
-                .anyMatch(
-                        volume ->
-                                volume.getConfigMap()
-                                        .getName()
-                                        .equals(EXISTING_HADOOP_CONF_CONFIG_MAP));
-        assertThat(volumes)
-                .noneMatch(
-                        volume ->
-                                volume.getConfigMap()
-                                        .getName()
-                                        .equals(
-                                                HadoopConfMountDecorator.getHadoopConfConfigMapName(
-                                                        CLUSTER_ID)));
+        assertTrue(
+                volumes.stream()
+                        .anyMatch(
+                                volume ->
+                                        volume.getConfigMap()
+                                                .getName()
+                                                .equals(EXISTING_HADOOP_CONF_CONFIG_MAP)));
+        assertFalse(
+                volumes.stream()
+                        .anyMatch(
+                                volume ->
+                                        volume.getConfigMap()
+                                                .getName()
+                                                .equals(
+                                                        HadoopConfMountDecorator
+                                                                .getHadoopConfConfigMapName(
+                                                                        CLUSTER_ID))));
     }
 
     @Test
-    void testHadoopConfDirectoryUnset() throws IOException {
-        assertThat(hadoopConfMountDecorator.buildAccompanyingKubernetesResources()).isEmpty();
+    public void testHadoopConfDirectoryUnset() throws IOException {
+        assertEquals(0, hadoopConfMountDecorator.buildAccompanyingKubernetesResources().size());
 
         final FlinkPod resultFlinkPod = hadoopConfMountDecorator.decorateFlinkPod(baseFlinkPod);
-        assertThat(resultFlinkPod.getPodWithoutMainContainer())
-                .isEqualTo(baseFlinkPod.getPodWithoutMainContainer());
-        assertThat(resultFlinkPod.getMainContainer()).isEqualTo(baseFlinkPod.getMainContainer());
+        assertEquals(
+                baseFlinkPod.getPodWithoutMainContainer(),
+                resultFlinkPod.getPodWithoutMainContainer());
+        assertEquals(baseFlinkPod.getMainContainer(), resultFlinkPod.getMainContainer());
     }
 
     @Test
-    void testEmptyHadoopConfDirectory() throws IOException {
+    public void testEmptyHadoopConfDirectory() throws IOException {
         setHadoopConfDirEnv();
 
-        assertThat(hadoopConfMountDecorator.buildAccompanyingKubernetesResources()).isEmpty();
+        assertEquals(0, hadoopConfMountDecorator.buildAccompanyingKubernetesResources().size());
 
         final FlinkPod resultFlinkPod = hadoopConfMountDecorator.decorateFlinkPod(baseFlinkPod);
-        assertThat(resultFlinkPod.getPodWithoutMainContainer())
-                .isEqualTo(baseFlinkPod.getPodWithoutMainContainer());
-        assertThat(resultFlinkPod.getMainContainer()).isEqualTo(baseFlinkPod.getMainContainer());
+        assertEquals(
+                baseFlinkPod.getPodWithoutMainContainer(),
+                resultFlinkPod.getPodWithoutMainContainer());
+        assertEquals(baseFlinkPod.getMainContainer(), resultFlinkPod.getMainContainer());
     }
 
     @Test
-    void testHadoopConfConfigMap() throws IOException {
+    public void testHadoopConfConfigMap() throws IOException {
         setHadoopConfDirEnv();
         generateHadoopConfFileItems();
 
         final List<HasMetadata> additionalResources =
                 hadoopConfMountDecorator.buildAccompanyingKubernetesResources();
-        assertThat(additionalResources).hasSize(1);
+        assertEquals(1, additionalResources.size());
 
         final ConfigMap resultConfigMap = (ConfigMap) additionalResources.get(0);
 
-        assertThat(resultConfigMap.getApiVersion()).isEqualTo(Constants.API_VERSION);
-        assertThat(resultConfigMap.getMetadata().getName())
-                .isEqualTo(HadoopConfMountDecorator.getHadoopConfConfigMapName(CLUSTER_ID));
-        assertThat(resultConfigMap.getMetadata().getLabels()).isEqualTo(getCommonLabels());
+        assertEquals(Constants.API_VERSION, resultConfigMap.getApiVersion());
+        assertEquals(
+                HadoopConfMountDecorator.getHadoopConfConfigMapName(CLUSTER_ID),
+                resultConfigMap.getMetadata().getName());
+        assertEquals(getCommonLabels(), resultConfigMap.getMetadata().getLabels());
 
         Map<String, String> resultDatas = resultConfigMap.getData();
-        assertThat(resultDatas.get("core-site.xml")).isEqualTo("some data");
-        assertThat(resultDatas.get("hdfs-site.xml")).isEqualTo("some data");
+        assertEquals("some data", resultDatas.get("core-site.xml"));
+        assertEquals("some data", resultDatas.get("hdfs-site.xml"));
     }
 
     @Test
-    void testPodWithHadoopConfVolume() throws IOException {
+    public void testPodWithHadoopConfVolume() throws IOException {
         setHadoopConfDirEnv();
         generateHadoopConfFileItems();
         final FlinkPod resultFlinkPod = hadoopConfMountDecorator.decorateFlinkPod(baseFlinkPod);
 
         final List<Volume> resultVolumes =
                 resultFlinkPod.getPodWithoutMainContainer().getSpec().getVolumes();
-        assertThat(resultVolumes).hasSize(1);
+        assertEquals(1, resultVolumes.size());
 
         final Volume resultVolume = resultVolumes.get(0);
-        assertThat(resultVolume.getName()).isEqualTo(Constants.HADOOP_CONF_VOLUME);
+        assertEquals(Constants.HADOOP_CONF_VOLUME, resultVolume.getName());
 
         final ConfigMapVolumeSource resultVolumeConfigMap = resultVolume.getConfigMap();
-        assertThat(resultVolumeConfigMap.getName())
-                .isEqualTo(HadoopConfMountDecorator.getHadoopConfConfigMapName(CLUSTER_ID));
+        assertEquals(
+                HadoopConfMountDecorator.getHadoopConfConfigMapName(CLUSTER_ID),
+                resultVolumeConfigMap.getName());
 
         final Map<String, String> expectedKeyToPaths =
                 new HashMap<String, String>() {
@@ -173,21 +183,21 @@ class HadoopConfMountDecoratorTest extends KubernetesJobManagerTestBase {
         final Map<String, String> resultKeyToPaths =
                 resultVolumeConfigMap.getItems().stream()
                         .collect(Collectors.toMap(KeyToPath::getKey, KeyToPath::getPath));
-        assertThat(resultKeyToPaths).isEqualTo(expectedKeyToPaths);
+        assertEquals(expectedKeyToPaths, resultKeyToPaths);
     }
 
     @Test
-    void testMainContainerWithHadoopConfVolumeMount() throws IOException {
+    public void testMainContainerWithHadoopConfVolumeMount() throws IOException {
         setHadoopConfDirEnv();
         generateHadoopConfFileItems();
         final FlinkPod resultFlinkPod = hadoopConfMountDecorator.decorateFlinkPod(baseFlinkPod);
 
         final List<VolumeMount> resultVolumeMounts =
                 resultFlinkPod.getMainContainer().getVolumeMounts();
-        assertThat(resultVolumeMounts).hasSize(1);
+        assertEquals(1, resultVolumeMounts.size());
         final VolumeMount resultVolumeMount = resultVolumeMounts.get(0);
-        assertThat(resultVolumeMount.getName()).isEqualTo(Constants.HADOOP_CONF_VOLUME);
-        assertThat(resultVolumeMount.getMountPath()).isEqualTo(Constants.HADOOP_CONF_DIR_IN_POD);
+        assertEquals(Constants.HADOOP_CONF_VOLUME, resultVolumeMount.getName());
+        assertEquals(Constants.HADOOP_CONF_DIR_IN_POD, resultVolumeMount.getMountPath());
 
         final Map<String, String> expectedEnvs =
                 new HashMap<String, String>() {
@@ -198,6 +208,6 @@ class HadoopConfMountDecoratorTest extends KubernetesJobManagerTestBase {
         final Map<String, String> resultEnvs =
                 resultFlinkPod.getMainContainer().getEnv().stream()
                         .collect(Collectors.toMap(EnvVar::getName, EnvVar::getValue));
-        assertThat(resultEnvs).isEqualTo(expectedEnvs);
+        assertEquals(expectedEnvs, resultEnvs);
     }
 }

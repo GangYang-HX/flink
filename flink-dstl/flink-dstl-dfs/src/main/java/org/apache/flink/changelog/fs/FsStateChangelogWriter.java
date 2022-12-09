@@ -22,11 +22,8 @@ import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.changelog.fs.StateChangeUploadScheduler.UploadTask;
 import org.apache.flink.runtime.state.KeyGroupRange;
-import org.apache.flink.runtime.state.LocalRecoveryConfig;
-import org.apache.flink.runtime.state.SnapshotResult;
 import org.apache.flink.runtime.state.StreamStateHandle;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandleStreamImpl;
-import org.apache.flink.runtime.state.changelog.LocalChangelogRegistry;
 import org.apache.flink.runtime.state.changelog.SequenceNumber;
 import org.apache.flink.runtime.state.changelog.SequenceNumberRange;
 import org.apache.flink.runtime.state.changelog.StateChange;
@@ -35,7 +32,6 @@ import org.apache.flink.runtime.state.changelog.StateChangelogWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -110,12 +106,6 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
     private SequenceNumber lowestSequenceNumber = INITIAL_SQN;
 
     /**
-     * {@link SequenceNumber} after which changes will NOT be requested, inclusive. Decreased on
-     * {@link #truncateAndClose(SequenceNumber)}.
-     */
-    private SequenceNumber highestSequenceNumber = SequenceNumber.of(Long.MAX_VALUE);
-
-    /**
      * Active changes, that all share the same {@link #activeSequenceNumber}.
      *
      * <p>When the latter is incremented in {@link #rollover()}, those changes are added to {@link
@@ -141,30 +131,17 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
 
     private final MailboxExecutor mailboxExecutor;
 
-    private final TaskChangelogRegistry changelogRegistry;
-
-    /** The configuration for local recovery. */
-    @Nonnull private final LocalRecoveryConfig localRecoveryConfig;
-
-    private final LocalChangelogRegistry localChangelogRegistry;
-
     FsStateChangelogWriter(
             UUID logId,
             KeyGroupRange keyGroupRange,
             StateChangeUploadScheduler uploader,
             long preEmptivePersistThresholdInBytes,
-            MailboxExecutor mailboxExecutor,
-            TaskChangelogRegistry changelogRegistry,
-            LocalRecoveryConfig localRecoveryConfig,
-            LocalChangelogRegistry localChangelogRegistry) {
+            MailboxExecutor mailboxExecutor) {
         this.logId = logId;
         this.keyGroupRange = keyGroupRange;
         this.uploader = uploader;
         this.preEmptivePersistThresholdInBytes = preEmptivePersistThresholdInBytes;
         this.mailboxExecutor = mailboxExecutor;
-        this.changelogRegistry = changelogRegistry;
-        this.localRecoveryConfig = localRecoveryConfig;
-        this.localChangelogRegistry = localChangelogRegistry;
     }
 
     @Override
@@ -175,7 +152,7 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         activeChangeSetSize += value.length;
         if (activeChangeSetSize >= preEmptivePersistThresholdInBytes) {
             LOG.debug(
-                    "pre-emptively flush {}MB of appended changes to the common store",
+                    "pre-emptively flush {}Mb of appended changes to the common store",
                     activeChangeSetSize / 1024 / 1024);
             persistInternal(notUploaded.isEmpty() ? activeSequenceNumber : notUploaded.firstKey());
         }
@@ -198,8 +175,8 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
     }
 
     @Override
-    public CompletableFuture<SnapshotResult<ChangelogStateHandleStreamImpl>> persist(
-            SequenceNumber from) throws IOException {
+    public CompletableFuture<ChangelogStateHandleStreamImpl> persist(SequenceNumber from)
+            throws IOException {
         LOG.debug(
                 "persist {} starting from sqn {} (incl.), active sqn: {}",
                 logId,
@@ -208,8 +185,8 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         return persistInternal(from);
     }
 
-    private CompletableFuture<SnapshotResult<ChangelogStateHandleStreamImpl>> persistInternal(
-            SequenceNumber from) throws IOException {
+    private CompletableFuture<ChangelogStateHandleStreamImpl> persistInternal(SequenceNumber from)
+            throws IOException {
         ensureCanPersist(from);
         rollover();
         Map<SequenceNumber, StateChangeSet> toUpload = drainTailMap(notUploaded, from);
@@ -219,11 +196,9 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         SequenceNumberRange range = SequenceNumberRange.generic(from, activeSequenceNumber);
         if (range.size() == readyToReturn.size()) {
             checkState(toUpload.isEmpty());
-            return CompletableFuture.completedFuture(
-                    buildSnapshotResult(keyGroupRange, readyToReturn, 0L));
+            return CompletableFuture.completedFuture(buildHandle(keyGroupRange, readyToReturn, 0L));
         } else {
-            CompletableFuture<SnapshotResult<ChangelogStateHandleStreamImpl>> future =
-                    new CompletableFuture<>();
+            CompletableFuture<ChangelogStateHandleStreamImpl> future = new CompletableFuture<>();
             uploadCompletionListeners.add(
                     new UploadCompletionListener(keyGroupRange, range, readyToReturn, future));
             if (!toUpload.isEmpty()) {
@@ -269,17 +244,8 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
                     } else {
                         uploadCompletionListeners.removeIf(listener -> listener.onSuccess(results));
                         for (UploadResult result : results) {
-                            SequenceNumber resultSqn = result.sequenceNumber;
-                            if (resultSqn.compareTo(lowestSequenceNumber) >= 0
-                                    && resultSqn.compareTo(highestSequenceNumber) < 0) {
-                                uploaded.put(resultSqn, result);
-                            } else {
-                                // uploaded already truncated, i.e. materialized state changes,
-                                // or closed
-                                changelogRegistry.notUsed(result.streamStateHandle, logId);
-                                if (result.localStreamHandle != null) {
-                                    changelogRegistry.notUsed(result.localStreamHandle, logId);
-                                }
+                            if (result.sequenceNumber.compareTo(lowestSequenceNumber) >= 0) {
+                                uploaded.put(result.sequenceNumber, result);
                             }
                         }
                     }
@@ -304,18 +270,7 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         checkArgument(to.compareTo(activeSequenceNumber) <= 0);
         lowestSequenceNumber = to;
         notUploaded.headMap(lowestSequenceNumber, false).clear();
-
-        Map<SequenceNumber, UploadResult> toDiscard = uploaded.headMap(to);
-        notifyStateNotUsed(toDiscard);
-        toDiscard.clear();
-    }
-
-    @Override
-    public void truncateAndClose(SequenceNumber from) {
-        LOG.debug("truncate {} tail from sqn {} (incl.)", logId, from);
-        highestSequenceNumber = from;
-        notifyStateNotUsed(uploaded.tailMap(from));
-        close();
+        uploaded.headMap(lowestSequenceNumber, false).clear();
     }
 
     private void rollover() {
@@ -332,45 +287,16 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
     }
 
     @Override
-    public void confirm(SequenceNumber from, SequenceNumber to, long checkpointId) {
-        checkState(from.compareTo(to) <= 0, "Invalid confirm range: [%s,%s)", from, to);
-        checkState(
-                from.compareTo(activeSequenceNumber) <= 0
-                        && to.compareTo(activeSequenceNumber) <= 0,
-                "Invalid confirm range: [%s,%s), active sqn: %s",
-                from,
-                to,
-                activeSequenceNumber);
-        // it is possible that "uploaded" has already been truncated (after checkpoint subsumption)
-        // so do not check that "uploaded" contains the specified range
-        LOG.debug("Confirm [{}, {})", from, to);
-        uploaded.subMap(from, to).values().stream()
-                .map(UploadResult::getStreamStateHandle)
-                .forEach(changelogRegistry::stopTracking);
-
-        // transfer the control of localHandle to localStateRegistry.
-        uploaded.subMap(from, to).values().stream()
-                .map(UploadResult::getLocalStreamHandleStateHandle)
-                .filter(localHandle -> localHandle != null)
-                .forEach(
-                        localHandle -> {
-                            changelogRegistry.stopTracking(localHandle);
-                            localChangelogRegistry.register(localHandle, checkpointId);
-                        });
-        localChangelogRegistry.discardUpToCheckpoint(checkpointId);
+    public void confirm(SequenceNumber from, SequenceNumber to) {
+        // do nothing
     }
 
     @Override
-    public void subsume(long checkpointId) {
-        localChangelogRegistry.discardUpToCheckpoint(checkpointId);
+    public void reset(SequenceNumber from, SequenceNumber to) {
+        // do nothing
     }
 
-    @Override
-    public void reset(SequenceNumber from, SequenceNumber to, long checkpointId) {
-        localChangelogRegistry.prune(checkpointId);
-    }
-
-    private SnapshotResult<ChangelogStateHandleStreamImpl> buildSnapshotResult(
+    private static ChangelogStateHandleStreamImpl buildHandle(
             KeyGroupRange keyGroupRange,
             NavigableMap<SequenceNumber, UploadResult> results,
             long incrementalSize) {
@@ -380,47 +306,17 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
             tuples.add(Tuple2.of(uploadResult.getStreamStateHandle(), uploadResult.getOffset()));
             size += uploadResult.getSize();
         }
-        ChangelogStateHandleStreamImpl jmChangelogStateHandle =
-                new ChangelogStateHandleStreamImpl(
-                        tuples,
-                        keyGroupRange,
-                        size,
-                        incrementalSize,
-                        FsStateChangelogStorageFactory.IDENTIFIER);
-        if (localRecoveryConfig.isLocalRecoveryEnabled()) {
-            size = 0;
-            List<Tuple2<StreamStateHandle, Long>> localTuples = new ArrayList<>();
-            for (UploadResult uploadResult : results.values()) {
-                if (uploadResult.getLocalStreamHandleStateHandle() != null) {
-                    localTuples.add(
-                            Tuple2.of(
-                                    uploadResult.getLocalStreamHandleStateHandle(),
-                                    uploadResult.getLocalOffset()));
-                    size += uploadResult.getSize();
-                }
-            }
-            ChangelogStateHandleStreamImpl localChangelogStateHandle = null;
-            if (localTuples.size() == tuples.size()) {
-                localChangelogStateHandle =
-                        new ChangelogStateHandleStreamImpl(
-                                localTuples,
-                                keyGroupRange,
-                                size,
-                                0L,
-                                FsStateChangelogStorageFactory.IDENTIFIER);
-                return SnapshotResult.withLocalState(
-                        jmChangelogStateHandle, localChangelogStateHandle);
-
-            } else {
-                LOG.warn("local handles are different from remote");
-            }
-        }
-        return SnapshotResult.of(jmChangelogStateHandle);
+        return new ChangelogStateHandleStreamImpl(tuples, keyGroupRange, size, incrementalSize);
     }
 
     @VisibleForTesting
     SequenceNumber lastAppendedSqnUnsafe() {
         return activeSequenceNumber;
+    }
+
+    @VisibleForTesting
+    public SequenceNumber getLowestSequenceNumber() {
+        return lowestSequenceNumber;
     }
 
     private void ensureCanPersist(SequenceNumber from) throws IOException {
@@ -442,10 +338,9 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         }
     }
 
-    private final class UploadCompletionListener {
+    private static final class UploadCompletionListener {
         private final NavigableMap<SequenceNumber, UploadResult> uploaded;
-        private final CompletableFuture<SnapshotResult<ChangelogStateHandleStreamImpl>>
-                completionFuture;
+        private final CompletableFuture<ChangelogStateHandleStreamImpl> completionFuture;
         private final KeyGroupRange keyGroupRange;
         private final SequenceNumberRange changeRange;
 
@@ -453,8 +348,7 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
                 KeyGroupRange keyGroupRange,
                 SequenceNumberRange changeRange,
                 Map<SequenceNumber, UploadResult> uploaded,
-                CompletableFuture<SnapshotResult<ChangelogStateHandleStreamImpl>>
-                        completionFuture) {
+                CompletableFuture<ChangelogStateHandleStreamImpl> completionFuture) {
             checkArgument(
                     !changeRange.isEmpty(), "Empty change range not allowed: %s", changeRange);
             this.uploaded = new TreeMap<>(uploaded);
@@ -471,7 +365,7 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
                     incrementalSize += uploadResult.getSize();
                     if (uploaded.size() == changeRange.size()) {
                         completionFuture.complete(
-                                buildSnapshotResult(keyGroupRange, uploaded, incrementalSize));
+                                buildHandle(keyGroupRange, uploaded, incrementalSize));
                         return true;
                     }
                 }
@@ -500,15 +394,5 @@ class FsStateChangelogWriter implements StateChangelogWriter<ChangelogStateHandl
         Map<SequenceNumber, StateChangeSet> toUpload = new HashMap<>(tailMap);
         tailMap.clear();
         return toUpload;
-    }
-
-    private void notifyStateNotUsed(Map<SequenceNumber, UploadResult> notUsedState) {
-        LOG.trace("Uploaded state to discard: {}", notUsedState);
-        for (UploadResult result : notUsedState.values()) {
-            changelogRegistry.notUsed(result.streamStateHandle, logId);
-            if (result.localStreamHandle != null) {
-                changelogRegistry.notUsed(result.localStreamHandle, logId);
-            }
-        }
     }
 }

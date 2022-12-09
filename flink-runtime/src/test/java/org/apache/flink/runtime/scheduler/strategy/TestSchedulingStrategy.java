@@ -20,8 +20,11 @@ package org.apache.flink.runtime.scheduler.strategy;
 
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
+import org.apache.flink.runtime.scheduler.DeploymentOption;
+import org.apache.flink.runtime.scheduler.ExecutionVertexDeploymentOption;
 import org.apache.flink.runtime.scheduler.SchedulerOperations;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -33,6 +36,8 @@ public class TestSchedulingStrategy implements SchedulingStrategy {
     private final SchedulerOperations schedulerOperations;
 
     private final SchedulingTopology schedulingTopology;
+
+    private final DeploymentOption deploymentOption = new DeploymentOption(false);
 
     private Set<ExecutionVertexID> receivedVerticesToRestart;
 
@@ -72,7 +77,21 @@ public class TestSchedulingStrategy implements SchedulingStrategy {
     }
 
     private void allocateSlotsAndDeploy(final List<ExecutionVertexID> verticesToSchedule) {
-        schedulerOperations.allocateSlotsAndDeploy(verticesToSchedule);
+        final List<ExecutionVertexDeploymentOption> executionVertexDeploymentOptions =
+                createExecutionVertexDeploymentOptions(verticesToSchedule);
+        schedulerOperations.allocateSlotsAndDeploy(executionVertexDeploymentOptions);
+    }
+
+    private List<ExecutionVertexDeploymentOption> createExecutionVertexDeploymentOptions(
+            final List<ExecutionVertexID> vertices) {
+
+        final List<ExecutionVertexDeploymentOption> executionVertexDeploymentOptions =
+                new ArrayList<>(vertices.size());
+        for (ExecutionVertexID executionVertexID : vertices) {
+            executionVertexDeploymentOptions.add(
+                    new ExecutionVertexDeploymentOption(executionVertexID, deploymentOption));
+        }
+        return executionVertexDeploymentOptions;
     }
 
     /** The factory for creating {@link TestSchedulingStrategy}. */

@@ -47,7 +47,7 @@ In particular, Apache Flink's [user mailing list](https://flink.apache.org/commu
 If you want to follow along, you will require a computer with: 
 
 * Java 11
-* Python 3.6, 3.7, 3.8 or 3.9
+* Python 3.6, 3.7 or 3.8
 
 Using Python DataStream API requires installing PyFlink, which is available on [PyPI](https://pypi.org/project/apache-flink/) and can be easily installed using `pip`. 
 
@@ -122,7 +122,8 @@ import sys
 
 from pyflink.common import WatermarkStrategy, Encoder, Types
 from pyflink.datastream import StreamExecutionEnvironment, RuntimeExecutionMode
-from pyflink.datastream.connectors.file_system import FileSource, StreamFormat, FileSink, OutputFileConfig, RollingPolicy
+from pyflink.datastream.connectors import (FileSource, StreamFormat, FileSink, OutputFileConfig,
+                                           RollingPolicy)
 
 
 word_count_data = ["To be, or not to be,--that is the question:--",

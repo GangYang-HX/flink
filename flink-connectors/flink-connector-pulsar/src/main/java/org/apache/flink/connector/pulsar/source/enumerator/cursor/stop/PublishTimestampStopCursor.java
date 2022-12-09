@@ -27,16 +27,13 @@ public class PublishTimestampStopCursor implements StopCursor {
     private static final long serialVersionUID = 4386276745339324527L;
 
     private final long timestamp;
-    private final boolean inclusive;
 
-    public PublishTimestampStopCursor(long timestamp, boolean inclusive) {
+    public PublishTimestampStopCursor(long timestamp) {
         this.timestamp = timestamp;
-        this.inclusive = inclusive;
     }
 
     @Override
-    public StopCondition shouldStop(Message<?> message) {
-        long publishTime = message.getPublishTime();
-        return StopCondition.compare(timestamp, publishTime, inclusive);
+    public boolean shouldStop(Message<?> message) {
+        return message.getPublishTime() >= timestamp;
     }
 }

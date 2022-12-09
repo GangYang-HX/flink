@@ -144,11 +144,6 @@ public final class OggJsonDeserializationSchema implements DeserializationSchema
     }
 
     @Override
-    public void open(InitializationContext context) throws Exception {
-        jsonDeserializer.open(context);
-    }
-
-    @Override
     public RowData deserialize(byte[] message) {
         throw new RuntimeException(
                 "Please invoke DeserializationSchema#deserialize(byte[], Collector<RowData>) instead.");

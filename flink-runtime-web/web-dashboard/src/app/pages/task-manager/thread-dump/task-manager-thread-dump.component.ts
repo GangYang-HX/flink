@@ -16,18 +16,15 @@
  * limitations under the License.
  */
 
-import { ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, OnDestroy, Inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
-import { of, Subject } from 'rxjs';
-import { catchError, takeUntil } from 'rxjs/operators';
+import { ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, OnDestroy } from '@angular/core';
+import { Subject } from 'rxjs';
+import { first, takeUntil } from 'rxjs/operators';
 
-import { ModuleConfig } from '@flink-runtime-web/core/module-config';
-import {
-  TASK_MANAGER_MODULE_CONFIG,
-  TASK_MANAGER_MODULE_DEFAULT_CONFIG
-} from '@flink-runtime-web/pages/task-manager/task-manager.config';
-import { ConfigService, TaskManagerService } from '@flink-runtime-web/services';
 import { EditorOptions } from 'ng-zorro-antd/code-editor/typings';
+import { flinkEditorOptions } from 'share/common/editor/editor-config';
+
+import { TaskManagerDetail } from 'interfaces';
+import { TaskManagerService } from 'services';
 
 @Component({
   selector: 'flink-task-manager-thread-dump',
@@ -36,31 +33,22 @@ import { EditorOptions } from 'ng-zorro-antd/code-editor/typings';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TaskManagerThreadDumpComponent implements OnInit, OnDestroy {
-  public editorOptions: EditorOptions;
+  public readonly editorOptions: EditorOptions = flinkEditorOptions;
 
   public dump = '';
   public loading = true;
-  public taskManagerId: string;
-  public downloadUrl = '';
-  public downloadName = '';
+  public taskManagerDetail: TaskManagerDetail;
 
   private readonly destroy$ = new Subject<void>();
 
-  constructor(
-    private readonly taskManagerService: TaskManagerService,
-    private readonly configService: ConfigService,
-    private readonly activatedRoute: ActivatedRoute,
-    private readonly cdr: ChangeDetectorRef,
-    @Inject(TASK_MANAGER_MODULE_CONFIG) readonly moduleConfig: ModuleConfig
-  ) {
-    this.editorOptions = moduleConfig.editorOptions || TASK_MANAGER_MODULE_DEFAULT_CONFIG.editorOptions;
-  }
+  constructor(private readonly taskManagerService: TaskManagerService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit(): void {
-    this.taskManagerId = this.activatedRoute.parent!.snapshot.params.taskManagerId;
-    this.downloadUrl = `${this.configService.BASE_URL}/taskmanagers/${this.taskManagerId}/thread-dump`;
-    this.downloadName = `taskmanager_${this.taskManagerId}_thread_dump`;
-    this.reload();
+    this.taskManagerService.taskManagerDetail$.pipe(first(), takeUntil(this.destroy$)).subscribe(data => {
+      this.taskManagerDetail = data;
+      this.reload();
+      this.cdr.markForCheck();
+    });
   }
 
   public ngOnDestroy(): void {
@@ -71,16 +59,20 @@ export class TaskManagerThreadDumpComponent implements OnInit, OnDestroy {
   public reload(): void {
     this.loading = true;
     this.cdr.markForCheck();
-    this.taskManagerService
-      .loadThreadDump(this.taskManagerId)
-      .pipe(
-        catchError(() => of('')),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(data => {
-        this.loading = false;
-        this.dump = data;
-        this.cdr.markForCheck();
-      });
+    if (this.taskManagerDetail) {
+      this.taskManagerService
+        .loadThreadDump(this.taskManagerDetail.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(
+          data => {
+            this.loading = false;
+            this.dump = data;
+            this.cdr.markForCheck();
+          },
+          () => {
+            this.cdr.markForCheck();
+          }
+        );
+    }
   }
 }

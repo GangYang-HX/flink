@@ -24,7 +24,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import java.sql.Time;
 
 /** Test for {@link TimeSerializer}. */
-class TimeSerializerTest extends SerializerTestBase<Time> {
+public class TimeSerializerTest extends SerializerTestBase<Time> {
     @Override
     protected TypeSerializer<Time> createSerializer() {
         return TimeSerializer.INSTANCE;

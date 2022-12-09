@@ -18,8 +18,7 @@
 package org.apache.flink.table.planner.plan.schema
 
 import org.apache.flink.table.functions
-import org.apache.flink.table.functions.{BuiltInFunctionDefinitions, TableFunction}
-import org.apache.flink.table.planner.functions.bridging.BridgingSqlFunction
+import org.apache.flink.table.functions.TableFunction
 import org.apache.flink.table.planner.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromDataTypeToLogicalType
 import org.apache.flink.table.types.DataType
@@ -35,11 +34,7 @@ import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory}
  *   The Table Function instance
  * @param implicitResultType
  *   Implicit result type.
- * @deprecated
- *   Use [[BuiltInFunctionDefinitions]] that translates to [[BridgingSqlFunction]].
  */
-@Deprecated
-@deprecated
 class DeferredTypeFlinkTableFunction(
     val tableFunction: TableFunction[_],
     val implicitResultType: DataType)

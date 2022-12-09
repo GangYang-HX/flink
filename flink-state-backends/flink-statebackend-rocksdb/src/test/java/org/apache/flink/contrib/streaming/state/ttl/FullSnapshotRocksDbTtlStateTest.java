@@ -27,9 +27,4 @@ public class FullSnapshotRocksDbTtlStateTest extends RocksDBTtlStateTestBase {
     StateBackend createStateBackend() {
         return createStateBackend(TernaryBoolean.FALSE);
     }
-
-    @Override
-    public boolean isSavepoint() {
-        return false;
-    }
 }

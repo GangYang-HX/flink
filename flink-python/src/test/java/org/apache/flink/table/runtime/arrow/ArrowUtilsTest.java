@@ -82,8 +82,8 @@ import org.apache.arrow.vector.types.TimeUnit;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -93,17 +93,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link ArrowUtils}. */
-class ArrowUtilsTest {
+public class ArrowUtilsTest {
 
     private static List<Tuple5<String, LogicalType, ArrowType, Class<?>, Class<?>>> testFields;
     private static RowType rowType;
     private static BufferAllocator allocator;
 
-    @BeforeAll
-    static void init() {
+    @BeforeClass
+    public static void init() {
         testFields = new ArrayList<>();
         testFields.add(
                 Tuple5.of(
@@ -329,42 +329,42 @@ class ArrowUtilsTest {
     }
 
     @Test
-    void testConvertBetweenLogicalTypeAndArrowType() {
+    public void testConvertBetweenLogicalTypeAndArrowType() {
         Schema schema = ArrowUtils.toArrowSchema(rowType);
 
-        assertThat(schema.getFields()).hasSize(testFields.size());
+        assertEquals(testFields.size(), schema.getFields().size());
         List<Field> fields = schema.getFields();
         for (int i = 0; i < schema.getFields().size(); i++) {
             // verify convert from RowType to ArrowType
-            assertThat(fields.get(i).getName()).isEqualTo(testFields.get(i).f0);
-            assertThat(fields.get(i).getType()).isEqualTo(testFields.get(i).f2);
+            assertEquals(testFields.get(i).f0, fields.get(i).getName());
+            assertEquals(testFields.get(i).f2, fields.get(i).getType());
         }
     }
 
     @Test
-    void testCreateArrowReader() {
+    public void testCreateArrowReader() {
         VectorSchemaRoot root =
                 VectorSchemaRoot.create(ArrowUtils.toArrowSchema(rowType), allocator);
         ArrowReader reader = ArrowUtils.createArrowReader(root, rowType);
         ColumnVector[] columnVectors = reader.getColumnVectors();
         for (int i = 0; i < columnVectors.length; i++) {
-            assertThat(columnVectors[i].getClass()).isEqualTo(testFields.get(i).f4);
+            assertEquals(testFields.get(i).f4, columnVectors[i].getClass());
         }
     }
 
     @Test
-    void testCreateArrowWriter() {
+    public void testCreateArrowWriter() {
         VectorSchemaRoot root =
                 VectorSchemaRoot.create(ArrowUtils.toArrowSchema(rowType), allocator);
         ArrowWriter<RowData> writer = ArrowUtils.createRowDataArrowWriter(root, rowType);
         ArrowFieldWriter<RowData>[] fieldWriters = writer.getFieldWriters();
         for (int i = 0; i < fieldWriters.length; i++) {
-            assertThat(fieldWriters[i].getClass()).isEqualTo(testFields.get(i).f3);
+            assertEquals(testFields.get(i).f3, fieldWriters[i].getClass());
         }
     }
 
     @Test
-    void testReadArrowBatches() throws IOException {
+    public void testReadArrowBatches() throws IOException {
         VectorSchemaRoot root =
                 VectorSchemaRoot.create(ArrowUtils.toArrowSchema(rowType), allocator);
         ArrowWriter<RowData> arrowWriter = ArrowUtils.createRowDataArrowWriter(root, rowType);
@@ -390,11 +390,10 @@ class ArrowUtilsTest {
             arrowWriter.reset();
         }
 
-        assertThat(
-                        ArrowUtils.readArrowBatches(
-                                        Channels.newChannel(
-                                                new ByteArrayInputStream(baos.toByteArray())))
-                                .length)
-                .isEqualTo(batches);
+        assertEquals(
+                batches,
+                ArrowUtils.readArrowBatches(
+                                Channels.newChannel(new ByteArrayInputStream(baos.toByteArray())))
+                        .length);
     }
 }

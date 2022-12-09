@@ -34,7 +34,6 @@ import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.runtime.state.AbstractKeyedStateBackend;
 import org.apache.flink.runtime.state.AbstractStateBackend;
-import org.apache.flink.runtime.state.ChangelogTestUtils;
 import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.CheckpointStorageAccess;
 import org.apache.flink.runtime.state.CheckpointStorageLoader;
@@ -65,7 +64,6 @@ import org.junit.rules.TemporaryFolder;
 import javax.annotation.Nonnull;
 
 import java.util.Collection;
-import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -144,18 +142,6 @@ public class ChangelogStateBackendLoadingTest {
                         null, TernaryBoolean.FALSE, config(true), cl, null);
 
         assertTrue(backend instanceof HashMapStateBackend);
-    }
-
-    @Test
-    public void testLoadingChangelogForRecovery() throws Exception {
-        final StateBackend backend =
-                StateBackendLoader.loadStateBackendFromKeyedStateHandles(
-                        new MockStateBackend(),
-                        cl,
-                        Collections.singletonList(
-                                ChangelogTestUtils.createChangelogStateBackendHandle()));
-
-        assertTrue(backend instanceof DeactivatedChangelogStateBackend);
     }
 
     @Test(expected = IllegalArgumentException.class)

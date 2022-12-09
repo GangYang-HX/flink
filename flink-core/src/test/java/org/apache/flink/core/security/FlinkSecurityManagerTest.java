@@ -22,12 +22,10 @@ import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.IllegalConfigurationException;
 import org.apache.flink.core.testutils.CheckedThread;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.security.Permission;
@@ -46,10 +44,6 @@ import static org.junit.Assert.fail;
 
 /** Tests for {@code FlinkUserSecurityManager}. */
 public class FlinkSecurityManagerTest extends TestLogger {
-
-    @ClassRule
-    public static final TestExecutorResource<ExecutorService> EXECUTOR_RESOURCE =
-            new TestExecutorResource<>(() -> Executors.newSingleThreadExecutor());
 
     private static final int TEST_EXIT_CODE = 123;
     SecurityManager originalSecurityManager;
@@ -91,7 +85,7 @@ public class FlinkSecurityManagerTest extends TestLogger {
     public void testPerThreadThrowUserExit() throws Exception {
         FlinkSecurityManager flinkSecurityManager =
                 new FlinkSecurityManager(ClusterOptions.UserSystemExitMode.THROW, false);
-        ExecutorService executorService = EXECUTOR_RESOURCE.getExecutor();
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
         // Async thread test before enabling monitoring ensures it does not throw while prestarting
         // worker thread, which is to be unmonitored and tested after enabling monitoring enabled.
         CompletableFuture<Void> future =

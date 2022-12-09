@@ -69,10 +69,6 @@ public class HiveParserQB {
      */
     private int numSubQueryPredicates;
 
-    private CreateTableDesc createTableDesc;
-
-    private HiveParserDirectoryDesc directoryDesc;
-
     public void print(String msg) {
         LOG.info(msg + "alias=" + qbp.getAlias());
         for (String alias : getSubqAliases()) {
@@ -223,16 +219,10 @@ public class HiveParserQB {
     }
 
     public CreateTableDesc getTableDesc() {
-        return createTableDesc;
+        return null;
     }
 
-    public void setDirectoryDesc(HiveParserDirectoryDesc directoryDesc) {
-        this.directoryDesc = directoryDesc;
-    }
-
-    public HiveParserDirectoryDesc getDirectoryDesc() {
-        return directoryDesc;
-    }
+    public void setDirectoryDesc(CreateTableDesc directoryDesc) {}
 
     public boolean isCTAS() {
         return false;

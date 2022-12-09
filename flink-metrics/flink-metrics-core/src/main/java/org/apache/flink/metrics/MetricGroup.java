@@ -166,6 +166,15 @@ public interface MetricGroup {
     MetricGroup addGroup(String name);
 
     /**
+     * Creates a new MetricGroup and adds it to this groups sub-groups.
+     *
+     * @param name name of the group
+     * @param mode whether to ignore all metrics in this metrics group while querying metrics
+     * @return the created group
+     */
+    MetricGroup addGroup(String name, QueryServiceMode mode);
+
+    /**
      * Creates a new key-value MetricGroup pair. The key group is added to this groups sub-groups,
      * while the value group is added to the key group's sub-groups. This method returns the value
      * group.
@@ -179,6 +188,16 @@ public interface MetricGroup {
      * @return the second created group
      */
     MetricGroup addGroup(String key, String value);
+
+    /**
+     * Creates a new key-value MetricGroup pair.
+     *
+     * @param key name of the first group
+     * @param value name of the second group
+     * @param mode whether to ignore all metrics in this metrics group while querying metrics
+     * @return the second created group
+     */
+    MetricGroup addGroup(String key, String value, QueryServiceMode mode);
 
     // ------------------------------------------------------------------------
     // Scope
@@ -219,4 +238,13 @@ public interface MetricGroup {
      * @return fully qualified metric name
      */
     String getMetricIdentifier(String metricName, CharacterFilter filter);
+
+    /**
+     * Returns querying service's mode. See {@link QueryServiceMode}
+     *
+     * @return mode
+     */
+    default QueryServiceMode getQueryServiceMode() {
+        return QueryServiceMode.ENABLE;
+    }
 }

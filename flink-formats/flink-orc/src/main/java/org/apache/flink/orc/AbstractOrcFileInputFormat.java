@@ -32,6 +32,8 @@ import org.apache.flink.orc.vector.OrcVectorizedBatchWrapper;
 
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -54,6 +56,8 @@ public abstract class AbstractOrcFileInputFormat<T, BatchT, SplitT extends FileS
 
     private static final long serialVersionUID = 1L;
 
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractOrcFileInputFormat.class);
+
     protected final OrcShim<BatchT> shim;
 
     protected final SerializableHadoopConfigWrapper hadoopConfigWrapper;
@@ -68,7 +72,7 @@ public abstract class AbstractOrcFileInputFormat<T, BatchT, SplitT extends FileS
 
     /**
      * @param shim the shim for various Orc dependent versions. If you use the latest version,
-     *     please use {@link OrcShim#defaultShim()} directly.
+     *         please use {@link OrcShim#defaultShim()} directly.
      * @param hadoopConfig the hadoop config for orc reader.
      * @param schema the full schema of orc format.
      * @param selectedFields the read selected field of orc format.
@@ -254,6 +258,7 @@ public abstract class AbstractOrcFileInputFormat<T, BatchT, SplitT extends FileS
         @Override
         public RecordIterator<T> readBatch() throws IOException {
             final OrcReaderBatch<T, BatchT> batch = getCachedEntry();
+            LOG.info("start orc file format readBatch,batch={}", batch);
             final OrcVectorizedBatchWrapper<BatchT> orcVectorBatch = batch.orcVectorizedRowBatch();
 
             final long orcRowNumber = orcReader.getRowNumber();
@@ -262,6 +267,9 @@ public abstract class AbstractOrcFileInputFormat<T, BatchT, SplitT extends FileS
                 return null;
             }
 
+            LOG.info("batch convertAndGetIterator params,orcVectorBatch={}, orcRowNumber={}",
+                    orcVectorBatch,
+                    orcRowNumber);
             final RecordIterator<T> records =
                     batch.convertAndGetIterator(orcVectorBatch, orcRowNumber);
             if (recordsToSkip > 0) {

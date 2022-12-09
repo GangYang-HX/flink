@@ -20,10 +20,7 @@ package org.apache.flink.table.planner.plan.utils
 import org.apache.flink.api.common.operators.Order
 import org.apache.flink.table.api.TableException
 import org.apache.flink.table.planner.calcite.FlinkPlannerImpl
-import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator
-import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeConfig
 import org.apache.flink.table.planner.plan.nodes.exec.spec.SortSpec
-import org.apache.flink.table.types.logical.RowType
 
 import org.apache.calcite.rel.`type`._
 import org.apache.calcite.rel.{RelCollation, RelFieldCollation}
@@ -120,15 +117,6 @@ object SortUtil {
       }
     }
     builder.build()
-  }
-
-  def newSortGen(
-      config: ExecNodeConfig,
-      classLoader: ClassLoader,
-      originalKeys: Array[Int],
-      inputType: RowType): SortCodeGenerator = {
-    val sortSpec = SortUtil.getAscendingSortSpec(originalKeys)
-    new SortCodeGenerator(config, classLoader, inputType, sortSpec)
   }
 
   def directionToOrder(direction: Direction): Order = {

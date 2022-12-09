@@ -22,8 +22,11 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.logical.LogicalTypeFamily;
 import org.apache.flink.table.types.logical.utils.LogicalTypeMerging;
 
+import org.junit.runners.Parameterized;
+
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import static org.apache.flink.table.types.inference.TypeStrategies.MISSING;
 import static org.apache.flink.table.types.inference.TypeStrategies.argument;
@@ -33,11 +36,11 @@ import static org.apache.flink.table.types.inference.TypeStrategies.nullableIfAr
 import static org.apache.flink.table.types.inference.TypeStrategies.varyingString;
 
 /** Tests for built-in {@link TypeStrategies}. */
-class TypeStrategiesTest extends TypeStrategiesTestBase {
+public class TypeStrategiesTest extends TypeStrategiesTestBase {
 
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TypeStrategiesTestBase.TestSpec> testData() {
+        return Arrays.asList(
                 // missing strategy with arbitrary argument
                 TypeStrategiesTestBase.TestSpec.forStrategy(MISSING)
                         .inputTypes(DataTypes.INT())

@@ -21,7 +21,6 @@ package org.apache.flink.runtime.rest.handler.job;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.executiongraph.AccessExecution;
 import org.apache.flink.runtime.executiongraph.AccessExecutionVertex;
-import org.apache.flink.runtime.executiongraph.ExecutionHistory;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
 import org.apache.flink.runtime.rest.handler.legacy.ExecutionGraphCache;
@@ -38,9 +37,7 @@ import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
-import java.util.Collection;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.Executor;
 
 /**
@@ -89,22 +86,15 @@ public abstract class AbstractSubtaskAttemptHandler<
             throws RestHandlerException {
         final Integer attemptNumber = request.getPathParameter(SubtaskAttemptPathParameter.class);
 
-        final Collection<AccessExecution> currentExecutions =
-                executionVertex.getCurrentExecutions();
-        final ExecutionHistory executionHistory = executionVertex.getExecutionHistory();
+        final AccessExecution currentAttempt = executionVertex.getCurrentExecutionAttempt();
+        if (attemptNumber == currentAttempt.getAttemptNumber()) {
+            return handleRequest(request, currentAttempt);
+        } else if (attemptNumber >= 0 && attemptNumber < currentAttempt.getAttemptNumber()) {
+            final AccessExecution execution =
+                    executionVertex.getPriorExecutionAttempt(attemptNumber);
 
-        for (AccessExecution currentExecution : currentExecutions) {
-            if (attemptNumber == currentExecution.getAttemptNumber()) {
-                return handleRequest(request, currentExecution);
-            }
-        }
-
-        if (executionHistory.isValidAttemptNumber(attemptNumber)) {
-            final Optional<? extends AccessExecution> execution =
-                    executionHistory.getHistoricalExecution(attemptNumber);
-
-            if (execution.isPresent()) {
-                return handleRequest(request, execution.get());
+            if (execution != null) {
+                return handleRequest(request, execution);
             } else {
                 throw new RestHandlerException(
                         "Attempt "

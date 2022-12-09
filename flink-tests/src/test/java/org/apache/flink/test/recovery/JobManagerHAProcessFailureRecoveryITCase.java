@@ -51,7 +51,6 @@ import org.apache.flink.runtime.testutils.DispatcherProcess;
 import org.apache.flink.runtime.testutils.ZooKeeperTestUtils;
 import org.apache.flink.runtime.zookeeper.ZooKeeperTestEnvironment;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.FutureUtils;
@@ -61,7 +60,6 @@ import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -76,7 +74,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -103,10 +100,6 @@ public class JobManagerHAProcessFailureRecoveryITCase extends TestLogger {
     private static ZooKeeperTestEnvironment zooKeeper;
 
     private static final Duration TEST_TIMEOUT = Duration.ofMinutes(5);
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
@@ -296,9 +289,7 @@ public class JobManagerHAProcessFailureRecoveryITCase extends TestLogger {
 
             highAvailabilityServices =
                     HighAvailabilityServicesUtils.createAvailableOrEmbeddedServices(
-                            config,
-                            EXECUTOR_RESOURCE.getExecutor(),
-                            NoOpFatalErrorHandler.INSTANCE);
+                            config, TestingUtils.defaultExecutor(), NoOpFatalErrorHandler.INSTANCE);
 
             final PluginManager pluginManager =
                     PluginUtils.createPluginManagerFromRootFolder(config);
@@ -430,7 +421,7 @@ public class JobManagerHAProcessFailureRecoveryITCase extends TestLogger {
                 highAvailabilityServices.closeAndCleanupAllData();
             }
 
-            RpcUtils.terminateRpcService(rpcService);
+            RpcUtils.terminateRpcService(rpcService, timeout);
 
             // Delete coordination directory
             if (coordinateTempDir != null) {
@@ -449,7 +440,7 @@ public class JobManagerHAProcessFailureRecoveryITCase extends TestLogger {
                         () ->
                                 dispatcherGateway.requestClusterOverview(
                                         Time.milliseconds(timeLeft.toMillis())),
-                        Duration.ofMillis(50L),
+                        Time.milliseconds(50L),
                         org.apache.flink.api.common.time.Deadline.fromNow(
                                 Duration.ofMillis(timeLeft.toMillis())),
                         clusterOverview ->

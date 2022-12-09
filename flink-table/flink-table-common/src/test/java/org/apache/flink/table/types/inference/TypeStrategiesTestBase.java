@@ -24,9 +24,10 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.inference.utils.CallContextMock;
 import org.apache.flink.table.types.inference.utils.FunctionDefinitionMock;
 
-import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
 import javax.annotation.Nullable;
 
@@ -35,35 +36,32 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
 import static org.apache.flink.table.test.TableAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Base class for tests of {@link TypeStrategies}. */
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@RunWith(Parameterized.class)
 public abstract class TypeStrategiesTestBase {
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testTypeStrategy(TestSpec testSpec) {
+    @Parameter public TestSpec testSpec;
+
+    @Test
+    public void testTypeStrategy() {
         if (testSpec.expectedErrorMessage != null) {
-            assertThatThrownBy(() -> runTypeInference(testSpec))
+            assertThatThrownBy(this::runTypeInference)
                     .satisfies(
                             anyCauseMatches(
                                     ValidationException.class, testSpec.expectedErrorMessage));
         } else if (testSpec.expectedDataType != null) {
-            assertThat(runTypeInference(testSpec).getOutputDataType())
-                    .isEqualTo(testSpec.expectedDataType);
+            assertThat(runTypeInference().getOutputDataType()).isEqualTo(testSpec.expectedDataType);
         }
     }
 
-    protected abstract Stream<TestSpec> testData();
-
     // --------------------------------------------------------------------------------------------
 
-    private TypeInferenceUtil.Result runTypeInference(TestSpec testSpec) {
+    private TypeInferenceUtil.Result runTypeInference() {
         final FunctionDefinitionMock functionDefinitionMock = new FunctionDefinitionMock();
         functionDefinitionMock.functionKind = FunctionKind.SCALAR;
         final CallContextMock callContextMock = new CallContextMock();

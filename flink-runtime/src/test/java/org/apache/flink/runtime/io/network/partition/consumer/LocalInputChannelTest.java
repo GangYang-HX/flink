@@ -173,8 +173,7 @@ public class LocalInputChannelTest {
                                                     producerBufferPoolSize,
                                                     producerBufferPoolSize,
                                                     parallelism,
-                                                    Integer.MAX_VALUE,
-                                                    0))
+                                                    Integer.MAX_VALUE))
                             .build();
 
             // Create a buffer pool for this partition

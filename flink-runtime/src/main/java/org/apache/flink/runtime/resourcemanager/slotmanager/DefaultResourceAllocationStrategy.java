@@ -19,7 +19,6 @@
 package org.apache.flink.runtime.resourcemanager.slotmanager;
 
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.runtime.blocklist.BlockedTaskManagerChecker;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.slots.ResourceRequirement;
 
@@ -69,13 +68,11 @@ public class DefaultResourceAllocationStrategy implements ResourceAllocationStra
     @Override
     public ResourceAllocationResult tryFulfillRequirements(
             Map<JobID, Collection<ResourceRequirement>> missingResources,
-            TaskManagerResourceInfoProvider taskManagerResourceInfoProvider,
-            BlockedTaskManagerChecker blockedTaskManagerChecker) {
+            TaskManagerResourceInfoProvider taskManagerResourceInfoProvider) {
         final ResourceAllocationResult.Builder resultBuilder = ResourceAllocationResult.builder();
 
         final List<InternalResourceInfo> registeredResources =
-                getAvailableResources(
-                        taskManagerResourceInfoProvider, resultBuilder, blockedTaskManagerChecker);
+                getRegisteredResources(taskManagerResourceInfoProvider, resultBuilder);
         final List<InternalResourceInfo> pendingResources =
                 getPendingResources(taskManagerResourceInfoProvider, resultBuilder);
 
@@ -95,15 +92,10 @@ public class DefaultResourceAllocationStrategy implements ResourceAllocationStra
         return resultBuilder.build();
     }
 
-    private static List<InternalResourceInfo> getAvailableResources(
+    private static List<InternalResourceInfo> getRegisteredResources(
             TaskManagerResourceInfoProvider taskManagerResourceInfoProvider,
-            ResourceAllocationResult.Builder resultBuilder,
-            BlockedTaskManagerChecker blockedTaskManagerChecker) {
+            ResourceAllocationResult.Builder resultBuilder) {
         return taskManagerResourceInfoProvider.getRegisteredTaskManagers().stream()
-                .filter(
-                        taskManager ->
-                                !blockedTaskManagerChecker.isBlockedTaskManager(
-                                        taskManager.getTaskExecutorConnection().getResourceID()))
                 .map(
                         taskManager ->
                                 new InternalResourceInfo(

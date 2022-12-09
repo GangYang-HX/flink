@@ -38,11 +38,7 @@ import org.apache.flink.runtime.rest.JobRestEndpointFactory;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -92,10 +88,7 @@ public class ApplicationClusterEntryPoint extends ClusterEntrypoint {
                 program.getJobJarAndDependencies(),
                 URL::toString);
         ConfigUtils.encodeCollectionToConfig(
-                configuration,
-                PipelineOptions.CLASSPATHS,
-                getClasspath(configuration, program),
-                URL::toString);
+                configuration, PipelineOptions.CLASSPATHS, program.getClasspaths(), URL::toString);
 
         // If it is a PyFlink Application, we need to extract Python dependencies from the program
         // arguments, and
@@ -103,17 +96,6 @@ public class ApplicationClusterEntryPoint extends ClusterEntrypoint {
         if (PackagedProgramUtils.isPython(program.getMainClassName())) {
             ProgramOptionsUtils.configurePythonExecution(configuration, program);
         }
-    }
-
-    private static List<URL> getClasspath(
-            final Configuration configuration, final PackagedProgram program)
-            throws MalformedURLException {
-        final List<URL> classpath =
-                ConfigUtils.decodeListFromConfig(
-                        configuration, PipelineOptions.CLASSPATHS, URL::new);
-        classpath.addAll(program.getClasspaths());
-        return Collections.unmodifiableList(
-                classpath.stream().distinct().collect(Collectors.toList()));
     }
 
     @Override

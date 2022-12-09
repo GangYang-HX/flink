@@ -503,8 +503,10 @@ object HashAggCodeGenHelper {
                |""".stripMargin.trim
 
           if (filterArg >= 0) {
-            val filterTerm =
-              s"!$inputTerm.isNullAt($filterArg) && $inputTerm.getBoolean($filterArg)"
+            var filterTerm = s"$inputTerm.getBoolean($filterArg)"
+            if (ctx.nullCheck) {
+              filterTerm = s"!$inputTerm.isNullAt($filterArg) && " + filterTerm
+            }
             s"""
                |if ($filterTerm) {
                | $innerCode
@@ -832,7 +834,6 @@ object HashAggCodeGenHelper {
       aggMapKeyType: RowType): String = {
     val sortCodeGenerator = new SortCodeGenerator(
       ctx.tableConfig,
-      ctx.classLoader,
       aggMapKeyType,
       SortUtil.getAscendingSortSpec(Array.range(0, aggMapKeyType.getFieldCount)))
     val computer = sortCodeGenerator.generateNormalizedKeyComputer("AggMapKeyComputer")

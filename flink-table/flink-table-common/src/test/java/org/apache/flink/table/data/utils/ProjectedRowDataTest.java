@@ -29,10 +29,10 @@ import static org.apache.flink.table.test.TableAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link ProjectedRowData}. */
-class ProjectedRowDataTest {
+public class ProjectedRowDataTest {
 
     @Test
-    void testProjectedRows() {
+    public void testProjectedRows() {
         final RowData initialRow = GenericRowData.of(0L, 1L, 2L, 3L, 4L);
         final ProjectedRowData projectedRowData =
                 ProjectedRowData.from(
@@ -55,7 +55,7 @@ class ProjectedRowDataTest {
     }
 
     @Test
-    void testProjectedRowsDoesntSupportNestedProjections() {
+    public void testProjectedRowsDoesntSupportNestedProjections() {
         assertThatThrownBy(
                         () ->
                                 ProjectedRowData.from(

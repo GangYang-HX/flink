@@ -17,7 +17,7 @@
  */
 package org.apache.flink.table.planner.codegen
 
-import org.apache.flink.configuration.ReadableConfig
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.data.{GenericRowData, RowData}
 import org.apache.flink.table.runtime.operators.values.ValuesInputFormat
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo
@@ -32,12 +32,11 @@ import scala.collection.JavaConversions._
 object ValuesCodeGenerator {
 
   def generatorInputFormat(
-      tableConfig: ReadableConfig,
-      classLoader: ClassLoader,
+      tableConfig: TableConfig,
       outputType: RowType,
       tuples: util.List[util.List[RexLiteral]],
       description: String): ValuesInputFormat = {
-    val ctx = new CodeGeneratorContext(tableConfig, classLoader)
+    val ctx = CodeGeneratorContext(tableConfig)
     val exprGenerator = new ExprCodeGenerator(ctx, false)
     // generate code for every record
     val generatedRecords = tuples.map {

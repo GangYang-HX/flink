@@ -19,8 +19,8 @@ package org.apache.flink.table.planner.plan.nodes.physical.batch
 
 import org.apache.flink.table.api.TableException
 import org.apache.flink.table.functions.UserDefinedFunction
+import org.apache.flink.table.planner.plan.utils.FlinkRelOptUtil
 import org.apache.flink.table.planner.utils.AggregatePhaseStrategy
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTableConfig
 import org.apache.flink.table.planner.utils.TableConfigUtils.getAggPhaseStrategy
 
 import org.apache.calcite.plan.{RelOptCluster, RelTraitSet}
@@ -65,7 +65,7 @@ abstract class BatchPhysicalGroupAggregateBase(
   def getAggCallToAggFunction: Seq[(AggregateCall, UserDefinedFunction)] = aggCallToAggFunction
 
   protected def isEnforceTwoStageAgg: Boolean = {
-    val tableConfig = unwrapTableConfig(this)
+    val tableConfig = FlinkRelOptUtil.getTableConfigFromContext(this)
     getAggPhaseStrategy(tableConfig) == AggregatePhaseStrategy.TWO_PHASE
   }
 

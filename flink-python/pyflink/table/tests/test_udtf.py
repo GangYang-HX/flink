@@ -15,14 +15,10 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 ################################################################################
-import sys
 import unittest
-
-import pytest
 
 from pyflink.table import DataTypes
 from pyflink.table.udf import TableFunction, udtf, ScalarFunction, udf
-from pyflink.table.expressions import col
 from pyflink.testing import source_sink_utils
 from pyflink.testing.test_case_utils import PyFlinkStreamTableTestCase, \
     PyFlinkBatchTableTestCase
@@ -31,8 +27,9 @@ from pyflink.testing.test_case_utils import PyFlinkStreamTableTestCase, \
 class UserDefinedTableFunctionTests(object):
 
     def test_table_function(self):
-        self._register_table_sink("""CREATE TABLE Results(a BIGINT, b BIGINT, c BIGINT)
-                WITH ('connector'='test-sink')""")
+        self._register_table_sink(
+            ['a', 'b', 'c'],
+            [DataTypes.BIGINT(), DataTypes.BIGINT(), DataTypes.BIGINT()])
 
         multi_emit = udtf(MultiEmit(), result_types=[DataTypes.BIGINT(), DataTypes.BIGINT()])
         multi_num = udf(MultiNum(), result_type=DataTypes.BIGINT())
@@ -40,9 +37,9 @@ class UserDefinedTableFunctionTests(object):
         t = self.t_env.from_elements([(1, 1, 3), (2, 1, 6), (3, 2, 9)], ['a', 'b', 'c'])
         t = t.join_lateral(multi_emit((t.a + t.a) / 2, multi_num(t.b)).alias('x', 'y'))
         t = t.left_outer_join_lateral(condition_multi_emit(t.x, t.y).alias('m')) \
-            .select(t.x, t.y, col("m"))
+            .select("x, y, m")
         t = t.left_outer_join_lateral(identity(t.m).alias('n')) \
-            .select(t.x, t.y, col("n"))
+            .select("x, y, n")
         actual = self._get_output(t)
         self.assert_equals(actual,
                            ["+I[1, 0, null]", "+I[1, 1, null]", "+I[2, 0, null]", "+I[2, 1, null]",
@@ -50,8 +47,9 @@ class UserDefinedTableFunctionTests(object):
                             "+I[3, 1, 2]", "+I[3, 2, 2]", "+I[3, 3, null]"])
 
     def test_table_function_with_sql_query(self):
-        self._register_table_sink("""CREATE TABLE Results(a BIGINT, b BIGINT, c BIGINT)
-                        WITH ('connector'='test-sink')""")
+        self._register_table_sink(
+            ['a', 'b', 'c'],
+            [DataTypes.BIGINT(), DataTypes.BIGINT(), DataTypes.BIGINT()])
 
         self.t_env.create_temporary_system_function(
             "multi_emit", udtf(MultiEmit(), result_types=[DataTypes.BIGINT(), DataTypes.BIGINT()]))
@@ -64,8 +62,9 @@ class UserDefinedTableFunctionTests(object):
         actual = self._get_output(t)
         self.assert_equals(actual, ["+I[1, 1, 0]", "+I[2, 2, 0]", "+I[3, 3, 0]", "+I[3, 3, 1]"])
 
-    def _register_table_sink(self, ddl: str):
-        self.t_env.execute_sql(ddl)
+    def _register_table_sink(self, field_names: list, field_types: list):
+        table_sink = source_sink_utils.TestAppendSink(field_names, field_types)
+        self.t_env.register_table_sink("Results", table_sink)
 
     def _get_output(self, t):
         t.execute_insert("Results").wait()
@@ -75,6 +74,7 @@ class UserDefinedTableFunctionTests(object):
 class PyFlinkStreamUserDefinedFunctionTests(UserDefinedTableFunctionTests,
                                             PyFlinkStreamTableTestCase):
 
+    @unittest.skip("Python UDFs are currently unsupported in JSON plan")
     def test_execute_from_json_plan(self):
         # create source file path
         tmp_dir = self.tempdir
@@ -118,7 +118,7 @@ class PyFlinkStreamUserDefinedFunctionTests(UserDefinedTableFunctionTests,
                                                       " as T(x, y)"
                                                       " ON TRUE")
         from py4j.java_gateway import get_method
-        get_method(json_plan.execute(), "await")()
+        get_method(self.t_env._j_tenv.executePlan(json_plan), "await")()
 
         import glob
         lines = [line.strip() for file in glob.glob(sink_path + '/*') for line in open(file, 'r')]
@@ -131,19 +131,15 @@ class PyFlinkBatchUserDefinedFunctionTests(UserDefinedTableFunctionTests,
     pass
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="requires python3.7")
-class PyFlinkEmbeddedThreadTests(UserDefinedTableFunctionTests, PyFlinkStreamTableTestCase):
-    def setUp(self):
-        super(PyFlinkEmbeddedThreadTests, self).setUp()
-        self.t_env.get_config().set("python.execution-mode", "thread")
-
-
 class MultiEmit(TableFunction, unittest.TestCase):
 
     def open(self, function_context):
+        mg = function_context.get_metric_group()
+        self.counter = mg.add_group("key", "value").counter("my_counter")
         self.counter_sum = 0
 
     def eval(self, x, y):
+        self.counter.inc(y)
         self.counter_sum += y
         for i in range(y):
             yield x, i

@@ -21,14 +21,17 @@ package org.apache.flink.table.types.inference.strategies;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.inference.TypeStrategiesTestBase;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized;
+
+import java.util.Arrays;
+import java.util.List;
 
 /** Tests for {@link ArrayTypeStrategy}. */
-class ArrayTypeStrategyTest extends TypeStrategiesTestBase {
+public class ArrayTypeStrategyTest extends TypeStrategiesTestBase {
 
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
                 TestSpec.forStrategy("Infer an array type", SpecificTypeStrategies.ARRAY)
                         .inputTypes(DataTypes.BIGINT(), DataTypes.BIGINT())
                         .expectDataType(DataTypes.ARRAY(DataTypes.BIGINT()).notNull()));

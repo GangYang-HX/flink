@@ -33,8 +33,8 @@ import org.apache.flink.yarn.configuration.YarnDeploymentTarget;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.io.FileNotFoundException;
 import java.time.Duration;
@@ -44,19 +44,19 @@ import static org.apache.flink.yarn.configuration.YarnConfigOptions.CLASSPATH_IN
 import static org.apache.flink.yarn.util.TestUtils.getTestJarPath;
 
 /** Test cases for the deployment of Yarn Flink application clusters. */
-class YARNApplicationITCase extends YarnTestBase {
+public class YARNApplicationITCase extends YarnTestBase {
 
     private static final Duration yarnAppTerminateTimeout = Duration.ofSeconds(30);
     private static final int sleepIntervalInMS = 100;
 
-    @BeforeAll
+    @BeforeClass
     public static void setup() {
         YARN_CONFIGURATION.set(YarnTestBase.TEST_CLUSTER_NAME_KEY, "flink-yarn-tests-application");
         startYARNWithConfig(YARN_CONFIGURATION, true);
     }
 
     @Test
-    void testApplicationClusterWithLocalUserJarAndFirstUserJarInclusion() throws Exception {
+    public void testApplicationClusterWithLocalUserJarAndFirstUserJarInclusion() throws Exception {
         runTest(
                 () ->
                         deployApplication(
@@ -66,7 +66,8 @@ class YARNApplicationITCase extends YarnTestBase {
     }
 
     @Test
-    void testApplicationClusterWithLocalUserJarAndDisableUserJarInclusion() throws Exception {
+    public void testApplicationClusterWithLocalUserJarAndDisableUserJarInclusion()
+            throws Exception {
         runTest(
                 () ->
                         deployApplication(
@@ -76,7 +77,7 @@ class YARNApplicationITCase extends YarnTestBase {
     }
 
     @Test
-    void testApplicationClusterWithRemoteUserJar() throws Exception {
+    public void testApplicationClusterWithRemoteUserJar() throws Exception {
         final Path testingJar = getTestingJar();
         final Path remoteJar =
                 new Path(miniDFSCluster.getFileSystem().getHomeDirectory(), testingJar.getName());

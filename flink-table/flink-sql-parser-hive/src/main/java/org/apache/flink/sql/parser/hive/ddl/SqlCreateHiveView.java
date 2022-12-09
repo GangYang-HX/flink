@@ -18,7 +18,6 @@
 
 package org.apache.flink.sql.parser.hive.ddl;
 
-import org.apache.flink.sql.parser.SqlUnparseUtils;
 import org.apache.flink.sql.parser.ddl.SqlCreateView;
 import org.apache.flink.table.factories.FactoryUtil;
 
@@ -87,7 +86,7 @@ public class SqlCreateHiveView extends SqlCreateView {
             writer.keyword("TBLPROPERTIES");
             SqlWriter.Frame withFrame = writer.startList("(", ")");
             for (SqlNode property : originPropList) {
-                SqlUnparseUtils.printIndent(writer);
+                printIndent(writer);
                 property.unparse(writer, leftPrec, rightPrec);
             }
             writer.newlineAndIndent();

@@ -356,7 +356,6 @@ public final class DynamicSourceUtils {
                         !isBatchMode,
                         contextResolvedTable,
                         ShortcutUtils.unwrapContext(relBuilder),
-                        ShortcutUtils.unwrapTypeFactory(relBuilder),
                         new SourceAbilitySpec[0]);
 
         final LogicalTableScan scan =
@@ -371,7 +370,7 @@ public final class DynamicSourceUtils {
         return Collections.emptyMap();
     }
 
-    public static List<MetadataColumn> extractMetadataColumns(ResolvedSchema schema) {
+    private static List<MetadataColumn> extractMetadataColumns(ResolvedSchema schema) {
         return schema.getColumns().stream()
                 .filter(MetadataColumn.class::isInstance)
                 .map(MetadataColumn.class::cast)

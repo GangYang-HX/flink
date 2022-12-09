@@ -64,7 +64,6 @@ public abstract class UnboundedPrecedingOverFrame implements OverWindowFrame {
         if (inputIterator.advanceNext()) {
             nextRow = inputIterator.getRow().copy();
         }
-        processor.setWindowSize(rows.size());
         // reset the accumulators value
         processor.setAccumulators(processor.createAccumulators());
     }

@@ -27,14 +27,13 @@ import org.apache.flink.table.runtime.generated.RecordComparator;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
 import org.apache.flink.util.MutableObjectIterator;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test of {@link BinaryMergeIterator}. */
 public class BinaryMergeIteratorTest {
@@ -98,7 +97,7 @@ public class BinaryMergeIteratorTest {
 
         int pos = 0;
         while ((row = iterator.next(row)) != null) {
-            assertThat(row.getInt(0)).isEqualTo(expected[pos++]);
+            Assert.assertEquals(expected[pos++], row.getInt(0));
         }
     }
 
@@ -120,7 +119,7 @@ public class BinaryMergeIteratorTest {
 
         int pos = 0;
         while ((row = iterator.next(row)) != null) {
-            assertThat(row.getInt(0)).isEqualTo(expected[pos++]);
+            Assert.assertEquals(expected[pos++], row.getInt(0));
         }
     }
 
@@ -158,7 +157,7 @@ public class BinaryMergeIteratorTest {
 
         int pre = 0;
         while ((row = iterator.next(row)) != null) {
-            assertThat(comparator.compare(row.getInt(0), pre)).isGreaterThanOrEqualTo(0);
+            Assert.assertTrue(comparator.compare(row.getInt(0), pre) >= 0);
             pre = row.getInt(0);
         }
     }

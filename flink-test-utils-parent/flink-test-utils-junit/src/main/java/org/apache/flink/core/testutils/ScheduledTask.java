@@ -59,10 +59,6 @@ public final class ScheduledTask<T> implements ScheduledFuture<T> {
         return period > 0;
     }
 
-    public long getPeriod() {
-        return period;
-    }
-
     public void execute() {
         if (!result.isDone()) {
             if (!isPeriodic()) {

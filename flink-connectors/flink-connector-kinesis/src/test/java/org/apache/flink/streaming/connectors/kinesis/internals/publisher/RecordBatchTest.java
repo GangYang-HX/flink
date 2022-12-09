@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.TestUtils.createDummyStreamShardHandle;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link RecordBatch}. */
 public class RecordBatchTest {
@@ -45,10 +45,10 @@ public class RecordBatchTest {
                         createDummyStreamShardHandle(),
                         100L);
 
-        assertThat(result.getAggregatedRecordSize()).isEqualTo(4);
-        assertThat(result.getDeaggregatedRecordSize()).isEqualTo(4);
-        assertThat(result.getTotalSizeInBytes()).isEqualTo(128);
-        assertThat(result.getAverageRecordSizeBytes()).isEqualTo(32);
+        assertEquals(4, result.getAggregatedRecordSize());
+        assertEquals(4, result.getDeaggregatedRecordSize());
+        assertEquals(128, result.getTotalSizeInBytes());
+        assertEquals(32, result.getAverageRecordSizeBytes());
     }
 
     @Test
@@ -57,19 +57,19 @@ public class RecordBatchTest {
                 TestUtils.createAggregatedRecordBatch(5, 5, new AtomicInteger());
         RecordBatch result = new RecordBatch(records, createDummyStreamShardHandle(), 100L);
 
-        assertThat(result.getAggregatedRecordSize()).isEqualTo(5);
-        assertThat(result.getDeaggregatedRecordSize()).isEqualTo(25);
-        assertThat(result.getTotalSizeInBytes()).isEqualTo(25 * 1024);
-        assertThat(result.getAverageRecordSizeBytes()).isEqualTo(1024);
+        assertEquals(5, result.getAggregatedRecordSize());
+        assertEquals(25, result.getDeaggregatedRecordSize());
+        assertEquals(25 * 1024, result.getTotalSizeInBytes());
+        assertEquals(1024, result.getAverageRecordSizeBytes());
     }
 
     @Test
     public void testGetAverageRecordSizeBytesEmptyList() {
         RecordBatch result = new RecordBatch(emptyList(), createDummyStreamShardHandle(), 100L);
 
-        assertThat(result.getAggregatedRecordSize()).isEqualTo(0);
-        assertThat(result.getDeaggregatedRecordSize()).isEqualTo(0);
-        assertThat(result.getAverageRecordSizeBytes()).isEqualTo(0);
+        assertEquals(0, result.getAggregatedRecordSize());
+        assertEquals(0, result.getDeaggregatedRecordSize());
+        assertEquals(0, result.getAverageRecordSizeBytes());
     }
 
     @Test
@@ -77,7 +77,7 @@ public class RecordBatchTest {
         RecordBatch result =
                 new RecordBatch(singletonList(record("1")), createDummyStreamShardHandle(), 100L);
 
-        assertThat(result.getMillisBehindLatest()).isEqualTo(Long.valueOf(100));
+        assertEquals(Long.valueOf(100), result.getMillisBehindLatest());
     }
 
     private Record record(final String sequenceNumber) {

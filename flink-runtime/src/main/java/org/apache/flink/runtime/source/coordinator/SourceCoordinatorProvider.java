@@ -43,7 +43,6 @@ public class SourceCoordinatorProvider<SplitT extends SourceSplit>
     private final Source<?, SplitT, ?> source;
     private final int numWorkerThreads;
     private final WatermarkAlignmentParams alignmentParams;
-    @Nullable private final String coordinatorListeningID;
 
     /**
      * Construct the {@link SourceCoordinatorProvider}.
@@ -61,14 +60,12 @@ public class SourceCoordinatorProvider<SplitT extends SourceSplit>
             OperatorID operatorID,
             Source<?, SplitT, ?> source,
             int numWorkerThreads,
-            WatermarkAlignmentParams alignmentParams,
-            @Nullable String coordinatorListeningID) {
+            WatermarkAlignmentParams alignmentParams) {
         super(operatorID);
         this.operatorName = operatorName;
         this.source = source;
         this.numWorkerThreads = numWorkerThreads;
         this.alignmentParams = alignmentParams;
-        this.coordinatorListeningID = coordinatorListeningID;
     }
 
     @Override
@@ -80,18 +77,13 @@ public class SourceCoordinatorProvider<SplitT extends SourceSplit>
         SimpleVersionedSerializer<SplitT> splitSerializer = source.getSplitSerializer();
         SourceCoordinatorContext<SplitT> sourceCoordinatorContext =
                 new SourceCoordinatorContext<>(
-                        coordinatorThreadFactory,
-                        numWorkerThreads,
-                        context,
-                        splitSerializer,
-                        context.isConcurrentExecutionAttemptsSupported());
+                        coordinatorThreadFactory, numWorkerThreads, context, splitSerializer);
         return new SourceCoordinator<>(
                 operatorName,
                 source,
                 sourceCoordinatorContext,
                 context.getCoordinatorStore(),
-                alignmentParams,
-                coordinatorListeningID);
+                alignmentParams);
     }
 
     /** A thread factory class that provides some helper methods. */

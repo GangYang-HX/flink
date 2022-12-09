@@ -50,6 +50,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -347,7 +349,9 @@ public class KafkaSourceReaderTest extends SourceReaderTestBase<KafkaPartitionSp
 
             // Metric "commit-total" of KafkaConsumer should be greater than 0
             // It's hard to know the exactly number of commit because of the retry
-            assertThat(getKafkaConsumerMetric("commit-total", metricListener)).isGreaterThan(0L);
+            MatcherAssert.assertThat(
+                    getKafkaConsumerMetric("commit-total", metricListener),
+                    Matchers.greaterThan(0L));
 
             // Committed offset should be NUM_RECORD_PER_SPLIT
             assertThat(getCommittedOffsetMetric(tp0, metricListener))
@@ -360,7 +364,7 @@ public class KafkaSourceReaderTest extends SourceReaderTestBase<KafkaPartitionSp
                     metricListener.getCounter(
                             KAFKA_SOURCE_READER_METRIC_GROUP, COMMITS_SUCCEEDED_METRIC_COUNTER);
             assertThat(commitsSucceeded).isPresent();
-            assertThat(commitsSucceeded.get().getCount()).isGreaterThan(0L);
+            MatcherAssert.assertThat(commitsSucceeded.get().getCount(), Matchers.greaterThan(0L));
         }
     }
 
@@ -391,10 +395,11 @@ public class KafkaSourceReaderTest extends SourceReaderTestBase<KafkaPartitionSp
                     new TestingReaderOutput<>(),
                     () -> reader.getNumAliveFetchers() == 0,
                     "The split fetcher did not exit before timeout.");
-            assertThat(finishedSplits)
-                    .containsExactlyInAnyOrder(
+            MatcherAssert.assertThat(
+                    finishedSplits,
+                    Matchers.containsInAnyOrder(
                             KafkaPartitionSplit.toSplitId(normalSplit.getTopicPartition()),
-                            KafkaPartitionSplit.toSplitId(emptySplit.getTopicPartition()));
+                            KafkaPartitionSplit.toSplitId(emptySplit.getTopicPartition())));
         }
     }
 

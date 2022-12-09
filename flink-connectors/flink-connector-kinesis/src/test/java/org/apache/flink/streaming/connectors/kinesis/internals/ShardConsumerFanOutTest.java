@@ -41,7 +41,8 @@ import static org.apache.flink.streaming.connectors.kinesis.internals.ShardConsu
 import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber.SENTINEL_AT_TIMESTAMP_SEQUENCE_NUM;
 import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber.SENTINEL_LATEST_SEQUENCE_NUM;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.TestUtils.efoProperties;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AFTER_SEQUENCE_NUMBER;
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_SEQUENCE_NUMBER;
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_TIMESTAMP;
@@ -55,7 +56,7 @@ public class ShardConsumerFanOutTest {
 
         assertNumberOfMessagesReceivedFromKinesis(0, kinesis, fakeSequenceNumber());
 
-        assertThat(kinesis.getNumberOfSubscribeToShardInvocations()).isEqualTo(1);
+        assertEquals(1, kinesis.getNumberOfSubscribeToShardInvocations());
     }
 
     @Test
@@ -69,10 +70,10 @@ public class ShardConsumerFanOutTest {
         assertNumberOfMessagesReceivedFromKinesis(10, kinesis, sequenceNumber, efoProperties());
 
         StartingPosition actual = kinesis.getStartingPositionForSubscription(0);
-        assertThat(actual.type()).isEqualTo(AT_TIMESTAMP);
+        assertEquals(AT_TIMESTAMP, actual.type());
 
         // Considering milliseconds to make now have the same precision as actual
-        assertThat(now.toEpochMilli()).isLessThanOrEqualTo(actual.timestamp().toEpochMilli());
+        assertTrue(now.toEpochMilli() <= actual.timestamp().toEpochMilli());
     }
 
     @Test
@@ -86,10 +87,10 @@ public class ShardConsumerFanOutTest {
         assertNumberOfMessagesReceivedFromKinesis(1, kinesis, sequenceNumber, efoProperties());
 
         // This fake Kinesis will give 2 subscriptions
-        assertThat(kinesis.getNumberOfSubscribeToShardInvocations()).isEqualTo(2);
+        assertEquals(2, kinesis.getNumberOfSubscribeToShardInvocations());
 
-        assertThat(kinesis.getStartingPositionForSubscription(0).type()).isEqualTo(AT_TIMESTAMP);
-        assertThat(kinesis.getStartingPositionForSubscription(1).type()).isEqualTo(AT_TIMESTAMP);
+        assertEquals(AT_TIMESTAMP, kinesis.getStartingPositionForSubscription(0).type());
+        assertEquals(AT_TIMESTAMP, kinesis.getStartingPositionForSubscription(1).type());
     }
 
     @Test
@@ -110,8 +111,8 @@ public class ShardConsumerFanOutTest {
         assertNumberOfMessagesReceivedFromKinesis(10, kinesis, sequenceNumber, consumerConfig);
 
         StartingPosition actual = kinesis.getStartingPositionForSubscription(0);
-        assertThat(actual.type()).isEqualTo(AT_TIMESTAMP);
-        assertThat(actual.timestamp()).isEqualTo(expectedTimestamp);
+        assertEquals(AT_TIMESTAMP, actual.type());
+        assertEquals(expectedTimestamp, actual.timestamp());
     }
 
     @Test
@@ -125,7 +126,7 @@ public class ShardConsumerFanOutTest {
         ShardConsumerMetricsReporter metrics =
                 assertNumberOfMessagesReceivedFromKinesis(10, kinesis, fakeSequenceNumber());
 
-        assertThat(metrics.getMillisBehindLatest()).isEqualTo(123L);
+        assertEquals(123L, metrics.getMillisBehindLatest());
     }
 
     @Test
@@ -139,7 +140,7 @@ public class ShardConsumerFanOutTest {
         // 10 batches of 5 records = 50
         assertNumberOfMessagesReceivedFromKinesis(50, kinesis, fakeSequenceNumber());
 
-        assertThat(kinesis.getNumberOfSubscribeToShardInvocations()).isEqualTo(1);
+        assertEquals(1, kinesis.getNumberOfSubscribeToShardInvocations());
     }
 
     @Test
@@ -155,12 +156,11 @@ public class ShardConsumerFanOutTest {
         assertNumberOfMessagesReceivedFromKinesis(1000, kinesis, fakeSequenceNumber());
 
         // 100 batches / 5 batches per subscription = 20 subscriptions
-        assertThat(kinesis.getNumberOfSubscribeToShardInvocations()).isEqualTo(20);
+        assertEquals(20, kinesis.getNumberOfSubscribeToShardInvocations());
 
         // Starting from non-aggregated sequence number means we should start AFTER the sequence
         // number
-        assertThat(kinesis.getStartingPositionForSubscription(0).type())
-                .isEqualTo(AFTER_SEQUENCE_NUMBER);
+        assertEquals(AFTER_SEQUENCE_NUMBER, kinesis.getStartingPositionForSubscription(0).type());
     }
 
     @Test
@@ -193,8 +193,7 @@ public class ShardConsumerFanOutTest {
         assertNumberOfMessagesReceivedFromKinesis(94, kinesis, subsequenceNumber);
 
         // Starting from aggregated sequence number means we should start AT the sequence number
-        assertThat(kinesis.getStartingPositionForSubscription(0).type())
-                .isEqualTo(AT_SEQUENCE_NUMBER);
+        assertEquals(AT_SEQUENCE_NUMBER, kinesis.getStartingPositionForSubscription(0).type());
     }
 
     @Test
@@ -210,7 +209,7 @@ public class ShardConsumerFanOutTest {
         assertNumberOfMessagesReceivedFromKinesis(10, kinesis, new SequenceNumber("0"));
 
         // 10 batches / 2 batches per subscription = 5 subscriptions
-        assertThat(kinesis.getNumberOfSubscribeToShardInvocations()).isEqualTo(5);
+        assertEquals(5, kinesis.getNumberOfSubscribeToShardInvocations());
 
         // Starting positions should correlate to the last consumed sequence number
         assertStartingPositionAfterSequenceNumber(
@@ -272,8 +271,8 @@ public class ShardConsumerFanOutTest {
 
     private void assertStartingPositionAfterSequenceNumber(
             final StartingPosition startingPosition, final String sequenceNumber) {
-        assertThat(startingPosition.type()).isEqualTo(AFTER_SEQUENCE_NUMBER);
-        assertThat(startingPosition.sequenceNumber()).isEqualTo(sequenceNumber);
+        assertEquals(AFTER_SEQUENCE_NUMBER, startingPosition.type());
+        assertEquals(sequenceNumber, startingPosition.sequenceNumber());
     }
 
     private ShardConsumerMetricsReporter assertNumberOfMessagesReceivedFromKinesis(

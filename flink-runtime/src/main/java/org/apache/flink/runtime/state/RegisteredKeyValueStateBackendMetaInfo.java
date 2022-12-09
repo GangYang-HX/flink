@@ -224,12 +224,6 @@ public class RegisteredKeyValueStateBackendMetaInfo<N, S> extends RegisteredStat
         return computeSnapshot();
     }
 
-    @Nonnull
-    @Override
-    public RegisteredKeyValueStateBackendMetaInfo<N, S> withSerializerUpgradesAllowed() {
-        return new RegisteredKeyValueStateBackendMetaInfo<>(snapshot());
-    }
-
     public void checkStateMetaInfo(StateDescriptor<?, ?> stateDesc) {
 
         Preconditions.checkState(

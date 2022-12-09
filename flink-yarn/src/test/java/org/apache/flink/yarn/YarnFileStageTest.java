@@ -19,6 +19,7 @@
 package org.apache.flink.yarn;
 
 import org.apache.flink.util.OperatingSystem;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.Lists;
 
@@ -33,11 +34,14 @@ import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.LocalResource;
 import org.apache.hadoop.yarn.api.records.LocalResourceType;
 import org.apache.hadoop.yarn.util.ConverterUtils;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.AfterClass;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -52,15 +56,20 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.flink.yarn.YarnTestUtils.generateFilesInDirectory;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 /** Tests for verifying file staging during submission to YARN works. */
-public class YarnFileStageTest {
+public class YarnFileStageTest extends TestLogger {
 
     private static final String LOCAL_RESOURCE_DIRECTORY = "stage_test";
 
-    @TempDir public File tempFolder;
+    @ClassRule public static final TemporaryFolder CLASS_TEMP_DIR = new TemporaryFolder();
+
+    @Rule public TemporaryFolder tempFolder = new TemporaryFolder();
 
     private static MiniDFSCluster hdfsCluster;
 
@@ -72,20 +81,22 @@ public class YarnFileStageTest {
     //  Test setup and shutdown
     // ------------------------------------------------------------------------
 
-    @BeforeAll
-    static void createHDFS(@TempDir File hdfsTempDir) throws Exception {
-        assumeThat(!OperatingSystem.isWindows()).isTrue();
+    @BeforeClass
+    public static void createHDFS() throws Exception {
+        Assume.assumeTrue(!OperatingSystem.isWindows());
+
+        final File tempDir = CLASS_TEMP_DIR.newFolder();
 
         org.apache.hadoop.conf.Configuration hdConf = new org.apache.hadoop.conf.Configuration();
-        hdConf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, hdfsTempDir.getAbsolutePath());
+        hdConf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, tempDir.getAbsolutePath());
 
         MiniDFSCluster.Builder builder = new MiniDFSCluster.Builder(hdConf);
         hdfsCluster = builder.build();
         hdfsRootPath = new Path(hdfsCluster.getURI());
     }
 
-    @AfterAll
-    static void destroyHDFS() {
+    @AfterClass
+    public static void destroyHDFS() {
         if (hdfsCluster != null) {
             hdfsCluster.shutdown();
         }
@@ -93,8 +104,8 @@ public class YarnFileStageTest {
         hdfsRootPath = null;
     }
 
-    @BeforeEach
-    void initConfig() {
+    @Before
+    public void initConfig() {
         hadoopConfig = new org.apache.hadoop.conf.Configuration();
         hadoopConfig.set(
                 org.apache.hadoop.fs.FileSystem.FS_DEFAULT_NAME_KEY, hdfsRootPath.toString());
@@ -164,7 +175,7 @@ public class YarnFileStageTest {
      * @param targetFileSystem file system of the target path
      * @param targetDir target path (URI like <tt>hdfs://...</tt>)
      * @param localResourceDirectory the directory that localResource are uploaded to
-     * @param srcDir JUnit temporary folder rule to create the source directory with
+     * @param tempFolder JUnit temporary folder rule to create the source directory with
      * @param addSchemeToLocalPath whether add the <tt>file://</tt> scheme to the local path to copy
      *     from
      * @param useRemoteFiles whether register the local resource with remote files
@@ -173,13 +184,15 @@ public class YarnFileStageTest {
             FileSystem targetFileSystem,
             Path targetDir,
             String localResourceDirectory,
-            File srcDir,
+            TemporaryFolder tempFolder,
             boolean addSchemeToLocalPath,
             boolean useRemoteFiles)
             throws Exception {
 
         // directory must not yet exist
-        assertThat(targetFileSystem.exists(targetDir)).isFalse();
+        assertFalse(targetFileSystem.exists(targetDir));
+
+        final File srcDir = tempFolder.newFolder();
 
         final HashMap<String /* (relative) path */, /* contents */ String> srcFiles =
                 new HashMap<>(4);
@@ -228,16 +241,17 @@ public class YarnFileStageTest {
 
             final Path basePath = new Path(localResourceDirectory, srcPath.getName());
             final Path nestedPath = new Path(basePath, "nested");
-            assertThat(classpath)
-                    .containsExactlyInAnyOrder(
+            assertThat(
+                    classpath,
+                    containsInAnyOrder(
                             basePath.toString(),
                             nestedPath.toString(),
                             new Path(nestedPath, "4").toString(),
-                            new Path(basePath, "test.jar").toString());
+                            new Path(basePath, "test.jar").toString()));
 
             final Map<String, LocalResource> localResources =
                     uploader.getRegisteredLocalResources();
-            assertThat(localResources).hasSameSizeAs(srcFiles);
+            assertEquals(srcFiles.size(), localResources.size());
 
             final Path workDir =
                     ConverterUtils.getPathFromYarnURL(
@@ -265,14 +279,19 @@ public class YarnFileStageTest {
      * @param targetFileSystem file system of the target path
      * @param targetDir target path (URI like <tt>hdfs://...</tt>)
      * @param localResourceDirectory the directory that localResource are uploaded to
-     * @param srcDir JUnit temporary folder rule to create the source directory with
+     * @param temporaryFolder JUnit temporary folder rule to create the source directory with
      * @throws IOException if error occurs when accessing the file system
      * @throws URISyntaxException if the format of url has errors when converting a given url to
      *     hadoop path
      */
     private static void testCopySingleFileFromLocal(
-            FileSystem targetFileSystem, Path targetDir, String localResourceDirectory, File srcDir)
+            FileSystem targetFileSystem,
+            Path targetDir,
+            String localResourceDirectory,
+            TemporaryFolder temporaryFolder)
             throws IOException, InterruptedException, URISyntaxException {
+
+        final File srcDir = temporaryFolder.newFolder();
 
         final String localFile = "local.jar";
         final String localFileContent = "Local Jar Content";
@@ -301,8 +320,9 @@ public class YarnFileStageTest {
                             localResourceDirectory,
                             LocalResourceType.FILE);
 
-            assertThat(classpath)
-                    .containsExactly(new Path(localResourceDirectory, localFile).toString());
+            assertThat(
+                    classpath,
+                    containsInAnyOrder(new Path(localResourceDirectory, localFile).toString()));
 
             final Map<String, LocalResource> localResources =
                     uploader.getRegisteredLocalResources();
@@ -326,15 +346,19 @@ public class YarnFileStageTest {
      * @param targetFileSystem file system of the target path
      * @param targetDir target path (URI like <tt>hdfs://...</tt>)
      * @param localResourceDirectory the directory that localResource are uploaded to
-     * @param srcDir JUnit temporary folder rule to create the source directory with
+     * @param temporaryFolder JUnit temporary folder rule to create the source directory with
      * @throws IOException if error occurs when accessing the file system
      * @throws URISyntaxException if the format of url has errors when converting a given url to
      *     hadoop path
      */
     private static void testCopySymbolicPathFromLocal(
-            FileSystem targetFileSystem, Path targetDir, String localResourceDirectory, File srcDir)
+            FileSystem targetFileSystem,
+            Path targetDir,
+            String localResourceDirectory,
+            TemporaryFolder temporaryFolder)
             throws IOException, InterruptedException, URISyntaxException {
 
+        final File srcDir = temporaryFolder.newFolder();
         final String srcPath = srcDir.getAbsolutePath();
 
         final String localSymbolicFile = "local.lnk";
@@ -350,6 +374,7 @@ public class YarnFileStageTest {
                 Paths.get(srcPath, localSymbolicFile), Paths.get(srcPath, "nested"));
 
         try {
+            final List<Path> remotePaths = new ArrayList<>();
 
             final ApplicationId applicationId = ApplicationId.newInstance(0, 0);
             final YarnApplicationFileUploader uploader =
@@ -368,10 +393,11 @@ public class YarnFileStageTest {
                             LocalResourceType.FILE);
 
             // resource directories go first
-            assertThat(classpath)
-                    .containsExactlyInAnyOrder(
+            assertThat(
+                    classpath,
+                    containsInAnyOrder(
                             new Path(localResourceDirectory).toString(),
-                            new Path(localResourceDirectory, "nested/local.jar").toString());
+                            new Path(localResourceDirectory, "nested/local.jar").toString()));
 
             final Map<String, LocalResource> localResources =
                     uploader.getRegisteredLocalResources();
@@ -417,9 +443,7 @@ public class YarnFileStageTest {
                     String relativePath = absolutePathString.substring(workDirPrefixLength);
                     targetFiles.put(relativePath, in.readUTF());
 
-                    assertThat(in.read())
-                            .as("extraneous data in file " + relativePath)
-                            .isEqualTo(-1);
+                    assertEquals("extraneous data in file " + relativePath, -1, in.read());
                     break;
                 } catch (FileNotFoundException e) {
                     // For S3, read-after-write may be eventually consistent, i.e. when trying
@@ -430,6 +454,6 @@ public class YarnFileStageTest {
                 }
             } while ((retries--) > 0);
         }
-        assertThat(targetFiles).isEqualTo(expectedFiles);
+        assertThat(targetFiles, equalTo(expectedFiles));
     }
 }

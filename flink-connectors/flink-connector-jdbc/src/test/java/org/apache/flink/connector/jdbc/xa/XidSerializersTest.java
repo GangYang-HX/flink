@@ -23,7 +23,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import javax.transaction.xa.Xid;
 
 /** XaSerializersTest. */
-class XidSerializersTest extends SerializerTestBase<Xid> {
+public class XidSerializersTest extends SerializerTestBase<Xid> {
 
     @Override
     protected TypeSerializer<Xid> createSerializer() {

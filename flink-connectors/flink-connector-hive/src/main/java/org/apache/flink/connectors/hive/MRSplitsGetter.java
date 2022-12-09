@@ -40,6 +40,7 @@ import java.util.concurrent.Future;
 
 import static org.apache.flink.util.concurrent.Executors.newDirectExecutorService;
 import static org.apache.hadoop.mapreduce.lib.input.FileInputFormat.INPUT_DIR;
+import static org.apache.hadoop.mapreduce.lib.input.FileInputFormat.INPUT_DIR_RECURSIVE;
 
 /** Create MR splits by multi-thread for hive partitions. */
 public class MRSplitsGetter implements Closeable {
@@ -111,6 +112,7 @@ public class MRSplitsGetter implements Closeable {
             FileSystem fs = inputPath.getFileSystem(jobConf);
             // it's possible a partition exists in metastore but the data has been removed
             if (!fs.exists(inputPath)) {
+                LOG.info("input path not exists: {}", inputPath);
                 return new HiveTablePartitionSplits(partition, jobConf, new InputSplit[0]);
             }
             InputFormat format;
@@ -123,6 +125,7 @@ public class MRSplitsGetter implements Closeable {
                                                 Thread.currentThread().getContextClassLoader())
                                         .newInstance();
             } catch (Exception e) {
+                LOG.error("init format error, format: {}", sd.getInputFormat(), e);
                 throw new FlinkHiveException("Unable to instantiate the hadoop input format", e);
             }
             ReflectionUtils.setConf(format, jobConf);

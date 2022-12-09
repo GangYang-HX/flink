@@ -30,7 +30,7 @@ import org.apache.flink.table.functions.UserDefinedFunction
 import org.apache.flink.table.planner.codegen.GenerateUtils.{generateInputFieldUnboxing, generateNonNullField}
 import org.apache.flink.table.planner.codegen.calls.BuiltInMethods.BINARY_STRING_DATA_FROM_STRING
 import org.apache.flink.table.runtime.dataview.StateDataViewStore
-import org.apache.flink.table.runtime.generated.{AggsHandleFunction, GeneratedHashFunction, HashFunction, NamespaceAggsHandleFunction, TableAggsHandleFunction}
+import org.apache.flink.table.runtime.generated.{AggsHandleFunction, HashFunction, NamespaceAggsHandleFunction, TableAggsHandleFunction}
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromDataTypeToLogicalType
 import org.apache.flink.table.runtime.typeutils.TypeCheckUtils
 import org.apache.flink.table.runtime.util.{MurmurHashUtil, TimeWindowUtil}
@@ -311,36 +311,22 @@ object CodeGenUtils {
       case DOUBLE => s"${className[JDouble]}.hashCode($term)"
       case TIMESTAMP_WITHOUT_TIME_ZONE | TIMESTAMP_WITH_LOCAL_TIME_ZONE =>
         s"$term.hashCode()"
-      case TIMESTAMP_WITH_TIME_ZONE =>
+      case TIMESTAMP_WITH_TIME_ZONE | ARRAY | MULTISET | MAP =>
         throw new UnsupportedOperationException(
           s"Unsupported type($t) to generate hash code," +
             s" the type($t) is not supported as a GROUP_BY/PARTITION_BY/JOIN_EQUAL/UNION field.")
-      case ARRAY =>
-        val subCtx = new CodeGeneratorContext(ctx.tableConfig, ctx.classLoader)
-        val genHash =
-          HashCodeGenerator.generateArrayHash(
-            subCtx,
-            t.asInstanceOf[ArrayType].getElementType,
-            "SubHashArray")
-        genHashFunction(ctx, subCtx, genHash, term)
-      case MULTISET | MAP =>
-        val subCtx = new CodeGeneratorContext(ctx.tableConfig, ctx.classLoader)
-        val (keyType, valueType) = t match {
-          case multiset: MultisetType =>
-            (multiset.getElementType, new IntType())
-          case map: MapType =>
-            (map.getKeyType, map.getValueType)
-        }
-        val genHash =
-          HashCodeGenerator.generateMapHash(subCtx, keyType, valueType, "SubHashMap")
-        genHashFunction(ctx, subCtx, genHash, term)
       case INTERVAL_DAY_TIME => s"${className[JLong]}.hashCode($term)"
       case ROW | STRUCTURED_TYPE =>
         val fieldCount = getFieldCount(t)
-        val subCtx = new CodeGeneratorContext(ctx.tableConfig, ctx.classLoader)
+        val subCtx = CodeGeneratorContext(ctx.tableConfig)
         val genHash =
           HashCodeGenerator.generateRowHash(subCtx, t, "SubHashRow", (0 until fieldCount).toArray)
-        genHashFunction(ctx, subCtx, genHash, term)
+        ctx.addReusableInnerClass(genHash.getClassName, genHash.getCode)
+        val refs = ctx.addReusableObject(subCtx.references.toArray, "subRefs")
+        val hashFunc = newName("hashFunc")
+        ctx.addReusableMember(s"${classOf[HashFunction].getCanonicalName} $hashFunc;")
+        ctx.addReusableInitStatement(s"$hashFunc = new ${genHash.getClassName}($refs);")
+        s"$hashFunc.hashCode($term)"
       case DISTINCT_TYPE =>
         hashCodeForType(ctx, t.asInstanceOf[DistinctType].getSourceType, term)
       case RAW =>
@@ -357,19 +343,6 @@ object CodeGenUtils {
     }
 
   // -------------------------- Method & Enum ---------------------------------------
-
-  def genHashFunction(
-      ctx: CodeGeneratorContext,
-      subCtx: CodeGeneratorContext,
-      genHash: GeneratedHashFunction,
-      term: String): String = {
-    ctx.addReusableInnerClass(genHash.getClassName, genHash.getCode)
-    val refs = ctx.addReusableObject(subCtx.references.toArray, "subRefs")
-    val hashFunc = newName("hashFunc")
-    ctx.addReusableMember(s"${classOf[HashFunction].getCanonicalName} $hashFunc;")
-    ctx.addReusableInitStatement(s"$hashFunc = new ${genHash.getClassName}($refs);")
-    s"$hashFunc.hashCode($term)"
-  }
 
   def qualifyMethod(method: Method): String =
     method.getDeclaringClass.getCanonicalName + "." + method.getName
@@ -510,27 +483,40 @@ object CodeGenUtils {
         case Some(writer) =>
           // use writer to set field
           val writeField = binaryWriterWriteField(ctx, indexTerm, fieldTerm, writer, fieldType)
-          s"""
-             |${fieldExpr.code}
-             |if (${fieldExpr.nullTerm}) {
-             |  ${binaryWriterWriteNull(indexTerm, writer, fieldType)};
-             |} else {
-             |  $writeField;
-             |}
-           """.stripMargin
+          if (ctx.nullCheck) {
+            s"""
+               |${fieldExpr.code}
+               |if (${fieldExpr.nullTerm}) {
+               |  ${binaryWriterWriteNull(indexTerm, writer, fieldType)};
+               |} else {
+               |  $writeField;
+               |}
+             """.stripMargin
+          } else {
+            s"""
+               |${fieldExpr.code}
+               |$writeField;
+             """.stripMargin
+          }
 
         case None =>
           // directly set field to BinaryRowData, this depends on all the fields are fixed length
           val writeField = binaryRowFieldSetAccess(indexTerm, rowTerm, fieldType, fieldTerm)
-
-          s"""
-             |${fieldExpr.code}
-             |if (${fieldExpr.nullTerm}) {
-             |  ${binaryRowSetNull(indexTerm, rowTerm, fieldType)};
-             |} else {
-             |  $writeField;
-             |}
-           """.stripMargin
+          if (ctx.nullCheck) {
+            s"""
+               |${fieldExpr.code}
+               |if (${fieldExpr.nullTerm}) {
+               |  ${binaryRowSetNull(indexTerm, rowTerm, fieldType)};
+               |} else {
+               |  $writeField;
+               |}
+             """.stripMargin
+          } else {
+            s"""
+               |${fieldExpr.code}
+               |$writeField;
+             """.stripMargin
+          }
       }
     } else if (rowClass == classOf[GenericRowData] || rowClass == classOf[BoxedWrapperRowData]) {
       val writeField = if (rowClass == classOf[GenericRowData]) {
@@ -544,7 +530,7 @@ object CodeGenUtils {
         s"$rowTerm.setNullAt($indexTerm)"
       }
 
-      if (fieldType.isNullable) {
+      if (ctx.nullCheck) {
         s"""
            |${fieldExpr.code}
            |if (${fieldExpr.nullTerm}) {

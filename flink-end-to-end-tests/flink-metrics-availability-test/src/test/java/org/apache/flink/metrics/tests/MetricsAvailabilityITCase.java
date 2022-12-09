@@ -19,6 +19,7 @@
 package org.apache.flink.metrics.tests;
 
 import org.apache.flink.api.common.time.Deadline;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.rest.RestClient;
@@ -169,7 +170,7 @@ public class MetricsAvailabilityITCase extends TestLogger {
                                 throw new RuntimeException(e);
                             }
                         },
-                        Duration.ofMillis(100),
+                        Time.milliseconds(100),
                         deadline,
                         predicate,
                         new ScheduledExecutorServiceAdapter(scheduledExecutorService));

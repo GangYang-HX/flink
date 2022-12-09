@@ -40,6 +40,7 @@ import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
 import org.apache.flink.runtime.io.network.NettyShuffleEnvironmentBuilder;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.partition.NoOpResultPartitionConsumableNotifier;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.runtime.jobgraph.tasks.InputSplitProvider;
@@ -48,7 +49,6 @@ import org.apache.flink.runtime.memory.MemoryManagerBuilder;
 import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.query.KvStateRegistry;
 import org.apache.flink.runtime.shuffle.ShuffleEnvironment;
-import org.apache.flink.runtime.state.TaskExecutorStateChangelogStoragesManager;
 import org.apache.flink.runtime.state.TaskLocalStateStore;
 import org.apache.flink.runtime.state.TaskLocalStateStoreImpl;
 import org.apache.flink.runtime.state.TaskStateManager;
@@ -82,7 +82,6 @@ import java.util.Collections;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.junit.Assume.assumeFalse;
 import static org.mockito.Mockito.mock;
 
@@ -159,7 +158,7 @@ public class JvmExitOnFatalErrorTest extends TestLogger {
                 final JobID jid = new JobID();
                 final AllocationID allocationID = new AllocationID();
                 final JobVertexID jobVertexId = new JobVertexID();
-                final ExecutionAttemptID executionAttemptID = createExecutionAttemptId(jobVertexId);
+                final ExecutionAttemptID executionAttemptID = new ExecutionAttemptID();
                 final AllocationID slotAllocationId = new AllocationID();
 
                 final SerializedValue<ExecutionConfig> execConfig =
@@ -207,7 +206,7 @@ public class JvmExitOnFatalErrorTest extends TestLogger {
                                 jid,
                                 allocationID,
                                 jobVertexId,
-                                executionAttemptID.getSubtaskIndex(),
+                                0,
                                 TestLocalRecoveryConfig.disabled(),
                                 executor);
 
@@ -220,7 +219,6 @@ public class JvmExitOnFatalErrorTest extends TestLogger {
                                 executionAttemptID,
                                 localStateStore,
                                 changelogStorage,
-                                new TaskExecutorStateChangelogStoragesManager(),
                                 null,
                                 mock(CheckpointResponder.class));
 
@@ -230,6 +228,8 @@ public class JvmExitOnFatalErrorTest extends TestLogger {
                                 taskInformation,
                                 executionAttemptID,
                                 slotAllocationId,
+                                0, // subtaskIndex
+                                0, // attemptNumber
                                 Collections.<ResultPartitionDeploymentDescriptor>emptyList(),
                                 Collections.<InputGateDeploymentDescriptor>emptyList(),
                                 memoryManager,
@@ -251,6 +251,7 @@ public class JvmExitOnFatalErrorTest extends TestLogger {
                                         VoidPermanentBlobService.INSTANCE),
                                 tmInfo,
                                 UnregisteredMetricGroups.createUnregisteredTaskMetricGroup(),
+                                new NoOpResultPartitionConsumableNotifier(),
                                 new NoOpPartitionProducerStateChecker(),
                                 executor);
 

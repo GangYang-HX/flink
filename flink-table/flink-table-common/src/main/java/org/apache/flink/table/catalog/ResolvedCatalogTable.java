@@ -37,8 +37,7 @@ import java.util.Optional;
  * ResolvedCatalogTable#toProperties()}.
  */
 @PublicEvolving
-public final class ResolvedCatalogTable
-        implements ResolvedCatalogBaseTable<CatalogTable>, CatalogTable {
+public class ResolvedCatalogTable implements ResolvedCatalogBaseTable<CatalogTable>, CatalogTable {
 
     private final CatalogTable origin;
 

@@ -50,7 +50,8 @@ import java.util.concurrent.ScheduledFuture;
 import static org.apache.flink.types.RowKind.DELETE;
 import static org.apache.flink.types.RowKind.INSERT;
 import static org.apache.flink.types.RowKind.UPDATE_AFTER;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link ReducingUpsertWriter}. */
 @RunWith(Parameterized.class)
@@ -154,7 +155,7 @@ public class ReducingUpsertWriterTest {
 
         // write 4 records which doesn't trigger batch size
         writeData(bufferedWriter, new ReusableIterator(0, 4));
-        assertThat(writer.rowDataCollectors).isEmpty();
+        assertTrue(writer.rowDataCollectors.isEmpty());
 
         // write one more record, and should flush the buffer
         writeData(bufferedWriter, new ReusableIterator(7, 1));
@@ -211,7 +212,7 @@ public class ReducingUpsertWriterTest {
         writer.rowDataCollectors.clear();
         // write remaining data, and they are still buffered
         writeData(bufferedWriter, new ReusableIterator(4, 3));
-        assertThat(writer.rowDataCollectors).isEmpty();
+        assertTrue(writer.rowDataCollectors.isEmpty());
     }
 
     @Test
@@ -270,9 +271,9 @@ public class ReducingUpsertWriterTest {
             actualMap.computeIfAbsent(id, key -> new ArrayList<>()).add(rowData);
         }
 
-        assertThat(actualMap).hasSameSizeAs(expected);
+        assertEquals(expected.size(), actualMap.size());
         for (Integer id : expected.keySet()) {
-            assertThat(actualMap.get(id)).isEqualTo(expected.get(id));
+            assertEquals(expected.get(id), actualMap.get(id));
         }
     }
 
@@ -337,8 +338,9 @@ public class ReducingUpsertWriterTest {
         @Override
         public void write(RowData element, Context context)
                 throws IOException, InterruptedException {
-            assertThat(Instant.ofEpochMilli(context.timestamp()))
-                    .isEqualTo(element.getTimestamp(TIMESTAMP_INDICES, 3).toInstant());
+            assertEquals(
+                    element.getTimestamp(TIMESTAMP_INDICES, 3).toInstant(),
+                    Instant.ofEpochMilli(context.timestamp()));
             rowDataCollectors.add(element);
         }
 

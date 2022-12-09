@@ -20,8 +20,6 @@ package org.apache.flink.table.planner.delegation.hive;
 
 import org.apache.flink.table.catalog.hive.client.HiveShim;
 import org.apache.flink.table.catalog.hive.util.HiveReflectionUtils;
-import org.apache.flink.table.module.hive.udf.generic.HiveGenericUDFArrayAccessStructField;
-import org.apache.flink.table.module.hive.udf.generic.HiveGenericUDFToDecimal;
 import org.apache.flink.table.planner.delegation.hive.copy.HiveASTParseUtils;
 import org.apache.flink.table.planner.delegation.hive.copy.HiveParserExprNodeDescUtils;
 import org.apache.flink.table.planner.delegation.hive.copy.HiveParserExprNodeSubQueryDesc;
@@ -60,8 +58,6 @@ import org.apache.calcite.util.TimestampString;
 import org.apache.hadoop.hive.common.type.Decimal128;
 import org.apache.hadoop.hive.common.type.HiveChar;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
-import org.apache.hadoop.hive.common.type.HiveIntervalDayTime;
-import org.apache.hadoop.hive.common.type.HiveIntervalYearMonth;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
 import org.apache.hadoop.hive.ql.ErrorMsg;
 import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
@@ -94,7 +90,6 @@ import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.PrimitiveTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
-import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 
 import java.math.BigDecimal;
@@ -102,7 +97,6 @@ import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -239,44 +233,16 @@ public class HiveParserRexNodeConverter {
         RexNode rexNode = convert(fieldDesc.getDesc());
         if (rexNode.getType().isStruct()) {
             // regular case of accessing nested field in a column
-            return cluster.getRexBuilder()
-                    .makeFieldAccess(rexNode, fieldDesc.getFieldName(), false);
+            return cluster.getRexBuilder().makeFieldAccess(rexNode, fieldDesc.getFieldName(), true);
         } else {
             if (fieldDesc.getIsList()) {
-                // it's for accessing the value of a field for the struct data contained in a list.
-                // to support such case, convert it to call 'flink_hive_array_access_struct_field'
-                // function implemented in
-                // org.apache.flink.table.module.hive.udf.generic.HiveGenericUDFArrayFieldAccess
-
-                // get the first parameter's data type for 'flink_hive_array_access_struct_field'
-                RelDataType arrayDataType =
-                        HiveParserTypeConverter.convert(
-                                fieldDesc.getDesc().getTypeInfo(), cluster.getTypeFactory());
-                // get the second parameter for 'flink_hive_array_access_struct_field', it's always
-                // a string literal valued the field's name
-                RexNode accessedField =
-                        cluster.getRexBuilder().makeLiteral(fieldDesc.getFieldName());
-                RelDataType accessFieldType =
-                        HiveParserTypeConverter.convert(
-                                TypeInfoFactory.stringTypeInfo, cluster.getTypeFactory());
-                RelDataType retType =
-                        HiveParserTypeConverter.convert(
-                                fieldDesc.getTypeInfo(), cluster.getTypeFactory());
-                SqlOperator calciteOp =
-                        HiveParserSqlFunctionConverter.getCalciteFn(
-                                HiveGenericUDFArrayAccessStructField.NAME,
-                                Arrays.asList(arrayDataType, accessFieldType),
-                                retType,
-                                false,
-                                funcConverter);
-
-                return cluster.getRexBuilder().makeCall(calciteOp, rexNode, accessedField);
-            } else {
-                // This may happen for schema-less tables, where columns are dynamically
-                // supplied by serdes.
-                throw new SemanticException(
-                        "Unexpected rexnode : " + rexNode.getClass().getCanonicalName());
+                // TODO: support this, need to create a func to create an array with fields within
+                // the origin array?
             }
+            // This may happen for schema-less tables, where columns are dynamically
+            // supplied by serdes.
+            throw new SemanticException(
+                    "Unexpected rexnode : " + rexNode.getClass().getCanonicalName());
         }
     }
 
@@ -458,21 +424,9 @@ public class HiveParserRexNodeConverter {
             default:
                 if (hiveShim.isIntervalYearMonthType(hiveTypeCategory)) {
                     // Calcite year-month literal value is months as BigDecimal
-                    BigDecimal totalMonths;
-                    if (value instanceof HiveParserIntervalYearMonth) {
-                        totalMonths =
-                                BigDecimal.valueOf(
-                                        ((HiveParserIntervalYearMonth) value).getTotalMonths());
-                    } else if (value instanceof HiveIntervalYearMonth) {
-                        totalMonths =
-                                BigDecimal.valueOf(
-                                        ((HiveIntervalYearMonth) value).getTotalMonths());
-                    } else {
-                        throw new SemanticException(
-                                String.format(
-                                        "Unexpected class %s for Hive's interval day time type",
-                                        value.getClass().getName()));
-                    }
+                    BigDecimal totalMonths =
+                            BigDecimal.valueOf(
+                                    ((HiveParserIntervalYearMonth) value).getTotalMonths());
                     calciteLiteral =
                             rexBuilder.makeIntervalLiteral(
                                     totalMonths,
@@ -481,30 +435,12 @@ public class HiveParserRexNodeConverter {
                 } else if (hiveShim.isIntervalDayTimeType(hiveTypeCategory)) {
                     // Calcite day-time interval is millis value as BigDecimal
                     // Seconds converted to millis
-                    BigDecimal secsValueBd;
+                    BigDecimal secsValueBd =
+                            BigDecimal.valueOf(
+                                    ((HiveParserIntervalDayTime) value).getTotalSeconds() * 1000);
                     // Nanos converted to millis
-                    BigDecimal nanosValueBd;
-                    if (value instanceof HiveParserIntervalDayTime) {
-                        secsValueBd =
-                                BigDecimal.valueOf(
-                                        ((HiveParserIntervalDayTime) value).getTotalSeconds()
-                                                * 1000);
-                        nanosValueBd =
-                                BigDecimal.valueOf(
-                                        ((HiveParserIntervalDayTime) value).getNanos(), 6);
-                    } else if (value instanceof HiveIntervalDayTime) {
-                        secsValueBd =
-                                BigDecimal.valueOf(
-                                        ((HiveIntervalDayTime) value).getTotalSeconds() * 1000);
-                        nanosValueBd =
-                                BigDecimal.valueOf(((HiveIntervalDayTime) value).getNanos(), 6);
-                    } else {
-                        throw new SemanticException(
-                                String.format(
-                                        "Unexpected class %s for Hive's interval day time type.",
-                                        value.getClass().getName()));
-                    }
-                    // Nanos converted to millis
+                    BigDecimal nanosValueBd =
+                            BigDecimal.valueOf(((HiveParserIntervalDayTime) value).getNanos(), 6);
                     calciteLiteral =
                             rexBuilder.makeIntervalLiteral(
                                     secsValueBd.add(nanosValueBd),
@@ -596,7 +532,7 @@ public class HiveParserRexNodeConverter {
                 HiveParserTypeConverter.convert(func.getTypeInfo(), cluster.getTypeFactory());
         SqlOperator calciteOp =
                 HiveParserSqlFunctionConverter.getCalciteOperator(
-                        func.getFuncText(), func.getGenericUDF(), argTypes, retType, funcConverter);
+                        func.getFuncText(), func.getGenericUDF(), argTypes, retType);
         if (calciteOp.getKind() == SqlKind.CASE) {
             // If it is a case operator, we need to rewrite it
             childRexNodeLst = rewriteCaseChildren(func, childRexNodeLst);
@@ -673,8 +609,7 @@ public class HiveParserRexNodeConverter {
                                     HiveParserTypeConverter.convert(
                                             commonType, cluster.getTypeFactory())),
                             Collections.singletonList(commonType),
-                            funcConverter,
-                            true);
+                            null);
             // create RexNode for LHS
             RexNode lhsRex = convert(lhsDesc);
 
@@ -797,29 +732,7 @@ public class HiveParserRexNodeConverter {
             throws SemanticException {
         GenericUDF udf = func.getGenericUDF();
         if (isExplicitCast(udf) && childRexNodeLst != null && childRexNodeLst.size() == 1) {
-            RelDataType targetType =
-                    HiveParserTypeConverter.convert(func.getTypeInfo(), cluster.getTypeFactory());
-            if (HiveParserUtils.isFromTimeStampToDecimal(
-                    childRexNodeLst.get(0).getType(), targetType)) {
-                // special case for cast timestamp to decimal for Flink don't support cast from
-                // TIMESTAMP type to NUMERIC type.
-                // use custom to_decimal function to cast, which is consistent with Hive.
-                SqlOperator castOperator =
-                        HiveParserSqlFunctionConverter.getCalciteFn(
-                                HiveGenericUDFToDecimal.NAME,
-                                Arrays.asList(childRexNodeLst.get(0).getType(), targetType),
-                                targetType,
-                                false,
-                                funcConverter);
-                return cluster.getRexBuilder()
-                        .makeCall(
-                                castOperator,
-                                childRexNodeLst.get(0),
-                                cluster.getRexBuilder().makeNullLiteral(targetType));
-            }
-
-            // we cannot handle SettableUDF at the moment so we call calcite to do the cast in
-            // that
+            // we cannot handle SettableUDF at the moment so we call calcite to do the cast in that
             // case, otherwise we use hive functions to achieve better compatibility
             if (udf instanceof SettableUDF
                     || !funcConverter.hasOverloadedOp(

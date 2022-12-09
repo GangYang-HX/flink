@@ -23,8 +23,6 @@ import org.apache.flink.examples.scala.graph.EnumTriangles;
 import org.apache.flink.test.testdata.EnumTriangleData;
 import org.apache.flink.test.util.JavaProgramTestBase;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultsByLinesInMemory;
-
 /** Test {@link EnumTriangles}. */
 public class EnumTriangleITCase extends JavaProgramTestBase {
 

@@ -33,8 +33,6 @@ trait AggCodeGen {
 
   def resetAccumulator(generator: ExprCodeGenerator): String
 
-  def setWindowSize(generator: ExprCodeGenerator): String
-
   def accumulate(generator: ExprCodeGenerator): String
 
   def retract(generator: ExprCodeGenerator): String

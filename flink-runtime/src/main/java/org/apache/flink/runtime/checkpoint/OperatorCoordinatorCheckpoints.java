@@ -81,7 +81,7 @@ final class OperatorCoordinatorCheckpoints {
             throws Exception {
 
         final CompletableFuture<AllCoordinatorSnapshots> snapshots =
-                triggerAllCoordinatorCheckpoints(coordinators, checkpoint.getCheckpointID());
+                triggerAllCoordinatorCheckpoints(coordinators, checkpoint.getCheckpointId());
 
         return snapshots.thenAcceptAsync(
                 (allSnapshots) -> {

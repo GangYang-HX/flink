@@ -24,32 +24,33 @@ import org.apache.flink.connector.file.src.reader.TextLineInputFormat;
 import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
 import org.apache.flink.core.fs.Path;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 import java.util.Collections;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Unit tests for the {@link FileSourceReader}. */
-class FileSourceReaderTest {
+public class FileSourceReaderTest {
 
-    @TempDir private static java.nio.file.Path tmpDir;
+    @ClassRule public static final TemporaryFolder TMP_DIR = new TemporaryFolder();
 
     @Test
-    void testRequestSplitWhenNoSplitRestored() throws Exception {
+    public void testRequestSplitWhenNoSplitRestored() throws Exception {
         final TestingReaderContext context = new TestingReaderContext();
         final FileSourceReader<String, FileSourceSplit> reader = createReader(context);
 
         reader.start();
         reader.close();
 
-        assertThat(context.getNumSplitRequests()).isEqualTo(1);
+        assertEquals(1, context.getNumSplitRequests());
     }
 
     @Test
-    void testNoSplitRequestWhenSplitRestored() throws Exception {
+    public void testNoSplitRequestWhenSplitRestored() throws Exception {
         final TestingReaderContext context = new TestingReaderContext();
         final FileSourceReader<String, FileSourceSplit> reader = createReader(context);
 
@@ -57,7 +58,7 @@ class FileSourceReaderTest {
         reader.start();
         reader.close();
 
-        assertThat(context.getNumSplitRequests()).isEqualTo(0);
+        assertEquals(0, context.getNumSplitRequests());
     }
 
     private static FileSourceReader<String, FileSourceSplit> createReader(
@@ -67,6 +68,7 @@ class FileSourceReaderTest {
     }
 
     private static FileSourceSplit createTestFileSplit() throws IOException {
-        return new FileSourceSplit("test-id", Path.fromLocalFile(tmpDir.toFile()), 0L, 0L, 0L, 0L);
+        return new FileSourceSplit(
+                "test-id", Path.fromLocalFile(TMP_DIR.newFile()), 0L, 0L, 0L, 0L);
     }
 }

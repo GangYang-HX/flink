@@ -56,9 +56,6 @@ public interface ResolverRule {
         /** Access to configuration. */
         ReadableConfig configuration();
 
-        /** Access to user classloader. */
-        ClassLoader userClassLoader();
-
         /**
          * Access to available {@link org.apache.flink.table.expressions.FieldReferenceExpression}
          * in inputs.

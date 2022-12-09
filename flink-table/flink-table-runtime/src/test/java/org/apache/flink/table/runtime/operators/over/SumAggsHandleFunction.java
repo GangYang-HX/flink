@@ -77,9 +77,6 @@ public class SumAggsHandleFunction implements AggsHandleFunction {
     }
 
     @Override
-    public void setWindowSize(int windowSize) {}
-
-    @Override
     public void cleanup() throws Exception {}
 
     @Override

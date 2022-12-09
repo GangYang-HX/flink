@@ -26,7 +26,6 @@ import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
-import org.apache.flink.runtime.security.token.DelegationTokenManager;
 
 import javax.annotation.Nullable;
 
@@ -47,7 +46,6 @@ public class ResourceManagerProcessContext {
     private final RpcService rpcService;
     private final HighAvailabilityServices highAvailabilityServices;
     private final HeartbeatServices heartbeatServices;
-    private final DelegationTokenManager delegationTokenManager;
     private final FatalErrorHandler fatalErrorHandler;
     private final ClusterInformation clusterInformation;
     @Nullable private final String webInterfaceUrl;
@@ -62,7 +60,6 @@ public class ResourceManagerProcessContext {
             RpcService rpcService,
             HighAvailabilityServices highAvailabilityServices,
             HeartbeatServices heartbeatServices,
-            DelegationTokenManager delegationTokenManager,
             FatalErrorHandler fatalErrorHandler,
             ClusterInformation clusterInformation,
             @Nullable String webInterfaceUrl,
@@ -75,7 +72,6 @@ public class ResourceManagerProcessContext {
         this.rpcService = checkNotNull(rpcService);
         this.highAvailabilityServices = checkNotNull(highAvailabilityServices);
         this.heartbeatServices = checkNotNull(heartbeatServices);
-        this.delegationTokenManager = checkNotNull(delegationTokenManager);
         this.fatalErrorHandler = checkNotNull(fatalErrorHandler);
         this.clusterInformation = checkNotNull(clusterInformation);
         this.metricRegistry = checkNotNull(metricRegistry);
@@ -107,10 +103,6 @@ public class ResourceManagerProcessContext {
 
     public HeartbeatServices getHeartbeatServices() {
         return heartbeatServices;
-    }
-
-    public DelegationTokenManager getDelegationTokenManager() {
-        return delegationTokenManager;
     }
 
     public FatalErrorHandler getFatalErrorHandler() {

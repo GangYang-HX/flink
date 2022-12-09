@@ -24,12 +24,15 @@ import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.hadoop.hive.ql.exec.vector.StructColumnVector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** This column vector is used to adapt hive's StructColumnVector to Flink's RowColumnVector. */
 public class OrcRowColumnVector extends AbstractOrcColumnVector
         implements org.apache.flink.table.data.columnar.vector.RowColumnVector {
 
     private final ColumnarRowData columnarRowData;
+    private static final Logger LOG = LoggerFactory.getLogger(OrcRowColumnVector.class);
 
     public OrcRowColumnVector(StructColumnVector hiveVector, RowType type) {
         super(hiveVector);
@@ -38,6 +41,12 @@ public class OrcRowColumnVector extends AbstractOrcColumnVector
         for (int i = 0; i < len; i++) {
             flinkVectors[i] = createFlinkVector(hiveVector.fields[i], type.getTypeAt(i));
         }
+        LOG.info(
+                "init OrcRowColumnVector,hiveVector={},type={},flinkVectors={}",
+                hiveVector.toString(),
+                type,
+                flinkVectors.length);
+
         this.columnarRowData = new ColumnarRowData(new VectorizedColumnBatch(flinkVectors));
     }
 

@@ -20,7 +20,6 @@ package org.apache.flink.table.runtime.generated;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ReadableConfig;
 
 /** Describes a generated {@link NamespaceAggsHandleFunction}. */
 public class GeneratedNamespaceAggsHandleFunction<N>
@@ -35,7 +34,7 @@ public class GeneratedNamespaceAggsHandleFunction<N>
     }
 
     public GeneratedNamespaceAggsHandleFunction(
-            String className, String code, Object[] references, ReadableConfig conf) {
+            String className, String code, Object[] references, Configuration conf) {
         super(className, code, references, conf);
     }
 }

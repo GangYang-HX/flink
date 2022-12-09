@@ -18,8 +18,6 @@
 
 package org.apache.flink.sql.parser.ddl;
 
-import org.apache.flink.sql.parser.SqlUnparseUtils;
-
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
@@ -83,10 +81,16 @@ public class SqlAddReplaceColumns extends SqlAlterTable {
         writer.keyword("COLUMNS");
         SqlWriter.Frame frame = writer.startList(SqlWriter.FrameTypeEnum.create("sds"), "(", ")");
         for (SqlNode column : newColumns) {
-            SqlUnparseUtils.printIndent(writer);
+            printIndent(writer);
             column.unparse(writer, leftPrec, rightPrec);
         }
         writer.newlineAndIndent();
         writer.endList(frame);
+    }
+
+    protected void printIndent(SqlWriter writer) {
+        writer.sep(",", false);
+        writer.newlineAndIndent();
+        writer.print("  ");
     }
 }

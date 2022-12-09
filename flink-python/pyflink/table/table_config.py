@@ -16,8 +16,10 @@
 # limitations under the License.
 ################################################################################
 import datetime
+import warnings
 
 from py4j.compat import long
+from typing import Tuple
 
 from pyflink.common.configuration import Configuration
 from pyflink.java_gateway import get_gateway
@@ -131,6 +133,29 @@ class TableConfig(object):
             self._j_table_config.setLocalTimeZone(j_timezone)
         else:
             raise Exception("TableConfig.timezone should be a string!")
+
+    def get_null_check(self) -> bool:
+        """
+        A boolean value, "True" enables NULL check and "False" disables NULL check.
+
+        .. note:: Deprecated in 1.15 and will be removed in next release.
+        """
+        warnings.warn("Deprecated in 1.15.", DeprecationWarning)
+
+        return self._j_table_config.getNullCheck()
+
+    def set_null_check(self, null_check: bool):
+        """
+        Sets the NULL check. If enabled, all fields need to be checked for NULL first.
+
+        .. note:: Deprecated in 1.15 and will be removed in next release.
+        """
+        warnings.warn("Deprecated in 1.15.", DeprecationWarning)
+
+        if null_check is not None and isinstance(null_check, bool):
+            self._j_table_config.setNullCheck(null_check)
+        else:
+            raise Exception("TableConfig.null_check should be a bool value!")
 
     def get_max_generated_code_length(self) -> int:
         """
@@ -264,6 +289,87 @@ class TableConfig(object):
         return datetime.timedelta(
             milliseconds=self._j_table_config.getIdleStateRetention().toMillis())
 
+    def set_decimal_context(self, precision: int, rounding_mode: str):
+        """
+        Sets the default context for decimal division calculation.
+        (precision=34, rounding_mode=HALF_EVEN) by default.
+
+        The precision is the number of digits to be used for an operation. A value of 0 indicates
+        that unlimited precision (as many digits as are required) will be used. Note that leading
+        zeros (in the coefficient of a number) are never significant.
+
+        The rounding mode is the rounding algorithm to be used for an operation. It could be:
+
+        **UP**, **DOWN**, **CEILING**, **FLOOR**, **HALF_UP**, **HALF_DOWN**, **HALF_EVEN**,
+        **UNNECESSARY**
+
+        The table below shows the results of rounding input to one digit with the given rounding
+        mode:
+
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | Input | UP | DOWN | CEILING | FLOOR | HALF_UP | HALF_DOWN | HALF_EVEN | UNNECESSARY |
+        +=======+====+======+=========+=======+=========+===========+===========+=============+
+        | 5.5   |  6 |   5  |    6    |   5   |    6    |     5     |     6     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | 2.5   |  3 |   2  |    3    |   2   |    3    |     2     |     2     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | 1.6   |  2 |   1  |    2    |   1   |    2    |     2     |     2     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | 1.1   |  2 |   1  |    2    |   1   |    1    |     1     |     1     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | 1.0   |  1 |   1  |    1    |   1   |    1    |     1     |     1     |      1      |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | -1.0  | -1 |  -1  |   -1    |  -1   |   -1    |    -1     |    -1     |     -1      |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | -1.1  | -2 |  -1  |   -1    |  -2   |   -1    |    -1     |    -1     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | -1.6  | -2 |  -1  |   -1    |  -2   |   -2    |    -2     |    -2     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | 2.5   | -3 |  -2  |   -2    |  -3   |   -3    |    -2     |    -2     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+        | 5.5   | -6 |  -5  |   -5    |  -6   |   -6    |    -5     |    -6     |  Exception  |
+        +-------+----+------+---------+-------+---------+-----------+-----------+-------------+
+
+        :param precision: The precision of the decimal context.
+        :param rounding_mode: The rounding mode of the decimal context.
+
+        .. note:: Deprecated in 1.15 and will be removed in next release.
+        """
+        warnings.warn("Deprecated in 1.15.", DeprecationWarning)
+
+        if rounding_mode not in (
+                "UP",
+                "DOWN",
+                "CEILING",
+                "FLOOR",
+                "HALF_UP",
+                "HALF_DOWN",
+                "HALF_EVEN",
+                "UNNECESSARY"):
+            raise ValueError("Unsupported rounding_mode: %s" % rounding_mode)
+        gateway = get_gateway()
+        j_rounding_mode = getattr(gateway.jvm.java.math.RoundingMode, rounding_mode)
+        j_math_context = gateway.jvm.java.math.MathContext(precision, j_rounding_mode)
+        self._j_table_config.setDecimalContext(j_math_context)
+
+    def get_decimal_context(self) -> Tuple[int, str]:
+        """
+        Returns current context for decimal division calculation,
+        (precision=34, rounding_mode=HALF_EVEN) by default.
+
+        .. seealso:: :func:`set_decimal_context`
+
+        :return: the current context for decimal division calculation.
+
+        .. note:: Deprecated in 1.15 and will be removed in next release.
+        """
+        warnings.warn("Deprecated in 1.15.", DeprecationWarning)
+
+        j_math_context = self._j_table_config.getDecimalContext()
+        precision = j_math_context.getPrecision()
+        rounding_mode = j_math_context.getRoundingMode().name()
+        return precision, rounding_mode
+
     def get_configuration(self) -> Configuration:
         """
         Gives direct access to the underlying key-value map for advanced configuration.
@@ -325,7 +431,7 @@ class TableConfig(object):
 
         .. note::
 
-            The python udf worker depends on Apache Beam (version == 2.38.0).
+            The python udf worker depends on Apache Beam (version == 2.27.0).
             Please ensure that the specified environment meets the above requirements.
 
         :param python_exec: The path of python interpreter.

@@ -23,7 +23,6 @@ import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.client.program.ClusterClient;
 import org.apache.flink.client.program.MiniClusterClient;
 import org.apache.flink.client.program.rest.RestClusterClient;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.testutils.InternalMiniClusterExtension;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
@@ -171,7 +170,7 @@ public final class MiniClusterExtension
             throws ParameterResolutionException {
         Class<?> parameterType = parameterContext.getParameter().getType();
         if (parameterContext.isAnnotated(InjectClusterClient.class)
-                && ClusterClient.class.isAssignableFrom(parameterType)) {
+                && parameterType.isAssignableFrom(ClusterClient.class)) {
             return true;
         }
         return internalMiniClusterExtension.supportsParameter(parameterContext, extensionContext);
@@ -242,9 +241,7 @@ public final class MiniClusterExtension
 
     @Override
     public void afterAll(ExtensionContext context) throws Exception {
-        if (internalMiniClusterExtension != null) {
-            internalMiniClusterExtension.afterAll(context);
-        }
+        internalMiniClusterExtension.afterAll(context);
     }
 
     // Implementation
@@ -278,12 +275,6 @@ public final class MiniClusterExtension
         return new RestClusterClient<>(
                 internalMiniClusterExtension.getClientConfiguration(),
                 MiniClusterClient.MiniClusterId.INSTANCE);
-    }
-
-    // Utils
-
-    public Configuration getClientConfiguration() {
-        return internalMiniClusterExtension.getClientConfiguration();
     }
 
     private static class CloseableParameter<T extends AutoCloseable>

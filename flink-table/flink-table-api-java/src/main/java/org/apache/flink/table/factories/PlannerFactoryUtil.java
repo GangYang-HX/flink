@@ -37,7 +37,6 @@ public class PlannerFactoryUtil {
     public static Planner createPlanner(
             Executor executor,
             TableConfig tableConfig,
-            ClassLoader userClassLoader,
             ModuleManager moduleManager,
             CatalogManager catalogManager,
             FunctionCatalog functionCatalog) {
@@ -49,12 +48,7 @@ public class PlannerFactoryUtil {
 
         final Context context =
                 new DefaultPlannerContext(
-                        executor,
-                        tableConfig,
-                        userClassLoader,
-                        moduleManager,
-                        catalogManager,
-                        functionCatalog);
+                        executor, tableConfig, moduleManager, catalogManager, functionCatalog);
         return plannerFactory.create(context);
     }
 

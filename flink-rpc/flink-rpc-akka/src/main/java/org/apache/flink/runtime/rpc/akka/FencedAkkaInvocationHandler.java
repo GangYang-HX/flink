@@ -18,23 +18,31 @@
 
 package org.apache.flink.runtime.rpc.akka;
 
+import org.apache.flink.api.common.time.Time;
+import org.apache.flink.runtime.concurrent.akka.AkkaFutureUtils;
+import org.apache.flink.runtime.rpc.FencedMainThreadExecutable;
 import org.apache.flink.runtime.rpc.FencedRpcEndpoint;
 import org.apache.flink.runtime.rpc.FencedRpcGateway;
-import org.apache.flink.runtime.rpc.MainThreadExecutable;
+import org.apache.flink.runtime.rpc.messages.CallAsync;
 import org.apache.flink.runtime.rpc.messages.FencedMessage;
 import org.apache.flink.runtime.rpc.messages.LocalFencedMessage;
 import org.apache.flink.runtime.rpc.messages.RemoteFencedMessage;
+import org.apache.flink.runtime.rpc.messages.RunAsync;
+import org.apache.flink.runtime.rpc.messages.UnfencedMessage;
 import org.apache.flink.util.Preconditions;
 
 import akka.actor.ActorRef;
+import akka.pattern.Patterns;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.lang.reflect.Method;
-import java.time.Duration;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * Fenced extension of the {@link AkkaInvocationHandler}. This invocation handler will be used in
@@ -44,7 +52,7 @@ import java.util.function.Supplier;
  * @param <F> type of the fencing token
  */
 public class FencedAkkaInvocationHandler<F extends Serializable> extends AkkaInvocationHandler
-        implements MainThreadExecutable, FencedRpcGateway<F> {
+        implements FencedMainThreadExecutable, FencedRpcGateway<F> {
 
     private final Supplier<F> fencingTokenSupplier;
 
@@ -52,9 +60,8 @@ public class FencedAkkaInvocationHandler<F extends Serializable> extends AkkaInv
             String address,
             String hostname,
             ActorRef rpcEndpoint,
-            Duration timeout,
+            Time timeout,
             long maximumFramesize,
-            boolean forceRpcInvocationSerialization,
             @Nullable CompletableFuture<Void> terminationFuture,
             Supplier<F> fencingTokenSupplier,
             boolean captureAskCallStacks,
@@ -65,7 +72,6 @@ public class FencedAkkaInvocationHandler<F extends Serializable> extends AkkaInv
                 rpcEndpoint,
                 timeout,
                 maximumFramesize,
-                forceRpcInvocationSerialization,
                 terminationFuture,
                 captureAskCallStacks,
                 flinkClassLoader);
@@ -77,11 +83,50 @@ public class FencedAkkaInvocationHandler<F extends Serializable> extends AkkaInv
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         Class<?> declaringClass = method.getDeclaringClass();
 
-        if (declaringClass.equals(MainThreadExecutable.class)
+        if (declaringClass.equals(FencedMainThreadExecutable.class)
                 || declaringClass.equals(FencedRpcGateway.class)) {
             return method.invoke(this, args);
         } else {
             return super.invoke(proxy, method, args);
+        }
+    }
+
+    @Override
+    public void runAsyncWithoutFencing(Runnable runnable) {
+        checkNotNull(runnable, "runnable");
+
+        if (isLocal) {
+            getActorRef()
+                    .tell(new UnfencedMessage<>(new RunAsync(runnable, 0L)), ActorRef.noSender());
+        } else {
+            throw new RuntimeException(
+                    "Trying to send a Runnable to a remote actor at "
+                            + getActorRef().path()
+                            + ". This is not supported.");
+        }
+    }
+
+    @Override
+    public <V> CompletableFuture<V> callAsyncWithoutFencing(Callable<V> callable, Time timeout) {
+        checkNotNull(callable, "callable");
+        checkNotNull(timeout, "timeout");
+
+        if (isLocal) {
+            @SuppressWarnings("unchecked")
+            CompletableFuture<V> resultFuture =
+                    (CompletableFuture<V>)
+                            AkkaFutureUtils.toJava(
+                                    Patterns.ask(
+                                            getActorRef(),
+                                            new UnfencedMessage<>(new CallAsync(callable)),
+                                            timeout.toMilliseconds()));
+
+            return resultFuture;
+        } else {
+            throw new RuntimeException(
+                    "Trying to send a Runnable to a remote actor at "
+                            + getActorRef().path()
+                            + ". This is not supported.");
         }
     }
 
@@ -91,7 +136,7 @@ public class FencedAkkaInvocationHandler<F extends Serializable> extends AkkaInv
     }
 
     @Override
-    public CompletableFuture<?> ask(Object message, Duration timeout) {
+    public CompletableFuture<?> ask(Object message, Time timeout) {
         return super.ask(fenceMessage(message), timeout);
     }
 

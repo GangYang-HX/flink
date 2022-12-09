@@ -24,19 +24,22 @@ import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.ScalarFunction;
 import org.apache.flink.types.Row;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized.Parameters;
+
+import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.flink.table.api.Expressions.$;
 import static org.apache.flink.table.api.Expressions.call;
 import static org.apache.flink.table.api.Expressions.row;
 
 /** Tests for different combinations around {@link BuiltInFunctionDefinitions#ROW}. */
-class RowFunctionITCase extends BuiltInFunctionTestBase {
+public class RowFunctionITCase extends BuiltInFunctionTestBase {
 
-    @Override
-    Stream<TestSetSpec> getTestSetSpecs() {
-        return Stream.of(
-                TestSetSpec.forFunction(BuiltInFunctionDefinitions.ROW, "with field access")
+    @Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
+                TestSpec.forFunction(BuiltInFunctionDefinitions.ROW, "with field access")
                         .onFieldsWithData(12, "Hello world")
                         .andDataTypes(DataTypes.INT(), DataTypes.STRING())
                         .testTableApiResult(
@@ -53,7 +56,7 @@ class RowFunctionITCase extends BuiltInFunctionTestBase {
                                                 DataTypes.FIELD("EXPR$0", DataTypes.INT()),
                                                 DataTypes.FIELD("EXPR$1", DataTypes.STRING()))
                                         .notNull()),
-                TestSetSpec.forFunction(BuiltInFunctionDefinitions.ROW, "within function call")
+                TestSpec.forFunction(BuiltInFunctionDefinitions.ROW, "within function call")
                         .onFieldsWithData(12, "Hello world")
                         .andDataTypes(DataTypes.INT(), DataTypes.STRING())
                         .withFunction(TakesRow.class)
@@ -64,7 +67,7 @@ class RowFunctionITCase extends BuiltInFunctionTestBase {
                                 DataTypes.ROW(
                                         DataTypes.FIELD("i", DataTypes.INT()),
                                         DataTypes.FIELD("s", DataTypes.STRING()))),
-                TestSetSpec.forFunction(BuiltInFunctionDefinitions.ROW, "within cast")
+                TestSpec.forFunction(BuiltInFunctionDefinitions.ROW, "within cast")
                         .onFieldsWithData(1)
                         .testResult(
                                 row($("f0").plus(12), "Hello world")

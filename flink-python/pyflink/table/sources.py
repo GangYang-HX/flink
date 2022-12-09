@@ -17,7 +17,8 @@
 ################################################################################
 
 from pyflink.java_gateway import get_gateway
-from pyflink.table.types import _to_java_data_type
+from pyflink.table.types import _to_java_type
+
 __all__ = ['TableSource', 'CsvTableSource']
 
 
@@ -81,7 +82,7 @@ class CsvTableSource(TableSource):
         builder.path(source_path)
 
         for (field_name, field_type) in zip(field_names, field_types):
-            builder.field(field_name, _to_java_data_type(field_type))
+            builder.field(field_name, _to_java_type(field_type))
 
         if field_delim is not None:
             builder.fieldDelimiter(field_delim)

@@ -42,8 +42,8 @@ class StreamPhysicalWindowDeduplicate(
     cluster: RelOptCluster,
     traitSet: RelTraitSet,
     inputRel: RelNode,
-    val partitionKeys: Array[Int],
-    val orderKey: Int,
+    partitionKeys: Array[Int],
+    orderKey: Int,
     keepLastRow: Boolean,
     windowing: WindowingStrategy)
   extends SingleRel(cluster, traitSet, inputRel)

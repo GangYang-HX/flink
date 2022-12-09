@@ -77,7 +77,7 @@ public class ContinuousHivePendingSplitsCheckpointSerializer
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 
         try (DataOutputViewStreamWrapper outputWrapper =
-                new DataOutputViewStreamWrapper(byteArrayOutputStream)) {
+                     new DataOutputViewStreamWrapper(byteArrayOutputStream)) {
             outputWrapper.writeInt(superBytes.length);
             outputWrapper.write(superBytes);
             readOffsetSerDe.serialize(hiveCheckpoint.getCurrentReadOffset(), outputWrapper);
@@ -94,7 +94,7 @@ public class ContinuousHivePendingSplitsCheckpointSerializer
             throws IOException {
         if (version == 1) {
             try (DataInputViewStreamWrapper inputWrapper =
-                    new DataInputViewStreamWrapper(new ByteArrayInputStream(serialized))) {
+                         new DataInputViewStreamWrapper(new ByteArrayInputStream(serialized))) {
                 return deserializeV1(inputWrapper);
             }
         }
@@ -115,7 +115,10 @@ public class ContinuousHivePendingSplitsCheckpointSerializer
                 parts.add(partitionSerDe.deserialize(inputWrapper));
             }
             return new ContinuousHivePendingSplitsCheckpoint(
-                    superCP.getSplits(), currentReadOffset, parts);
+                    superCP.getSplits(),
+                    currentReadOffset,
+                    parts,
+                    superCP.getAlreadyProcessedPaths());
         } catch (ClassNotFoundException e) {
             throw new IOException("Failed to deserialize " + getClass().getName(), e);
         }
@@ -125,7 +128,8 @@ public class ContinuousHivePendingSplitsCheckpointSerializer
 
         private static final ReadOffsetSerDeImpl INSTANCE = new ReadOffsetSerDeImpl();
 
-        private ReadOffsetSerDeImpl() {}
+        private ReadOffsetSerDeImpl() {
+        }
 
         @Override
         public void serialize(Comparable<?> offset, OutputStream outputStream) throws IOException {

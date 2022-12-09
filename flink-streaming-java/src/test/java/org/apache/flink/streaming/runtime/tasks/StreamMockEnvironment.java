@@ -71,7 +71,6 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
@@ -138,7 +137,7 @@ public class StreamMockEnvironment implements Environment {
             TaskStateManager taskStateManager) {
         this(
                 new JobID(),
-                createExecutionAttemptId(),
+                new ExecutionAttemptID(),
                 jobConfig,
                 taskConfig,
                 executionConfig,
@@ -164,14 +163,14 @@ public class StreamMockEnvironment implements Environment {
         this.jobID = jobID;
         this.executionAttemptID = executionAttemptID;
 
-        int subtaskIndex = executionAttemptID.getExecutionVertexId().getSubtaskIndex();
+        int subtaskIndex = 0;
         this.taskInfo =
                 new TaskInfo(
                         "", /* task name */
                         1, /* num key groups / max parallelism */
                         subtaskIndex, /* index of this subtask */
                         1, /* num subtasks */
-                        executionAttemptID.getAttemptNumber() /* attempt number */);
+                        0 /* attempt number */);
         this.jobConfiguration = jobConfig;
         this.taskConfiguration = taskConfig;
         this.inputs = new LinkedList<>();
@@ -188,9 +187,7 @@ public class StreamMockEnvironment implements Environment {
         this.accumulatorRegistry = new AccumulatorRegistry(jobID, getExecutionId());
 
         KvStateRegistry registry = new KvStateRegistry();
-        this.kvStateRegistry =
-                registry.createTaskRegistry(
-                        jobID, executionAttemptID.getExecutionVertexId().getJobVertexId());
+        this.kvStateRegistry = registry.createTaskRegistry(jobID, getJobVertexId());
         this.collectNetworkEvents = collectNetworkEvents;
     }
 

@@ -27,7 +27,8 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 
 /** {@link RelDataTypeFactory} for testing purposes. */
-final class TestRelDataTypeFactory extends SqlTypeFactoryImpl implements ExtendedRelTypeFactory {
+public final class TestRelDataTypeFactory extends SqlTypeFactoryImpl
+        implements ExtendedRelTypeFactory {
 
     TestRelDataTypeFactory(RelDataTypeSystem typeSystem) {
         super(typeSystem);

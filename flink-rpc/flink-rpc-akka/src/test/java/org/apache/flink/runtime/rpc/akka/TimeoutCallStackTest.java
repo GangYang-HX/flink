@@ -29,40 +29,42 @@ import org.apache.flink.util.concurrent.FutureUtils;
 
 import akka.actor.ActorSystem;
 import akka.actor.Terminated;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Tests that ask timeouts report the call stack of the calling function. */
-class TimeoutCallStackTest {
+public class TimeoutCallStackTest {
 
     private static ActorSystem actorSystem;
     private static RpcService rpcService;
 
     private final List<RpcEndpoint> endpointsToStop = new ArrayList<>();
 
-    @BeforeAll
-    static void setup() {
+    @BeforeClass
+    public static void setup() {
         actorSystem = AkkaUtils.createDefaultActorSystem();
         rpcService =
                 new AkkaRpcService(actorSystem, AkkaRpcServiceConfiguration.defaultConfiguration());
     }
 
-    @AfterAll
-    static void teardown() throws Exception {
+    @AfterClass
+    public static void teardown() throws Exception {
 
         final CompletableFuture<Void> rpcTerminationFuture = rpcService.stopService();
         final CompletableFuture<Terminated> actorSystemTerminationFuture =
@@ -72,33 +74,29 @@ class TimeoutCallStackTest {
                 .get(10_000, TimeUnit.MILLISECONDS);
     }
 
-    @AfterEach
-    void stopTestEndpoints() {
+    @After
+    public void stopTestEndpoints() {
         endpointsToStop.forEach(IOUtils::closeQuietly);
     }
 
     @Test
-    void testTimeoutExceptionWithTime() throws Exception {
-        testTimeoutException(gateway -> gateway.callThatTimesOut(Time.milliseconds(1)));
-    }
-
-    @Test
-    void testTimeoutExceptionWithDuration() throws Exception {
-        testTimeoutException(gateway -> gateway.callThatTimesOut(Duration.ofMillis(1)));
-    }
-
-    private void testTimeoutException(
-            Function<TestingGateway, CompletableFuture<Void>> timeoutOperation) throws Exception {
+    public void testTimeoutException() throws Exception {
         final TestingGateway gateway = createTestingGateway();
 
-        final CompletableFuture<Void> future = timeoutOperation.apply(gateway);
+        final CompletableFuture<Void> future = gateway.callThatTimesOut(Time.milliseconds(1));
 
-        assertThatThrownBy(future::get)
-                .hasCauseInstanceOf(TimeoutException.class)
-                .hasStackTraceContaining("testTimeoutException")
-                .extracting(Throwable::getCause)
-                .extracting(Throwable::getMessage)
-                .satisfies(s -> assertThat(s).contains("callThatTimesOut"));
+        Throwable failureCause = null;
+        try {
+            future.get();
+            fail("test buggy: the call should never have completed");
+        } catch (ExecutionException e) {
+            failureCause = e.getCause();
+        }
+
+        assertThat(failureCause, instanceOf(TimeoutException.class));
+        assertThat(failureCause.getMessage(), containsString("callThatTimesOut"));
+        assertThat(
+                failureCause.getStackTrace()[0].getMethodName(), equalTo("testTimeoutException"));
     }
 
     // ------------------------------------------------------------------------
@@ -120,8 +118,6 @@ class TimeoutCallStackTest {
     private interface TestingGateway extends RpcGateway {
 
         CompletableFuture<Void> callThatTimesOut(@RpcTimeout Time timeout);
-
-        CompletableFuture<Void> callThatTimesOut(@RpcTimeout Duration timeout);
     }
 
     private static final class TestingRpcEndpoint extends RpcEndpoint implements TestingGateway {
@@ -132,12 +128,6 @@ class TimeoutCallStackTest {
 
         @Override
         public CompletableFuture<Void> callThatTimesOut(@RpcTimeout Time timeout) {
-            // return a future that never completes, so the call is guaranteed to time out
-            return new CompletableFuture<>();
-        }
-
-        @Override
-        public CompletableFuture<Void> callThatTimesOut(@RpcTimeout Duration timeout) {
             // return a future that never completes, so the call is guaranteed to time out
             return new CompletableFuture<>();
         }

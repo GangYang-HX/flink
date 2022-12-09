@@ -338,8 +338,10 @@ public class MetricUtils {
             final com.sun.management.OperatingSystemMXBean mxBean =
                     (com.sun.management.OperatingSystemMXBean)
                             ManagementFactory.getOperatingSystemMXBean();
-
-            metrics.<Double, Gauge<Double>>gauge("Load", mxBean::getProcessCpuLoad);
+            final CpuMetricHelper cpuMetricHelper = new CpuMetricHelper(mxBean);
+            metrics.<Double, Gauge<Double>>gauge("Load1", cpuMetricHelper::getProcessCpuLoad);
+            metrics.<Double, Gauge<Double>>gauge(
+                    "Load1UseagePercent", cpuMetricHelper::getProcessCpuUseagePercent);
             metrics.<Long, Gauge<Long>>gauge("Time", mxBean::getProcessCpuTime);
         } catch (Exception e) {
             LOG.warn(

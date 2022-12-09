@@ -55,8 +55,7 @@ public class SystemResourcesCounterTest {
                         + systemResources.getCpuSoftIrq()
                         + systemResources.getCpuSys()
                         + systemResources.getCpuUser()
-                        + systemResources.getIOWait()
-                        + systemResources.getCpuSteal();
+                        + systemResources.getIOWait();
 
         assertTrue(
                 "There should be at least one processor", systemResources.getProcessorsCount() > 0);

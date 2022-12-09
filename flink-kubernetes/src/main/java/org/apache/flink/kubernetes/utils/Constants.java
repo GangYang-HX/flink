@@ -31,8 +31,10 @@ public class Constants {
     public static final String CONFIG_FILE_LOGBACK_NAME = "logback-console.xml";
     public static final String CONFIG_FILE_LOG4J_NAME = "log4j-console.properties";
     public static final String ENV_FLINK_LOG_DIR = "FLINK_LOG_DIR";
+    public static final String CONFIG_FILE_LOG_AGENT = "flink-logagent";
 
     public static final String MAIN_CONTAINER_NAME = "flink-main-container";
+    public static final String INIT_CONTAINER_NAME = "flink-fetcher-container";
 
     public static final String FLINK_CONF_VOLUME = "flink-config-volume";
     public static final String CONFIG_MAP_PREFIX = "flink-config-";
@@ -85,10 +87,6 @@ public class Constants {
 
     public static final String POD_IP_FIELD_PATH = "status.podIP";
 
-    public static final String ENV_FLINK_POD_NODE_ID = "_POD_NODE_ID";
-
-    public static final String POD_NODE_ID_FIELD_PATH = "spec.nodeName";
-
     public static final int MAXIMUM_CHARACTERS_OF_CLUSTER_ID = 45;
 
     public static final String RESTART_POLICY_OF_NEVER = "Never";
@@ -113,6 +111,19 @@ public class Constants {
     // Kubernetes start scripts
     public static final String KUBERNETES_JOB_MANAGER_SCRIPT_PATH = "kubernetes-jobmanager.sh";
     public static final String KUBERNETES_TASK_MANAGER_SCRIPT_PATH = "kubernetes-taskmanager.sh";
+    public static final String KUBERNETES_INIT_CONTAINER_FETCHER_SCRIPT_PATH =
+            "kubernetes-jars-fetcher.sh";
 
     public static final String ENV_TM_JVM_MEM_OPTS = "FLINK_TM_JVM_MEM_OPTS";
+
+    public static final String CUSTOM_LIB_VOLUME = "CUSTOM-LIB-VOLUME";
+    public static final String CUSTOM_LIB_SUFFIX = "custom-lib";
+
+    public static final String ENV_FLINK_GLOBAL_JOB_ID = "FLINK_GLOBAL_JOB_ID";
+    public static final String ENV_FLINK_GLOBAL_JOB_INSTANCE_ID = "FLINK_GLOBAL_JOB_INSTANCE_ID";
+
+    public static final String GLOBAL_JOB_ID_KEY = "jobId";
+    public static final String GLOBAL_JOB_INSTANCE_ID_KEY = "jobHistoryId";
+
+    public static final String ENV_FLINK_POD_NAME = "FLINK_POD_NAME";
 }

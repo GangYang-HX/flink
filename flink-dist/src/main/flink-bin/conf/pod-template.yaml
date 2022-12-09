@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: flink-pod-template
+spec:
+  initContainers:
+    - name: flink-fetcher-container
+      image: hub.bilibili.co/public/flink-kubernetes-fetcher:v0.4
+      # Use wget or other tools to get user jars from remote storage
+      volumeMounts:
+        - mountPath: /opt/flink/custom-lib
+          name: flink-custom-lib
+  containers:
+    # Do not change the main container name
+    - name: flink-main-container
+      volumeMounts:
+        - mountPath: /opt/flink/custom-lib
+          name: flink-init-container
+  volumes:
+    - name: flink-custom-lib
+      emptyDir: {}

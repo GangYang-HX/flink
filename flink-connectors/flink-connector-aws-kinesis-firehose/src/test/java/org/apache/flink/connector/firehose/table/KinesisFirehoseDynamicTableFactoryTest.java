@@ -29,9 +29,10 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.TableOptionsBuilder;
 import org.apache.flink.table.factories.TestFormatFactory;
 import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
+import org.apache.flink.util.TestLogger;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Map;
 import java.util.Properties;
@@ -42,11 +43,11 @@ import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSin
  * Test for {@link KinesisFirehoseDynamicSink} created by {@link
  * KinesisFirehoseDynamicTableFactory}.
  */
-class KinesisFirehoseDynamicTableFactoryTest {
+public class KinesisFirehoseDynamicTableFactoryTest extends TestLogger {
     private static final String DELIVERY_STREAM_NAME = "myDeliveryStream";
 
     @Test
-    void testGoodTableSink() {
+    public void testGoodTableSink() {
         ResolvedSchema sinkSchema = defaultSinkSchema();
         Map<String, String> sinkOptions = defaultTableOptions().build();
 
@@ -73,7 +74,7 @@ class KinesisFirehoseDynamicTableFactoryTest {
     }
 
     @Test
-    void testGoodTableSinkWithSinkOptions() {
+    public void testGoodTableSinkWithSinkOptions() {
         ResolvedSchema sinkSchema = defaultSinkSchema();
         Map<String, String> sinkOptions = defaultTableOptionsWithSinkOptions().build();
 

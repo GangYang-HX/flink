@@ -43,6 +43,14 @@ public class KafkaSourceOptions {
                             "The interval in milliseconds for the Kafka source to discover "
                                     + "the new partitions. A non-positive value disables the partition discovery.");
 
+    public static final ConfigOption<Long> FLINK_PARTITION_DISCOVERY_RETRIES =
+            ConfigOptions.key("flink.partition-discovery.retries")
+                    .longType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The interval in milliseconds for the Kafka source to discover "
+                                    + "the new partitions. A non-positive value disables the partition discovery.");
+
     public static final ConfigOption<Boolean> REGISTER_KAFKA_CONSUMER_METRICS =
             ConfigOptions.key("register.consumer.metrics")
                     .booleanType()

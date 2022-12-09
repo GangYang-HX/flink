@@ -28,7 +28,6 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.table.data.utils.JoinedRowData;
-import org.apache.flink.table.runtime.collector.ListenableCollector;
 import org.apache.flink.table.runtime.collector.TableFunctionCollector;
 import org.apache.flink.table.runtime.generated.GeneratedCollectorWrapper;
 import org.apache.flink.table.runtime.generated.GeneratedFunctionWrapper;
@@ -239,15 +238,13 @@ public class LookupJoinHarnessTest {
      * The {@link TestingFetcherCollector} is a simple implementation of {@link
      * TableFunctionCollector} which combines left and right into a JoinedRowData.
      */
-    public static final class TestingFetcherCollector extends ListenableCollector<RowData> {
+    public static final class TestingFetcherCollector extends TableFunctionCollector {
         private static final long serialVersionUID = -312754413938303160L;
 
         @Override
-        public void collect(RowData record) {
+        public void collect(Object record) {
             RowData left = (RowData) getInput();
-            RowData right = record;
-            getCollectListener().ifPresent(listener -> listener.onCollect(record));
-
+            RowData right = (RowData) record;
             outputResult(new JoinedRowData(left, right));
         }
     }

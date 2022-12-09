@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.concurrent.Executor;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * {@link CompletedCheckpointStore} for JobManagers running in {@link HighAvailabilityMode#NONE}.
@@ -52,8 +51,6 @@ public class StandaloneCompletedCheckpointStore extends AbstractCompleteCheckpoi
 
     /** The completed checkpoints. */
     private final ArrayDeque<CompletedCheckpoint> checkpoints;
-
-    private final Executor ioExecutor;
 
     @VisibleForTesting
     public StandaloneCompletedCheckpointStore(int maxNumberOfCheckpointsToRetain) {
@@ -95,7 +92,6 @@ public class StandaloneCompletedCheckpointStore extends AbstractCompleteCheckpoi
         checkArgument(maxNumberOfCheckpointsToRetain >= 1, "Must retain at least one checkpoint.");
         this.maxNumberOfCheckpointsToRetain = maxNumberOfCheckpointsToRetain;
         this.checkpoints = checkpoints;
-        this.ioExecutor = checkNotNull(ioExecutor);
     }
 
     @Nullable
@@ -112,20 +108,10 @@ public class StandaloneCompletedCheckpointStore extends AbstractCompleteCheckpoi
                 CheckpointSubsumeHelper.subsume(
                                 checkpoints,
                                 maxNumberOfCheckpointsToRetain,
-                                (cc) -> {
-                                    cc.markAsDiscardedOnSubsume();
-                                    checkpointsCleaner.addSubsumedCheckpoint(cc);
-                                })
+                                cc -> cc.markAsDiscardedOnSubsume().discard())
                         .orElse(null);
 
-        findLowest(checkpoints)
-                .ifPresent(
-                        id ->
-                                checkpointsCleaner.cleanSubsumedCheckpoints(
-                                        id,
-                                        getSharedStateRegistry().unregisterUnusedState(id),
-                                        postCleanup,
-                                        ioExecutor));
+        unregisterUnusedState(checkpoints);
 
         return completedCheckpoint;
     }
@@ -171,11 +157,7 @@ public class StandaloneCompletedCheckpointStore extends AbstractCompleteCheckpoi
                 // - checkpoint is not retained (it might be used externally)
                 // - checkpoint handle removal succeeded (e.g. from ZK) - otherwise, it might still
                 // be used in recovery if the job status is lost
-                checkpointsCleaner.cleanSubsumedCheckpoints(
-                        lowestRetained,
-                        getSharedStateRegistry().unregisterUnusedState(lowestRetained),
-                        () -> {},
-                        ioExecutor);
+                getSharedStateRegistry().unregisterUnusedState(lowestRetained);
             }
 
         } finally {

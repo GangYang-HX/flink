@@ -143,7 +143,6 @@ public class MetricFetcherImpl<T extends RestfulGateway> implements MetricFetche
                                     toRetain.add(job.getJobId().toString());
                                 }
                                 metrics.retainJobs(toRetain);
-                                metrics.updateCurrentExecutionAttempts(jobDetails.getJobs());
                             }
                         },
                         executor);

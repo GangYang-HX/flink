@@ -18,7 +18,6 @@
 
 package org.apache.flink.formats.parquet.vector;
 
-import org.apache.flink.annotation.Internal;
 import org.apache.flink.formats.parquet.utils.ParquetSchemaConverter;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.columnar.vector.BytesColumnVector;
@@ -27,13 +26,10 @@ import org.apache.flink.table.data.columnar.vector.DecimalColumnVector;
 import org.apache.flink.table.data.columnar.vector.IntColumnVector;
 import org.apache.flink.table.data.columnar.vector.LongColumnVector;
 
-import org.apache.parquet.Preconditions;
-
 /**
  * Parquet write decimal as int32 and int64 and binary, this class wrap the real vector to provide
  * {@link DecimalColumnVector} interface.
  */
-@Internal
 public class ParquetDecimalVector implements DecimalColumnVector {
 
     private final ColumnVector vector;
@@ -44,25 +40,16 @@ public class ParquetDecimalVector implements DecimalColumnVector {
 
     @Override
     public DecimalData getDecimal(int i, int precision, int scale) {
-        if (ParquetSchemaConverter.is32BitDecimal(precision) && vector instanceof IntColumnVector) {
+        if (ParquetSchemaConverter.is32BitDecimal(precision)) {
             return DecimalData.fromUnscaledLong(
                     ((IntColumnVector) vector).getInt(i), precision, scale);
-        } else if (ParquetSchemaConverter.is64BitDecimal(precision)
-                && vector instanceof LongColumnVector) {
+        } else if (ParquetSchemaConverter.is64BitDecimal(precision)) {
             return DecimalData.fromUnscaledLong(
                     ((LongColumnVector) vector).getLong(i), precision, scale);
         } else {
-            Preconditions.checkArgument(
-                    vector instanceof BytesColumnVector,
-                    "Reading decimal type occur unsupported vector type: %s",
-                    vector.getClass());
             return DecimalData.fromUnscaledBytes(
                     ((BytesColumnVector) vector).getBytes(i).getBytes(), precision, scale);
         }
-    }
-
-    public ColumnVector getVector() {
-        return vector;
     }
 
     @Override

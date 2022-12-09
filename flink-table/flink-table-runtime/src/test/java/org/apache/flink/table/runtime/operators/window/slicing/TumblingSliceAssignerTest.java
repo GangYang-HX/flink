@@ -26,9 +26,12 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.TimeZone;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link SliceAssigners.TumblingSliceAssigner}. */
 @RunWith(Parameterized.class)
@@ -45,12 +48,15 @@ public class TumblingSliceAssignerTest extends SliceAssignerTestBase {
     public void testSliceAssignment() {
         SliceAssigner assigner = SliceAssigners.tumbling(0, shiftTimeZone, Duration.ofHours(5));
 
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T00:00:00")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T04:59:59.999")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T05:00:00")))
-                .isEqualTo(utcMills("1970-01-01T10:00:00"));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00"),
+                assignSliceEnd(assigner, localMills("1970-01-01T00:00:00")));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00"),
+                assignSliceEnd(assigner, localMills("1970-01-01T04:59:59.999")));
+        assertEquals(
+                utcMills("1970-01-01T10:00:00"),
+                assignSliceEnd(assigner, localMills("1970-01-01T05:00:00")));
     }
 
     @Test
@@ -59,12 +65,15 @@ public class TumblingSliceAssignerTest extends SliceAssignerTestBase {
                 SliceAssigners.tumbling(0, shiftTimeZone, Duration.ofHours(5))
                         .withOffset(Duration.ofMillis(100));
 
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T00:00:00.1")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00.1"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.099")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00.1"));
-        assertThat(assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.1")))
-                .isEqualTo(utcMills("1970-01-01T10:00:00.1"));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00.1"),
+                assignSliceEnd(assigner, localMills("1970-01-01T00:00:00.1")));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00.1"),
+                assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.099")));
+        assertEquals(
+                utcMills("1970-01-01T10:00:00.1"),
+                assignSliceEnd(assigner, localMills("1970-01-01T05:00:00.1")));
     }
 
     @Test
@@ -107,33 +116,39 @@ public class TumblingSliceAssignerTest extends SliceAssignerTestBase {
     public void testGetWindowStart() {
         SliceAssigner assigner = SliceAssigners.tumbling(0, shiftTimeZone, Duration.ofHours(5));
 
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T00:00:00")))
-                .isEqualTo(utcMills("1969-12-31T19:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T05:00:00")))
-                .isEqualTo(utcMills("1970-01-01T00:00:00"));
-        assertThat(assigner.getWindowStart(utcMills("1970-01-01T10:00:00")))
-                .isEqualTo(utcMills("1970-01-01T05:00:00"));
+        assertEquals(
+                utcMills("1969-12-31T19:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T00:00:00")));
+        assertEquals(
+                utcMills("1970-01-01T00:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T05:00:00")));
+        assertEquals(
+                utcMills("1970-01-01T05:00:00"),
+                assigner.getWindowStart(utcMills("1970-01-01T10:00:00")));
     }
 
     @Test
     public void testExpiredSlices() {
         SliceAssigner assigner = SliceAssigners.tumbling(0, shiftTimeZone, Duration.ofHours(5));
 
-        assertThat(expiredSlices(assigner, utcMills("1970-01-01T00:00:00")))
-                .containsExactly(utcMills("1970-01-01T00:00:00"));
-        assertThat(expiredSlices(assigner, utcMills("1970-01-01T05:00:00")))
-                .containsExactly(utcMills("1970-01-01T05:00:00"));
-        assertThat(expiredSlices(assigner, utcMills("1970-01-01T10:00:00")))
-                .containsExactly(utcMills("1970-01-01T10:00:00"));
+        assertEquals(
+                Collections.singletonList(utcMills("1970-01-01T00:00:00")),
+                expiredSlices(assigner, utcMills("1970-01-01T00:00:00")));
+        assertEquals(
+                Collections.singletonList(utcMills("1970-01-01T05:00:00")),
+                expiredSlices(assigner, utcMills("1970-01-01T05:00:00")));
+        assertEquals(
+                Collections.singletonList(utcMills("1970-01-01T10:00:00")),
+                expiredSlices(assigner, utcMills("1970-01-01T10:00:00")));
     }
 
     @Test
     public void testEventTime() {
         SliceAssigner assigner1 = SliceAssigners.tumbling(0, shiftTimeZone, Duration.ofHours(5));
-        assertThat(assigner1.isEventTime()).isTrue();
+        assertTrue(assigner1.isEventTime());
 
         SliceAssigner assigner2 = SliceAssigners.tumbling(-1, shiftTimeZone, Duration.ofHours(5));
-        assertThat(assigner2.isEventTime()).isFalse();
+        assertFalse(assigner2.isEventTime());
     }
 
     @Test

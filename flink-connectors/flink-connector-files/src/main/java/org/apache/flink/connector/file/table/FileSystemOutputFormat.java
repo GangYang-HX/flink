@@ -26,13 +26,10 @@ import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.functions.sink.filesystem.OutputFileConfig;
 import org.apache.flink.table.api.TableException;
-import org.apache.flink.table.catalog.ObjectIdentifier;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -49,7 +46,6 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
     private final FileSystemFactory fsFactory;
     private final TableMetaStoreFactory msFactory;
     private final boolean overwrite;
-    private final boolean isToLocal;
     private final Path tmpPath;
     private final String[] partitionColumns;
     private final boolean dynamicGrouped;
@@ -57,8 +53,6 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
     private final PartitionComputer<T> computer;
     private final OutputFormatFactory<T> formatFactory;
     private final OutputFileConfig outputFileConfig;
-    private final ObjectIdentifier identifier;
-    private final PartitionCommitPolicyFactory partitionCommitPolicyFactory;
 
     private transient PartitionWriter<T> writer;
     private transient Configuration parameters;
@@ -67,20 +61,16 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
             FileSystemFactory fsFactory,
             TableMetaStoreFactory msFactory,
             boolean overwrite,
-            boolean isToLocal,
             Path tmpPath,
             String[] partitionColumns,
             boolean dynamicGrouped,
             LinkedHashMap<String, String> staticPartitions,
             OutputFormatFactory<T> formatFactory,
             PartitionComputer<T> computer,
-            OutputFileConfig outputFileConfig,
-            ObjectIdentifier identifier,
-            PartitionCommitPolicyFactory partitionCommitPolicyFactory) {
+            OutputFileConfig outputFileConfig) {
         this.fsFactory = fsFactory;
         this.msFactory = msFactory;
         this.overwrite = overwrite;
-        this.isToLocal = isToLocal;
         this.tmpPath = tmpPath;
         this.partitionColumns = partitionColumns;
         this.dynamicGrouped = dynamicGrouped;
@@ -88,38 +78,14 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
         this.formatFactory = formatFactory;
         this.computer = computer;
         this.outputFileConfig = outputFileConfig;
-        this.identifier = identifier;
-        this.partitionCommitPolicyFactory = partitionCommitPolicyFactory;
     }
 
     @Override
     public void finalizeGlobal(int parallelism) {
         try {
-            List<PartitionCommitPolicy> policies = Collections.emptyList();
-            if (partitionCommitPolicyFactory != null) {
-                policies =
-                        partitionCommitPolicyFactory.createPolicyChain(
-                                Thread.currentThread().getContextClassLoader(),
-                                () -> {
-                                    try {
-                                        return fsFactory.create(tmpPath.toUri());
-                                    } catch (IOException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                });
-            }
-
             FileSystemCommitter committer =
                     new FileSystemCommitter(
-                            fsFactory,
-                            msFactory,
-                            overwrite,
-                            tmpPath,
-                            partitionColumns.length,
-                            isToLocal,
-                            identifier,
-                            staticPartitions,
-                            policies);
+                            fsFactory, msFactory, overwrite, tmpPath, partitionColumns.length);
             committer.commitPartitions();
         } catch (Exception e) {
             throw new TableException("Exception in finalizeGlobal", e);
@@ -183,15 +149,11 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
         private LinkedHashMap<String, String> staticPartitions = new LinkedHashMap<>();
         private boolean dynamicGrouped = false;
         private boolean overwrite = false;
-        private boolean isToLocal = false;
         private FileSystemFactory fileSystemFactory = FileSystem::get;
 
         private PartitionComputer<T> computer;
 
         private OutputFileConfig outputFileConfig = new OutputFileConfig("", "");
-
-        private ObjectIdentifier identifier;
-        private PartitionCommitPolicyFactory partitionCommitPolicyFactory;
 
         public Builder<T> setPartitionColumns(String[] partitionColumns) {
             this.partitionColumns = partitionColumns;
@@ -228,11 +190,6 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
             return this;
         }
 
-        public Builder<T> setIsToLocal(boolean isToLocal) {
-            this.isToLocal = isToLocal;
-            return this;
-        }
-
         public Builder<T> setTempPath(Path tmpPath) {
             this.tmpPath = tmpPath;
             return this;
@@ -248,17 +205,6 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
             return this;
         }
 
-        public Builder<T> setIdentifier(ObjectIdentifier identifier) {
-            this.identifier = identifier;
-            return this;
-        }
-
-        public Builder<T> setPartitionCommitPolicyFactory(
-                PartitionCommitPolicyFactory partitionCommitPolicyFactory) {
-            this.partitionCommitPolicyFactory = partitionCommitPolicyFactory;
-            return this;
-        }
-
         public FileSystemOutputFormat<T> build() {
             checkNotNull(partitionColumns, "partitionColumns should not be null");
             checkNotNull(formatFactory, "formatFactory should not be null");
@@ -270,16 +216,13 @@ public class FileSystemOutputFormat<T> implements OutputFormat<T>, FinalizeOnMas
                     fileSystemFactory,
                     metaStoreFactory,
                     overwrite,
-                    isToLocal,
                     tmpPath,
                     partitionColumns,
                     dynamicGrouped,
                     staticPartitions,
                     formatFactory,
                     computer,
-                    outputFileConfig,
-                    identifier,
-                    partitionCommitPolicyFactory);
+                    outputFileConfig);
         }
     }
 }

@@ -27,6 +27,7 @@ import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.python.PythonFunctionInfo;
@@ -41,12 +42,12 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Test for {@link StreamArrowPythonRowTimeBoundedRangeOperator}. These test that:
@@ -58,11 +59,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Watermarks are buffered and only sent to downstream when finishedBundle is triggered
  * </ul>
  */
-class StreamArrowPythonRowTimeBoundedRangeOperatorTest
+public class StreamArrowPythonRowTimeBoundedRangeOperatorTest
         extends AbstractStreamArrowPythonAggregateFunctionOperatorTest {
 
     @Test
-    void testOverWindowAggregateFunction() throws Exception {
+    public void testOverWindowAggregateFunction() throws Exception {
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness =
                 getTestHarness(new Configuration());
 
@@ -93,7 +94,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredOnCheckpoint() throws Exception {
+    public void testFinishBundleTriggeredOnCheckpoint() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = getTestHarness(conf);
@@ -130,7 +131,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByCount() throws Exception {
+    public void testFinishBundleTriggeredByCount() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 4);
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = getTestHarness(conf);
@@ -165,7 +166,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
     }
 
     @Test
-    void testFinishBundleTriggeredByTime() throws Exception {
+    public void testFinishBundleTriggeredByTime() throws Exception {
         Configuration conf = new Configuration();
         conf.setInteger(PythonOptions.MAX_BUNDLE_SIZE, 10);
         conf.setLong(PythonOptions.MAX_BUNDLE_TIME_MILLS, 1000L);
@@ -201,7 +202,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
     }
 
     @Test
-    void testStateCleanup() throws Exception {
+    public void testStateCleanup() throws Exception {
         Configuration conf = new Configuration();
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = getTestHarness(conf);
         AbstractStreamOperator<RowData> operator = testHarness.getOperator();
@@ -210,9 +211,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
 
         AbstractKeyedStateBackend stateBackend =
                 (AbstractKeyedStateBackend) operator.getKeyedStateBackend();
-        assertThat(stateBackend.numKeyValueStateEntries())
-                .as("Initial state is not empty")
-                .isEqualTo(0);
+        assertEquals("Initial state is not empty", 0, stateBackend.numKeyValueStateEntries());
 
         testHarness.processElement(new StreamRecord<>(newBinaryRow(true, "c1", "c2", 0L, 100L)));
         testHarness.processElement(new StreamRecord<>(newBinaryRow(true, "c1", "c4", 1L, 100L)));
@@ -224,9 +223,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
         testHarness.processWatermark(new Watermark(4000L));
         // at this moment the function should have cleaned up states
 
-        assertThat(stateBackend.numKeyValueStateEntries())
-                .as("State has not been cleaned up")
-                .isEqualTo(0);
+        assertEquals("State has not been cleaned up", 0, stateBackend.numKeyValueStateEntries());
 
         testHarness.close();
     }
@@ -287,9 +284,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
                 3,
                 3L,
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "UdafInputProjection",
                         inputType,
                         udfInputType,
@@ -327,7 +322,7 @@ class StreamArrowPythonRowTimeBoundedRangeOperatorTest
                     udfInputType,
                     udfOutputType,
                     getFunctionUrn(),
-                    createUserDefinedFunctionsProto(),
+                    getUserDefinedFunctionsProto(),
                     PythonTestUtils.createMockFlinkMetricContainer(),
                     false);
         }

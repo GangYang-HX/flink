@@ -169,7 +169,6 @@ public class StreamExecIncrementalGroupAggregate extends StreamExecAggregateBase
 
         final AggregateInfoList partialLocalAggInfoList =
                 AggregateUtil.createPartialAggInfoList(
-                        planner.getTypeFactory(),
                         partialLocalAggInputType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(partialOriginalAggCalls)),
                         partialAggCallNeedRetractions,
@@ -183,14 +182,12 @@ public class StreamExecIncrementalGroupAggregate extends StreamExecAggregateBase
                         partialAggGrouping.length,
                         partialLocalAggInfoList.getAccTypes(),
                         config,
-                        planner.getFlinkContext().getClassLoader(),
-                        planner.createRelBuilder(),
+                        planner.getRelBuilder(),
                         // the partial aggregate accumulators will be buffered, so need copy
                         true);
 
         final AggregateInfoList incrementalAggInfo =
                 AggregateUtil.createIncrementalAggInfoList(
-                        planner.getTypeFactory(),
                         partialLocalAggInputType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(partialOriginalAggCalls)),
                         partialAggCallNeedRetractions,
@@ -203,21 +200,16 @@ public class StreamExecIncrementalGroupAggregate extends StreamExecAggregateBase
                         0,
                         partialLocalAggInfoList.getAccTypes(),
                         config,
-                        planner.getFlinkContext().getClassLoader(),
-                        planner.createRelBuilder(),
+                        planner.getRelBuilder(),
                         // the final aggregate accumulators is not buffered
                         false);
 
         final RowDataKeySelector partialKeySelector =
                 KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        partialAggGrouping,
-                        InternalTypeInfo.of(inputEdge.getOutputType()));
+                        partialAggGrouping, InternalTypeInfo.of(inputEdge.getOutputType()));
         final RowDataKeySelector finalKeySelector =
                 KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        finalAggGrouping,
-                        partialKeySelector.getProducedType());
+                        finalAggGrouping, partialKeySelector.getProducedType());
 
         final MiniBatchIncrementalGroupAggFunction aggFunction =
                 new MiniBatchIncrementalGroupAggFunction(
@@ -252,13 +244,12 @@ public class StreamExecIncrementalGroupAggregate extends StreamExecAggregateBase
             int mergedAccOffset,
             DataType[] mergedAccExternalTypes,
             ExecNodeConfig config,
-            ClassLoader classLoader,
             RelBuilder relBuilder,
             boolean inputFieldCopy) {
 
         AggsHandlerCodeGenerator generator =
                 new AggsHandlerCodeGenerator(
-                        new CodeGeneratorContext(config, classLoader),
+                        new CodeGeneratorContext(config.getTableConfig()),
                         relBuilder,
                         JavaScalaConversionUtil.toScala(partialLocalAggInputType.getChildren()),
                         inputFieldCopy);

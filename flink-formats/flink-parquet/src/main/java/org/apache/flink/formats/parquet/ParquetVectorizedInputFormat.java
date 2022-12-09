@@ -29,6 +29,7 @@ import org.apache.flink.formats.parquet.utils.ParquetSchemaConverter;
 import org.apache.flink.formats.parquet.utils.SerializableConfiguration;
 import org.apache.flink.formats.parquet.vector.ColumnBatchFactory;
 import org.apache.flink.formats.parquet.vector.ParquetDecimalVector;
+import org.apache.flink.formats.parquet.vector.reader.AbstractColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
@@ -80,12 +81,12 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
     private static final Logger LOG = LoggerFactory.getLogger(ParquetVectorizedInputFormat.class);
     private static final long serialVersionUID = 1L;
 
-    protected final SerializableConfiguration hadoopConfig;
+    private final SerializableConfiguration hadoopConfig;
     private final String[] projectedFields;
     private final LogicalType[] projectedTypes;
     private final ColumnBatchFactory<SplitT> batchFactory;
     private final int batchSize;
-    protected final boolean isUtcTimestamp;
+    private final boolean isUtcTimestamp;
     private final boolean isCaseSensitive;
     private final Set<Integer> unknownFieldsIndices = new HashSet<>();
 
@@ -234,6 +235,11 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
          * Check that the requested schema is supported.
          */
         for (int i = 0; i < requestedSchema.getFieldCount(); ++i) {
+            Type t = requestedSchema.getFields().get(i);
+            if (!t.isPrimitive() || t.isRepetition(Type.Repetition.REPEATED)) {
+                throw new UnsupportedOperationException("Complex types not supported.");
+            }
+
             String[] colPath = requestedSchema.getPaths().get(i);
             if (fileSchema.containsPath(colPath)) {
                 ColumnDescriptor fd = fileSchema.getColumnDescription(colPath);
@@ -275,15 +281,12 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
 
     private WritableColumnVector[] createWritableVectors(MessageType requestedSchema) {
         WritableColumnVector[] columns = new WritableColumnVector[projectedTypes.length];
-        List<Type> types = requestedSchema.getFields();
         for (int i = 0; i < projectedTypes.length; i++) {
             columns[i] =
                     createWritableColumnVector(
                             batchSize,
                             projectedTypes[i],
-                            types.get(i),
-                            requestedSchema.getColumns(),
-                            0);
+                            requestedSchema.getColumns().get(i).getPrimitiveType());
         }
         return columns;
     }
@@ -401,19 +404,16 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
                                 + " out of "
                                 + totalRowCount);
             }
-
-            List<Type> types = requestedSchema.getFields();
-            columnReaders = new ColumnReader[types.size()];
-            for (int i = 0; i < types.size(); ++i) {
+            List<ColumnDescriptor> columns = requestedSchema.getColumns();
+            columnReaders = new AbstractColumnReader[columns.size()];
+            for (int i = 0; i < columns.size(); ++i) {
                 if (!unknownFieldsIndices.contains(i)) {
                     columnReaders[i] =
                             createColumnReader(
                                     isUtcTimestamp,
                                     projectedTypes[i],
-                                    types.get(i),
-                                    requestedSchema.getColumns(),
-                                    pages,
-                                    0);
+                                    columns.get(i),
+                                    pages.getPageReader(columns.get(i)));
                 }
             }
             totalCountLoadedSoFar += pages.getRowCount();

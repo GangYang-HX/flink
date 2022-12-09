@@ -223,12 +223,12 @@ class RelNodeWrapper(relNode: RelNode) {
 }
 
 /** Builds [[RelNodeBlock]] plan */
-class RelNodeBlockPlanBuilder private (tableConfig: ReadableConfig) {
+class RelNodeBlockPlanBuilder private (config: ReadableConfig) {
 
   private val node2Wrapper = new util.IdentityHashMap[RelNode, RelNodeWrapper]()
   private val node2Block = new util.IdentityHashMap[RelNode, RelNodeBlock]()
 
-  private val isUnionAllAsBreakPointEnabled = tableConfig
+  private val isUnionAllAsBreakPointEnabled = config
     .get(RelNodeBlockPlanBuilder.TABLE_OPTIMIZER_UNIONALL_AS_BREAKPOINT_ENABLED)
 
   /**
@@ -384,9 +384,7 @@ object RelNodeBlockPlanBuilder {
    * @return
    *   Sink-RelNodeBlocks, each Sink-RelNodeBlock is a tree.
    */
-  def buildRelNodeBlockPlan(
-      sinkNodes: Seq[RelNode],
-      tableConfig: ReadableConfig): Seq[RelNodeBlock] = {
+  def buildRelNodeBlockPlan(sinkNodes: Seq[RelNode], config: ReadableConfig): Seq[RelNodeBlock] = {
     require(sinkNodes.nonEmpty)
 
     // expand QueryOperationCatalogViewTable in TableScan
@@ -397,8 +395,8 @@ object RelNodeBlockPlanBuilder {
       Seq(new RelNodeBlock(convertedRelNodes.head))
     } else {
       // merge multiple RelNode trees to RelNode dag
-      val relNodeDag = reuseRelNodes(convertedRelNodes, tableConfig)
-      val builder = new RelNodeBlockPlanBuilder(tableConfig)
+      val relNodeDag = reuseRelNodes(convertedRelNodes, config)
+      val builder = new RelNodeBlockPlanBuilder(config)
       builder.buildRelNodeBlockPlan(relNodeDag)
     }
   }
@@ -411,8 +409,8 @@ object RelNodeBlockPlanBuilder {
    * @return
    *   RelNode dag which reuse common subPlan in each tree
    */
-  private def reuseRelNodes(relNodes: Seq[RelNode], tableConfig: ReadableConfig): Seq[RelNode] = {
-    val findOpBlockWithDigest = tableConfig
+  private def reuseRelNodes(relNodes: Seq[RelNode], config: ReadableConfig): Seq[RelNode] = {
+    val findOpBlockWithDigest = config
       .get(RelNodeBlockPlanBuilder.TABLE_OPTIMIZER_REUSE_OPTIMIZE_BLOCK_WITH_DIGEST_ENABLED)
     if (!findOpBlockWithDigest) {
       return relNodes

@@ -218,11 +218,7 @@ public class HybridSourceSplitEnumerator
             }
 
             if (subtaskSourceIndex < currentSourceIndex) {
-                // find initial or next index for the reader
-                subtaskSourceIndex =
-                        subtaskSourceIndex == -1
-                                ? switchedSources.getFirstSourceIndex()
-                                : ++subtaskSourceIndex;
+                subtaskSourceIndex++;
                 sendSwitchSourceEvent(subtaskId, subtaskSourceIndex);
                 return;
             }
@@ -246,10 +242,7 @@ public class HybridSourceSplitEnumerator
 
     @Override
     public void close() throws IOException {
-        // close may be called before currentEnumerator was initialized
-        if (currentEnumerator != null) {
-            currentEnumerator.close();
-        }
+        currentEnumerator.close();
     }
 
     private void switchEnumerator() {

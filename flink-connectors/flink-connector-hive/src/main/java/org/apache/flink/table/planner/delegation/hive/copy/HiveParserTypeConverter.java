@@ -26,7 +26,6 @@ import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.rel.type.StructKind;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.sql.SqlCollation;
 import org.apache.calcite.sql.SqlIntervalQualifier;
@@ -39,7 +38,6 @@ import org.apache.hadoop.hive.ql.exec.ColumnInfo;
 import org.apache.hadoop.hive.ql.exec.RowSchema;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.hadoop.hive.serde.serdeConstants;
-import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.BaseCharTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
@@ -70,12 +68,7 @@ public class HiveParserTypeConverter {
 
         for (ColumnInfo ci : rs.getSignature()) {
             if (neededCols == null || neededCols.contains(ci.getInternalName())) {
-                RelDataType relDataType = convert(ci.getType(), dtFactory);
-                // if the type is struct, we set it nullable
-                if (ci.getType().getCategory() == ObjectInspector.Category.STRUCT) {
-                    relDataType = dtFactory.createTypeWithNullability(relDataType, true);
-                }
-                fieldTypes.add(relDataType);
+                fieldTypes.add(convert(ci.getType(), dtFactory));
                 fieldNames.add(ci.getInternalName());
             }
         }
@@ -103,7 +96,7 @@ public class HiveParserTypeConverter {
                 convertedType = convert((UnionTypeInfo) type, dtFactory);
                 break;
         }
-        return dtFactory.createTypeWithNullability(convertedType, true);
+        return convertedType;
     }
 
     public static RelDataType convert(PrimitiveTypeInfo type, RelDataTypeFactory dtFactory) {
@@ -149,7 +142,7 @@ public class HiveParserTypeConverter {
                 convertedType = dtFactory.createSqlType(SqlTypeName.TIMESTAMP, 9);
                 break;
             case BINARY:
-                convertedType = dtFactory.createSqlType(SqlTypeName.VARBINARY);
+                convertedType = dtFactory.createSqlType(SqlTypeName.BINARY);
                 break;
             case DECIMAL:
                 DecimalTypeInfo dtInf = (DecimalTypeInfo) type;
@@ -217,8 +210,7 @@ public class HiveParserTypeConverter {
         for (TypeInfo ti : structType.getAllStructFieldTypeInfos()) {
             fTypes.add(convert(ti, dtFactory));
         }
-        return dtFactory.createStructType(
-                StructKind.PEEK_FIELDS_NO_EXPAND, fTypes, structType.getAllStructFieldNames());
+        return dtFactory.createStructType(fTypes, structType.getAllStructFieldNames());
     }
 
     private static RelDataType convert(UnionTypeInfo unionType, RelDataTypeFactory dtFactory)
@@ -297,7 +289,6 @@ public class HiveParserTypeConverter {
             case INTERVAL_SECOND:
                 return hiveShim.getIntervalDayTimeTypeInfo();
             case BINARY:
-            case VARBINARY:
                 return TypeInfoFactory.binaryTypeInfo;
             case DECIMAL:
                 return TypeInfoFactory.getDecimalTypeInfo(rType.getPrecision(), rType.getScale());

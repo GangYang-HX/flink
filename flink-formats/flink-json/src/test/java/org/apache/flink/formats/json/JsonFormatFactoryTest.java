@@ -46,10 +46,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for the {@link JsonFormatFactory}. */
-class JsonFormatFactoryTest {
+public class JsonFormatFactoryTest {
 
     @Test
-    void testSeDeSchema() {
+    public void testSeDeSchema() {
         final Map<String, String> tableOptions = getAllOptions();
 
         testSchemaSerializationSchema(tableOptions);
@@ -57,7 +57,7 @@ class JsonFormatFactoryTest {
     }
 
     @Test
-    void testFailOnMissingField() {
+    public void testFailOnMissingField() {
         final Map<String, String> tableOptions =
                 getModifyOptions(options -> options.put("json.fail-on-missing-field", "true"));
 
@@ -69,7 +69,7 @@ class JsonFormatFactoryTest {
     }
 
     @Test
-    void testInvalidOptionForIgnoreParseErrors() {
+    public void testInvalidOptionForIgnoreParseErrors() {
         final Map<String, String> tableOptions =
                 getModifyOptions(options -> options.put("json.ignore-parse-errors", "abc"));
 
@@ -81,7 +81,7 @@ class JsonFormatFactoryTest {
     }
 
     @Test
-    void testInvalidOptionForTimestampFormat() {
+    public void testInvalidOptionForTimestampFormat() {
         final Map<String, String> tableOptions =
                 getModifyOptions(options -> options.put("json.timestamp-format.standard", "test"));
 
@@ -93,7 +93,7 @@ class JsonFormatFactoryTest {
     }
 
     @Test
-    void testLowerCaseOptionForTimestampFormat() {
+    public void testLowerCaseOptionForTimestampFormat() {
         final Map<String, String> tableOptions =
                 getModifyOptions(
                         options -> options.put("json.timestamp-format.standard", "iso-8601"));
@@ -106,7 +106,7 @@ class JsonFormatFactoryTest {
     }
 
     @Test
-    void testInvalidOptionForMapNullKeyMode() {
+    public void testInvalidOptionForMapNullKeyMode() {
         final Map<String, String> tableOptions =
                 getModifyOptions(options -> options.put("json.map-null-key.mode", "invalid"));
 
@@ -118,7 +118,7 @@ class JsonFormatFactoryTest {
     }
 
     @Test
-    void testLowerCaseOptionForMapNullKeyMode() {
+    public void testLowerCaseOptionForMapNullKeyMode() {
         final Map<String, String> tableOptions =
                 getModifyOptions(options -> options.put("json.map-null-key.mode", "fail"));
 

@@ -111,6 +111,15 @@ public class StatementSetImpl<E extends TableEnvironmentInternal> implements Sta
         }
     }
 
+    @Override
+    public TableResult execute(String jobName) {
+        try {
+            return tableEnvironment.executeInternalWithJobName(operations, jobName);
+        } finally {
+            operations.clear();
+        }
+    }
+
     @Experimental
     public CompiledPlan compilePlan() {
         return tableEnvironment.compilePlan(operations);

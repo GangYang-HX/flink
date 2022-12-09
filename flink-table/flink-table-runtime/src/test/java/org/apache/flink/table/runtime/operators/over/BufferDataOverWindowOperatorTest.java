@@ -49,6 +49,7 @@ import org.apache.flink.table.runtime.operators.over.frame.UnboundedOverWindowFr
 import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.RowType;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -61,7 +62,6 @@ import static org.apache.flink.table.runtime.operators.over.NonBufferOverWindowO
 import static org.apache.flink.table.runtime.operators.over.NonBufferOverWindowOperatorTest.function;
 import static org.apache.flink.table.runtime.operators.over.NonBufferOverWindowOperatorTest.inputSer;
 import static org.apache.flink.table.runtime.operators.over.NonBufferOverWindowOperatorTest.inputType;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -265,7 +265,7 @@ public class BufferDataOverWindowOperatorTest {
         addRow(2, 6L, 2L); /* 9 **/
         operator.endInput();
         GenericRowData[] outputs = this.collect.toArray(new GenericRowData[0]);
-        assertThat(outputs).isEqualTo(expect);
+        Assert.assertArrayEquals(expect, outputs);
         operator.close();
     }
 

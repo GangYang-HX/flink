@@ -26,15 +26,14 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.UniqueBucketAssigner;
 import org.apache.flink.streaming.util.FiniteTestSource;
-import org.apache.flink.test.junit5.MiniClusterExtension;
+import org.apache.flink.test.util.AbstractTestBase;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -44,14 +43,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Integration test case for writing bulk encoded files with the {@link StreamingFileSink} and
  * Hadoop Compression Codecs.
  */
-@ExtendWith(MiniClusterExtension.class)
-class CompressionFactoryITCase {
+public class CompressionFactoryITCase extends AbstractTestBase {
 
     private final Configuration configuration = new Configuration();
 
@@ -59,10 +59,11 @@ class CompressionFactoryITCase {
 
     private final List<String> testData = Arrays.asList("line1", "line2", "line3");
 
+    @Rule public final Timeout timeoutPerTest = Timeout.seconds(20);
+
     @Test
-    @Timeout(20)
-    void testWriteCompressedFile(@TempDir java.nio.file.Path tmpDir) throws Exception {
-        final File folder = tmpDir.toFile();
+    public void testWriteCompressedFile() throws Exception {
+        final File folder = TEMPORARY_FOLDER.newFolder();
         final Path testPath = Path.fromLocalFile(folder);
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -101,18 +102,18 @@ class CompressionFactoryITCase {
     private void validateResults(File folder, List<String> expected, CompressionCodec codec)
             throws Exception {
         File[] buckets = folder.listFiles();
-        assertThat(buckets).isNotNull();
-        assertThat(buckets).hasSize(1);
+        assertNotNull(buckets);
+        assertEquals(1, buckets.length);
 
         final File[] partFiles = buckets[0].listFiles();
-        assertThat(partFiles).isNotNull();
-        assertThat(partFiles).hasSize(2);
+        assertNotNull(partFiles);
+        assertEquals(2, partFiles.length);
 
         for (File partFile : partFiles) {
-            assertThat(partFile.length()).isGreaterThan(0);
+            assertTrue(partFile.length() > 0);
 
             final List<String> fileContent = readFile(partFile, codec);
-            assertThat(fileContent).isEqualTo(expected);
+            assertEquals(expected, fileContent);
         }
     }
 }

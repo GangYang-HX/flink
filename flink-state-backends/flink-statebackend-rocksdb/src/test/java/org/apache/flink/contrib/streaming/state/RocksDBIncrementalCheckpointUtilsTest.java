@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.flink.contrib.streaming.state.RocksDBConfigurableOptions.RESTORE_OVERLAP_FRACTION_THRESHOLD;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -96,32 +95,31 @@ public class RocksDBIncrementalCheckpointUtilsTest extends TestLogger {
         when(keyedStateHandle3.getKeyGroupRange()).thenReturn(new KeyGroupRange(8, 12));
         keyedStateHandles.add(keyedStateHandle3);
 
+        // this should choose no one handle.
+        Assert.assertNull(
+                RocksDBIncrementalCheckpointUtils.chooseTheBestStateHandleForInitial(
+                        keyedStateHandles, new KeyGroupRange(3, 5)));
+
         // this should choose keyedStateHandle2, because keyedStateHandle2's key-group range
         // satisfies the overlap fraction demand.
         Assert.assertEquals(
                 keyedStateHandle2,
                 RocksDBIncrementalCheckpointUtils.chooseTheBestStateHandleForInitial(
-                        keyedStateHandles,
-                        new KeyGroupRange(3, 6),
-                        RESTORE_OVERLAP_FRACTION_THRESHOLD.defaultValue()));
+                        keyedStateHandles, new KeyGroupRange(3, 6)));
 
         // both keyedStateHandle2 & keyedStateHandle3's key-group range satisfies the overlap
         // fraction, but keyedStateHandle3's key group range is better.
         Assert.assertEquals(
                 keyedStateHandle3,
                 RocksDBIncrementalCheckpointUtils.chooseTheBestStateHandleForInitial(
-                        keyedStateHandles,
-                        new KeyGroupRange(5, 12),
-                        RESTORE_OVERLAP_FRACTION_THRESHOLD.defaultValue()));
+                        keyedStateHandles, new KeyGroupRange(5, 12)));
 
         // The intersect key group number of keyedStateHandle2 & keyedStateHandle3's with [4, 11]
         // are 4. But the over fraction of keyedStateHandle2 is better.
         Assert.assertEquals(
                 keyedStateHandle2,
                 RocksDBIncrementalCheckpointUtils.chooseTheBestStateHandleForInitial(
-                        keyedStateHandles,
-                        new KeyGroupRange(4, 11),
-                        RESTORE_OVERLAP_FRACTION_THRESHOLD.defaultValue()));
+                        keyedStateHandles, new KeyGroupRange(4, 11)));
 
         // both keyedStateHandle2 & keyedStateHandle3's key-group range are covered by [3, 12],
         // but this should choose the keyedStateHandle3, because keyedStateHandle3's key-group is
@@ -129,9 +127,7 @@ public class RocksDBIncrementalCheckpointUtilsTest extends TestLogger {
         Assert.assertEquals(
                 keyedStateHandle3,
                 RocksDBIncrementalCheckpointUtils.chooseTheBestStateHandleForInitial(
-                        keyedStateHandles,
-                        new KeyGroupRange(3, 12),
-                        RESTORE_OVERLAP_FRACTION_THRESHOLD.defaultValue()));
+                        keyedStateHandles, new KeyGroupRange(3, 12)));
     }
 
     private void testClipDBWithKeyGroupRangeHelper(
@@ -179,7 +175,8 @@ public class RocksDBIncrementalCheckpointUtilsTest extends TestLogger {
                     Collections.singletonList(columnFamilyHandle),
                     targetGroupRange,
                     currentGroupRange,
-                    keyGroupPrefixBytes);
+                    keyGroupPrefixBytes,
+                    RocksDBConfigurableOptions.WRITE_BATCH_SIZE.defaultValue().getBytes());
 
             for (int i = currentGroupRangeStart; i <= currentGroupRangeEnd; ++i) {
                 for (int j = 0; j < 100; ++j) {

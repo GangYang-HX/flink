@@ -28,6 +28,7 @@ import org.apache.flink.runtime.state.filesystem.FsCheckpointStreamFactory.FsChe
 import org.apache.flink.runtime.state.memory.ByteStreamStateHandle;
 
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -376,6 +377,7 @@ public class FsCheckpointStateOutputStreamTest {
      * This test checks that the stream does not check and clean the parent directory when
      * encountering a write error.
      */
+    @Ignore
     @Test
     public void testStreamDoesNotTryToCleanUpParentOnError() throws Exception {
         final File directory = tempDir.newFolder();

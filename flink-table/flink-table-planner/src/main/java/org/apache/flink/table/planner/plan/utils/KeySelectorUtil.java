@@ -18,46 +18,32 @@
 
 package org.apache.flink.table.planner.plan.utils;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
 import org.apache.flink.table.planner.codegen.ProjectionCodeGenerator;
 import org.apache.flink.table.runtime.generated.GeneratedProjection;
 import org.apache.flink.table.runtime.keyselector.BinaryRowDataKeySelector;
 import org.apache.flink.table.runtime.keyselector.EmptyRowDataKeySelector;
-import org.apache.flink.table.runtime.keyselector.GenericRowDataKeySelector;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
-import org.apache.flink.table.runtime.typeutils.InternalSerializers;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
-import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 /** Utility for KeySelector. */
 public class KeySelectorUtil {
 
-    public static RowDataKeySelector getRowDataSelector(
-            ClassLoader classLoader, int[] keyFields, InternalTypeInfo<RowData> rowType) {
-        return getRowDataSelector(classLoader, keyFields, rowType, BinaryRowData.class);
-    }
-
     /**
      * Create a RowDataKeySelector to extract keys from DataStream which type is {@link
      * InternalTypeInfo} of {@link RowData}.
      *
-     * @param classLoader user ClassLoader
      * @param keyFields key fields
      * @param rowType type of DataStream to extract keys
      * @return the RowDataKeySelector to extract keys from DataStream which type is {@link
      *     InternalTypeInfo} of {@link RowData}.
      */
     public static RowDataKeySelector getRowDataSelector(
-            ClassLoader classLoader,
-            int[] keyFields,
-            InternalTypeInfo<RowData> rowType,
-            Class<? extends RowData> outClass) {
+            int[] keyFields, InternalTypeInfo<RowData> rowType) {
         if (keyFields.length > 0) {
             LogicalType[] inputFieldTypes = rowType.toRowFieldTypes();
             LogicalType[] keyFieldTypes = new LogicalType[keyFields.length];
@@ -70,23 +56,13 @@ public class KeySelectorUtil {
             RowType inputType = rowType.toRowType();
             GeneratedProjection generatedProjection =
                     ProjectionCodeGenerator.generateProjection(
-                            new CodeGeneratorContext(new Configuration(), classLoader),
+                            CodeGeneratorContext.apply(new TableConfig()),
                             "KeyProjection",
                             inputType,
                             returnType,
-                            keyFields,
-                            outClass);
+                            keyFields);
             InternalTypeInfo<RowData> keyRowType = InternalTypeInfo.of(returnType);
-            if (outClass == BinaryRowData.class) {
-                return new BinaryRowDataKeySelector(keyRowType, generatedProjection);
-            } else if (outClass == GenericRowData.class) {
-                RowDataSerializer keySerializer = InternalSerializers.create(returnType);
-                return new GenericRowDataKeySelector(
-                        keyRowType, keySerializer, generatedProjection);
-            } else {
-                throw new UnsupportedOperationException(
-                        "Currently only GenericRowData and BinaryRowData supported as outClass of KeySelector.");
-            }
+            return new BinaryRowDataKeySelector(keyRowType, generatedProjection);
         } else {
             return EmptyRowDataKeySelector.INSTANCE;
         }

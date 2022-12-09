@@ -150,6 +150,7 @@ class MergeTableLikeUtil {
         schemaBuilder.appendDerivedColumns(mergingStrategies, derivedColumns);
         schemaBuilder.appendDerivedWatermarks(mergingStrategies, derivedWatermarkSpecs);
         schemaBuilder.appendDerivedPrimaryKey(derivedPrimaryKey);
+        schemaBuilder.handleSourceColumnWithDerivedPrimaryKey(sourceSchema, derivedPrimaryKey);
 
         return schemaBuilder.build();
     }
@@ -307,6 +308,26 @@ class MergeTableLikeUtil {
                                         .getConstraintName()
                                         .orElseGet(() -> "PK_" + primaryKeyColumns.hashCode()),
                                 primaryKeyColumns);
+            }
+        }
+
+        private void handleSourceColumnWithDerivedPrimaryKey(
+                TableSchema sourceSchema, SqlTableConstraint derivedPrimaryKey) {
+            if (derivedPrimaryKey == null) {
+                return;
+            }
+            for (SqlNode primaryKeyNode : derivedPrimaryKey.getColumns()) {
+                String primaryKey = ((SqlIdentifier) primaryKeyNode).getSimple();
+                for (TableColumn sourceColumn : sourceSchema.getTableColumns()) {
+                    if (sourceColumn.getName().equals(primaryKey)) {
+                        // primary key 对应的 column 必须 not null
+                        columns.put(
+                                primaryKey,
+                                TableColumn.of(
+                                        primaryKey, columns.get(primaryKey).getType().notNull()));
+                        break;
+                    }
+                }
             }
         }
 

@@ -38,6 +38,7 @@ import org.apache.flink.configuration.SecurityOptions;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.util.ConfigurationException;
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.yarn.cli.FlinkYarnSessionCli;
 import org.apache.flink.yarn.configuration.YarnConfigOptions;
 import org.apache.flink.yarn.executors.YarnJobClusterExecutor;
@@ -49,22 +50,25 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.List;
-import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for the {@link FlinkYarnSessionCli}. */
-class FlinkYarnSessionCliTest {
+public class FlinkYarnSessionCliTest extends TestLogger {
 
     private static final ApplicationId TEST_YARN_APPLICATION_ID =
             ApplicationId.newInstance(System.currentTimeMillis(), 42);
@@ -80,14 +84,14 @@ class FlinkYarnSessionCliTest {
     private static final String invalidPropertiesFile =
             "jasfobManager=" + TEST_YARN_JOB_MANAGER_ADDRESS + ":asf" + TEST_YARN_JOB_MANAGER_PORT;
 
-    @TempDir private Path tmp;
+    @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
     @Test
-    void testDynamicProperties() throws Exception {
+    public void testDynamicProperties() throws Exception {
 
         FlinkYarnSessionCli cli =
                 new FlinkYarnSessionCli(
-                        new Configuration(), tmp.toFile().getAbsolutePath(), "", "", false);
+                        new Configuration(), tmp.getRoot().getAbsolutePath(), "", "", false);
         Options options = new Options();
         cli.addGeneralOptions(options);
         cli.addRunOptions(options);
@@ -109,14 +113,13 @@ class FlinkYarnSessionCliTest {
                         });
 
         Configuration executorConfig = cli.toConfiguration(cmd);
-        assertThat(executorConfig.get(AkkaOptions.ASK_TIMEOUT_DURATION)).hasMinutes(5);
-        assertThat(executorConfig.get(CoreOptions.FLINK_JVM_OPTIONS)).isEqualTo("-DappName=foobar");
-        assertThat(executorConfig.get(SecurityOptions.SSL_INTERNAL_KEY_PASSWORD))
-                .isEqualTo("changeit");
+        assertEquals(Duration.ofMinutes(5), executorConfig.get(AkkaOptions.ASK_TIMEOUT_DURATION));
+        assertEquals("-DappName=foobar", executorConfig.get(CoreOptions.FLINK_JVM_OPTIONS));
+        assertEquals("changeit", executorConfig.get(SecurityOptions.SSL_INTERNAL_KEY_PASSWORD));
     }
 
     @Test
-    void testCorrectSettingOfMaxSlots() throws Exception {
+    public void testCorrectSettingOfMaxSlots() throws Exception {
         String[] params = new String[] {"-ys", "3"};
 
         final Configuration configuration = createConfigurationWithJmAndTmTotalMemory(2048);
@@ -133,22 +136,22 @@ class FlinkYarnSessionCliTest {
 
         // each task manager has 3 slots but the parallelism is 7. Thus the slots should be
         // increased.
-        assertThat(clusterSpecification.getSlotsPerTaskManager()).isEqualTo(3);
+        assertEquals(3, clusterSpecification.getSlotsPerTaskManager());
     }
 
     @Test
-    void testCorrectSettingOfDetachedMode() throws Exception {
+    public void testCorrectSettingOfDetachedMode() throws Exception {
         final String[] params = new String[] {"-yd"};
         FlinkYarnSessionCli yarnCLI = createFlinkYarnSessionCli();
 
         final CommandLine commandLine = yarnCLI.parseCommandLineOptions(params, true);
         final Configuration executorConfig = yarnCLI.toConfiguration(commandLine);
 
-        assertThat(executorConfig.get(DeploymentOptions.ATTACHED)).isFalse();
+        assertThat(executorConfig.get(DeploymentOptions.ATTACHED), is(false));
     }
 
     @Test
-    void testZookeeperNamespaceProperty() throws Exception {
+    public void testZookeeperNamespaceProperty() throws Exception {
         String zkNamespaceCliInput = "flink_test_namespace";
 
         String[] params = new String[] {"-yz", zkNamespaceCliInput};
@@ -159,12 +162,12 @@ class FlinkYarnSessionCliTest {
 
         Configuration executorConfig = yarnCLI.toConfiguration(commandLine);
 
-        assertThat(executorConfig.get(HighAvailabilityOptions.HA_CLUSTER_ID))
-                .isEqualTo(zkNamespaceCliInput);
+        assertThat(
+                executorConfig.get(HighAvailabilityOptions.HA_CLUSTER_ID), is(zkNamespaceCliInput));
     }
 
     @Test
-    void testNodeLabelProperty() throws Exception {
+    public void testNodeLabelProperty() throws Exception {
         String nodeLabelCliInput = "flink_test_nodelabel";
 
         String[] params = new String[] {"-ynl", nodeLabelCliInput};
@@ -178,11 +181,11 @@ class FlinkYarnSessionCliTest {
         YarnClusterDescriptor descriptor =
                 (YarnClusterDescriptor) clientFactory.createClusterDescriptor(executorConfig);
 
-        assertThat(descriptor.getNodeLabel()).isEqualTo(nodeLabelCliInput);
+        assertEquals(nodeLabelCliInput, descriptor.getNodeLabel());
     }
 
     @Test
-    void testExecutorCLIisPrioritised() throws Exception {
+    public void testExecutorCLIisPrioritised() throws Exception {
         final File directoryPath = writeYarnPropertiesFile(validPropertiesFile);
 
         final Configuration configuration = new Configuration();
@@ -200,11 +203,7 @@ class FlinkYarnSessionCliTest {
             Configuration configuration, String[] argsUnderTest)
             throws IOException, CliArgsException {
         final List<CustomCommandLine> customCommandLines =
-                CliFrontend.loadCustomCommandLines(
-                        configuration,
-                        Files.createTempFile(tmp, UUID.randomUUID().toString(), "")
-                                .toFile()
-                                .getAbsolutePath());
+                CliFrontend.loadCustomCommandLines(configuration, tmp.newFile().getAbsolutePath());
 
         final CliFrontend cli = new CliFrontend(configuration, customCommandLines);
         final CommandLine commandLine =
@@ -212,7 +211,7 @@ class FlinkYarnSessionCliTest {
 
         final CustomCommandLine customCommandLine =
                 cli.validateAndGetActiveCommandLine(commandLine);
-        assertThat(customCommandLine).isInstanceOf(GenericCLI.class);
+        assertTrue(customCommandLine instanceof GenericCLI);
     }
 
     private void validateYarnCLIisActive(Configuration configuration)
@@ -220,7 +219,7 @@ class FlinkYarnSessionCliTest {
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli(configuration);
         final CommandLine testCLIArgs =
                 flinkYarnSessionCli.parseCommandLineOptions(new String[] {}, true);
-        assertThat(flinkYarnSessionCli.isActive(testCLIArgs)).isTrue();
+        assertTrue(flinkYarnSessionCli.isActive(testCLIArgs));
     }
 
     /**
@@ -228,7 +227,7 @@ class FlinkYarnSessionCliTest {
      * location.
      */
     @Test
-    void testResumeFromYarnPropertiesFile() throws Exception {
+    public void testResumeFromYarnPropertiesFile() throws Exception {
 
         File directoryPath = writeYarnPropertiesFile(validPropertiesFile);
 
@@ -246,27 +245,27 @@ class FlinkYarnSessionCliTest {
                 getClusterClientFactory(executorConfig);
         final ApplicationId clusterId = clientFactory.getClusterId(executorConfig);
 
-        assertThat(clusterId).isEqualTo(TEST_YARN_APPLICATION_ID);
+        assertEquals(TEST_YARN_APPLICATION_ID, clusterId);
     }
 
     /**
      * Tests that we fail when reading an invalid yarn properties file when retrieving the cluster
      * id.
      */
-    @Test
-    void testInvalidYarnPropertiesFile() throws Exception {
+    @Test(expected = FlinkException.class)
+    public void testInvalidYarnPropertiesFile() throws Exception {
 
         File directoryPath = writeYarnPropertiesFile(invalidPropertiesFile);
 
         final Configuration configuration = new Configuration();
         configuration.setString(
                 YarnConfigOptions.PROPERTIES_FILE_LOCATION, directoryPath.getAbsolutePath());
-        assertThatThrownBy(() -> createFlinkYarnSessionCli(configuration))
-                .isInstanceOf(FlinkException.class);
+
+        createFlinkYarnSessionCli(configuration);
     }
 
     @Test
-    void testResumeFromYarnID() throws Exception {
+    public void testResumeFromYarnID() throws Exception {
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
 
         final CommandLine commandLine =
@@ -278,11 +277,11 @@ class FlinkYarnSessionCliTest {
                 getClusterClientFactory(executorConfig);
         final ApplicationId clusterId = clientFactory.getClusterId(executorConfig);
 
-        assertThat(clusterId).isEqualTo(TEST_YARN_APPLICATION_ID);
+        assertEquals(TEST_YARN_APPLICATION_ID, clusterId);
     }
 
     @Test
-    void testResumeFromYarnIDZookeeperNamespace() throws Exception {
+    public void testResumeFromYarnIDZookeeperNamespace() throws Exception {
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
 
         final CommandLine commandLine =
@@ -300,11 +299,11 @@ class FlinkYarnSessionCliTest {
 
         String zkNs =
                 clusterDescriptorConfiguration.getValue(HighAvailabilityOptions.HA_CLUSTER_ID);
-        assertThat(zkNs).matches("application_\\d+_0042");
+        assertTrue(zkNs.matches("application_\\d+_0042"));
     }
 
     @Test
-    void testResumeFromYarnIDZookeeperNamespaceOverride() throws Exception {
+    public void testResumeFromYarnIDZookeeperNamespaceOverride() throws Exception {
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
 
         final String overrideZkNamespace = "my_cluster";
@@ -326,11 +325,11 @@ class FlinkYarnSessionCliTest {
                 clusterDescriptor.getFlinkConfiguration();
         final String clusterId =
                 clusterDescriptorConfiguration.getValue(HighAvailabilityOptions.HA_CLUSTER_ID);
-        assertThat(clusterId).isEqualTo(overrideZkNamespace);
+        assertEquals(overrideZkNamespace, clusterId);
     }
 
     @Test
-    void testYarnIDOverridesPropertiesFile() throws Exception {
+    public void testYarnIDOverridesPropertiesFile() throws Exception {
         File directoryPath = writeYarnPropertiesFile(validPropertiesFile);
 
         final Configuration configuration = new Configuration();
@@ -347,7 +346,7 @@ class FlinkYarnSessionCliTest {
                 getClusterClientFactory(executorConfig);
         final ApplicationId clusterId = clientFactory.getClusterId(executorConfig);
 
-        assertThat(clusterId).isEqualTo(TEST_YARN_APPLICATION_ID_2);
+        assertEquals(TEST_YARN_APPLICATION_ID_2, clusterId);
     }
 
     /**
@@ -355,7 +354,7 @@ class FlinkYarnSessionCliTest {
      * ClusterSpecification} is created.
      */
     @Test
-    void testCommandLineClusterSpecification() throws Exception {
+    public void testCommandLineClusterSpecification() throws Exception {
         final Configuration configuration = new Configuration();
         final int jobManagerMemory = 1337;
         final int taskManagerMemory = 7331;
@@ -369,9 +368,9 @@ class FlinkYarnSessionCliTest {
 
         final String[] args = {
             "-yjm",
-            jobManagerMemory + "m",
+            String.valueOf(jobManagerMemory) + "m",
             "-ytm",
-            taskManagerMemory + "m",
+            String.valueOf(taskManagerMemory) + "m",
             "-ys",
             String.valueOf(slotsPerTaskManager)
         };
@@ -384,16 +383,16 @@ class FlinkYarnSessionCliTest {
         ClusterSpecification clusterSpecification =
                 clientFactory.getClusterSpecification(executorConfig);
 
-        assertThat(clusterSpecification.getMasterMemoryMB()).isEqualTo(jobManagerMemory);
-        assertThat(clusterSpecification.getTaskManagerMemoryMB()).isEqualTo(taskManagerMemory);
-        assertThat(clusterSpecification.getSlotsPerTaskManager()).isEqualTo(slotsPerTaskManager);
+        assertThat(clusterSpecification.getMasterMemoryMB(), is(jobManagerMemory));
+        assertThat(clusterSpecification.getTaskManagerMemoryMB(), is(taskManagerMemory));
+        assertThat(clusterSpecification.getSlotsPerTaskManager(), is(slotsPerTaskManager));
     }
 
     /**
      * Tests that the configuration settings are used to create the {@link ClusterSpecification}.
      */
     @Test
-    void testConfigurationClusterSpecification() throws Exception {
+    public void testConfigurationClusterSpecification() throws Exception {
         final Configuration configuration = new Configuration();
         final int jobManagerMemory = 1337;
         configuration.set(
@@ -415,14 +414,14 @@ class FlinkYarnSessionCliTest {
         ClusterSpecification clusterSpecification =
                 clientFactory.getClusterSpecification(configuration);
 
-        assertThat(clusterSpecification.getMasterMemoryMB()).isEqualTo(jobManagerMemory);
-        assertThat(clusterSpecification.getTaskManagerMemoryMB()).isEqualTo(taskManagerMemory);
-        assertThat(clusterSpecification.getSlotsPerTaskManager()).isEqualTo(slotsPerTaskManager);
+        assertThat(clusterSpecification.getMasterMemoryMB(), is(jobManagerMemory));
+        assertThat(clusterSpecification.getTaskManagerMemoryMB(), is(taskManagerMemory));
+        assertThat(clusterSpecification.getSlotsPerTaskManager(), is(slotsPerTaskManager));
     }
 
     /** Tests the specifying total process memory without unit for job manager and task manager. */
     @Test
-    void testMemoryPropertyWithoutUnit() throws Exception {
+    public void testMemoryPropertyWithoutUnit() throws Exception {
         final String[] args = new String[] {"-yjm", "1024", "-ytm", "2048"};
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
 
@@ -434,15 +433,15 @@ class FlinkYarnSessionCliTest {
         final ClusterSpecification clusterSpecification =
                 clientFactory.getClusterSpecification(executorConfig);
 
-        assertThat(clusterSpecification.getMasterMemoryMB()).isEqualTo(1024);
-        assertThat(clusterSpecification.getTaskManagerMemoryMB()).isEqualTo(2048);
+        assertThat(clusterSpecification.getMasterMemoryMB(), is(1024));
+        assertThat(clusterSpecification.getTaskManagerMemoryMB(), is(2048));
     }
 
     /**
      * Tests the specifying total process memory with unit (MB) for job manager and task manager.
      */
     @Test
-    void testMemoryPropertyWithUnitMB() throws Exception {
+    public void testMemoryPropertyWithUnitMB() throws Exception {
         final String[] args = new String[] {"-yjm", "1024m", "-ytm", "2048m"};
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
         final CommandLine commandLine = flinkYarnSessionCli.parseCommandLineOptions(args, false);
@@ -453,8 +452,8 @@ class FlinkYarnSessionCliTest {
         final ClusterSpecification clusterSpecification =
                 clientFactory.getClusterSpecification(executorConfig);
 
-        assertThat(clusterSpecification.getMasterMemoryMB()).isEqualTo(1024);
-        assertThat(clusterSpecification.getTaskManagerMemoryMB()).isEqualTo(2048);
+        assertThat(clusterSpecification.getMasterMemoryMB(), is(1024));
+        assertThat(clusterSpecification.getTaskManagerMemoryMB(), is(2048));
     }
 
     /**
@@ -462,7 +461,7 @@ class FlinkYarnSessionCliTest {
      * manager.
      */
     @Test
-    void testMemoryPropertyWithArbitraryUnit() throws Exception {
+    public void testMemoryPropertyWithArbitraryUnit() throws Exception {
         final String[] args = new String[] {"-yjm", "1g", "-ytm", "2g"};
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
         final CommandLine commandLine = flinkYarnSessionCli.parseCommandLineOptions(args, false);
@@ -473,16 +472,16 @@ class FlinkYarnSessionCliTest {
         final ClusterSpecification clusterSpecification =
                 clientFactory.getClusterSpecification(executorConfig);
 
-        assertThat(clusterSpecification.getMasterMemoryMB()).isEqualTo(1024);
-        assertThat(clusterSpecification.getTaskManagerMemoryMB()).isEqualTo(2048);
+        assertThat(clusterSpecification.getMasterMemoryMB(), is(1024));
+        assertThat(clusterSpecification.getTaskManagerMemoryMB(), is(2048));
     }
 
     /** Tests the specifying heap memory with old config key for job manager and task manager. */
     @Test
-    void testHeapMemoryPropertyWithOldConfigKey() throws Exception {
+    public void testHeapMemoryPropertyWithOldConfigKey() throws Exception {
         Configuration configuration = new Configuration();
-        configuration.set(JobManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.parse("2048m"));
-        configuration.set(TaskManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.parse("4096m"));
+        configuration.setInteger(JobManagerOptions.JOB_MANAGER_HEAP_MEMORY_MB, 2048);
+        configuration.setInteger(TaskManagerOptions.TASK_MANAGER_HEAP_MEMORY_MB, 4096);
 
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli(configuration);
 
@@ -496,8 +495,8 @@ class FlinkYarnSessionCliTest {
         final ClusterSpecification clusterSpecification =
                 clientFactory.getClusterSpecification(configuration);
 
-        assertThat(clusterSpecification.getMasterMemoryMB()).isEqualTo(2048);
-        assertThat(clusterSpecification.getTaskManagerMemoryMB()).isEqualTo(4096);
+        assertThat(clusterSpecification.getMasterMemoryMB(), is(2048));
+        assertThat(clusterSpecification.getTaskManagerMemoryMB(), is(4096));
     }
 
     /**
@@ -505,7 +504,7 @@ class FlinkYarnSessionCliTest {
      * manager and task manager.
      */
     @Test
-    void testJobManagerMemoryPropertyWithConfigDefaultValue() throws Exception {
+    public void testJobManagerMemoryPropertyWithConfigDefaultValue() throws Exception {
         int procMemory = 2048;
         final Configuration configuration = createConfigurationWithJmAndTmTotalMemory(procMemory);
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli(configuration);
@@ -520,23 +519,19 @@ class FlinkYarnSessionCliTest {
         final ClusterSpecification clusterSpecification =
                 clientFactory.getClusterSpecification(configuration);
 
-        assertThat(clusterSpecification.getMasterMemoryMB()).isEqualTo(procMemory);
-        assertThat(clusterSpecification.getTaskManagerMemoryMB()).isEqualTo(procMemory);
+        assertThat(clusterSpecification.getMasterMemoryMB(), is(procMemory));
+        assertThat(clusterSpecification.getTaskManagerMemoryMB(), is(procMemory));
     }
 
     @Test
-    void testMultipleYarnShipOptions() throws Exception {
+    public void testMultipleYarnShipOptions() throws Exception {
         final String[] args =
                 new String[] {
                     "run",
                     "--yarnship",
-                    Files.createTempDirectory(tmp, UUID.randomUUID().toString())
-                            .toFile()
-                            .getAbsolutePath(),
+                    tmp.newFolder().getAbsolutePath(),
                     "--yarnship",
-                    Files.createTempDirectory(tmp, UUID.randomUUID().toString())
-                            .toFile()
-                            .getAbsolutePath()
+                    tmp.newFolder().getAbsolutePath()
                 };
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
 
@@ -548,12 +543,12 @@ class FlinkYarnSessionCliTest {
         YarnClusterDescriptor flinkYarnDescriptor =
                 (YarnClusterDescriptor) clientFactory.createClusterDescriptor(executorConfig);
 
-        assertThat(flinkYarnDescriptor.getShipFiles()).hasSize(2);
+        assertEquals(2, flinkYarnDescriptor.getShipFiles().size());
     }
 
     @Test
-    void testShipFiles() throws Exception {
-        File tmpFile = Files.createTempFile(tmp, UUID.randomUUID().toString(), "").toFile();
+    public void testShipFiles() throws Exception {
+        File tmpFile = tmp.newFile();
         final String[] args = new String[] {"run", "--yarnship", tmpFile.toString()};
         final FlinkYarnSessionCli flinkYarnSessionCli = createFlinkYarnSessionCli();
 
@@ -565,12 +560,12 @@ class FlinkYarnSessionCliTest {
         YarnClusterDescriptor flinkYarnDescriptor =
                 (YarnClusterDescriptor) clientFactory.createClusterDescriptor(executorConfig);
 
-        assertThat(flinkYarnDescriptor.getShipFiles()).isEqualTo(Lists.newArrayList(tmpFile));
+        assertEquals(Lists.newArrayList(tmpFile), flinkYarnDescriptor.getShipFiles());
     }
 
     @Test
-    void testMissingShipFiles() throws Exception {
-        File tmpFile = Files.createTempFile(tmp, UUID.randomUUID().toString(), "").toFile();
+    public void testMissingShipFiles() throws Exception {
+        File tmpFile = tmp.newFile();
         final String[] args =
                 new String[] {
                     "run", "--yarnship", tmpFile.toString(), "--yarnship", "missing.file"
@@ -579,9 +574,12 @@ class FlinkYarnSessionCliTest {
 
         final CommandLine commandLine = flinkYarnSessionCli.parseCommandLineOptions(args, false);
 
-        assertThatThrownBy(() -> flinkYarnSessionCli.toConfiguration(commandLine))
-                .isInstanceOf(ConfigurationException.class)
-                .hasMessage("Ship file missing.file does not exist");
+        try {
+            flinkYarnSessionCli.toConfiguration(commandLine);
+            fail("Expected error for missing file");
+        } catch (ConfigurationException ce) {
+            assertEquals("Ship file missing.file does not exist", ce.getMessage());
+        }
     }
 
     ///////////
@@ -596,7 +594,7 @@ class FlinkYarnSessionCliTest {
     }
 
     private File writeYarnPropertiesFile(String contents) throws IOException {
-        File tmpFolder = Files.createTempDirectory(tmp, UUID.randomUUID().toString()).toFile();
+        File tmpFolder = tmp.newFolder();
         String currentUser = System.getProperty("user.name");
 
         // copy .yarn-properties-<username>
@@ -610,17 +608,23 @@ class FlinkYarnSessionCliTest {
         return createFlinkYarnSessionCli(new Configuration());
     }
 
-    private Configuration createConfigurationWithJmAndTmTotalMemory(int totalMemory) {
+    private FlinkYarnSessionCli createFlinkYarnSessionCliWithJmAndTmTotalMemory(int totalMemomory)
+            throws FlinkException {
+        return createFlinkYarnSessionCli(createConfigurationWithJmAndTmTotalMemory(totalMemomory));
+    }
+
+    private Configuration createConfigurationWithJmAndTmTotalMemory(int totalMemomory)
+            throws FlinkException {
         Configuration configuration = new Configuration();
         configuration.set(
-                JobManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.ofMebiBytes(totalMemory));
+                JobManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.ofMebiBytes(totalMemomory));
         configuration.set(
-                TaskManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.ofMebiBytes(totalMemory));
+                TaskManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.ofMebiBytes(totalMemomory));
         return configuration;
     }
 
     private FlinkYarnSessionCli createFlinkYarnSessionCli(Configuration configuration)
             throws FlinkException {
-        return new FlinkYarnSessionCli(configuration, tmp.toFile().getAbsolutePath(), "y", "yarn");
+        return new FlinkYarnSessionCli(configuration, tmp.getRoot().getAbsolutePath(), "y", "yarn");
     }
 }

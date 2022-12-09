@@ -72,12 +72,12 @@ under the License.
 		</file>
 
 		<!-- Scala APIs -->
-		<file>
-			<source>../flink-dist-scala/target/flink-dist-scala_${scala.binary.version}-${project.version}.jar</source>
-			<outputDirectory>lib/</outputDirectory>
-			<destName>flink-scala_${scala.binary.version}-${project.version}.jar</destName>
-			<fileMode>0644</fileMode>
-		</file>
+<!--		<file>-->
+<!--			<source>../flink-dist-scala/target/flink-dist-scala_${scala.binary.version}-${project.version}.jar</source>-->
+<!--			<outputDirectory>lib/</outputDirectory>-->
+<!--			<destName>flink-scala_${scala.binary.version}-${project.version}.jar</destName>-->
+<!--			<fileMode>0644</fileMode>-->
+<!--		</file>-->
 
 		<!-- Table jars -->
 		<file>
@@ -168,13 +168,6 @@ under the License.
 		<!-- copy SQL client -->
 		<fileSet>
 			<directory>../flink-table/flink-sql-client/bin/</directory>
-			<outputDirectory>bin</outputDirectory>
-			<fileMode>0755</fileMode>
-		</fileSet>
-
-		<!-- copy SQL gateway -->
-		<fileSet>
-			<directory>../flink-table/flink-sql-gateway/bin/</directory>
 			<outputDirectory>bin</outputDirectory>
 			<fileMode>0755</fileMode>
 		</fileSet>

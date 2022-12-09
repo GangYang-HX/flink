@@ -26,10 +26,10 @@ import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.checkpoint.CheckpointsCleaner;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
-import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.IntermediateResult;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
+import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
 import org.apache.flink.runtime.executiongraph.failover.flip1.FailoverStrategy;
 import org.apache.flink.runtime.executiongraph.failover.flip1.RestartBackoffTimeStrategy;
 import org.apache.flink.runtime.jobgraph.JobEdge;
@@ -41,15 +41,16 @@ import org.apache.flink.runtime.jobgraph.topology.DefaultLogicalResult;
 import org.apache.flink.runtime.jobgraph.topology.DefaultLogicalTopology;
 import org.apache.flink.runtime.jobgraph.topology.DefaultLogicalVertex;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
-import org.apache.flink.runtime.scheduler.DefaultExecutionDeployer;
 import org.apache.flink.runtime.scheduler.DefaultScheduler;
 import org.apache.flink.runtime.scheduler.ExecutionGraphFactory;
-import org.apache.flink.runtime.scheduler.ExecutionOperations;
 import org.apache.flink.runtime.scheduler.ExecutionSlotAllocatorFactory;
+import org.apache.flink.runtime.scheduler.ExecutionVertexOperations;
 import org.apache.flink.runtime.scheduler.ExecutionVertexVersioner;
+import org.apache.flink.runtime.scheduler.SchedulerOperations;
 import org.apache.flink.runtime.scheduler.VertexParallelismStore;
 import org.apache.flink.runtime.scheduler.adaptivebatch.forwardgroup.ForwardGroup;
 import org.apache.flink.runtime.scheduler.adaptivebatch.forwardgroup.ForwardGroupComputeUtil;
+import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.scheduler.strategy.SchedulingStrategyFactory;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
@@ -70,7 +71,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * This scheduler decides the parallelism of JobVertex according to the data volume it consumes. A
  * dynamically built up ExecutionGraph is used for this purpose.
  */
-public class AdaptiveBatchScheduler extends DefaultScheduler {
+public class AdaptiveBatchScheduler extends DefaultScheduler implements SchedulerOperations {
 
     private final DefaultLogicalTopology logicalTopology;
 
@@ -78,7 +79,7 @@ public class AdaptiveBatchScheduler extends DefaultScheduler {
 
     private final Map<JobVertexID, ForwardGroup> forwardGroupsByJobVertexId;
 
-    public AdaptiveBatchScheduler(
+    AdaptiveBatchScheduler(
             final Logger log,
             final JobGraph jobGraph,
             final Executor ioExecutor,
@@ -92,7 +93,7 @@ public class AdaptiveBatchScheduler extends DefaultScheduler {
             final SchedulingStrategyFactory schedulingStrategyFactory,
             final FailoverStrategy.Factory failoverStrategyFactory,
             final RestartBackoffTimeStrategy restartBackoffTimeStrategy,
-            final ExecutionOperations executionOperations,
+            final ExecutionVertexOperations executionVertexOperations,
             final ExecutionVertexVersioner executionVertexVersioner,
             final ExecutionSlotAllocatorFactory executionSlotAllocatorFactory,
             long initializationTimestamp,
@@ -119,7 +120,7 @@ public class AdaptiveBatchScheduler extends DefaultScheduler {
                 schedulingStrategyFactory,
                 failoverStrategyFactory,
                 restartBackoffTimeStrategy,
-                executionOperations,
+                executionVertexOperations,
                 executionVertexVersioner,
                 executionSlotAllocatorFactory,
                 initializationTimestamp,
@@ -129,8 +130,7 @@ public class AdaptiveBatchScheduler extends DefaultScheduler {
                 shuffleMaster,
                 rpcTimeout,
                 computeVertexParallelismStoreForDynamicGraph(
-                        jobGraph.getVertices(), defaultMaxParallelism),
-                new DefaultExecutionDeployer.Factory());
+                        jobGraph.getVertices(), defaultMaxParallelism));
 
         this.logicalTopology = DefaultLogicalTopology.fromJobGraph(jobGraph);
 
@@ -143,20 +143,23 @@ public class AdaptiveBatchScheduler extends DefaultScheduler {
     }
 
     @Override
-    protected void startSchedulingInternal() {
+    public void startSchedulingInternal() {
         initializeVerticesIfPossible();
 
         super.startSchedulingInternal();
     }
 
     @Override
-    protected void onTaskFinished(final Execution execution) {
+    protected void updateTaskExecutionStateInternal(
+            final ExecutionVertexID executionVertexId,
+            final TaskExecutionStateTransition taskExecutionState) {
+
         initializeVerticesIfPossible();
 
-        super.onTaskFinished(execution);
+        super.updateTaskExecutionStateInternal(executionVertexId, taskExecutionState);
     }
 
-    void initializeVerticesIfPossible() {
+    private void initializeVerticesIfPossible() {
         final List<ExecutionJobVertex> newlyInitializedJobVertices = new ArrayList<>();
         try {
             final long createTimestamp = System.currentTimeMillis();

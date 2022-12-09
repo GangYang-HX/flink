@@ -33,7 +33,8 @@ import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.junit.Assert.assertThat;
 
 /** A resource that starts an embedded elasticsearch cluster. */
 public class ElasticsearchResource extends ExternalResource {
@@ -81,8 +82,8 @@ public class ElasticsearchResource extends ExternalResource {
 
         ClusterHealthResponse health = healthFuture.actionGet(TimeValue.timeValueSeconds(120));
 
-        assertThat(health.getNumberOfNodes()).isGreaterThanOrEqualTo(1);
-        assertThat(health.getNumberOfDataNodes()).isGreaterThanOrEqualTo(1);
+        assertThat(health.getNumberOfNodes(), greaterThanOrEqualTo(1));
+        assertThat(health.getNumberOfDataNodes(), greaterThanOrEqualTo(1));
     }
 
     @Override

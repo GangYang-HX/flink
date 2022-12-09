@@ -29,7 +29,6 @@ import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
 import org.apache.flink.queryablestate.client.QueryableStateClient;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
-import org.apache.flink.runtime.testutils.ZooKeeperTestUtils;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 
 import org.apache.curator.test.TestingServer;
@@ -63,7 +62,7 @@ public class HAQueryableStateRocksDBBackendITCase extends AbstractQueryableState
 
     @BeforeClass
     public static void setup() throws Exception {
-        zkServer = ZooKeeperTestUtils.createAndStartZookeeperTestingServer();
+        zkServer = new TestingServer();
 
         // we have to manage this manually because we have to create the ZooKeeper server
         // ahead of this
@@ -88,6 +87,7 @@ public class HAQueryableStateRocksDBBackendITCase extends AbstractQueryableState
 
         client.shutdownAndWait();
 
+        zkServer.stop();
         zkServer.close();
     }
 

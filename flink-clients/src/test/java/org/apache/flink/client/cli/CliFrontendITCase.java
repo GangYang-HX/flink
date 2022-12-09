@@ -23,33 +23,34 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.time.Duration;
 import java.util.Collections;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.junit.Assert.assertThat;
 
 /** Integration tests for {@link CliFrontend}. */
-class CliFrontendITCase {
+public class CliFrontendITCase {
 
     private PrintStream originalPrintStream;
 
     private ByteArrayOutputStream testOutputStream;
 
-    @BeforeEach
-    void before() {
+    @Before
+    public void before() {
         originalPrintStream = System.out;
         testOutputStream = new ByteArrayOutputStream();
         System.setOut(new PrintStream(testOutputStream));
     }
 
-    @AfterEach
-    void tearDown() {
+    @After
+    public void finalize() {
         System.setOut(originalPrintStream);
     }
 
@@ -58,7 +59,7 @@ class CliFrontendITCase {
     }
 
     @Test
-    void configurationIsForwarded() throws Exception {
+    public void configurationIsForwarded() throws Exception {
         Configuration config = new Configuration();
         CustomCommandLine commandLine = new DefaultCLI();
 
@@ -71,11 +72,11 @@ class CliFrontendITCase {
                     "run", "-c", TestingJob.class.getName(), CliFrontendTestUtils.getTestJarPath()
                 });
 
-        assertThat(getStdoutString()).contains("Watermark interval is 42");
+        assertThat(getStdoutString(), containsString("Watermark interval is 42"));
     }
 
     @Test
-    void commandlineOverridesConfiguration() throws Exception {
+    public void commandlineOverridesConfiguration() throws Exception {
         Configuration config = new Configuration();
 
         // we use GenericCli because it allows specifying arbitrary options via "-Dfoo=bar" syntax
@@ -96,7 +97,7 @@ class CliFrontendITCase {
                     CliFrontendTestUtils.getTestJarPath()
                 });
 
-        assertThat(getStdoutString()).contains("Watermark interval is 142");
+        assertThat(getStdoutString(), containsString("Watermark interval is 142"));
     }
 
     /**

@@ -29,9 +29,4 @@ import org.apache.flink.runtime.state.StateBackend;
 @Internal
 public interface DelegatingStateBackend extends StateBackend {
     StateBackend getDelegatedStateBackend();
-
-    @Override
-    default String getName() {
-        return getDelegatedStateBackend().getName();
-    }
 }

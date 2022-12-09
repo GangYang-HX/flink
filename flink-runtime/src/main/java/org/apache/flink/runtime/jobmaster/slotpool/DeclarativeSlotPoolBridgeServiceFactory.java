@@ -41,11 +41,10 @@ public class DeclarativeSlotPoolBridgeServiceFactory extends AbstractSlotPoolSer
 
     @Nonnull
     @Override
-    public SlotPoolService createSlotPoolService(
-            @Nonnull JobID jobId, DeclarativeSlotPoolFactory declarativeSlotPoolFactory) {
+    public SlotPoolService createSlotPoolService(@Nonnull JobID jobId) {
         return new DeclarativeSlotPoolBridge(
                 jobId,
-                declarativeSlotPoolFactory,
+                new DefaultDeclarativeSlotPoolFactory(),
                 clock,
                 rpcTimeout,
                 slotIdleTimeout,

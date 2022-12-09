@@ -30,32 +30,23 @@ import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
-import org.apache.flink.runtime.scheduler.DefaultSchedulerBuilder;
 import org.apache.flink.runtime.scheduler.SchedulerBase;
 import org.apache.flink.runtime.scheduler.SchedulerTestingUtils;
 import org.apache.flink.runtime.scheduler.TestingPhysicalSlot;
 import org.apache.flink.runtime.scheduler.TestingPhysicalSlotProvider;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertFalse;
 
 /** Tests for the {@link ExecutionVertex}. */
 public class ExecutionVertexTest extends TestLogger {
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     @Test
     public void testResetForNewExecutionReleasesPartitions() throws Exception {
@@ -75,10 +66,8 @@ public class ExecutionVertexTest extends TestLogger {
         final JobGraph jobGraph =
                 JobGraphTestUtils.streamingJobGraph(producerJobVertex, consumerJobVertex);
         final SchedulerBase scheduler =
-                new DefaultSchedulerBuilder(
-                                jobGraph,
-                                ComponentMainThreadExecutorServiceAdapter.forMainThread(),
-                                EXECUTOR_RESOURCE.getExecutor())
+                SchedulerTestingUtils.newSchedulerBuilder(
+                                jobGraph, ComponentMainThreadExecutorServiceAdapter.forMainThread())
                         .setPartitionTracker(partitionTracker)
                         .build();
 
@@ -123,10 +112,8 @@ public class ExecutionVertexTest extends TestLogger {
         // make sure that retrieving the last (al)location is independent from the history size
         configuration.set(JobManagerOptions.MAX_ATTEMPTS_HISTORY_SIZE, 1);
         final SchedulerBase scheduler =
-                new DefaultSchedulerBuilder(
-                                jobGraph,
-                                ComponentMainThreadExecutorServiceAdapter.forMainThread(),
-                                EXECUTOR_RESOURCE.getExecutor())
+                SchedulerTestingUtils.newSchedulerBuilder(
+                                jobGraph, ComponentMainThreadExecutorServiceAdapter.forMainThread())
                         .setJobMasterConfiguration(configuration)
                         .setExecutionSlotAllocatorFactory(
                                 SchedulerTestingUtils.newSlotSharingExecutionSlotAllocatorFactory(

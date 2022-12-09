@@ -57,7 +57,7 @@ public abstract class AbstractCompleteCheckpointStore implements CompletedCheckp
         findLowest(unSubsumedCheckpoints).ifPresent(sharedStateRegistry::unregisterUnusedState);
     }
 
-    protected static Optional<Long> findLowest(Deque<CompletedCheckpoint> unSubsumedCheckpoints) {
+    private static Optional<Long> findLowest(Deque<CompletedCheckpoint> unSubsumedCheckpoints) {
         for (CompletedCheckpoint p : unSubsumedCheckpoints) {
             if (!p.getProperties().isSavepoint()) {
                 return Optional.of(p.getCheckpointID());

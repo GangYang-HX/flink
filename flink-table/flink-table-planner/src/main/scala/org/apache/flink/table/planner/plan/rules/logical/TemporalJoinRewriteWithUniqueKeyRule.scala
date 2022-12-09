@@ -110,12 +110,7 @@ class TemporalJoinRewriteWithUniqueKeyRule
       }
     })
     val rewriteJoin =
-      FlinkLogicalJoin.create(
-        leftInput,
-        snapshot,
-        newJoinCondition,
-        join.getHints,
-        join.getJoinType)
+      FlinkLogicalJoin.create(leftInput, snapshot, newJoinCondition, join.getJoinType)
     call.transformTo(rewriteJoin)
   }
 

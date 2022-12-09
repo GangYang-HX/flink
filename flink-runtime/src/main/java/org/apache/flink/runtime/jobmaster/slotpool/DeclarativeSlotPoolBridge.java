@@ -153,13 +153,14 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
         }
 
         if (isJobRestarting) {
-            return getDeclarativeSlotPool()
+            getDeclarativeSlotPool()
                     .registerSlots(
                             offers,
                             taskManagerLocation,
                             taskManagerGateway,
                             getRelativeTimeMillis());
 
+            return offers;
         } else {
             return getDeclarativeSlotPool()
                     .offerSlots(
@@ -397,9 +398,8 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
     }
 
     private void failPendingRequests(Collection<ResourceRequirement> acquiredResources) {
-        // only fails streaming requests because batch jobs do not require all resources
-        // requirements to be fullfilled at the same time
-        Predicate<PendingRequest> predicate = request -> !request.isBatchRequest();
+        Predicate<PendingRequest> predicate =
+                request -> !isBatchSlotRequestTimeoutCheckDisabled || !request.isBatchRequest();
         if (pendingRequests.values().stream().anyMatch(predicate)) {
             log.warn(
                     "Could not acquire the minimum required resources, failing slot requests. Acquired: {}. Current slot pool status: {}",

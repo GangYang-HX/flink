@@ -29,7 +29,6 @@ import org.apache.flink.connector.file.src.util.ArrayResultIterator;
 import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.InstantiationUtil;
@@ -65,7 +64,8 @@ public class DeserializationSchemaAdapter implements BulkFormat<RowData, FileSou
                     new DeserializationSchema.InitializationContext() {
                         @Override
                         public MetricGroup getMetricGroup() {
-                            return new UnregisteredMetricsGroup();
+                            throw new UnsupportedOperationException(
+                                    "MetricGroup is unsupported in BulkFormat.");
                         }
 
                         @Override

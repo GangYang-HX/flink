@@ -46,11 +46,6 @@ OutputTag<String> outputTag = new OutputTag<String>("side-output") {};
 val outputTag = OutputTag[String]("side-output")
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-output_tag = OutputTag("side-output", Types.STRING())
-```
-{{< /tab >}}
 {{< /tabs >}}
 
 注意 `OutputTag` 是如何根据旁路输出流所包含的元素类型进行类型化的。
@@ -113,25 +108,6 @@ val mainDataStream = input
   })
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-input = ...  # type: DataStream
-output_tag = OutputTag("side-output", Types.STRING())
-
-class MyProcessFunction(ProcessFunction):
-
-    def process_element(self, value: int, ctx: ProcessFunction.Context):
-        # emit data to regular output
-        yield value
-
-        # emit data to side output
-        yield output_tag, "sideout-" + str(value)
-
-
-main_data_stream = input \
-    .process(MyProcessFunction(), Types.INT())
-```
-{{< /tab >}}
 {{< /tabs >}}
 
 你可以在 `DataStream` 运算结果上使用 `getSideOutput(OutputTag)` 方法获取旁路输出流。这将产生一个与旁路输出流结果类型一致的 `DataStream`：
@@ -155,15 +131,6 @@ val outputTag = OutputTag[String]("side-output")
 val mainDataStream = ...
 
 val sideOutputStream: DataStream[String] = mainDataStream.getSideOutput(outputTag)
-```
-{{< /tab >}}
-{{< tab "Python" >}}
-```python
-output_tag = OutputTag("side-output", Types.STRING())
-
-main_data_stream = ...  # type: DataStream
-
-side_output_stream = main_data_stream.get_side_output(output_tag)  # type: DataStream
 ```
 {{< /tab >}}
 {{< /tabs >}}

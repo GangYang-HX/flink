@@ -19,35 +19,39 @@ package org.apache.flink.table.types.extraction
 
 import org.apache.flink.table.annotation.{DataTypeHint, HintFlag}
 import org.apache.flink.table.api.ValidationException
-import org.apache.flink.table.types.extraction.DataTypeExtractorTest._
+import org.apache.flink.table.types.extraction.DataTypeExtractorTest.{TestSpec, _}
 
-import org.assertj.core.api.Assertions.assertThatThrownBy
-import org.assertj.core.api.HamcrestCondition
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.{Rule, Test}
+import org.junit.rules.ExpectedException
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
 
 import java.util
-import java.util.stream
+
+import scala.annotation.meta.getter
 
 /** Scala tests for [[DataTypeExtractor]]. */
-class DataTypeExtractorScalaTest {
+@RunWith(classOf[Parameterized])
+class DataTypeExtractorScalaTest(testSpec: DataTypeExtractorTest.TestSpec) {
 
-  @ParameterizedTest
-  @MethodSource(Array("testData"))
-  def testScalaExtraction(testSpec: DataTypeExtractorTest.TestSpec): Unit = {
+  @(Rule @getter)
+  var thrown: ExpectedException = ExpectedException.none
+
+  @Test
+  def testScalaExtraction(): Unit = {
     if (testSpec.hasErrorMessage) {
-      assertThatThrownBy(() => runExtraction(testSpec))
-        .isInstanceOf(classOf[ValidationException])
-        .is(HamcrestCondition.matching(errorMatcher(testSpec)))
-    } else {
-      runExtraction(testSpec)
+      thrown.expect(classOf[ValidationException])
+      thrown.expectCause(errorMatcher(testSpec))
     }
+    runExtraction(testSpec)
   }
 }
 
 object DataTypeExtractorScalaTest {
 
-  def testData: stream.Stream[TestSpec] = java.util.stream.Stream.of(
+  @Parameters
+  def testData: Array[TestSpec] = Array(
     // simple structured type without RAW type
     TestSpec
       .forType(classOf[ScalaSimplePojo])

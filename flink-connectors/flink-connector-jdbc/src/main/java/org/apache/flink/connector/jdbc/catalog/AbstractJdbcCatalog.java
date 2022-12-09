@@ -144,17 +144,12 @@ public abstract class AbstractJdbcCatalog extends AbstractCatalog {
     // ------ retrieve PK constraint ------
 
     protected Optional<UniqueConstraint> getPrimaryKey(
-            DatabaseMetaData metaData, String database, String schema, String table)
-            throws SQLException {
+            DatabaseMetaData metaData, String schema, String table) throws SQLException {
 
         // According to the Javadoc of java.sql.DatabaseMetaData#getPrimaryKeys,
         // the returned primary key columns are ordered by COLUMN_NAME, not by KEY_SEQ.
         // We need to sort them based on the KEY_SEQ value.
-        // In the currently supported database dialects MySQL and Postgres,
-        // the database term is equivalent to catalog term.
-        // We need to pass the database name as catalog parameter for retrieving primary keys by
-        // full table identifier.
-        ResultSet rs = metaData.getPrimaryKeys(database, schema, table);
+        ResultSet rs = metaData.getPrimaryKeys(null, schema, table);
 
         Map<Integer, String> keySeqColumnName = new HashMap<>();
         String pkName = null;
@@ -162,9 +157,6 @@ public abstract class AbstractJdbcCatalog extends AbstractCatalog {
             String columnName = rs.getString("COLUMN_NAME");
             pkName = rs.getString("PK_NAME"); // all the PK_NAME should be the same
             int keySeq = rs.getInt("KEY_SEQ");
-            Preconditions.checkState(
-                    !keySeqColumnName.containsKey(keySeq - 1),
-                    "The field(s) of primary key must be from the same table.");
             keySeqColumnName.put(keySeq - 1, columnName); // KEY_SEQ is 1-based index
         }
         List<String> pkFields =
@@ -236,17 +228,12 @@ public abstract class AbstractJdbcCatalog extends AbstractCatalog {
             throw new TableNotExistException(getName(), tablePath);
         }
 
-        String databaseName = tablePath.getDatabaseName();
-        String dbUrl = baseUrl + databaseName;
+        String dbUrl = baseUrl + tablePath.getDatabaseName();
 
         try (Connection conn = DriverManager.getConnection(dbUrl, username, pwd)) {
             DatabaseMetaData metaData = conn.getMetaData();
             Optional<UniqueConstraint> primaryKey =
-                    getPrimaryKey(
-                            metaData,
-                            databaseName,
-                            getSchemaName(tablePath),
-                            getTableName(tablePath));
+                    getPrimaryKey(metaData, getSchemaName(tablePath), getTableName(tablePath));
 
             PreparedStatement ps =
                     conn.prepareStatement(

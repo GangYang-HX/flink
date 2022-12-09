@@ -23,26 +23,33 @@ import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.types.DataType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link TableSchema}. */
-class TableSchemaTest {
+public class TableSchemaTest {
 
     private static final String WATERMARK_EXPRESSION = "localtimestamp";
     private static final String WATERMARK_EXPRESSION_TS_LTZ = "now()";
     private static final DataType WATERMARK_DATATYPE = DataTypes.TIMESTAMP(3);
     private static final DataType WATERMARK_TS_LTZ_DATATYPE = DataTypes.TIMESTAMP_LTZ(3);
 
+    @Rule public ExpectedException thrown = ExpectedException.none();
+
     @Test
-    void testTableSchema() {
+    public void testTableSchema() {
         TableSchema schema =
                 TableSchema.builder()
                         .add(TableColumn.physical("f0", DataTypes.BIGINT()))
@@ -67,29 +74,31 @@ class TableSchemaTest {
                         + " |-- f3: BIGINT AS f0 + 1\n"
                         + " |-- f4: BIGINT METADATA FROM 'other.key' VIRTUAL\n"
                         + " |-- WATERMARK FOR f1.q2: TIMESTAMP(3) AS localtimestamp\n";
-        assertThat(schema.toString()).isEqualTo(expected);
+        assertEquals(expected, schema.toString());
 
         // test getFieldNames and getFieldDataType
-        assertThat(schema.getFieldName(2)).isEqualTo(Optional.of("f2"));
-        assertThat(schema.getFieldDataType(3)).isEqualTo(Optional.of(DataTypes.BIGINT()));
-        assertThat(schema.getTableColumn(3))
-                .isEqualTo(Optional.of(TableColumn.computed("f3", DataTypes.BIGINT(), "f0 + 1")));
-        assertThat(schema.getFieldDataType("f2")).isEqualTo(Optional.of(DataTypes.STRING()));
-        assertThat(schema.getFieldDataType("f1").map(r -> r.getChildren().get(0)))
-                .isEqualTo(Optional.of(DataTypes.STRING()));
-        assertThat(schema.getFieldName(5)).isNotPresent();
-        assertThat(schema.getFieldType(-1)).isNotPresent();
-        assertThat(schema.getFieldType("c")).isNotPresent();
-        assertThat(schema.getFieldDataType("f1.q1")).isNotPresent();
-        assertThat(schema.getFieldDataType("f1.q3")).isNotPresent();
+        assertEquals(Optional.of("f2"), schema.getFieldName(2));
+        assertEquals(Optional.of(DataTypes.BIGINT()), schema.getFieldDataType(3));
+        assertEquals(
+                Optional.of(TableColumn.computed("f3", DataTypes.BIGINT(), "f0 + 1")),
+                schema.getTableColumn(3));
+        assertEquals(Optional.of(DataTypes.STRING()), schema.getFieldDataType("f2"));
+        assertEquals(
+                Optional.of(DataTypes.STRING()),
+                schema.getFieldDataType("f1").map(r -> r.getChildren().get(0)));
+        assertFalse(schema.getFieldName(5).isPresent());
+        assertFalse(schema.getFieldType(-1).isPresent());
+        assertFalse(schema.getFieldType("c").isPresent());
+        assertFalse(schema.getFieldDataType("f1.q1").isPresent());
+        assertFalse(schema.getFieldDataType("f1.q3").isPresent());
 
         // test copy() and equals()
-        assertThat(schema.copy()).isEqualTo(schema);
-        assertThat(schema.copy().hashCode()).isEqualTo(schema.hashCode());
+        assertEquals(schema, schema.copy());
+        assertEquals(schema.hashCode(), schema.copy().hashCode());
     }
 
     @Test
-    void testWatermarkOnTimestampLtz() {
+    public void testWatermarkOnTimestampLtz() {
         TableSchema tableSchema =
                 TableSchema.builder()
                         .field("f0", DataTypes.TIMESTAMP())
@@ -107,11 +116,11 @@ class TableSchemaTest {
                         + " |-- f0: TIMESTAMP(6)\n"
                         + " |-- f1: ROW<`q1` STRING, `q2` TIMESTAMP_LTZ(3)>\n"
                         + " |-- WATERMARK FOR f1.q2: TIMESTAMP_LTZ(3) AS now()\n";
-        assertThat(tableSchema.toString()).isEqualTo(expected);
+        assertEquals(expected, tableSchema.toString());
     }
 
     @Test
-    void testPersistedRowDataType() {
+    public void testPersistedRowDataType() {
         final TableSchema schema =
                 TableSchema.builder()
                         .add(TableColumn.physical("f0", DataTypes.BIGINT()))
@@ -130,11 +139,11 @@ class TableSchemaTest {
                                 DataTypes.FIELD("f5", DataTypes.BIGINT()))
                         .notNull();
 
-        assertThat(schema.toPersistedRowDataType()).isEqualTo(expectedDataType);
+        assertThat(schema.toPersistedRowDataType(), equalTo(expectedDataType));
     }
 
     @Test
-    void testPhysicalRowDataType() {
+    public void testPhysicalRowDataType() {
         final TableSchema schema =
                 TableSchema.builder()
                         .add(TableColumn.physical("f0", DataTypes.BIGINT()))
@@ -151,11 +160,11 @@ class TableSchemaTest {
                                 DataTypes.FIELD("f3", DataTypes.STRING()))
                         .notNull();
 
-        assertThat(schema.toPhysicalRowDataType()).isEqualTo(expectedDataType);
+        assertThat(schema.toPhysicalRowDataType(), equalTo(expectedDataType));
     }
 
     @Test
-    void testRowDataType() {
+    public void testRowDataType() {
         final TableSchema schema =
                 TableSchema.builder()
                         .add(TableColumn.physical("f0", DataTypes.BIGINT()))
@@ -176,11 +185,11 @@ class TableSchemaTest {
                                 DataTypes.FIELD("f5", DataTypes.BIGINT()))
                         .notNull();
 
-        assertThat(schema.toRowDataType()).isEqualTo(expectedDataType);
+        assertThat(schema.toRowDataType(), equalTo(expectedDataType));
     }
 
     @Test
-    void testWatermarkOnDifferentFields() {
+    public void testWatermarkOnDifferentFields() {
         // column_name, column_type, exception_msg
         List<Tuple3<String, DataType, String>> testData = new ArrayList<>();
         testData.add(Tuple3.of("a", DataTypes.BIGINT(), "but is of type 'BIGINT'"));
@@ -203,19 +212,20 @@ class TableSchemaTest {
                     builder.watermark(t.f0, WATERMARK_EXPRESSION, WATERMARK_DATATYPE);
                     if (t.f2.equals("PASS")) {
                         TableSchema schema = builder.build();
-                        assertThat(schema.getWatermarkSpecs()).hasSize(1);
-                        assertThat(schema.getWatermarkSpecs().get(0).getRowtimeAttribute())
-                                .isEqualTo(t.f0);
+                        assertEquals(1, schema.getWatermarkSpecs().size());
+                        assertEquals(t.f0, schema.getWatermarkSpecs().get(0).getRowtimeAttribute());
                     } else {
-                        assertThatThrownBy(builder::build)
-                                .isInstanceOf(ValidationException.class)
-                                .hasMessageContaining(t.f2);
+                        try {
+                            builder.build();
+                        } catch (Exception e) {
+                            assertTrue(e.getMessage().contains(t.f2));
+                        }
                     }
                 });
     }
 
     @Test
-    void testWatermarkOnNestedField() {
+    public void testWatermarkOnNestedField() {
         TableSchema schema =
                 TableSchema.builder()
                         .field("f0", DataTypes.BIGINT())
@@ -234,51 +244,43 @@ class TableSchemaTest {
                         .watermark("f1.q3.t1", WATERMARK_EXPRESSION, WATERMARK_DATATYPE)
                         .build();
 
-        assertThat(schema.getWatermarkSpecs()).hasSize(1);
-        assertThat(schema.getWatermarkSpecs().get(0).getRowtimeAttribute()).isEqualTo("f1.q3.t1");
+        assertEquals(1, schema.getWatermarkSpecs().size());
+        assertEquals("f1.q3.t1", schema.getWatermarkSpecs().get(0).getRowtimeAttribute());
     }
 
     @Test
-    void testWatermarkOnNonExistedField() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.BIGINT())
-                                        .field(
-                                                "f1",
-                                                DataTypes.ROW(
-                                                        DataTypes.FIELD("q1", DataTypes.STRING()),
-                                                        DataTypes.FIELD(
-                                                                "q2", DataTypes.TIMESTAMP(3))))
-                                        .watermark(
-                                                "f1.q0", WATERMARK_EXPRESSION, WATERMARK_DATATYPE)
-                                        .build())
-                .isInstanceOf(ValidationException.class)
-                .hasMessage("Rowtime attribute 'f1.q0' is not defined in schema.");
+    public void testWatermarkOnNonExistedField() {
+        thrown.expectMessage("Rowtime attribute 'f1.q0' is not defined in schema");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.BIGINT())
+                .field(
+                        "f1",
+                        DataTypes.ROW(
+                                DataTypes.FIELD("q1", DataTypes.STRING()),
+                                DataTypes.FIELD("q2", DataTypes.TIMESTAMP(3))))
+                .watermark("f1.q0", WATERMARK_EXPRESSION, WATERMARK_DATATYPE)
+                .build();
     }
 
     @Test
-    void testMultipleWatermarks() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.TIMESTAMP())
-                                        .field(
-                                                "f1",
-                                                DataTypes.ROW(
-                                                        DataTypes.FIELD("q1", DataTypes.STRING()),
-                                                        DataTypes.FIELD(
-                                                                "q2", DataTypes.TIMESTAMP(3))))
-                                        .watermark(
-                                                "f1.q2", WATERMARK_EXPRESSION, WATERMARK_DATATYPE)
-                                        .watermark("f0", WATERMARK_EXPRESSION, WATERMARK_DATATYPE)
-                                        .build())
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Multiple watermark definition is not supported yet.");
+    public void testMultipleWatermarks() {
+        thrown.expectMessage("Multiple watermark definition is not supported yet.");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.TIMESTAMP())
+                .field(
+                        "f1",
+                        DataTypes.ROW(
+                                DataTypes.FIELD("q1", DataTypes.STRING()),
+                                DataTypes.FIELD("q2", DataTypes.TIMESTAMP(3))))
+                .watermark("f1.q2", WATERMARK_EXPRESSION, WATERMARK_DATATYPE)
+                .watermark("f0", WATERMARK_EXPRESSION, WATERMARK_DATATYPE)
+                .build();
     }
 
     @Test
-    void testDifferentWatermarkStrategyOutputTypes() {
+    public void testDifferentWatermarkStrategyOutputTypes() {
         List<Tuple2<DataType, String>> testData = new ArrayList<>();
         testData.add(Tuple2.of(DataTypes.BIGINT(), "but is of type 'BIGINT'"));
         testData.add(Tuple2.of(DataTypes.STRING(), "but is of type 'STRING'"));
@@ -300,11 +302,13 @@ class TableSchemaTest {
                                     .watermark("f0", "f0 - INTERVAL '5' SECOND", t.f0);
                     if (t.f1.equals("PASS")) {
                         TableSchema schema = builder.build();
-                        assertThat(schema.getWatermarkSpecs()).hasSize(1);
+                        assertEquals(1, schema.getWatermarkSpecs().size());
                     } else {
-                        assertThatThrownBy(builder::build)
-                                .isInstanceOf(ValidationException.class)
-                                .hasMessageContaining(t.f1);
+                        try {
+                            builder.build();
+                        } catch (Exception e) {
+                            assertTrue(e.getMessage().contains(t.f1));
+                        }
                     }
                 });
     }
@@ -313,7 +317,7 @@ class TableSchemaTest {
     CONSTRAINTS TESTS
     */
     @Test
-    void testPrimaryKeyPrinting() {
+    public void testPrimaryKeyPrinting() {
         TableSchema schema =
                 TableSchema.builder()
                         .field("f0", DataTypes.BIGINT().notNull())
@@ -322,17 +326,18 @@ class TableSchemaTest {
                         .primaryKey("pk", new String[] {"f0", "f2"})
                         .build();
 
-        assertThat(schema.toString())
-                .isEqualTo(
+        assertThat(
+                schema.toString(),
+                equalTo(
                         "root\n"
                                 + " |-- f0: BIGINT NOT NULL\n"
                                 + " |-- f1: STRING NOT NULL\n"
                                 + " |-- f2: DOUBLE NOT NULL\n"
-                                + " |-- CONSTRAINT pk PRIMARY KEY (f0, f2)\n");
+                                + " |-- CONSTRAINT pk PRIMARY KEY (f0, f2)\n"));
     }
 
     @Test
-    void testPrimaryKeyColumnsIndices() {
+    public void testPrimaryKeyColumnsIndices() {
         TableSchema schema =
                 TableSchema.builder()
                         .field("f0", DataTypes.BIGINT().notNull())
@@ -343,11 +348,11 @@ class TableSchemaTest {
 
         UniqueConstraint expectedKey = UniqueConstraint.primaryKey("pk", Arrays.asList("f0", "f2"));
 
-        assertThat(schema.getPrimaryKey().get()).isEqualTo(expectedKey);
+        assertThat(schema.getPrimaryKey().get(), equalTo(expectedKey));
     }
 
     @Test
-    void testPrimaryKeyLazilyDefinedColumns() {
+    public void testPrimaryKeyLazilyDefinedColumns() {
         TableSchema schema =
                 TableSchema.builder()
                         .field("f0", DataTypes.BIGINT().notNull())
@@ -358,79 +363,74 @@ class TableSchemaTest {
 
         UniqueConstraint expectedKey = UniqueConstraint.primaryKey("pk", Arrays.asList("f0", "f2"));
 
-        assertThat(schema.getPrimaryKey().get()).isEqualTo(expectedKey);
+        assertThat(schema.getPrimaryKey().get(), equalTo(expectedKey));
     }
 
     @Test
-    void testPrimaryKeyNoColumn() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.BIGINT().notNull())
-                                        .primaryKey("pk", new String[] {"f0", "f2"})
-                                        .build())
-                .isInstanceOf(ValidationException.class)
-                .hasMessage("Could not create a PRIMARY KEY 'pk'. Column 'f2' does not exist.");
+    public void testPrimaryKeyNoColumn() {
+        thrown.expect(ValidationException.class);
+        thrown.expectMessage("Could not create a PRIMARY KEY 'pk'. Column 'f2' does not exist.");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.BIGINT().notNull())
+                .primaryKey("pk", new String[] {"f0", "f2"})
+                .build();
     }
 
     @Test
-    void testPrimaryKeyNullableColumn() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.BIGINT())
-                                        .primaryKey("pk", new String[] {"f0"})
-                                        .build())
-                .isInstanceOf(ValidationException.class)
-                .hasMessage("Could not create a PRIMARY KEY 'pk'. Column 'f0' is nullable.");
+    public void testPrimaryKeyNullableColumn() {
+        thrown.expect(ValidationException.class);
+        thrown.expectMessage("Could not create a PRIMARY KEY 'pk'. Column 'f0' is nullable.");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.BIGINT())
+                .primaryKey("pk", new String[] {"f0"})
+                .build();
     }
 
     @Test
-    void testPrimaryKeyGeneratedColumn() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.BIGINT().notNull(), "123")
-                                        .primaryKey("pk", new String[] {"f0", "f2"})
-                                        .build())
-                .isInstanceOf(ValidationException.class)
-                .hasMessage(
-                        "Could not create a PRIMARY KEY 'pk'. Column 'f0' is not a physical column.");
+    public void testPrimaryKeyGeneratedColumn() {
+        thrown.expect(ValidationException.class);
+        thrown.expectMessage(
+                "Could not create a PRIMARY KEY 'pk'. Column 'f0' is not a physical column.");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.BIGINT().notNull(), "123")
+                .primaryKey("pk", new String[] {"f0", "f2"})
+                .build();
     }
 
     @Test
-    void testPrimaryKeyNameMustNotBeNull() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.BIGINT())
-                                        .primaryKey(null, new String[] {"f0", "f2"})
-                                        .build())
-                .isInstanceOf(ValidationException.class)
-                .hasMessage("PRIMARY KEY's name can not be null or empty.");
+    public void testPrimaryKeyNameMustNotBeNull() {
+        thrown.expect(ValidationException.class);
+        thrown.expectMessage("PRIMARY KEY's name can not be null or empty.");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.BIGINT())
+                .primaryKey(null, new String[] {"f0", "f2"})
+                .build();
     }
 
     @Test
-    void testPrimaryKeyNameMustNotBeEmpty() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.BIGINT())
-                                        .primaryKey("", new String[] {"f0", "f2"})
-                                        .build())
-                .isInstanceOf(ValidationException.class)
-                .hasMessage("PRIMARY KEY's name can not be null or empty.");
+    public void testPrimaryKeyNameMustNotBeEmpty() {
+        thrown.expect(ValidationException.class);
+        thrown.expectMessage("PRIMARY KEY's name can not be null or empty.");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.BIGINT())
+                .primaryKey("", new String[] {"f0", "f2"})
+                .build();
     }
 
     @Test
-    void testPrimaryKeyNoColumns() {
-        assertThatThrownBy(
-                        () ->
-                                TableSchema.builder()
-                                        .field("f0", DataTypes.BIGINT())
-                                        .primaryKey("pk", new String[] {})
-                                        .build())
-                .isInstanceOf(ValidationException.class)
-                .hasMessage("PRIMARY KEY constraint must be defined for at least a single column.");
+    public void testPrimaryKeyNoColumns() {
+        thrown.expect(ValidationException.class);
+        thrown.expectMessage(
+                "PRIMARY KEY constraint must be defined for at least a single column.");
+
+        TableSchema.builder()
+                .field("f0", DataTypes.BIGINT())
+                .primaryKey("pk", new String[] {})
+                .build();
     }
 }

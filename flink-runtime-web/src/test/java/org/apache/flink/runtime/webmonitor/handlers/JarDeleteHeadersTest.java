@@ -19,23 +19,26 @@
 package org.apache.flink.runtime.webmonitor.handlers;
 
 import org.apache.flink.runtime.rest.HttpMethodWrapper;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.assertThat;
 
 /** Tests for {@link JarDeleteHeaders}. */
-class JarDeleteHeadersTest {
+public class JarDeleteHeadersTest extends TestLogger {
 
     @Test
-    void testUrl() {
-        assertThat(JarDeleteHeaders.getInstance().getTargetRestEndpointURL())
-                .isEqualTo("/jars/:" + JarIdPathParameter.KEY);
+    public void testUrl() {
+        assertThat(
+                JarDeleteHeaders.getInstance().getTargetRestEndpointURL(),
+                equalTo("/jars/:" + JarIdPathParameter.KEY));
     }
 
     @Test
-    void testHttpMethod() {
-        assertThat(JarDeleteHeaders.getInstance().getHttpMethod())
-                .isEqualTo(HttpMethodWrapper.DELETE);
+    public void testHttpMethod() {
+        assertThat(
+                JarDeleteHeaders.getInstance().getHttpMethod(), equalTo(HttpMethodWrapper.DELETE));
     }
 }

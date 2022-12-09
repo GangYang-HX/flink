@@ -33,7 +33,8 @@ import org.apache.flink.table.runtime.operators.multipleinput.TestingTwoInputStr
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 /** Test for the sub-classes of {@link Input}. */
 public class InputTest extends MultipleInputTestBase {
@@ -55,13 +56,13 @@ public class InputTest extends MultipleInputTestBase {
         OneInput input = new OneInput(op);
 
         input.processElement(element);
-        assertThat(op.getCurrentElement()).isEqualTo(element);
+        assertEquals(element, op.getCurrentElement());
 
         input.processWatermark(watermark);
-        assertThat(op.getCurrentWatermark()).isEqualTo(watermark);
+        assertEquals(watermark, op.getCurrentWatermark());
 
         input.processLatencyMarker(latencyMarker);
-        assertThat(op.getCurrentLatencyMarker()).isEqualTo(latencyMarker);
+        assertEquals(latencyMarker, op.getCurrentLatencyMarker());
     }
 
     @Test
@@ -70,16 +71,16 @@ public class InputTest extends MultipleInputTestBase {
         FirstInputOfTwoInput input = new FirstInputOfTwoInput(op);
 
         input.processElement(element);
-        assertThat(op.getCurrentElement1()).isEqualTo(element);
-        assertThat(op.getCurrentElement2()).isNull();
+        assertEquals(element, op.getCurrentElement1());
+        assertNull(op.getCurrentElement2());
 
         input.processWatermark(watermark);
-        assertThat(op.getCurrentWatermark1()).isEqualTo(watermark);
-        assertThat(op.getCurrentWatermark2()).isNull();
+        assertEquals(watermark, op.getCurrentWatermark1());
+        assertNull(op.getCurrentWatermark2());
 
         input.processLatencyMarker(latencyMarker);
-        assertThat(op.getCurrentLatencyMarker1()).isEqualTo(latencyMarker);
-        assertThat(op.getCurrentLatencyMarker2()).isNull();
+        assertEquals(latencyMarker, op.getCurrentLatencyMarker1());
+        assertNull(op.getCurrentLatencyMarker2());
     }
 
     @Test
@@ -88,15 +89,15 @@ public class InputTest extends MultipleInputTestBase {
         SecondInputOfTwoInput input = new SecondInputOfTwoInput(op);
 
         input.processElement(element);
-        assertThat(op.getCurrentElement2()).isEqualTo(element);
-        assertThat(op.getCurrentElement1()).isNull();
+        assertEquals(element, op.getCurrentElement2());
+        assertNull(op.getCurrentElement1());
 
         input.processWatermark(watermark);
-        assertThat(op.getCurrentWatermark2()).isEqualTo(watermark);
-        assertThat(op.getCurrentWatermark1()).isNull();
+        assertEquals(watermark, op.getCurrentWatermark2());
+        assertNull(op.getCurrentWatermark1());
 
         input.processLatencyMarker(latencyMarker);
-        assertThat(op.getCurrentLatencyMarker2()).isEqualTo(latencyMarker);
-        assertThat(op.getCurrentLatencyMarker1()).isNull();
+        assertEquals(latencyMarker, op.getCurrentLatencyMarker2());
+        assertNull(op.getCurrentLatencyMarker1());
     }
 }

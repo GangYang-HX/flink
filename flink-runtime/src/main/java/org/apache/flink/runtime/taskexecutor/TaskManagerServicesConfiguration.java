@@ -27,13 +27,12 @@ import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.configuration.NettyShuffleEnvironmentOptions;
 import org.apache.flink.configuration.TaskManagerOptions;
-import org.apache.flink.configuration.TaskManagerOptionsInternal;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterEntrypointUtils;
 import org.apache.flink.runtime.entrypoint.WorkingDirectory;
+import org.apache.flink.runtime.execution.librarycache.FlinkUserCodeClassLoaders;
 import org.apache.flink.runtime.registration.RetryingRegistrationConfiguration;
 import org.apache.flink.runtime.util.ConfigurationParserUtils;
-import org.apache.flink.util.FlinkUserCodeClassLoaders;
 import org.apache.flink.util.NetUtils;
 import org.apache.flink.util.Reference;
 
@@ -59,8 +58,6 @@ public class TaskManagerServicesConfiguration {
     private final ResourceID resourceID;
 
     private final String externalAddress;
-
-    private final String nodeId;
 
     private final InetAddress bindAddress;
 
@@ -113,8 +110,7 @@ public class TaskManagerServicesConfiguration {
             Optional<Time> systemResourceMetricsProbingInterval,
             FlinkUserCodeClassLoaders.ResolveOrder classLoaderResolveOrder,
             String[] alwaysParentFirstLoaderPatterns,
-            int numIoThreads,
-            String nodeId) {
+            int numIoThreads) {
         this.configuration = checkNotNull(configuration);
         this.resourceID = checkNotNull(resourceID);
 
@@ -124,9 +120,9 @@ public class TaskManagerServicesConfiguration {
         this.localCommunicationOnly = localCommunicationOnly;
         this.tmpDirPaths = checkNotNull(tmpDirPaths);
         this.localRecoveryStateDirectories = checkNotNull(localRecoveryStateDirectories);
-        this.localRecoveryEnabled = localRecoveryEnabled;
+        this.localRecoveryEnabled = checkNotNull(localRecoveryEnabled);
         this.queryableStateConfig = queryableStateConfig;
-        this.numberOfSlots = numberOfSlots;
+        this.numberOfSlots = checkNotNull(numberOfSlots);
 
         this.pageSize = pageSize;
 
@@ -143,8 +139,6 @@ public class TaskManagerServicesConfiguration {
 
         this.systemResourceMetricsProbingInterval =
                 checkNotNull(systemResourceMetricsProbingInterval);
-
-        this.nodeId = checkNotNull(nodeId);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -236,10 +230,6 @@ public class TaskManagerServicesConfiguration {
         return numIoThreads;
     }
 
-    public String getNodeId() {
-        return nodeId;
-    }
-
     // --------------------------------------------------------------------------------------------
     //  Parsing of Flink configuration
     // --------------------------------------------------------------------------------------------
@@ -312,13 +302,6 @@ public class TaskManagerServicesConfiguration {
 
         final String[] tmpDirs = ConfigurationUtils.parseTempDirectories(configuration);
 
-        // If TaskManagerOptionsInternal.TASK_MANAGER_NODE_ID is not set, use the external address
-        // as the node id.
-        final String nodeId =
-                configuration
-                        .getOptional(TaskManagerOptionsInternal.TASK_MANAGER_NODE_ID)
-                        .orElse(externalAddress);
-
         return new TaskManagerServicesConfiguration(
                 configuration,
                 resourceID,
@@ -338,7 +321,6 @@ public class TaskManagerServicesConfiguration {
                 ConfigurationUtils.getSystemResourceMetricsProbingInterval(configuration),
                 FlinkUserCodeClassLoaders.ResolveOrder.fromString(classLoaderResolveOrder),
                 alwaysParentFirstLoaderPatterns,
-                numIoThreads,
-                nodeId);
+                numIoThreads);
     }
 }

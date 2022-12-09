@@ -31,25 +31,18 @@ import io.fabric8.kubernetes.api.model.ContainerBuilder;
 import io.fabric8.kubernetes.api.model.ContainerPort;
 import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
 import io.fabric8.kubernetes.api.model.EnvVar;
-import io.fabric8.kubernetes.api.model.EnvVarSourceBuilder;
-import io.fabric8.kubernetes.api.model.NodeAffinity;
-import io.fabric8.kubernetes.api.model.NodeAffinityBuilder;
-import io.fabric8.kubernetes.api.model.NodeSelectorRequirement;
+import io.fabric8.kubernetes.api.model.EnvVarSource;
+import io.fabric8.kubernetes.api.model.ObjectFieldSelector;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.ResourceRequirements;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.kubernetes.utils.Constants.API_VERSION;
-import static org.apache.flink.kubernetes.utils.Constants.DNS_PLOICY_DEFAULT;
-import static org.apache.flink.kubernetes.utils.Constants.DNS_PLOICY_HOSTNETWORK;
-import static org.apache.flink.kubernetes.utils.Constants.ENV_FLINK_POD_NODE_ID;
-import static org.apache.flink.kubernetes.utils.Constants.POD_NODE_ID_FIELD_PATH;
+import static org.apache.flink.kubernetes.utils.Constants.ENV_FLINK_POD_NAME;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** An initializer for the TaskManager {@link org.apache.flink.kubernetes.kubeclient.FlinkPod}. */
@@ -81,6 +74,7 @@ public class InitTaskManagerDecorator extends AbstractKubernetesStepDecorator {
                     "The restart policy of TaskManager pod will be overwritten to 'never' "
                             + "since it should not be restarted.");
         }
+
         basicPodBuilder
                 .withApiVersion(Constants.API_VERSION)
                 .editOrNewMetadata()
@@ -91,10 +85,8 @@ public class InitTaskManagerDecorator extends AbstractKubernetesStepDecorator {
                 .withServiceAccountName(serviceAccountName)
                 .withRestartPolicy(Constants.RESTART_POLICY_OF_NEVER)
                 .withHostNetwork(kubernetesTaskManagerParameters.isHostNetworkEnabled())
-                .withDnsPolicy(
-                        kubernetesTaskManagerParameters.isHostNetworkEnabled()
-                                ? DNS_PLOICY_HOSTNETWORK
-                                : DNS_PLOICY_DEFAULT)
+                .withDnsPolicy(kubernetesTaskManagerParameters.getDnsPolicy())
+                .withHostAliases(kubernetesTaskManagerParameters.getHostAliases())
                 .endSpec();
 
         // Merge fields
@@ -112,40 +104,11 @@ public class InitTaskManagerDecorator extends AbstractKubernetesStepDecorator {
                                 .collect(Collectors.toList()))
                 .endSpec();
 
-        // Add node affinity.
-        // https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#node-affinity
-        Set<String> blockedNodes = kubernetesTaskManagerParameters.getBlockedNodes();
-        if (!blockedNodes.isEmpty()) {
-            basicPodBuilder
-                    .editOrNewSpec()
-                    .editOrNewAffinity()
-                    .withNodeAffinity(
-                            generateNodeAffinity(
-                                    kubernetesTaskManagerParameters.getNodeNameLabel(),
-                                    blockedNodes))
-                    .endAffinity()
-                    .endSpec();
-        }
-
         final Container basicMainContainer = decorateMainContainer(flinkPod.getMainContainer());
 
         return new FlinkPod.Builder(flinkPod)
                 .withPod(basicPodBuilder.build())
                 .withMainContainer(basicMainContainer)
-                .build();
-    }
-
-    private NodeAffinity generateNodeAffinity(String labelKey, Set<String> blockedNodes) {
-        NodeSelectorRequirement nodeSelectorRequirement =
-                new NodeSelectorRequirement(labelKey, "NotIn", new ArrayList<>(blockedNodes));
-
-        NodeAffinityBuilder nodeAffinityBuilder = new NodeAffinityBuilder();
-        return nodeAffinityBuilder
-                .withNewRequiredDuringSchedulingIgnoredDuringExecution()
-                .addNewNodeSelectorTerm()
-                .addToMatchExpressions(nodeSelectorRequirement)
-                .endNodeSelectorTerm()
-                .endRequiredDuringSchedulingIgnoredDuringExecution()
                 .build();
     }
 
@@ -190,14 +153,10 @@ public class InitTaskManagerDecorator extends AbstractKubernetesStepDecorator {
         mainContainerBuilder
                 .addAllToPorts(getContainerPorts())
                 .addAllToEnv(getCustomizedEnvs())
-                .addNewEnv()
-                .withName(ENV_FLINK_POD_NODE_ID)
-                .withValueFrom(
-                        new EnvVarSourceBuilder()
-                                .withNewFieldRef(API_VERSION, POD_NODE_ID_FIELD_PATH)
-                                .build())
-                .endEnv();
+                .addToEnv(getPodNameEnv());
         getFlinkLogDirEnv().ifPresent(mainContainerBuilder::addToEnv);
+        getFlinkGlobalJobId().ifPresent(mainContainerBuilder::addToEnv);
+        getFlinkGlobalJobInstanceId().ifPresent(mainContainerBuilder::addToEnv);
 
         return mainContainerBuilder.build();
     }
@@ -223,5 +182,23 @@ public class InitTaskManagerDecorator extends AbstractKubernetesStepDecorator {
         return kubernetesTaskManagerParameters
                 .getFlinkLogDirInPod()
                 .map(logDir -> new EnvVar(Constants.ENV_FLINK_LOG_DIR, logDir, null));
+    }
+
+    private Optional<EnvVar> getFlinkGlobalJobId() {
+        return kubernetesTaskManagerParameters
+                .getFlinkGlobalJobId()
+                .map(id -> new EnvVar(Constants.ENV_FLINK_GLOBAL_JOB_ID, id, null));
+    }
+
+    private Optional<EnvVar> getFlinkGlobalJobInstanceId() {
+        return kubernetesTaskManagerParameters
+                .getFlinkGlobalJobInstanceId()
+                .map(id -> new EnvVar(Constants.ENV_FLINK_GLOBAL_JOB_INSTANCE_ID, id, null));
+    }
+
+    private static EnvVar getPodNameEnv() {
+        EnvVarSource source = new EnvVarSource();
+        source.setFieldRef(new ObjectFieldSelector(API_VERSION, "metadata.name"));
+        return new EnvVar(ENV_FLINK_POD_NAME, null, source);
     }
 }

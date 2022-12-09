@@ -18,15 +18,15 @@
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of, Subject } from 'rxjs';
-import { catchError, mergeMap, takeUntil } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { mergeMap, takeUntil } from 'rxjs/operators';
 
-import { TaskManagersItem } from '@flink-runtime-web/interfaces';
-import { StatusService, TaskManagerService } from '@flink-runtime-web/services';
-import { typeDefinition } from '@flink-runtime-web/utils/strong-type';
 import { NzTableSortFn } from 'ng-zorro-antd/table/src/table.types';
 
-function createSortFn(selector: (item: TaskManagersItem) => number): NzTableSortFn<TaskManagersItem> {
+import { TaskmanagersItem } from 'interfaces';
+import { StatusService, TaskManagerService } from 'services';
+
+function createSortFn(selector: (item: TaskmanagersItem) => number): NzTableSortFn<TaskmanagersItem> {
   return (pre, next) => (selector(pre) > selector(next) ? 1 : -1);
 }
 
@@ -37,8 +37,7 @@ function createSortFn(selector: (item: TaskManagersItem) => number): NzTableSort
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TaskManagerListComponent implements OnInit, OnDestroy {
-  public readonly trackById = (_: number, node: TaskManagersItem): string => node.id;
-  public readonly narrowType = typeDefinition<TaskManagersItem[]>();
+  public readonly trackById = (_: number, node: TaskmanagersItem): string => node.id;
 
   public readonly sortDataPortFn = createSortFn(item => item.dataPort);
   public readonly sortHeartBeatFn = createSortFn(item => item.timeSinceLastHeartbeat);
@@ -49,15 +48,15 @@ export class TaskManagerListComponent implements OnInit, OnDestroy {
   public readonly sortFreeMemoryFn = createSortFn(item => item.hardware?.freeMemory);
   public readonly sortManagedMemoryFn = createSortFn(item => item.hardware?.managedMemory);
 
-  public listOfTaskManager: TaskManagersItem[] = [];
+  public listOfTaskManager: TaskmanagersItem[] = [];
   public isLoading = true;
+  public sortName: string;
+  public sortValue: string;
 
   private readonly destroy$ = new Subject<void>();
 
-  public navigateTo(taskManager: TaskManagersItem): void {
-    this.router
-      .navigate([taskManager.id, 'metrics'], { relativeTo: this.activatedRoute, queryParamsHandling: 'preserve' })
-      .then();
+  public navigateTo(taskManager: TaskmanagersItem): void {
+    this.router.navigate([taskManager.id, 'metrics'], { relativeTo: this.activatedRoute }).then();
   }
 
   constructor(
@@ -71,14 +70,20 @@ export class TaskManagerListComponent implements OnInit, OnDestroy {
   public ngOnInit(): void {
     this.statusService.refresh$
       .pipe(
-        mergeMap(() => this.taskManagerService.loadManagers().pipe(catchError(() => of([] as TaskManagersItem[])))),
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
+        mergeMap(() => this.taskManagerService.loadManagers())
       )
-      .subscribe(data => {
-        this.isLoading = false;
-        this.listOfTaskManager = data;
-        this.cdr.markForCheck();
-      });
+      .subscribe(
+        data => {
+          this.isLoading = false;
+          this.listOfTaskManager = data;
+          this.cdr.markForCheck();
+        },
+        () => {
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        }
+      );
   }
 
   public ngOnDestroy(): void {

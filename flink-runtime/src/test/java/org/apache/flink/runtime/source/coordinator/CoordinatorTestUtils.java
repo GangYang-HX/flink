@@ -22,14 +22,17 @@ import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.api.connector.source.mocks.MockSourceSplit;
 import org.apache.flink.util.function.ThrowingRunnable;
 
+import org.hamcrest.Matchers;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** A util class containing the helper methods for the coordinator tests. */
 class CoordinatorTestUtils {
@@ -55,15 +58,24 @@ class CoordinatorTestUtils {
     /** Check the actual assignment meets the expectation. */
     static void verifyAssignment(
             List<String> expectedSplitIds, Collection<MockSourceSplit> actualAssignment) {
-        assertThat(actualAssignment.size()).isEqualTo(expectedSplitIds.size());
+        assertEquals(expectedSplitIds.size(), actualAssignment.size());
         int i = 0;
         for (MockSourceSplit split : actualAssignment) {
-            assertThat(split.splitId()).isEqualTo(expectedSplitIds.get(i++));
+            assertEquals(expectedSplitIds.get(i++), split.splitId());
         }
     }
 
     static void verifyException(
             ThrowingRunnable<Throwable> runnable, String failureMessage, String errorMessage) {
-        assertThatThrownBy(runnable::run, failureMessage).hasStackTraceContaining(errorMessage);
+        try {
+            runnable.run();
+            fail(failureMessage);
+        } catch (Throwable t) {
+            Throwable rootCause = t;
+            while (rootCause.getCause() != null) {
+                rootCause = rootCause.getCause();
+            }
+            assertThat(rootCause.getMessage(), Matchers.startsWith(errorMessage));
+        }
     }
 }

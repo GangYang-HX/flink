@@ -53,7 +53,6 @@ import org.apache.flink.runtime.util.BlobServerResource;
 import org.apache.flink.runtime.util.LeaderConnectionInfo;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
@@ -68,7 +67,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.contains;
@@ -88,10 +86,6 @@ public class DefaultDispatcherRunnerITCase extends TestLogger {
     public static TestingRpcServiceResource rpcServiceResource = new TestingRpcServiceResource();
 
     @ClassRule public static BlobServerResource blobServerResource = new BlobServerResource();
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     private JobGraph jobGraph;
 
@@ -272,7 +266,7 @@ public class DefaultDispatcherRunnerITCase extends TestLogger {
                 dispatcherLeaderElectionService,
                 fatalErrorHandler,
                 new TestingJobPersistenceComponentFactory(jobGraphStore, jobResultStore),
-                EXECUTOR_RESOURCE.getExecutor(),
+                TestingUtils.defaultExecutor(),
                 rpcServiceResource.getTestingRpcService(),
                 partialDispatcherServices);
     }

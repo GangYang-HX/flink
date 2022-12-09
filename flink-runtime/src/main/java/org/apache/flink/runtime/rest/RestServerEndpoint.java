@@ -67,7 +67,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -558,9 +557,6 @@ public abstract class RestServerEndpoint implements RestService {
             case PATCH:
                 router.addPatch(handlerURL, handler);
                 break;
-            case PUT:
-                router.addPut(handlerURL, handler);
-                break;
             default:
                 throw new RuntimeException("Unsupported http method: " + httpMethod + '.');
         }
@@ -627,9 +623,9 @@ public abstract class RestServerEndpoint implements RestService {
             }
 
             final RestHandlerSpecification headers = handler.f0;
-            for (RestAPIVersion supportedRestAPIVersion : headers.getSupportedAPIVersions()) {
+            for (RestAPIVersion supportedAPIVersion : headers.getSupportedAPIVersions()) {
                 final String parameterizedEndpoint =
-                        supportedRestAPIVersion.toString()
+                        supportedAPIVersion.toString()
                                 + headers.getHttpMethod()
                                 + headers.getTargetRestEndpointURL();
                 // normalize path parameters; distinct path parameters still clash at runtime
@@ -640,7 +636,7 @@ public abstract class RestServerEndpoint implements RestService {
                     throw new FlinkRuntimeException(
                             String.format(
                                     "REST handler registration overlaps with another registration for: version=%s, method=%s, url=%s.",
-                                    supportedRestAPIVersion,
+                                    supportedAPIVersion,
                                     headers.getHttpMethod(),
                                     headers.getTargetRestEndpointURL()));
                 }
@@ -666,6 +662,9 @@ public abstract class RestServerEndpoint implements RestService {
         private static final Comparator<String> CASE_INSENSITIVE_ORDER =
                 new CaseInsensitiveOrderComparator();
 
+        private static final Comparator<RestAPIVersion> API_VERSION_ORDER =
+                new RestAPIVersion.RestAPIVersionComparator();
+
         static final RestHandlerUrlComparator INSTANCE = new RestHandlerUrlComparator();
 
         @Override
@@ -678,13 +677,9 @@ public abstract class RestServerEndpoint implements RestService {
             if (urlComparisonResult != 0) {
                 return urlComparisonResult;
             } else {
-                Collection<? extends RestAPIVersion> o1APIVersions =
-                        o1.f0.getSupportedAPIVersions();
-                RestAPIVersion o1Version = Collections.min(o1APIVersions);
-                Collection<? extends RestAPIVersion> o2APIVersions =
-                        o2.f0.getSupportedAPIVersions();
-                RestAPIVersion o2Version = Collections.min(o2APIVersions);
-                return o1Version.compareTo(o2Version);
+                return API_VERSION_ORDER.compare(
+                        Collections.min(o1.f0.getSupportedAPIVersions()),
+                        Collections.min(o2.f0.getSupportedAPIVersions()));
             }
         }
 

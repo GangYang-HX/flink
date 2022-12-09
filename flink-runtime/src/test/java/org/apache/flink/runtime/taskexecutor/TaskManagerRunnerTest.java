@@ -71,6 +71,7 @@ public class TaskManagerRunnerTest extends TestLogger {
 
     @After
     public void after() throws Exception {
+        System.setSecurityManager(null);
         if (taskManagerRunner != null) {
             taskManagerRunner.close();
         }

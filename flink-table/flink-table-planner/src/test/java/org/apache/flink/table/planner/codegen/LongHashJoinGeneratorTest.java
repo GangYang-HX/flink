@@ -18,47 +18,73 @@
 
 package org.apache.flink.table.planner.codegen;
 
-import org.apache.flink.table.runtime.operators.join.FlinkJoinType;
+import org.apache.flink.api.common.functions.AbstractRichFunction;
+import org.apache.flink.table.api.TableConfig;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.runtime.generated.GeneratedJoinCondition;
+import org.apache.flink.table.runtime.generated.JoinCondition;
 import org.apache.flink.table.runtime.operators.join.HashJoinType;
 import org.apache.flink.table.runtime.operators.join.Int2HashJoinOperatorTest;
+import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.RowType;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 /** Test for {@link LongHashJoinGenerator}. */
 public class LongHashJoinGeneratorTest extends Int2HashJoinOperatorTest {
 
     @Override
-    public Object newOperator(
-            long memorySize,
-            FlinkJoinType flinkJoinType,
-            HashJoinType hashJoinType,
-            boolean buildLeft,
-            boolean reverseJoinFunction) {
-        return LongAdaptiveHashJoinGeneratorTest.getLongHashJoinOperator(
-                flinkJoinType, hashJoinType, buildLeft, reverseJoinFunction);
+    public Object newOperator(long memorySize, HashJoinType type, boolean reverseJoinFunction) {
+        RowType keyType = RowType.of(new IntType());
+        Assert.assertTrue(LongHashJoinGenerator.support(type, keyType, new boolean[] {true}));
+        return LongHashJoinGenerator.gen(
+                new TableConfig(),
+                type,
+                keyType,
+                RowType.of(new IntType(), new IntType()),
+                RowType.of(new IntType(), new IntType()),
+                new int[] {0},
+                new int[] {0},
+                20,
+                10000,
+                reverseJoinFunction,
+                new GeneratedJoinCondition(
+                        MyJoinCondition.class.getCanonicalName(), "", new Object[0]));
     }
 
     @Test
     @Override
-    public void testBuildLeftSemiJoin() {}
+    public void testBuildLeftSemiJoin() throws Exception {}
 
     @Test
     @Override
-    public void testBuildSecondHashFullOutJoin() {}
+    public void testBuildSecondHashFullOutJoin() throws Exception {}
 
     @Test
     @Override
-    public void testBuildSecondHashRightOutJoin() {}
+    public void testBuildSecondHashRightOutJoin() throws Exception {}
 
     @Test
     @Override
-    public void testBuildLeftAntiJoin() {}
+    public void testBuildLeftAntiJoin() throws Exception {}
 
     @Test
     @Override
-    public void testBuildFirstHashLeftOutJoin() {}
+    public void testBuildFirstHashLeftOutJoin() throws Exception {}
 
     @Test
     @Override
-    public void testBuildFirstHashFullOutJoin() {}
+    public void testBuildFirstHashFullOutJoin() throws Exception {}
+
+    /** Test cond. */
+    public static class MyJoinCondition extends AbstractRichFunction implements JoinCondition {
+
+        public MyJoinCondition(Object[] reference) {}
+
+        @Override
+        public boolean apply(RowData in1, RowData in2) {
+            return true;
+        }
+    }
 }

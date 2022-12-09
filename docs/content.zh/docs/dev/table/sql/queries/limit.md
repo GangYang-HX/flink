@@ -26,9 +26,9 @@ under the License.
 
 {{< label Batch >}}
 
-`LIMIT` 子句限制 `SELECT` 语句返回的行数。 通常，此子句与 ORDER BY 结合使用，以确保结果是确定性的。
+`LIMIT` clause constrains the number of rows returned by the `SELECT` statement. In general, this clause is used in conjunction with ORDER BY to ensure that the results are deterministic.
 
-以下示例选择 `Orders` 表中的前 3 行。
+The following example selects the first 3 rows in `Orders` table.
 
 ```sql
 SELECT *

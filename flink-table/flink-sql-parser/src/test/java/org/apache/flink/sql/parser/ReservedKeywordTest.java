@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 /** Test class to check parser keywords. */
 @Execution(CONCURRENT)
-class ReservedKeywordTest {
+public class ReservedKeywordTest {
 
     private static final SqlAbstractParserImpl.Metadata PARSER_METADATA =
             FlinkSqlParserImpl.FACTORY.getParser(new StringReader("")).getMetadata();

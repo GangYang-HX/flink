@@ -19,22 +19,18 @@
 package org.apache.flink.table.catalog.hive;
 
 import org.apache.flink.connector.datagen.table.DataGenTableSourceFactory;
+import org.apache.flink.connectors.hive.util.HiveConfUtils;
 import org.apache.flink.sql.parser.hive.ddl.SqlCreateHiveTable;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.catalog.CatalogBaseTable;
-import org.apache.flink.table.catalog.CatalogFunction;
-import org.apache.flink.table.catalog.CatalogFunctionImpl;
 import org.apache.flink.table.catalog.CatalogPropertiesUtil;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogTableImpl;
-import org.apache.flink.table.catalog.FunctionLanguage;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.hive.util.HiveTableUtil;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.factories.ManagedTableFactory;
-import org.apache.flink.table.resource.ResourceType;
-import org.apache.flink.table.resource.ResourceUri;
 
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -43,10 +39,8 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.flink.table.catalog.CatalogPropertiesUtil.FLINK_PROPERTY_PREFIX;
@@ -259,7 +253,7 @@ public class HiveCatalogTest {
     @Test
     public void testCreateHiveConf() {
         // hive-conf-dir not specified, should read hive-site from classpath
-        HiveConf hiveConf = HiveCatalog.createHiveConf(null, null);
+        HiveConf hiveConf = HiveConfUtils.createHiveConf(null, null);
         assertThat(hiveConf.get("common-key")).isEqualTo("common-val");
         // hive-conf-dir specified, shouldn't read hive-site from classpath
         String hiveConfDir =
@@ -267,7 +261,7 @@ public class HiveCatalogTest {
                         .getContextClassLoader()
                         .getResource("test-catalog-factory-conf")
                         .getPath();
-        hiveConf = HiveCatalog.createHiveConf(hiveConfDir, null);
+        hiveConf = HiveConfUtils.createHiveConf(hiveConfDir, null);
         assertThat(hiveConf.get("common-key")).isNull();
     }
 
@@ -289,40 +283,11 @@ public class HiveCatalogTest {
         assertThat(catalogTable.getSchema()).isEqualTo(TableSchema.builder().build());
     }
 
-    @Test
-    public void testFunction() throws Exception {
-        List<ResourceUri> resourceUris =
-                Arrays.asList(
-                        new ResourceUri(ResourceType.JAR, "jar/path"),
-                        new ResourceUri(ResourceType.FILE, "file/path"),
-                        new ResourceUri(ResourceType.ARCHIVE, "archive/path"));
-        for (FunctionLanguage functionLanguage : FunctionLanguage.values()) {
-            CatalogFunction catalogFunction =
-                    new CatalogFunctionImpl(
-                            "test-catalog-function", functionLanguage, resourceUris);
-            ObjectPath functionPath = new ObjectPath("default", "test_f");
-            hiveCatalog.createFunction(functionPath, catalogFunction, false);
-            checkCatalogFunction(catalogFunction, hiveCatalog.getFunction(functionPath));
-            hiveCatalog.dropFunction(functionPath, false);
-        }
-    }
-
     private static Map<String, String> getLegacyFileSystemConnectorOptions(String path) {
         final Map<String, String> options = new HashMap<>();
         options.put("connector.type", "filesystem");
         options.put("connector.path", path);
 
         return options;
-    }
-
-    private void checkCatalogFunction(
-            CatalogFunction expectFunction, CatalogFunction actualFunction) {
-        assertThat(actualFunction.getFunctionLanguage())
-                .isEqualTo(expectFunction.getFunctionLanguage());
-        assertThat(actualFunction.getClassName()).isEqualTo(expectFunction.getClassName());
-        assertThat(actualFunction.getFunctionResources())
-                .isEqualTo(expectFunction.getFunctionResources());
-        assertThat(actualFunction.getFunctionLanguage())
-                .isEqualTo(expectFunction.getFunctionLanguage());
     }
 }

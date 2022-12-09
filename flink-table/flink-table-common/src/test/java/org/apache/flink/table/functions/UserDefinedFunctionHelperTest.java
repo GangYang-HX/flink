@@ -22,17 +22,15 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.CatalogFunction;
 import org.apache.flink.table.catalog.FunctionLanguage;
-import org.apache.flink.table.resource.ResourceUri;
 import org.apache.flink.util.Collector;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import javax.annotation.Nullable;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -47,11 +45,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Tests for {@link UserDefinedFunctionHelper}. */
 @SuppressWarnings("unused")
-class UserDefinedFunctionHelperTest {
+public class UserDefinedFunctionHelperTest {
 
     @ParameterizedTest
     @MethodSource("testSpecs")
-    void testInstantiation(TestSpec testSpec) {
+    public void testInstantiation(TestSpec testSpec) {
         final Supplier<UserDefinedFunction> supplier;
         if (testSpec.functionClass != null) {
             supplier = () -> instantiateFunction(testSpec.functionClass);
@@ -79,7 +77,7 @@ class UserDefinedFunctionHelperTest {
 
     @ParameterizedTest
     @MethodSource("testSpecs")
-    void testValidation(TestSpec testSpec) {
+    public void testValidation(TestSpec testSpec) {
         final Runnable runnable;
         if (testSpec.functionClass != null) {
             runnable = () -> validateClass(testSpec.functionClass);
@@ -100,7 +98,7 @@ class UserDefinedFunctionHelperTest {
     }
 
     @Test
-    void testSerialization() {
+    public void testSerialization() {
         assertThat(isClassNameSerializable(new ValidTableFunction())).isTrue();
 
         assertThat(isClassNameSerializable(new ValidScalarFunction())).isTrue();
@@ -230,11 +228,6 @@ class UserDefinedFunctionHelperTest {
         @Override
         public FunctionLanguage getFunctionLanguage() {
             return FunctionLanguage.JAVA;
-        }
-
-        @Override
-        public List<ResourceUri> getFunctionResources() {
-            return Collections.emptyList();
         }
     }
 

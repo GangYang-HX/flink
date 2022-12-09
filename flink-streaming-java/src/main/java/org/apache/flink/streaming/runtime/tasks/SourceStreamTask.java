@@ -164,7 +164,6 @@ public class SourceStreamTask<
                 .gauge(
                         MetricNames.CHECKPOINT_START_DELAY_TIME,
                         this::getAsyncCheckpointStartDelayNanos);
-        recordWriter.setMaxOverdraftBuffersPerGate(0);
     }
 
     @Override

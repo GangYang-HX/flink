@@ -38,9 +38,6 @@ import org.junit.runners.Parameterized;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsText;
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /** Tests for {@link Graph} operations. */
 @RunWith(Parameterized.class)
 public class GraphOperationsITCase extends MultipleProgramsTestBase {

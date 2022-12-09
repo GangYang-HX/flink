@@ -30,32 +30,39 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.OutputStreamBase
 import org.apache.flink.streaming.api.functions.sink.filesystem.OutputStreamBasedPartFileWriter.OutputStreamBasedInProgressFileRecoverableSerializer;
 import org.apache.flink.streaming.api.functions.sink.filesystem.OutputStreamBasedPartFileWriter.OutputStreamBasedPendingFileRecoverable;
 import org.apache.flink.streaming.api.functions.sink.filesystem.OutputStreamBasedPartFileWriter.OutputStreamBasedPendingFileRecoverableSerializer;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Assert;
+import org.junit.ClassRule;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.stream.Stream;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Collection;
+import java.util.Collections;
 
 /**
  * Tests for the {@link OutputStreamBasedInProgressFileRecoverableSerializer} and the {@link
  * OutputStreamBasedPendingFileRecoverableSerializer}that verify we can still read the recoverable
  * serialized by the previous versions.
  */
-public class OutputStreamBasedPartFileRecoverableMigrationTest {
+@RunWith(Parameterized.class)
+public class OutputStreamBasedPartFileRecoverableMigrationTest extends TestLogger {
 
     private static final int CURRENT_VERSION = 1;
 
-    static Stream<Integer> previousVersions() {
-        return Stream.of(1);
+    @Parameterized.Parameters(name = "Previous Version = {0}")
+    public static Collection<Integer> previousVersions() {
+        return Collections.singletonList(1);
     }
+
+    @Parameterized.Parameter public Integer previousVersion;
 
     private static final String IN_PROGRESS_CONTENT = "writing";
     private static final String PENDING_CONTENT = "wrote";
@@ -63,9 +70,11 @@ public class OutputStreamBasedPartFileRecoverableMigrationTest {
     private static final java.nio.file.Path BASE_PATH =
             Paths.get("src/test/resources/").resolve("recoverable-serializer-migration");
 
+    @ClassRule public static TemporaryFolder tempFolder = new TemporaryFolder();
+
     @Test
-    @Disabled
-    void prepareDeserializationInProgress() throws IOException {
+    @Ignore
+    public void prepareDeserializationInProgress() throws IOException {
         String scenario = "in-progress";
         java.nio.file.Path path = resolveVersionPath(CURRENT_VERSION, scenario);
 
@@ -85,9 +94,8 @@ public class OutputStreamBasedPartFileRecoverableMigrationTest {
         Files.write(path.resolve("recoverable"), bytes);
     }
 
-    @ParameterizedTest(name = "Previous Version = {0}")
-    @MethodSource("previousVersions")
-    void testSerializationInProgress(int previousVersion) throws IOException {
+    @Test
+    public void testSerializationInProgress() throws IOException {
         String scenario = "in-progress";
         java.nio.file.Path path = resolveVersionPath(previousVersion, scenario);
 
@@ -100,15 +108,15 @@ public class OutputStreamBasedPartFileRecoverableMigrationTest {
                 serializer.deserialize(
                         previousVersion, Files.readAllBytes(path.resolve("recoverable")));
 
-        assertThat(recoverable).isInstanceOf(OutputStreamBasedInProgressFileRecoverable.class);
+        Assert.assertTrue(recoverable instanceof OutputStreamBasedInProgressFileRecoverable);
         // make sure the ResumeRecoverable is valid
         writer.recover(
                 ((OutputStreamBasedInProgressFileRecoverable) recoverable).getResumeRecoverable());
     }
 
     @Test
-    @Disabled
-    void prepareDeserializationPending() throws IOException {
+    @Ignore
+    public void prepareDeserializationPending() throws IOException {
         String scenario = "pending";
         java.nio.file.Path path = resolveVersionPath(CURRENT_VERSION, scenario);
 
@@ -128,9 +136,8 @@ public class OutputStreamBasedPartFileRecoverableMigrationTest {
         Files.write(path.resolve("recoverable"), bytes);
     }
 
-    @ParameterizedTest(name = "Previous Version = {0}")
-    @MethodSource("previousVersions")
-    void testSerializationPending(int previousVersion) throws IOException {
+    @Test
+    public void testSerializationPending() throws IOException {
         String scenario = "pending";
         java.nio.file.Path path = resolveVersionPath(previousVersion, scenario);
 
@@ -143,7 +150,7 @@ public class OutputStreamBasedPartFileRecoverableMigrationTest {
                 serializer.deserialize(
                         previousVersion, Files.readAllBytes(path.resolve("recoverable")));
 
-        assertThat(recoverable).isInstanceOf(OutputStreamBasedPendingFileRecoverable.class);
+        Assert.assertTrue(recoverable instanceof OutputStreamBasedPendingFileRecoverable);
         // make sure the CommitRecoverable is valid
         writer.recoverForCommit(
                 ((OutputStreamBasedPendingFileRecoverable) recoverable).getCommitRecoverable());

@@ -30,7 +30,6 @@ import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
 import org.apache.flink.types.Row;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.DeserializationFeature;
@@ -94,10 +93,8 @@ public class JsonRowDeserializationSchema implements DeserializationSchema<Row> 
 
     private boolean failOnMissingField;
 
-    private final boolean hasDecimalType;
-
     /** Object mapper for parsing the JSON. */
-    private transient ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private DeserializationRuntimeConverter runtimeConverter;
 
@@ -117,12 +114,8 @@ public class JsonRowDeserializationSchema implements DeserializationSchema<Row> 
         this.runtimeConverter = createConverter(this.typeInfo);
         this.ignoreParseErrors = ignoreParseErrors;
         RowType rowType = (RowType) fromLegacyInfoToDataType(this.typeInfo).getLogicalType();
-        hasDecimalType = LogicalTypeChecks.hasNested(rowType, t -> t.getTypeRoot().equals(DECIMAL));
-    }
-
-    @Override
-    public void open(InitializationContext context) throws Exception {
-        objectMapper = JacksonMapperFactory.createObjectMapper();
+        boolean hasDecimalType =
+                LogicalTypeChecks.hasNested(rowType, t -> t.getTypeRoot().equals(DECIMAL));
         if (hasDecimalType) {
             objectMapper.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
         }

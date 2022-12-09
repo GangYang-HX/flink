@@ -19,11 +19,11 @@
 package org.apache.flink.table.examples.utils;
 
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
-import org.apache.flink.test.junit5.MiniClusterExtension;
+import org.apache.flink.test.util.MiniClusterWithClientResource;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.ClassRule;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -31,9 +31,9 @@ import java.io.PrintStream;
 /** Test base for validating the example output to stdout. */
 public abstract class ExampleOutputTestBase {
 
-    @RegisterExtension
-    private static final MiniClusterExtension MINI_CLUSTER_RESOURCE =
-            new MiniClusterExtension(
+    @ClassRule
+    public static MiniClusterWithClientResource miniClusterResource =
+            new MiniClusterWithClientResource(
                     new MiniClusterResourceConfiguration.Builder()
                             .setNumberTaskManagers(1)
                             .setNumberSlotsPerTaskManager(1)
@@ -43,8 +43,8 @@ public abstract class ExampleOutputTestBase {
 
     private ByteArrayOutputStream testOutputStream;
 
-    @BeforeEach
-    void before() {
+    @Before
+    public void before() {
         originalPrintStream = System.out;
         testOutputStream = new ByteArrayOutputStream();
         System.setOut(new PrintStream(testOutputStream));
@@ -54,8 +54,8 @@ public abstract class ExampleOutputTestBase {
         return testOutputStream.toString();
     }
 
-    @AfterEach
-    void after() {
+    @After
+    public void after() {
         System.setOut(originalPrintStream);
     }
 }

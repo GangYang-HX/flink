@@ -25,12 +25,10 @@ import org.apache.flink.util.Preconditions;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 /** Sources that participated in switching with cached serializers. */
 class SwitchedSources {
-    private final SortedMap<Integer, Source> sources = new TreeMap<>();
+    private final Map<Integer, Source> sources = new HashMap<>();
     private final Map<Integer, SimpleVersionedSerializer<SourceSplit>> cachedSerializers =
             new HashMap<>();
 
@@ -46,9 +44,5 @@ class SwitchedSources {
 
     public void put(int sourceIndex, Source source) {
         sources.put(sourceIndex, Preconditions.checkNotNull(source));
-    }
-
-    public int getFirstSourceIndex() {
-        return sources.firstKey();
     }
 }

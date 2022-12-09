@@ -65,20 +65,24 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Phaser;
 import java.util.stream.Collectors;
 
 /** Implementation of {@link ResourceManagerDriver} for Yarn deployment. */
 public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<YarnWorkerNode> {
+
+    /**
+     * Environment variable name of the final container id used by the YarnResourceManager.
+     * Container ID generation may vary across Hadoop versions.
+     */
+    static final String ENV_FLINK_CONTAINER_ID = "_FLINK_CONTAINER_ID";
 
     /**
      * Environment variable name of the hostname given by YARN. In task executor we use the
@@ -123,8 +127,6 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
     private String taskManagerNodeLabel;
 
     private final Phaser trackerOfReleasedResources;
-
-    private final Set<String> lastBlockedNodes = new HashSet<>();
 
     public YarnResourceManagerDriver(
             Configuration flinkConfig,
@@ -276,7 +278,9 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
         } else {
             final Priority priority = priorityAndResourceOpt.get().getPriority();
             final Resource resource = priorityAndResourceOpt.get().getResource();
-            addContainerRequest(resource, priority);
+            resourceManagerClient.addContainerRequest(
+                    ContainerRequestReflector.INSTANCE.getContainerRequest(
+                            resource, priority, taskManagerNodeLabel));
 
             // make sure we transmit the request fast and receive fast news of granted allocations
             resourceManagerClient.setHeartbeatInterval(containerRequestHeartbeatIntervalMillis);
@@ -292,24 +296,6 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
         }
 
         return requestResourceFuture;
-    }
-
-    private void tryUpdateApplicationBlockList() {
-        Set<String> currentBlockedNodes = getBlockedNodeRetriever().getAllBlockedNodeIds();
-        if (!currentBlockedNodes.equals(lastBlockedNodes)) {
-            AMRMClientAsyncReflector.INSTANCE.tryUpdateBlockList(
-                    resourceManagerClient,
-                    new ArrayList<>(getDifference(currentBlockedNodes, lastBlockedNodes)),
-                    new ArrayList<>(getDifference(lastBlockedNodes, currentBlockedNodes)));
-            this.lastBlockedNodes.clear();
-            this.lastBlockedNodes.addAll(currentBlockedNodes);
-        }
-    }
-
-    private static Set<String> getDifference(Set<String> setA, Set<String> setB) {
-        Set<String> difference = new HashSet<>(setA);
-        difference.removeAll(setB);
-        return difference;
     }
 
     @Override
@@ -396,15 +382,6 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
 
     private int getNumRequestedNotAllocatedWorkers() {
         return requestResourceFutures.values().stream().mapToInt(Queue::size).sum();
-    }
-
-    private void addContainerRequest(Resource resource, Priority priority) {
-        // update blocklist
-        tryUpdateApplicationBlockList();
-        AMRMClient.ContainerRequest containerRequest =
-                ContainerRequestReflector.INSTANCE.getContainerRequest(
-                        resource, priority, taskManagerNodeLabel);
-        resourceManagerClient.addContainerRequest(containerRequest);
     }
 
     private void removeContainerRequest(AMRMClient.ContainerRequest pendingContainerRequest) {
@@ -504,6 +481,10 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
                         YarnTaskExecutorRunner.class,
                         log);
 
+        // set a special environment variable to uniquely identify this container
+        taskExecutorLaunchContext
+                .getEnvironment()
+                .put(ENV_FLINK_CONTAINER_ID, containerId.toString());
         taskExecutorLaunchContext.getEnvironment().put(ENV_FLINK_NODE_ID, host);
         return taskExecutorLaunchContext;
     }
@@ -547,6 +528,8 @@ public class YarnResourceManagerDriver extends AbstractResourceManagerDriver<Yar
             recoveredWorkers.add(worker);
         }
 
+        // Should not invoke resource event handler on the main thread executor.
+        // We are in the initializing thread. The main thread executor is not yet ready.
         getResourceEventHandler().onPreviousAttemptWorkersRecovered(recoveredWorkers);
     }
 

@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Properties;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -50,7 +49,7 @@ import static org.apache.flink.util.Preconditions.checkState;
  * }</pre>
  *
  * <p>One can also configure different {@link DeliveryGuarantee} by using {@link
- * #setDeliveryGuarantee(DeliveryGuarantee)} but keep in mind when using {@link
+ * #setDeliverGuarantee(DeliveryGuarantee)} but keep in mind when using {@link
  * DeliveryGuarantee#EXACTLY_ONCE} one must set the transactionalIdPrefix {@link
  * #setTransactionalIdPrefix(String)}.
  *
@@ -62,29 +61,16 @@ public class KafkaSinkBuilder<IN> {
 
     private static final Logger LOG = LoggerFactory.getLogger(KafkaSinkBuilder.class);
     private static final Duration DEFAULT_KAFKA_TRANSACTION_TIMEOUT = Duration.ofHours(1);
-    private static final String[] warnKeys =
-            new String[] {
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG
-            };
     private static final int MAXIMUM_PREFIX_BYTES = 64000;
 
     private DeliveryGuarantee deliveryGuarantee = DeliveryGuarantee.NONE;
     private String transactionalIdPrefix = "kafka-sink";
 
-    private final Properties kafkaProducerConfig;
+    protected Properties kafkaProducerConfig;
     private KafkaRecordSerializationSchema<IN> recordSerializer;
+    protected String bootstrapServers;
 
-    KafkaSinkBuilder() {
-        kafkaProducerConfig = new Properties();
-        kafkaProducerConfig.put(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        kafkaProducerConfig.put(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        kafkaProducerConfig.put(
-                ProducerConfig.TRANSACTION_TIMEOUT_CONFIG,
-                (int) DEFAULT_KAFKA_TRANSACTION_TIMEOUT.toMillis());
-    }
+    KafkaSinkBuilder() {}
 
     /**
      * Sets the wanted the {@link DeliveryGuarantee}. The default delivery guarantee is {@link
@@ -93,20 +79,6 @@ public class KafkaSinkBuilder<IN> {
      * @param deliveryGuarantee
      * @return {@link KafkaSinkBuilder}
      */
-    public KafkaSinkBuilder<IN> setDeliveryGuarantee(DeliveryGuarantee deliveryGuarantee) {
-        this.deliveryGuarantee = checkNotNull(deliveryGuarantee, "deliveryGuarantee");
-        return this;
-    }
-
-    /**
-     * Sets the wanted the {@link DeliveryGuarantee}. The default delivery guarantee is {@link
-     * #deliveryGuarantee}.
-     *
-     * @param deliveryGuarantee
-     * @return {@link KafkaSinkBuilder}
-     * @deprecated Will be removed in future versions. Use {@link #setDeliveryGuarantee} instead.
-     */
-    @Deprecated
     public KafkaSinkBuilder<IN> setDeliverGuarantee(DeliveryGuarantee deliveryGuarantee) {
         this.deliveryGuarantee = checkNotNull(deliveryGuarantee, "deliveryGuarantee");
         return this;
@@ -116,26 +88,43 @@ public class KafkaSinkBuilder<IN> {
      * Sets the configuration which used to instantiate all used {@link
      * org.apache.kafka.clients.producer.KafkaProducer}.
      *
-     * @param props
+     * @param kafkaProducerConfig
      * @return {@link KafkaSinkBuilder}
      */
-    public KafkaSinkBuilder<IN> setKafkaProducerConfig(Properties props) {
-        checkNotNull(props);
-        Arrays.stream(warnKeys)
-                .filter(props::containsKey)
-                .forEach(k -> LOG.warn("Overwriting the '{}' is not recommended", k));
+    public KafkaSinkBuilder<IN> setKafkaProducerConfig(Properties kafkaProducerConfig) {
+        this.kafkaProducerConfig = checkNotNull(kafkaProducerConfig, "kafkaProducerConfig");
+        // set the producer configuration properties for kafka record key value serializers.
+        if (!kafkaProducerConfig.containsKey(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG)) {
+            kafkaProducerConfig.put(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                    ByteArraySerializer.class.getName());
+        } else {
+            LOG.warn(
+                    "Overwriting the '{}' is not recommended",
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
+        }
 
-        kafkaProducerConfig.putAll(props);
-        return this;
-    }
+        if (!kafkaProducerConfig.containsKey(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG)) {
+            kafkaProducerConfig.put(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                    ByteArraySerializer.class.getName());
+        } else {
+            LOG.warn(
+                    "Overwriting the '{}' is not recommended",
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
+        }
 
-    public KafkaSinkBuilder<IN> setProperty(String key, String value) {
-        checkNotNull(key);
-        Arrays.stream(warnKeys)
-                .filter(key::equals)
-                .forEach(k -> LOG.warn("Overwriting the '{}' is not recommended", k));
-
-        kafkaProducerConfig.setProperty(key, value);
+        if (!kafkaProducerConfig.containsKey(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG)) {
+            final long timeout = DEFAULT_KAFKA_TRANSACTION_TIMEOUT.toMillis();
+            checkState(
+                    timeout < Integer.MAX_VALUE && timeout > 0,
+                    "timeout does not fit into 32 bit integer");
+            kafkaProducerConfig.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, (int) timeout);
+            LOG.warn(
+                    "Property [{}] not specified. Setting it to {}",
+                    ProducerConfig.TRANSACTION_TIMEOUT_CONFIG,
+                    DEFAULT_KAFKA_TRANSACTION_TIMEOUT);
+        }
         return this;
     }
 
@@ -187,10 +176,18 @@ public class KafkaSinkBuilder<IN> {
      * @return {@link KafkaSinkBuilder}
      */
     public KafkaSinkBuilder<IN> setBootstrapServers(String bootstrapServers) {
-        return setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        this.bootstrapServers = checkNotNull(bootstrapServers);
+        return this;
     }
 
     private void sanityCheck() {
+        if (kafkaProducerConfig == null) {
+            setKafkaProducerConfig(new Properties());
+        }
+        if (bootstrapServers != null) {
+            kafkaProducerConfig.setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        }
         checkNotNull(
                 kafkaProducerConfig.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
                 "bootstrapServers");

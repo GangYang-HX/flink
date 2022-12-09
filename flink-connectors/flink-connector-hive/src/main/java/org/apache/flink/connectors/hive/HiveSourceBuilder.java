@@ -79,7 +79,7 @@ public class HiveSourceBuilder {
     private static final Duration DEFAULT_SCAN_MONITOR_INTERVAL = Duration.ofMinutes(1L);
 
     private final JobConf jobConf;
-    private final ReadableConfig flinkConf;
+    private final int threadNum;
     private final boolean fallbackMappedReader;
 
     private final ObjectPath tablePath;
@@ -91,7 +91,6 @@ public class HiveSourceBuilder {
     private int[] projectedFields;
     private Long limit;
     private List<HiveTablePartition> partitions;
-    private List<String> dynamicFilterPartitionKeys;
 
     /**
      * Creates a builder to read a hive table.
@@ -99,11 +98,11 @@ public class HiveSourceBuilder {
      * @param jobConf holds hive and hadoop configurations
      * @param flinkConf holds flink configurations
      * @param hiveVersion the version of hive in use, if it's null the version will be automatically
-     *     detected
+     *         detected
      * @param dbName the name of the database the table belongs to
      * @param tableName the name of the table
      * @param tableOptions additional options needed to read the table, which take precedence over
-     *     table properties stored in metastore
+     *         table properties stored in metastore
      */
     public HiveSourceBuilder(
             @Nonnull JobConf jobConf,
@@ -113,14 +112,15 @@ public class HiveSourceBuilder {
             @Nonnull String tableName,
             @Nonnull Map<String, String> tableOptions) {
         this.jobConf = jobConf;
-        this.flinkConf = flinkConf;
+        this.threadNum =
+                flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM);
         this.fallbackMappedReader = flinkConf.get(TABLE_EXEC_HIVE_FALLBACK_MAPRED_READER);
         this.tablePath = new ObjectPath(dbName, tableName);
         this.hiveVersion = hiveVersion == null ? HiveShimLoader.getHiveVersion() : hiveVersion;
         HiveConf hiveConf = HiveConfUtils.create(jobConf);
         HiveShim hiveShim = HiveShimLoader.loadHiveShim(this.hiveVersion);
         try (HiveMetastoreClientWrapper client =
-                new HiveMetastoreClientWrapper(hiveConf, hiveShim)) {
+                     new HiveMetastoreClientWrapper(hiveConf, hiveShim)) {
             Table hiveTable = client.getTable(dbName, tableName);
             this.fullSchema =
                     HiveTableUtil.createTableSchema(hiveConf, hiveTable, client, hiveShim);
@@ -132,7 +132,6 @@ public class HiveSourceBuilder {
         }
         validateScanConfigurations(this.tableOptions);
         checkAcidTable(this.tableOptions, tablePath);
-        setFlinkConfigurationToJobConf();
     }
 
     /**
@@ -141,7 +140,7 @@ public class HiveSourceBuilder {
      * @param jobConf holds hive and hadoop configurations
      * @param flinkConf holds flink configurations
      * @param hiveVersion the version of hive in use, if it's null the version will be automatically
-     *     detected
+     *         detected
      * @param tablePath path of the table to be read
      * @param catalogTable the table to be read
      */
@@ -152,7 +151,7 @@ public class HiveSourceBuilder {
             @Nullable String hiveVersion,
             @Nonnull CatalogTable catalogTable) {
         this.jobConf = jobConf;
-        this.flinkConf = flinkConf;
+        this.threadNum = getThreadNum(flinkConf, catalogTable);
         this.fallbackMappedReader = flinkConf.get(TABLE_EXEC_HIVE_FALLBACK_MAPRED_READER);
         this.tablePath = tablePath;
         this.hiveVersion = hiveVersion == null ? HiveShimLoader.getHiveVersion() : hiveVersion;
@@ -161,7 +160,19 @@ public class HiveSourceBuilder {
         this.tableOptions = catalogTable.getOptions();
         validateScanConfigurations(tableOptions);
         checkAcidTable(tableOptions, tablePath);
-        setFlinkConfigurationToJobConf();
+    }
+
+    private int getThreadNum(ReadableConfig flinkConf, CatalogTable catalogTable) {
+        int threadNum = flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM);
+        if (threadNum
+                != HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM.defaultValue()) {
+            return threadNum;
+        }
+        Configuration configuration = Configuration.fromMap(catalogTable.getOptions());
+        if (!configuration.containsKey(HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM.key())) {
+            return threadNum;
+        }
+        return configuration.get(HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM);
     }
 
     /**
@@ -233,21 +244,21 @@ public class HiveSourceBuilder {
         FileSplitAssigner.Provider splitAssigner =
                 continuousSourceSettings == null || partitionKeys.isEmpty()
                         ? DEFAULT_SPLIT_ASSIGNER
+//                        : HiveSplitAssigner::new;
                         : SimpleSplitAssigner::new;
         return new HiveSource<>(
                 new Path[1],
                 new HiveSourceFileEnumerator.Provider(
                         partitions != null ? partitions : Collections.emptyList(),
+                        threadNum,
                         new JobConfWrapper(jobConf)),
                 splitAssigner,
                 bulkFormat,
                 continuousSourceSettings,
+                threadNum,
                 jobConf,
                 tablePath,
                 partitionKeys,
-                hiveVersion,
-                dynamicFilterPartitionKeys,
-                partitions,
                 fetcher,
                 fetcherContext);
     }
@@ -258,12 +269,6 @@ public class HiveSourceBuilder {
      */
     public HiveSourceBuilder setPartitions(List<HiveTablePartition> partitions) {
         this.partitions = partitions;
-        return this;
-    }
-
-    public HiveSourceBuilder setDynamicFilterPartitionKeys(
-            List<String> dynamicFilterPartitionKeys) {
-        this.dynamicFilterPartitionKeys = dynamicFilterPartitionKeys;
         return this;
     }
 
@@ -295,26 +300,6 @@ public class HiveSourceBuilder {
                         STREAMING_SOURCE_PARTITION_INCLUDE.key(), partitionInclude));
     }
 
-    private void setFlinkConfigurationToJobConf() {
-        jobConf.set(
-                HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM.key(),
-                flinkConf
-                        .get(HiveOptions.TABLE_EXEC_HIVE_LOAD_PARTITION_SPLITS_THREAD_NUM)
-                        .toString());
-        jobConf.set(
-                HiveOptions.TABLE_EXEC_HIVE_INFER_SOURCE_PARALLELISM_MAX.key(),
-                flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_INFER_SOURCE_PARALLELISM_MAX).toString());
-
-        jobConf.set(
-                HiveOptions.TABLE_EXEC_HIVE_SPLIT_MAX_BYTES.key(),
-                String.valueOf(
-                        flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_SPLIT_MAX_BYTES).getBytes()));
-        jobConf.set(
-                HiveOptions.TABLE_EXEC_HIVE_FILE_OPEN_COST.key(),
-                String.valueOf(
-                        flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_FILE_OPEN_COST).getBytes()));
-    }
-
     private boolean isStreamingSource() {
         return Boolean.parseBoolean(
                 tableOptions.getOrDefault(
@@ -343,7 +328,7 @@ public class HiveSourceBuilder {
         return (RowType) producedSchema.toRowDataType().bridgedTo(RowData.class).getLogicalType();
     }
 
-    protected BulkFormat<RowData, HiveSourceSplit> createDefaultBulkFormat() {
+    private BulkFormat<RowData, HiveSourceSplit> createDefaultBulkFormat() {
         return LimitableBulkFormat.create(
                 new HiveInputFormat(
                         new JobConfWrapper(jobConf),

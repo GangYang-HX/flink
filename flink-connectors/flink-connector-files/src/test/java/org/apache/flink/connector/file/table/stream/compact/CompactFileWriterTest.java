@@ -26,19 +26,19 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.util.List;
 
 import static org.apache.flink.connector.file.table.stream.compact.CompactMessages.CoordinatorInput;
 import static org.apache.flink.connector.file.table.stream.compact.CompactMessages.InputFile;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test for {@link CompactFileWriter}. */
-class CompactFileWriterTest extends AbstractCompactTestBase {
+public class CompactFileWriterTest extends AbstractCompactTestBase {
 
     @Test
-    void testEmitEndCheckpointAfterEndInput() throws Exception {
+    public void testEmitEndCheckpointAfterEndInput() throws Exception {
         CompactFileWriter<RowData> compactFileWriter =
                 new CompactFileWriter<>(
                         1000, StreamingFileSink.forRowFormat(folder, new SimpleStringEncoder<>()));
@@ -53,11 +53,11 @@ class CompactFileWriterTest extends AbstractCompactTestBase {
 
             List<CoordinatorInput> coordinatorInputs = harness.extractOutputValues();
 
-            assertThat(coordinatorInputs).hasSize(2);
+            Assert.assertEquals(2, coordinatorInputs.size());
             // assert emit InputFile
-            assertThat(coordinatorInputs.get(0)).isInstanceOf(InputFile.class);
+            Assert.assertTrue(coordinatorInputs.get(0) instanceof InputFile);
             // assert emit EndCheckpoint
-            assertThat(((EndCheckpoint) coordinatorInputs.get(1)).getCheckpointId()).isEqualTo(1);
+            Assert.assertEquals(1, ((EndCheckpoint) coordinatorInputs.get(1)).getCheckpointId());
 
             harness.processElement(row("test1"), 0);
             harness.processElement(row("test2"), 0);
@@ -70,7 +70,7 @@ class CompactFileWriterTest extends AbstractCompactTestBase {
             // assert emit EndCheckpoint with Long.MAX_VALUE lastly
             EndCheckpoint endCheckpoint =
                     (EndCheckpoint) coordinatorInputs.get(coordinatorInputs.size() - 1);
-            assertThat(endCheckpoint.getCheckpointId()).isEqualTo(Long.MAX_VALUE);
+            Assert.assertEquals(Long.MAX_VALUE, endCheckpoint.getCheckpointId());
         }
     }
 

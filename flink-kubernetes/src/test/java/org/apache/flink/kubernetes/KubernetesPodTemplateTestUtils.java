@@ -31,7 +31,10 @@ import java.net.URL;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  * Utilities for the Kubernetes pod template tests. The create methods are to provide the init
@@ -45,24 +48,12 @@ public class KubernetesPodTemplateTestUtils {
 
     private static final String TESTING_TEMPLATE_FILE_NAME = "testing-pod-template.yaml";
 
-    private static final String TESTING_NO_SPEC_TEMPLATE_FILE_NAME =
-            "testing-nospec-pod-template.yaml";
-
     public static File getPodTemplateFile() {
         final URL podTemplateUrl =
                 KubernetesPodTemplateTestUtils.class
                         .getClassLoader()
                         .getResource(TESTING_TEMPLATE_FILE_NAME);
-        assertThat(podTemplateUrl).isNotNull();
-        return new File(podTemplateUrl.getPath());
-    }
-
-    public static File getNoSpecPodTemplateFile() {
-        final URL podTemplateUrl =
-                KubernetesPodTemplateTestUtils.class
-                        .getClassLoader()
-                        .getResource(TESTING_NO_SPEC_TEMPLATE_FILE_NAME);
-        assertThat(podTemplateUrl).isNotNull();
+        assertThat(podTemplateUrl, not(nullValue()));
         return new File(podTemplateUrl.getPath());
     }
 
@@ -129,7 +120,7 @@ public class KubernetesPodTemplateTestUtils {
                 podSpec.getContainers().stream()
                         .filter(e -> e.getName().equals(containerName))
                         .collect(Collectors.toList());
-        assertThat(containers).hasSize(1);
+        assertThat(containers.size(), is(1));
         return containers.get(0);
     }
 }

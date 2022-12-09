@@ -22,11 +22,11 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.eventtime.Watermark;
 import org.apache.flink.api.common.eventtime.WatermarkAlignmentParams;
+import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.api.connector.source.Source;
 import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SourceSplit;
 import org.apache.flink.api.connector.source.SplitEnumerator;
-import org.apache.flink.api.connector.source.SupportsHandleExecutionAttemptSourceEvent;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
@@ -68,7 +68,6 @@ import static org.apache.flink.runtime.source.coordinator.SourceCoordinatorSerde
 import static org.apache.flink.runtime.source.coordinator.SourceCoordinatorSerdeUtils.readBytes;
 import static org.apache.flink.runtime.source.coordinator.SourceCoordinatorSerdeUtils.writeCoordinatorSerdeVersion;
 import static org.apache.flink.util.IOUtils.closeAll;
-import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /**
@@ -111,12 +110,6 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
     /** A flag marking whether the coordinator has started. */
     private boolean started;
 
-    /**
-     * An ID that the coordinator will register self in the coordinator store with. Other
-     * coordinators may send events to this coordinator by the ID.
-     */
-    @Nullable private final String coordinatorListeningID;
-
     public SourceCoordinator(
             String operatorName,
             Source<?, SplitT, EnumChkT> source,
@@ -127,8 +120,7 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
                 source,
                 context,
                 coordinatorStore,
-                WatermarkAlignmentParams.WATERMARK_ALIGNMENT_DISABLED,
-                null);
+                WatermarkAlignmentParams.WATERMARK_ALIGNMENT_DISABLED);
     }
 
     public SourceCoordinator(
@@ -136,23 +128,15 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
             Source<?, SplitT, EnumChkT> source,
             SourceCoordinatorContext<SplitT> context,
             CoordinatorStore coordinatorStore,
-            WatermarkAlignmentParams watermarkAlignmentParams,
-            @Nullable String coordinatorListeningID) {
+            WatermarkAlignmentParams watermarkAlignmentParams) {
         this.operatorName = operatorName;
         this.source = source;
         this.enumCheckpointSerializer = source.getEnumeratorCheckpointSerializer();
         this.context = context;
         this.coordinatorStore = coordinatorStore;
         this.watermarkAlignmentParams = watermarkAlignmentParams;
-        this.coordinatorListeningID = coordinatorListeningID;
 
         if (watermarkAlignmentParams.isEnabled()) {
-            if (context.isConcurrentExecutionAttemptsSupported()) {
-                throw new IllegalArgumentException(
-                        "Watermark alignment is not supported in concurrent execution attempts "
-                                + "scenario (e.g. if speculative execution is enabled)");
-            }
-
             coordinatorStore.putIfAbsent(
                     watermarkAlignmentParams.getWatermarkGroup(), new WatermarkAggregator<>());
             context.getCoordinatorExecutor()
@@ -223,16 +207,6 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
         // We rely on the single-threaded coordinator executor to guarantee
         // the other methods are invoked after the enumerator has started.
         runInEventLoop(() -> enumerator.start(), "starting the SplitEnumerator.");
-
-        if (coordinatorListeningID != null) {
-            if (coordinatorStore.containsKey(coordinatorListeningID)) {
-                // The coordinator will be recreated after global failover. It should be registered
-                // again replacing the previous one.
-                coordinatorStore.computeIfPresent(coordinatorListeningID, (id, origin) -> this);
-            } else {
-                coordinatorStore.putIfAbsent(coordinatorListeningID, this);
-            }
-        }
     }
 
     @Override
@@ -245,19 +219,34 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
     }
 
     @Override
-    public void handleEventFromOperator(int subtask, int attemptNumber, OperatorEvent event) {
+    public void handleEventFromOperator(int subtask, OperatorEvent event) {
         runInEventLoop(
                 () -> {
                     if (event instanceof RequestSplitEvent) {
-                        handleRequestSplitEvent(subtask, attemptNumber, (RequestSplitEvent) event);
+                        LOG.info(
+                                "Source {} received split request from parallel task {}",
+                                operatorName,
+                                subtask);
+                        enumerator.handleSplitRequest(
+                                subtask, ((RequestSplitEvent) event).hostName());
                     } else if (event instanceof SourceEventWrapper) {
-                        handleSourceEvent(
+                        final SourceEvent sourceEvent =
+                                ((SourceEventWrapper) event).getSourceEvent();
+                        LOG.debug(
+                                "Source {} received custom event from parallel task {}: {}",
+                                operatorName,
                                 subtask,
-                                attemptNumber,
-                                ((SourceEventWrapper) event).getSourceEvent());
+                                sourceEvent);
+                        enumerator.handleSourceEvent(subtask, sourceEvent);
                     } else if (event instanceof ReaderRegistrationEvent) {
-                        handleReaderRegistrationEvent(
-                                subtask, attemptNumber, (ReaderRegistrationEvent) event);
+                        final ReaderRegistrationEvent registrationEvent =
+                                (ReaderRegistrationEvent) event;
+                        LOG.info(
+                                "Source {} registering reader for parallel task {} @ {}",
+                                operatorName,
+                                subtask,
+                                registrationEvent.location());
+                        handleReaderRegistrationEvent(registrationEvent);
                     } else if (event instanceof ReportedWatermarkEvent) {
                         handleReportedWatermark(
                                 subtask,
@@ -266,29 +255,24 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
                         throw new FlinkException("Unrecognized Operator Event: " + event);
                     }
                 },
-                "handling operator event %s from subtask %d (#%d)",
+                "handling operator event %s from subtask %d",
                 event,
-                subtask,
-                attemptNumber);
+                subtask);
     }
 
     @Override
-    public void executionAttemptFailed(
-            int subtaskId, int attemptNumber, @Nullable Throwable reason) {
+    public void subtaskFailed(int subtaskId, @Nullable Throwable reason) {
         runInEventLoop(
                 () -> {
                     LOG.info(
-                            "Removing registered reader after failure for subtask {} (#{}) of source {}.",
+                            "Removing registered reader after failure for subtask {} of source {}.",
                             subtaskId,
-                            attemptNumber,
                             operatorName);
-
-                    context.unregisterSourceReader(subtaskId, attemptNumber);
-                    context.attemptFailed(subtaskId, attemptNumber);
+                    context.unregisterSourceReader(subtaskId);
+                    context.subtaskNotReady(subtaskId);
                 },
-                "handling subtask %d (#%d) failure",
-                subtaskId,
-                attemptNumber);
+                "handling subtask %d failure",
+                subtaskId);
     }
 
     @Override
@@ -300,8 +284,6 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
                             subtaskId,
                             checkpointId,
                             operatorName);
-
-                    context.subtaskReset(subtaskId);
 
                     final List<SplitT> splitsToAddBack =
                             context.getAndRemoveUncheckpointedAssignment(subtaskId, checkpointId);
@@ -317,15 +299,13 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
     }
 
     @Override
-    public void executionAttemptReady(int subtask, int attemptNumber, SubtaskGateway gateway) {
-        checkArgument(subtask == gateway.getSubtask());
-        checkArgument(attemptNumber == gateway.getExecution().getAttemptNumber());
+    public void subtaskReady(int subtask, SubtaskGateway gateway) {
+        assert subtask == gateway.getSubtask();
 
         runInEventLoop(
-                () -> context.attemptReady(gateway),
-                "making event gateway to subtask %d (#%d) available",
-                subtask,
-                attemptNumber);
+                () -> context.subtaskReady(gateway),
+                "making event gateway to subtask %d available",
+                subtask);
     }
 
     @Override
@@ -512,68 +492,12 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
 
     // --------------------- private methods -------------
 
-    private void handleRequestSplitEvent(int subtask, int attemptNumber, RequestSplitEvent event) {
-        LOG.info(
-                "Source {} received split request from parallel task {} (#{})",
-                operatorName,
-                subtask,
-                attemptNumber);
-
-        // request splits from the enumerator only if the enumerator has un-assigned splits
-        // this helps to reduce unnecessary split requests to the enumerator
-        if (!context.hasNoMoreSplits(subtask)) {
-            enumerator.handleSplitRequest(subtask, event.hostName());
-        }
+    private void handleReaderRegistrationEvent(ReaderRegistrationEvent event) {
+        context.registerSourceReader(new ReaderInfo(event.subtaskId(), event.location()));
+        enumerator.addReader(event.subtaskId());
     }
 
-    private void handleSourceEvent(int subtask, int attemptNumber, SourceEvent event) {
-        LOG.debug(
-                "Source {} received custom event from parallel task {} (#{}): {}",
-                operatorName,
-                subtask,
-                attemptNumber,
-                event);
-
-        if (context.isConcurrentExecutionAttemptsSupported()) {
-            checkState(
-                    enumerator instanceof SupportsHandleExecutionAttemptSourceEvent,
-                    "The split enumerator %s must implement SupportsHandleExecutionAttemptSourceEvent "
-                            + "to be used in concurrent execution attempts scenario (e.g. if "
-                            + "speculative execution is enabled).",
-                    enumerator.getClass().getCanonicalName());
-            ((SupportsHandleExecutionAttemptSourceEvent) enumerator)
-                    .handleSourceEvent(subtask, attemptNumber, event);
-        } else {
-            enumerator.handleSourceEvent(subtask, event);
-        }
-    }
-
-    private void handleReaderRegistrationEvent(
-            int subtask, int attemptNumber, ReaderRegistrationEvent event) {
-        checkArgument(subtask == event.subtaskId());
-
-        LOG.info(
-                "Source {} registering reader for parallel task {} (#{}) @ {}",
-                operatorName,
-                subtask,
-                attemptNumber,
-                event.location());
-
-        final boolean subtaskReaderExisted =
-                context.registeredReadersOfAttempts().containsKey(subtask);
-        context.registerSourceReader(subtask, attemptNumber, event.location());
-        if (!subtaskReaderExisted) {
-            enumerator.addReader(event.subtaskId());
-        }
-    }
-
-    private void handleReportedWatermark(int subtask, Watermark watermark) throws FlinkException {
-        if (context.isConcurrentExecutionAttemptsSupported()) {
-            throw new FlinkException(
-                    "ReportedWatermarkEvent is not supported in concurrent execution attempts "
-                            + "scenario (e.g. if speculative execution is enabled)");
-        }
-
+    private void handleReportedWatermark(int subtask, Watermark watermark) {
         LOG.debug("New reported watermark={} from subTaskId={}", watermark, subtask);
 
         checkState(watermarkAlignmentParams.isEnabled());

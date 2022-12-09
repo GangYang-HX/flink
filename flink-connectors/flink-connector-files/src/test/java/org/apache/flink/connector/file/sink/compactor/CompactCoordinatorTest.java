@@ -40,18 +40,17 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.types.Either;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /** Test for {@link CompactCoordinator}. */
-class CompactCoordinatorTest extends AbstractCompactTestBase {
+public class CompactCoordinatorTest extends AbstractCompactTestBase {
 
     @Test
-    void testSizeThreshold() throws Exception {
+    public void testSizeThreshold() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().setSizeThreshold(10).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -65,23 +64,23 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             FileSinkCommittable committable0 = committable("0", ".0", 5);
             FileSinkCommittable committable1 = committable("0", ".1", 6);
             harness.processElement(message(committable0));
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.processElement(message(committable1));
 
             List<CompactorRequest> results = harness.extractOutputValues();
-            assertThat(results).hasSize(1);
+            Assert.assertEquals(1, results.size());
             assertToCompact(results.get(0), committable0, committable1);
 
             harness.processElement(message(committable("0", ".2", 5)));
             harness.processElement(message(committable("1", ".0", 5)));
 
-            assertThat(harness.extractOutputValues()).hasSize(1);
+            Assert.assertEquals(1, harness.extractOutputValues().size());
         }
     }
 
     @Test
-    void testCompactOnCheckpoint() throws Exception {
+    public void testCompactOnCheckpoint() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().enableCompactionOnCheckpoint(1).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -102,23 +101,23 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.processElement(message(committable0));
             harness.processElement(message(committable1));
 
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.prepareSnapshotPreBarrier(1);
             harness.snapshot(1, 1);
 
-            assertThat(harness.extractOutputValues()).hasSize(1);
+            Assert.assertEquals(1, harness.extractOutputValues().size());
 
             harness.processElement(message(committable2));
             harness.processElement(message(committable3));
 
-            assertThat(harness.extractOutputValues()).hasSize(1);
+            Assert.assertEquals(1, harness.extractOutputValues().size());
 
             harness.prepareSnapshotPreBarrier(2);
             harness.snapshot(2, 2);
 
             List<CompactorRequest> results = harness.extractOutputValues();
-            assertThat(results).hasSize(3);
+            Assert.assertEquals(3, results.size());
             assertToCompact(results.get(0), committable0, committable1);
             assertToPassthrough(results.get(0), passThroughCommittable);
             assertToCompact(results.get(1), committable2);
@@ -127,7 +126,7 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
     }
 
     @Test
-    void testCompactOverMultipleCheckpoints() throws Exception {
+    public void testCompactOverMultipleCheckpoints() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().enableCompactionOnCheckpoint(3).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -144,26 +143,26 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.processElement(message(committable0));
             harness.processElement(message(committable1));
 
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.prepareSnapshotPreBarrier(1);
             harness.snapshot(1, 1);
             harness.prepareSnapshotPreBarrier(2);
             harness.snapshot(2, 2);
 
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.prepareSnapshotPreBarrier(3);
             harness.snapshot(3, 3);
 
             List<CompactorRequest> results = harness.extractOutputValues();
-            assertThat(results).hasSize(1);
+            Assert.assertEquals(1, results.size());
             assertToCompact(results.get(0), committable0, committable1);
         }
     }
 
     @Test
-    void testCompactOnEndOfInput() throws Exception {
+    public void testCompactOnEndOfInput() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().setSizeThreshold(10).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -178,23 +177,23 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
 
             harness.processElement(message(committable0));
 
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.prepareSnapshotPreBarrier(1);
             harness.snapshot(1, 1);
 
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.endInput();
 
             List<CompactorRequest> results = harness.extractOutputValues();
-            assertThat(results).hasSize(1);
+            Assert.assertEquals(1, results.size());
             assertToCompact(results.get(0), committable0);
         }
     }
 
     @Test
-    void testPassthrough() throws Exception {
+    public void testPassthrough() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().setSizeThreshold(10).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -216,7 +215,7 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.processElement(message(normalCommittable));
 
             List<CompactorRequest> results = harness.extractOutputValues();
-            assertThat(results).hasSize(1);
+            Assert.assertEquals(1, results.size());
             assertToCompact(results.get(0), normalCommittable);
             assertToPassthrough(
                     results.get(0),
@@ -227,7 +226,7 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
     }
 
     @Test
-    void testRestore() throws Exception {
+    public void testRestore() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().setSizeThreshold(10).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -245,7 +244,7 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.open();
 
             harness.processElement(message(committable0));
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.prepareSnapshotPreBarrier(1);
             state = harness.snapshot(1, 1);
@@ -261,17 +260,17 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
 
             harness.processElement(message(committable1));
 
-            assertThat(harness.extractOutputValues()).hasSize(1);
+            Assert.assertEquals(1, harness.extractOutputValues().size());
 
             harness.processElement(message(committable2));
             harness.processElement(message(committable3));
 
-            assertThat(harness.extractOutputValues()).hasSize(1);
+            Assert.assertEquals(1, harness.extractOutputValues().size());
 
             harness.endInput();
 
             List<CompactorRequest> results = harness.extractOutputValues();
-            assertThat(results).hasSize(3);
+            Assert.assertEquals(3, results.size());
             assertToCompact(results.get(0), committable0, committable1);
             assertToCompact(results.get(1), committable2);
             assertToCompact(results.get(2), committable3);
@@ -279,7 +278,7 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
     }
 
     @Test
-    void testRestoreWithChangedStrategy() throws Exception {
+    public void testRestoreWithChangedStrategy() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().setSizeThreshold(100).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -307,7 +306,7 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.prepareSnapshotPreBarrier(1);
             state = harness.snapshot(1, 1);
 
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
         }
 
         FileCompactStrategy changedStrategy = Builder.newBuilder().setSizeThreshold(10).build();
@@ -320,12 +319,12 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.initializeState(state);
             harness.open();
 
-            assertThat(harness.extractOutputValues()).hasSize(2);
+            Assert.assertEquals(2, harness.extractOutputValues().size());
 
             harness.processElement(message(committable5));
 
             List<CompactorRequest> results = harness.extractOutputValues();
-            assertThat(results).hasSize(3);
+            Assert.assertEquals(3, results.size());
             assertToCompact(results.get(0), committable0, committable1);
             assertToCompact(results.get(1), committable2, committable3);
             assertToCompact(results.get(2), committable4, committable5);
@@ -333,7 +332,7 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
     }
 
     @Test
-    void testStateHandler() throws Exception {
+    public void testStateHandler() throws Exception {
         FileCompactStrategy strategy = Builder.newBuilder().setSizeThreshold(10).build();
         CompactCoordinator coordinator =
                 new CompactCoordinator(strategy, getTestCommittableSerializer());
@@ -355,10 +354,10 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.open();
 
             harness.processElement(message(committable0));
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.processElement(message(cleanup3));
-            assertThat(harness.extractOutputValues()).isEmpty();
+            Assert.assertEquals(0, harness.extractOutputValues().size());
 
             harness.prepareSnapshotPreBarrier(1);
             state = harness.snapshot(1, 1);
@@ -383,40 +382,38 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
             harness.initializeState(state);
             harness.open();
 
-            assertThat(harness.extractOutputValues()).hasSize(2);
+            Assert.assertEquals(2, harness.extractOutputValues().size());
 
             harness.processElement(message(committable1));
             harness.processElement(message(committable2));
 
             List<Either<CommittableMessage<FileSinkCommittable>, CompactorRequest>> results =
                     harness.extractOutputValues();
-            assertThat(results).hasSize(4);
+            Assert.assertEquals(4, results.size());
 
             // restored request
-            assertThat(results.get(0).isRight()).isTrue();
+            Assert.assertTrue(results.get(0).isRight());
             assertToCompact(results.get(0).right(), committable0);
 
             assertToPassthrough(results.get(1).right(), cleanup3);
 
             // committable with . prefix should also be passed through
-            assertThat(
-                            results.get(2).isLeft()
-                                    && results.get(2).left() instanceof CommittableWithLineage)
-                    .isTrue();
-            assertThat(
-                            ((CommittableWithLineage<FileSinkCommittable>) results.get(2).left())
-                                    .getCommittable())
-                    .isEqualTo(committable1);
+            Assert.assertTrue(
+                    results.get(2).isLeft()
+                            && results.get(2).left() instanceof CommittableWithLineage);
+            Assert.assertEquals(
+                    ((CommittableWithLineage<FileSinkCommittable>) results.get(2).left())
+                            .getCommittable(),
+                    committable1);
 
             // committable without . prefix should be passed through normally
-            assertThat(
-                            results.get(3).isLeft()
-                                    && results.get(3).left() instanceof CommittableWithLineage)
-                    .isTrue();
-            assertThat(
-                            ((CommittableWithLineage<FileSinkCommittable>) results.get(3).left())
-                                    .getCommittable())
-                    .isEqualTo(committable2);
+            Assert.assertTrue(
+                    results.get(3).isLeft()
+                            && results.get(3).left() instanceof CommittableWithLineage);
+            Assert.assertEquals(
+                    ((CommittableWithLineage<FileSinkCommittable>) results.get(3).left())
+                            .getCommittable(),
+                    committable2);
         }
     }
 
@@ -451,12 +448,12 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
 
     private void assertToCompact(CompactorRequest request, FileSinkCommittable... committables) {
         List<FileSinkCommittable> committableToCompact = request.getCommittableToCompact();
-        assertThat(committableToCompact.toArray()).isEqualTo(committables);
+        Assert.assertArrayEquals(committables, committableToCompact.toArray());
     }
 
     private void assertToPassthrough(
             CompactorRequest request, FileSinkCommittable... committables) {
         List<FileSinkCommittable> committableToCompact = request.getCommittableToPassthrough();
-        assertThat(committableToCompact.toArray()).isEqualTo(committables);
+        Assert.assertArrayEquals(committables, committableToCompact.toArray());
     }
 }

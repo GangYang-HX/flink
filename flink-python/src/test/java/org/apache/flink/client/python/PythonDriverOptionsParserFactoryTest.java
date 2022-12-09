@@ -21,62 +21,61 @@ package org.apache.flink.client.python;
 import org.apache.flink.runtime.entrypoint.FlinkParseException;
 import org.apache.flink.runtime.entrypoint.parser.CommandLineParser;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for the {@link PythonDriverOptionsParserFactory}. */
-class PythonDriverOptionsParserFactoryTest {
+public class PythonDriverOptionsParserFactoryTest {
 
     private static final CommandLineParser<PythonDriverOptions> commandLineParser =
             new CommandLineParser<>(new PythonDriverOptionsParserFactory());
 
     @Test
-    void testPythonDriverOptionsParsing() throws FlinkParseException {
+    public void testPythonDriverOptionsParsing() throws FlinkParseException {
         final String[] args = {"--python", "xxx.py", "--input", "in.txt"};
         verifyPythonDriverOptionsParsing(args);
     }
 
     @Test
-    void testPymoduleOptionParsing() throws FlinkParseException {
+    public void testPymoduleOptionParsing() throws FlinkParseException {
         final String[] args = {"--pyModule", "xxx", "--input", "in.txt"};
         verifyPythonDriverOptionsParsing(args);
     }
 
     @Test
-    void testShortOptions() throws FlinkParseException {
+    public void testShortOptions() throws FlinkParseException {
         final String[] args = {"-py", "xxx.py", "--input", "in.txt"};
         verifyPythonDriverOptionsParsing(args);
     }
 
-    @Test
-    void testMultipleEntrypointsSpecified() {
+    @Test(expected = FlinkParseException.class)
+    public void testMultipleEntrypointsSpecified() throws FlinkParseException {
         final String[] args = {"--python", "xxx.py", "--pyModule", "yyy", "--input", "in.txt"};
-        assertThatThrownBy(() -> commandLineParser.parse(args))
-                .isInstanceOf(FlinkParseException.class);
+        commandLineParser.parse(args);
     }
 
-    @Test
-    void testEntrypointNotSpecified() {
+    @Test(expected = FlinkParseException.class)
+    public void testEntrypointNotSpecified() throws FlinkParseException {
         final String[] args = {"--input", "in.txt"};
-        assertThatThrownBy(() -> commandLineParser.parse(args))
-                .isInstanceOf(FlinkParseException.class);
+        commandLineParser.parse(args);
     }
 
     private void verifyPythonDriverOptionsParsing(final String[] args) throws FlinkParseException {
         final PythonDriverOptions pythonCommandOptions = commandLineParser.parse(args);
 
         if (pythonCommandOptions.getEntryPointScript().isPresent()) {
-            assertThat(pythonCommandOptions.getEntryPointScript().get()).isEqualTo("xxx.py");
+            assertEquals("xxx.py", pythonCommandOptions.getEntryPointScript().get());
         } else {
-            assertThat(pythonCommandOptions.getEntryPointModule()).isEqualTo("xxx");
+            assertEquals("xxx", pythonCommandOptions.getEntryPointModule());
         }
 
         // verify the python program arguments
         final List<String> programArgs = pythonCommandOptions.getProgramArgs();
-        assertThat(programArgs).containsExactly("--input", "in.txt");
+        assertEquals(2, programArgs.size());
+        assertEquals("--input", programArgs.get(0));
+        assertEquals("in.txt", programArgs.get(1));
     }
 }

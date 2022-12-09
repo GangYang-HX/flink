@@ -19,10 +19,7 @@ package org.apache.flink.streaming.connectors.cassandra;
 
 import org.apache.flink.types.Row;
 
-/**
- * A SinkFunction to write Row records into a Cassandra table. Please read the recommendations in
- * {@linkplain CassandraSinkBase}.
- */
+/** A SinkFunction to write Row records into a Cassandra table. */
 public class CassandraRowSink extends AbstractCassandraTupleSink<Row> {
 
     private final int rowArity;

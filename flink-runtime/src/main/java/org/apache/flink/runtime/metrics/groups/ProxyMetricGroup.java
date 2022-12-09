@@ -24,6 +24,7 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 
 import java.util.Map;
 
@@ -73,8 +74,18 @@ public class ProxyMetricGroup<P extends MetricGroup> implements MetricGroup {
     }
 
     @Override
+    public MetricGroup addGroup(String name, QueryServiceMode mode) {
+        return parentMetricGroup.addGroup(name, mode);
+    }
+
+    @Override
     public final MetricGroup addGroup(String key, String value) {
         return parentMetricGroup.addGroup(key, value);
+    }
+
+    @Override
+    public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
+        return parentMetricGroup.addGroup(key, value, mode);
     }
 
     @Override

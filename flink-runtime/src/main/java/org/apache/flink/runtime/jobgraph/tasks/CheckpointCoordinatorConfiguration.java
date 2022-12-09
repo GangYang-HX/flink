@@ -37,6 +37,8 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
 
     private static final long serialVersionUID = 2L;
 
+    private static final boolean ENABLE_AUTO_ADJUST_MAX_PARALLELISM_CHECK_DEFAULT = false;
+
     private final long checkpointInterval;
 
     private final long checkpointTimeout;
@@ -61,6 +63,8 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
     private final boolean isUnalignedCheckpointsEnabled;
 
     private final long alignedCheckpointTimeout;
+
+    private final boolean autoAdjustMaxParallelism;
 
     private final long checkpointIdOfIgnoredInFlightData;
 
@@ -88,6 +92,7 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
                 isExactlyOnce,
                 tolerableCpFailureNumber,
                 isUnalignedCheckpoint,
+                ENABLE_AUTO_ADJUST_MAX_PARALLELISM_CHECK_DEFAULT,
                 0,
                 checkpointIdOfIgnoredInFlightData,
                 false);
@@ -102,6 +107,7 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
             boolean isExactlyOnce,
             int tolerableCpFailureNumber,
             boolean isUnalignedCheckpointsEnabled,
+            boolean autoAdjustMaxParallelism,
             long alignedCheckpointTimeout,
             long checkpointIdOfIgnoredInFlightData,
             boolean enableCheckpointsAfterTasksFinish) {
@@ -126,6 +132,7 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
         this.isExactlyOnce = isExactlyOnce;
         this.tolerableCheckpointFailureNumber = tolerableCpFailureNumber;
         this.isUnalignedCheckpointsEnabled = isUnalignedCheckpointsEnabled;
+        this.autoAdjustMaxParallelism = autoAdjustMaxParallelism;
         this.alignedCheckpointTimeout = alignedCheckpointTimeout;
         this.checkpointIdOfIgnoredInFlightData = checkpointIdOfIgnoredInFlightData;
         this.enableCheckpointsAfterTasksFinish = enableCheckpointsAfterTasksFinish;
@@ -163,6 +170,10 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
         return isUnalignedCheckpointsEnabled;
     }
 
+    public boolean autoAdjustMaxParallelism() {
+        return autoAdjustMaxParallelism;
+    }
+
     public long getAlignedCheckpointTimeout() {
         return alignedCheckpointTimeout;
     }
@@ -193,6 +204,7 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
                 && alignedCheckpointTimeout == that.alignedCheckpointTimeout
                 && checkpointRetentionPolicy == that.checkpointRetentionPolicy
                 && tolerableCheckpointFailureNumber == that.tolerableCheckpointFailureNumber
+                && autoAdjustMaxParallelism == that.autoAdjustMaxParallelism
                 && checkpointIdOfIgnoredInFlightData == that.checkpointIdOfIgnoredInFlightData
                 && enableCheckpointsAfterTasksFinish == that.enableCheckpointsAfterTasksFinish;
     }
@@ -209,6 +221,7 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
                 isUnalignedCheckpointsEnabled,
                 alignedCheckpointTimeout,
                 tolerableCheckpointFailureNumber,
+                autoAdjustMaxParallelism,
                 checkpointIdOfIgnoredInFlightData,
                 enableCheckpointsAfterTasksFinish);
     }
@@ -234,6 +247,8 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
                 + alignedCheckpointTimeout
                 + ", tolerableCheckpointFailureNumber="
                 + tolerableCheckpointFailureNumber
+                + ", autoAdjustMaxParallelism="
+                + autoAdjustMaxParallelism
                 + ", checkpointIdOfIgnoredInFlightData="
                 + checkpointIdOfIgnoredInFlightData
                 + ", enableCheckpointsAfterTasksFinish="
@@ -256,6 +271,7 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
         private boolean isExactlyOnce = true;
         private int tolerableCheckpointFailureNumber;
         private boolean isUnalignedCheckpointsEnabled;
+        private boolean autoAdjustMaxParallelism;
         private long alignedCheckpointTimeout = 0;
         private long checkpointIdOfIgnoredInFlightData;
         private boolean enableCheckpointsAfterTasksFinish;
@@ -270,6 +286,7 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
                     isExactlyOnce,
                     tolerableCheckpointFailureNumber,
                     isUnalignedCheckpointsEnabled,
+                    autoAdjustMaxParallelism,
                     alignedCheckpointTimeout,
                     checkpointIdOfIgnoredInFlightData,
                     enableCheckpointsAfterTasksFinish);
@@ -325,6 +342,12 @@ public class CheckpointCoordinatorConfiguration implements Serializable {
         public CheckpointCoordinatorConfigurationBuilder setAlignedCheckpointTimeout(
                 long alignedCheckpointTimeout) {
             this.alignedCheckpointTimeout = alignedCheckpointTimeout;
+            return this;
+        }
+
+        public CheckpointCoordinatorConfigurationBuilder enableAutoAdjustMaxParallelism(
+                boolean autoAdjustMaxParallelism) {
+            this.autoAdjustMaxParallelism = autoAdjustMaxParallelism;
             return this;
         }
 

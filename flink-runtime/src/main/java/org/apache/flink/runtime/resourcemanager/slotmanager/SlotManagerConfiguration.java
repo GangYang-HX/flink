@@ -34,8 +34,6 @@ import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
-
 /** Configuration for the {@link SlotManager}. */
 public class SlotManagerConfiguration {
 
@@ -44,7 +42,6 @@ public class SlotManagerConfiguration {
     private final Time taskManagerRequestTimeout;
     private final Time slotRequestTimeout;
     private final Time taskManagerTimeout;
-    private final Duration requirementCheckDelay;
     private final boolean waitResultConsumedBeforeRelease;
     private final SlotMatchingStrategy slotMatchingStrategy;
     private final WorkerResourceSpec defaultWorkerResourceSpec;
@@ -58,7 +55,6 @@ public class SlotManagerConfiguration {
             Time taskManagerRequestTimeout,
             Time slotRequestTimeout,
             Time taskManagerTimeout,
-            Duration requirementCheckDelay,
             boolean waitResultConsumedBeforeRelease,
             SlotMatchingStrategy slotMatchingStrategy,
             WorkerResourceSpec defaultWorkerResourceSpec,
@@ -71,7 +67,6 @@ public class SlotManagerConfiguration {
         this.taskManagerRequestTimeout = Preconditions.checkNotNull(taskManagerRequestTimeout);
         this.slotRequestTimeout = Preconditions.checkNotNull(slotRequestTimeout);
         this.taskManagerTimeout = Preconditions.checkNotNull(taskManagerTimeout);
-        this.requirementCheckDelay = Preconditions.checkNotNull(requirementCheckDelay);
         this.waitResultConsumedBeforeRelease = waitResultConsumedBeforeRelease;
         this.slotMatchingStrategy = Preconditions.checkNotNull(slotMatchingStrategy);
         this.defaultWorkerResourceSpec = Preconditions.checkNotNull(defaultWorkerResourceSpec);
@@ -95,10 +90,6 @@ public class SlotManagerConfiguration {
 
     public Time getTaskManagerTimeout() {
         return taskManagerTimeout;
-    }
-
-    public Duration getRequirementCheckDelay() {
-        return requirementCheckDelay;
     }
 
     public boolean isWaitResultConsumedBeforeRelease() {
@@ -145,9 +136,6 @@ public class SlotManagerConfiguration {
                 Time.milliseconds(
                         configuration.getLong(ResourceManagerOptions.TASK_MANAGER_TIMEOUT));
 
-        final Duration requirementCheckDelay =
-                configuration.get(ResourceManagerOptions.REQUIREMENTS_CHECK_DELAY);
-
         boolean waitResultConsumedBeforeRelease =
                 configuration.getBoolean(
                         ResourceManagerOptions.TASK_MANAGER_RELEASE_WHEN_RESULT_CONSUMED);
@@ -170,7 +158,6 @@ public class SlotManagerConfiguration {
                 rpcTimeout,
                 slotRequestTimeout,
                 taskManagerTimeout,
-                requirementCheckDelay,
                 waitResultConsumedBeforeRelease,
                 slotMatchingStrategy,
                 defaultWorkerResourceSpec,

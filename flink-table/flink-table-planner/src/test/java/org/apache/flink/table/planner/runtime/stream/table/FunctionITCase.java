@@ -36,8 +36,9 @@ import java.util.List;
 import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
 import static org.apache.flink.table.api.Expressions.$;
 import static org.apache.flink.table.api.Expressions.call;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
 
 /** Tests for user defined functions in the Table API. */
 public class FunctionITCase extends StreamingTestBase {
@@ -66,7 +67,7 @@ public class FunctionITCase extends StreamingTestBase {
                                         .minus(call(new SimpleScalarFunction(), $("a"), $("b"))));
         table.executeInsert("TestTable").await();
 
-        assertThat(TestCollectionTableFactory.getResult()).isEqualTo(sinkData);
+        assertThat(TestCollectionTableFactory.getResult(), equalTo(sinkData));
     }
 
     @Test
@@ -94,7 +95,7 @@ public class FunctionITCase extends StreamingTestBase {
                 .executeInsert("SinkTable")
                 .await();
 
-        assertThat(TestCollectionTableFactory.getResult()).isEqualTo(sinkData);
+        assertThat(TestCollectionTableFactory.getResult(), equalTo(sinkData));
     }
 
     @Test

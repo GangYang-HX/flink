@@ -24,16 +24,15 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 
-import org.junit.Rule;
+import org.junit.Assert;
+import org.junit.ClassRule;
 import org.junit.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test for {@link JobManagerWatermarkTracker}. */
 public class JobManagerWatermarkTrackerTest {
 
-    @Rule
-    public final MiniClusterResource miniCluster =
+    @ClassRule
+    public static final MiniClusterResource FLINK =
             new MiniClusterResource(
                     new MiniClusterResourceConfiguration.Builder()
                             .setNumberTaskManagers(1)
@@ -41,7 +40,7 @@ public class JobManagerWatermarkTrackerTest {
                             .build());
 
     @Test
-    public void testUpdateWatermark() throws Exception {
+    public void testUpateWatermark() throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         env.addSource(new TestSourceFunction(new JobManagerWatermarkTracker("fakeId")))
@@ -65,8 +64,8 @@ public class JobManagerWatermarkTrackerTest {
 
         @Override
         public void run(SourceContext<Integer> ctx) {
-            assertThat(tracker.updateWatermark(998)).isEqualTo(998);
-            assertThat(tracker.updateWatermark(999)).isEqualTo(999);
+            Assert.assertEquals(998, tracker.updateWatermark(998));
+            Assert.assertEquals(999, tracker.updateWatermark(999));
         }
 
         @Override

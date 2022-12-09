@@ -28,8 +28,6 @@ import org.apache.flink.runtime.resourcemanager.JobLeaderIdService;
 import org.apache.flink.runtime.resourcemanager.slotmanager.DeclarativeSlotManagerBuilder;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
 import org.apache.flink.runtime.rpc.RpcService;
-import org.apache.flink.runtime.security.token.DelegationTokenManager;
-import org.apache.flink.runtime.security.token.NoOpDelegationTokenManager;
 import org.apache.flink.runtime.testutils.DirectScheduledExecutorService;
 import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
 
@@ -39,17 +37,19 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 public class MockResourceManagerRuntimeServices {
 
     public final RpcService rpcService;
+    public final Time timeout;
     public final TestingHighAvailabilityServices highAvailabilityServices;
     public final HeartbeatServices heartbeatServices;
-    public final DelegationTokenManager delegationTokenManager;
     public final TestingLeaderElectionService rmLeaderElectionService;
     public final JobLeaderIdService jobLeaderIdService;
     public final SlotManager slotManager;
 
-    public MockResourceManagerRuntimeServices(RpcService rpcService) {
+    public MockResourceManagerRuntimeServices(RpcService rpcService, Time timeout) {
         this(
                 rpcService,
-                DeclarativeSlotManagerBuilder.newBuilder(
+                timeout,
+                DeclarativeSlotManagerBuilder.newBuilder()
+                        .setScheduledExecutor(
                                 new ScheduledExecutorServiceAdapter(
                                         new DirectScheduledExecutorService()))
                         .setTaskManagerRequestTimeout(Time.seconds(10))
@@ -58,14 +58,15 @@ public class MockResourceManagerRuntimeServices {
                         .build());
     }
 
-    public MockResourceManagerRuntimeServices(RpcService rpcService, SlotManager slotManager) {
+    public MockResourceManagerRuntimeServices(
+            RpcService rpcService, Time timeout, SlotManager slotManager) {
         this.rpcService = checkNotNull(rpcService);
+        this.timeout = checkNotNull(timeout);
         this.slotManager = slotManager;
         highAvailabilityServices = new TestingHighAvailabilityServices();
         rmLeaderElectionService = new TestingLeaderElectionService();
         highAvailabilityServices.setResourceManagerLeaderElectionService(rmLeaderElectionService);
         heartbeatServices = new TestingHeartbeatServices();
-        delegationTokenManager = new NoOpDelegationTokenManager();
         jobLeaderIdService =
                 new DefaultJobLeaderIdService(
                         highAvailabilityServices,

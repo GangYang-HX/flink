@@ -29,7 +29,8 @@ import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.util.function.ThrowingConsumer;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,14 +38,13 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.stream.Collectors;
 
 /** Test for {@link CompactCoordinator}. */
-class CompactCoordinatorTest extends AbstractCompactTestBase {
+public class CompactCoordinatorTest extends AbstractCompactTestBase {
 
     @Test
-    void testCoordinatorCrossCheckpoints() throws Exception {
+    public void testCoordinatorCrossCheckpoints() throws Exception {
         AtomicReference<OperatorSubtaskState> state = new AtomicReference<>();
         runCoordinator(
                 harness -> {
@@ -87,12 +87,12 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
 
                     List<CoordinatorOutput> outputs = harness.extractOutputValues();
 
-                    assertThat(outputs).hasSize(7);
+                    Assert.assertEquals(7, outputs.size());
 
                     List<CompactionUnit> cp1Units = new ArrayList<>();
                     for (int i = 0; i < 4; i++) {
                         CoordinatorOutput output = outputs.get(i);
-                        assertThat(output).isInstanceOf(CompactionUnit.class);
+                        Assert.assertTrue(output instanceof CompactionUnit);
                         cp1Units.add((CompactionUnit) output);
                     }
                     cp1Units.sort(
@@ -127,20 +127,21 @@ class CompactCoordinatorTest extends AbstractCompactTestBase {
     }
 
     private void assertEndCompaction(CoordinatorOutput output, long checkpointId) {
-        assertThat(output).isInstanceOf(EndCompaction.class);
+        Assert.assertTrue(output instanceof EndCompaction);
         EndCompaction end = (EndCompaction) output;
 
-        assertThat(end.getCheckpointId()).isEqualTo(checkpointId);
+        Assert.assertEquals(checkpointId, end.getCheckpointId());
     }
 
     private void assertUnit(
             CoordinatorOutput output, int unitId, String partition, List<String> fileNames) {
-        assertThat(output).isInstanceOf(CompactionUnit.class);
+        Assert.assertTrue(output instanceof CompactionUnit);
         CompactionUnit unit = (CompactionUnit) output;
 
-        assertThat(unit.getUnitId()).isEqualTo(unitId);
-        assertThat(unit.getPartition()).isEqualTo(partition);
-        assertThat(unit.getPaths().stream().map(Path::getName))
-                .containsExactlyElementsOf(fileNames);
+        Assert.assertEquals(unitId, unit.getUnitId());
+        Assert.assertEquals(partition, unit.getPartition());
+        Assert.assertEquals(
+                fileNames,
+                unit.getPaths().stream().map(Path::getName).collect(Collectors.toList()));
     }
 }

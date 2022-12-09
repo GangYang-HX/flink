@@ -30,18 +30,14 @@ import org.apache.flink.runtime.jobmaster.TestingLogicalSlot;
 import org.apache.flink.runtime.jobmaster.TestingLogicalSlotBuilder;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
@@ -55,10 +51,6 @@ import static org.junit.Assert.fail;
 /** Tests for {@link ExecutionGraphToInputsLocationsRetrieverAdapter}. */
 public class ExecutionGraphToInputsLocationsRetrieverAdapterTest extends TestLogger {
 
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
-
     /** Tests that can get the producers of consumed result partitions. */
     @Test
     public void testGetConsumedResultPartitionsProducers() throws Exception {
@@ -71,8 +63,7 @@ public class ExecutionGraphToInputsLocationsRetrieverAdapterTest extends TestLog
                 producer2, DistributionPattern.ALL_TO_ALL, ResultPartitionType.PIPELINED);
 
         final ExecutionGraph eg =
-                ExecutionGraphTestUtils.createExecutionGraph(
-                        EXECUTOR_RESOURCE.getExecutor(), producer1, producer2, consumer);
+                ExecutionGraphTestUtils.createSimpleTestGraph(producer1, producer2, consumer);
         final ExecutionGraphToInputsLocationsRetrieverAdapter inputsLocationsRetriever =
                 new ExecutionGraphToInputsLocationsRetrieverAdapter(eg);
 
@@ -99,9 +90,7 @@ public class ExecutionGraphToInputsLocationsRetrieverAdapterTest extends TestLog
     public void testGetEmptyTaskManagerLocationIfVertexNotScheduled() throws Exception {
         final JobVertex jobVertex = ExecutionGraphTestUtils.createNoOpVertex(1);
 
-        final ExecutionGraph eg =
-                ExecutionGraphTestUtils.createExecutionGraph(
-                        EXECUTOR_RESOURCE.getExecutor(), jobVertex);
+        final ExecutionGraph eg = ExecutionGraphTestUtils.createSimpleTestGraph(jobVertex);
         final ExecutionGraphToInputsLocationsRetrieverAdapter inputsLocationsRetriever =
                 new ExecutionGraphToInputsLocationsRetrieverAdapter(eg);
 
@@ -119,9 +108,7 @@ public class ExecutionGraphToInputsLocationsRetrieverAdapterTest extends TestLog
 
         final TestingLogicalSlot testingLogicalSlot =
                 new TestingLogicalSlotBuilder().createTestingLogicalSlot();
-        final ExecutionGraph eg =
-                ExecutionGraphTestUtils.createExecutionGraph(
-                        EXECUTOR_RESOURCE.getExecutor(), jobVertex);
+        final ExecutionGraph eg = ExecutionGraphTestUtils.createSimpleTestGraph(jobVertex);
         final ExecutionGraphToInputsLocationsRetrieverAdapter inputsLocationsRetriever =
                 new ExecutionGraphToInputsLocationsRetrieverAdapter(eg);
 
@@ -149,9 +136,7 @@ public class ExecutionGraphToInputsLocationsRetrieverAdapterTest extends TestLog
     public void testGetNonExistingExecutionVertexWillThrowException() throws Exception {
         final JobVertex jobVertex = ExecutionGraphTestUtils.createNoOpVertex(1);
 
-        final ExecutionGraph eg =
-                ExecutionGraphTestUtils.createExecutionGraph(
-                        EXECUTOR_RESOURCE.getExecutor(), jobVertex);
+        final ExecutionGraph eg = ExecutionGraphTestUtils.createSimpleTestGraph(jobVertex);
         final ExecutionGraphToInputsLocationsRetrieverAdapter inputsLocationsRetriever =
                 new ExecutionGraphToInputsLocationsRetrieverAdapter(eg);
 

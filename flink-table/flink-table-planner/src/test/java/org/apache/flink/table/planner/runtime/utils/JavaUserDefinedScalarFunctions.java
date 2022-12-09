@@ -33,7 +33,7 @@ import java.time.LocalDateTime;
 import java.util.Random;
 import java.util.TimeZone;
 
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.fail;
 
 /** Test scalar functions. */
 public class JavaUserDefinedScalarFunctions {

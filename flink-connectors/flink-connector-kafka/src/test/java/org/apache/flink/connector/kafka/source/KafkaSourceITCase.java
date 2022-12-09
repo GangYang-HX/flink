@@ -81,6 +81,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.flink.connector.kafka.testutils.KafkaSourceExternalContext.SplitMappingMode.PARTITION;
 import static org.apache.flink.connector.kafka.testutils.KafkaSourceExternalContext.SplitMappingMode.TOPIC;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Unite test class for {@link KafkaSource}. */
 public class KafkaSourceITCase {
@@ -141,9 +142,10 @@ public class KafkaSourceITCase {
             stream.addSink(new DiscardingSink<>());
             JobExecutionResult result = env.execute();
 
-            assertThat(result.<List<Long>>getAccumulatorResult("timestamp"))
-                    .containsExactly(
-                            currentTimestamp + 1L, currentTimestamp + 2L, currentTimestamp + 3L);
+            assertEquals(
+                    Arrays.asList(
+                            currentTimestamp + 1L, currentTimestamp + 2L, currentTimestamp + 3L),
+                    result.getAccumulatorResult("timestamp"));
         }
 
         @ParameterizedTest(name = "Object reuse in deserializer = {arguments}")
@@ -211,7 +213,7 @@ public class KafkaSourceITCase {
                 // Since we have two topics, the expected sum value should be doubled
                 expectedSum *= 2;
 
-                assertThat(actualSum.get()).isEqualTo(expectedSum);
+                assertEquals(expectedSum, actualSum.get());
             }
         }
 
@@ -509,12 +511,12 @@ public class KafkaSourceITCase {
                     int firstExpectedValue =
                             Integer.parseInt(tp.substring(tp.lastIndexOf('-') + 1));
                     for (int i = 0; i < values.size(); i++) {
-                        assertThat((int) values.get(i))
-                                .as(
-                                        String.format(
-                                                "The %d-th value for partition %s should be %d",
-                                                i, tp, firstExpectedValue + i))
-                                .isEqualTo(firstExpectedValue + i);
+                        assertEquals(
+                                firstExpectedValue + i,
+                                (int) values.get(i),
+                                String.format(
+                                        "The %d-th value for partition %s should be %d",
+                                        i, tp, firstExpectedValue + i));
                     }
                 });
     }

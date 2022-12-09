@@ -28,11 +28,12 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test for {@link HeapWindowsGrouping}. */
 public class HeapWindowsGroupingTest {
@@ -340,8 +341,8 @@ public class HeapWindowsGroupingTest {
         // watermark to trigger all the windows first
         grouping.advanceWatermarkToTriggerAllWindows();
         processTriggerWindow(actual, windows, grouping);
-        assertThat(windows).isEqualTo(expectedWindows);
-        assertThat(actual).isEqualTo(expected);
+        assertEquals(expectedWindows, windows);
+        assertEquals(expected, actual);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -358,8 +359,8 @@ public class HeapWindowsGroupingTest {
         while (iter.advanceNext()) {
             buffer.add(iter.getRow().getLong(0));
         }
-        assertThat(window).isEqualTo(TimeWindow.of(0, 8L));
-        assertThat(buffer).isEmpty();
+        assertEquals(TimeWindow.of(0, 8L), window);
+        assertEquals(Collections.emptyList(), buffer);
 
         System.out.println("try invalid window trigger");
         grouping.buildTriggerWindowElementsIterator();
@@ -387,8 +388,8 @@ public class HeapWindowsGroupingTest {
         grouping.advanceWatermarkToTriggerAllWindows();
         processTriggerWindow(actual, windows, grouping);
 
-        assertThat(windows).isEqualTo(expectedWindows);
-        assertThat(actual).isEqualTo(expected);
+        assertEquals(expectedWindows, windows);
+        assertEquals(expected, actual);
     }
 
     private void processTriggerWindow(

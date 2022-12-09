@@ -67,7 +67,6 @@ final class AlternatingCollectingBarriers extends AbstractAlternatingAlignedBarr
                         + "collecting aligned barrier state");
 
         if (controller.allBarriersReceived()) {
-            controller.initInputsCheckpoint(pendingCheckpointBarrier);
             controller.triggerGlobalCheckpoint(pendingCheckpointBarrier);
             return finishCheckpoint();
         } else if (controller.isTimedOut(pendingCheckpointBarrier)) {

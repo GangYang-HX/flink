@@ -56,7 +56,9 @@ import static org.apache.flink.streaming.connectors.kinesis.table.RowDataKinesis
 import static org.apache.flink.streaming.connectors.kinesis.table.RowDataKinesisDeserializationSchema.Metadata.Timestamp;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSource;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 /**
  * Test for {@link KinesisDynamicSource} and {@link KinesisDynamicSink} created by {@link
@@ -90,17 +92,17 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
                         new TestFormatFactory.DecodingFormatMock(",", true));
 
         // verify that the constructed DynamicTableSink is as expected
-        assertThat(actualSource).isEqualTo(expectedSource);
+        assertEquals(expectedSource, actualSource);
 
         // verify that the copy of the constructed DynamicTableSink is as expected
-        assertThat(actualSource.copy()).isEqualTo(expectedSource);
+        assertEquals(expectedSource, actualSource.copy());
 
         // verify produced sink
         ScanTableSource.ScanRuntimeProvider functionProvider =
                 actualSource.getScanRuntimeProvider(ScanRuntimeProviderContext.INSTANCE);
         SourceFunction<RowData> sourceFunction =
                 as(functionProvider, SourceFunctionProvider.class).createSourceFunction();
-        assertThat(sourceFunction).isInstanceOf(FlinkKinesisConsumer.class);
+        assertThat(sourceFunction, instanceOf(FlinkKinesisConsumer.class));
     }
 
     @Test
@@ -128,10 +130,10 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
                         Arrays.asList(requestedMetadata));
 
         // verify that the constructed DynamicTableSource is as expected
-        assertThat(actualSource).isEqualTo(expectedSource);
+        assertEquals(expectedSource, actualSource);
 
         // verify that the copy of the constructed DynamicTableSink is as expected
-        assertThat(actualSource.copy()).isEqualTo(expectedSource);
+        assertEquals(expectedSource, actualSource.copy());
     }
 
     @Test
@@ -269,7 +271,7 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
     }
 
     private <T> T as(Object object, Class<T> clazz) {
-        assertThat(object).isInstanceOf(clazz);
+        assertThat(object, instanceOf(clazz));
         return clazz.cast(object);
     }
 }

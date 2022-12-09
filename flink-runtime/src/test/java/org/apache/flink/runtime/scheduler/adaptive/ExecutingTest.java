@@ -41,7 +41,6 @@ import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionDeploymentListener;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
-import org.apache.flink.runtime.executiongraph.ExecutionGraphID;
 import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.IntermediateResult;
@@ -52,7 +51,6 @@ import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
 import org.apache.flink.runtime.executiongraph.TestingDefaultExecutionGraphBuilder;
 import org.apache.flink.runtime.executiongraph.failover.flip1.partitionrelease.PartitionGroupReleaseStrategy;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
-import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
@@ -64,16 +62,12 @@ import org.apache.flink.runtime.scheduler.exceptionhistory.ExceptionHistoryEntry
 import org.apache.flink.runtime.scheduler.exceptionhistory.RootExceptionHistoryEntry;
 import org.apache.flink.runtime.scheduler.exceptionhistory.TestingAccessExecution;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
-import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.types.Either;
 import org.apache.flink.util.SerializedValue;
 import org.apache.flink.util.TestLogger;
 
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.slf4j.Logger;
 
@@ -88,7 +82,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -103,9 +96,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 /** Tests for {@link AdaptiveScheduler AdaptiveScheduler's} {@link Executing} state. */
 public class ExecutingTest extends TestLogger {
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     @Test
     public void testExecutionGraphDeploymentOnEnter() throws Exception {
@@ -371,8 +361,7 @@ public class ExecutingTest extends TestLogger {
     public void testTransitionToStopWithSavepointState() throws Exception {
         try (MockExecutingContext ctx = new MockExecutingContext()) {
             CheckpointCoordinator coordinator =
-                    new CheckpointCoordinatorTestingUtils.CheckpointCoordinatorBuilder()
-                            .build(EXECUTOR_RESOURCE.getExecutor());
+                    new CheckpointCoordinatorTestingUtils.CheckpointCoordinatorBuilder().build();
             StateTrackingMockExecutionGraph mockedExecutionGraphWithCheckpointCoordinator =
                     new StateTrackingMockExecutionGraph() {
                         @Nullable
@@ -395,8 +384,7 @@ public class ExecutingTest extends TestLogger {
     public void testCheckpointSchedulerIsStoppedOnStopWithSavepoint() throws Exception {
         try (MockExecutingContext ctx = new MockExecutingContext()) {
             CheckpointCoordinator coordinator =
-                    new CheckpointCoordinatorTestingUtils.CheckpointCoordinatorBuilder()
-                            .build(EXECUTOR_RESOURCE.getExecutor());
+                    new CheckpointCoordinatorTestingUtils.CheckpointCoordinatorBuilder().build();
             StateTrackingMockExecutionGraph mockedExecutionGraphWithCheckpointCoordinator =
                     new StateTrackingMockExecutionGraph() {
                         @Nullable
@@ -486,8 +474,7 @@ public class ExecutingTest extends TestLogger {
 
     private final class ExecutingStateBuilder {
         private ExecutionGraph executionGraph =
-                TestingDefaultExecutionGraphBuilder.newBuilder()
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                TestingDefaultExecutionGraphBuilder.newBuilder().build();
         private OperatorCoordinatorHandler operatorCoordinatorHandler;
 
         private ExecutingStateBuilder() throws JobException, JobExecutionException {
@@ -1015,18 +1002,6 @@ public class ExecutingTest extends TestLogger {
 
         @Override
         public boolean isDynamic() {
-            throw new UnsupportedOperationException(
-                    "This method is not supported by the MockInternalExecutionGraphAccessor.");
-        }
-
-        @Override
-        public ExecutionGraphID getExecutionGraphID() {
-            return new ExecutionGraphID();
-        }
-
-        @Override
-        public List<ShuffleDescriptor> getClusterPartitionShuffleDescriptors(
-                IntermediateDataSetID intermediateResultPartition) {
             throw new UnsupportedOperationException(
                     "This method is not supported by the MockInternalExecutionGraphAccessor.");
         }

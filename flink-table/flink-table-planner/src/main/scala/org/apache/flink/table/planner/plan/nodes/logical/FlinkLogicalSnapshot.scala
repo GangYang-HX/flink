@@ -17,32 +17,31 @@
  */
 package org.apache.flink.table.planner.plan.nodes.logical
 
-import org.apache.flink.table.planner.plan.nodes.FlinkConventions
+import java.util
+import java.util.function.Supplier
 
 import org.apache.calcite.plan._
-import org.apache.calcite.rel.{RelCollation, RelCollationTraitDef, RelNode}
 import org.apache.calcite.rel.convert.ConverterRule
 import org.apache.calcite.rel.core.Snapshot
 import org.apache.calcite.rel.logical.LogicalSnapshot
 import org.apache.calcite.rel.metadata.{RelMdCollation, RelMetadataQuery}
-import org.apache.calcite.rex.{RexFieldAccess, RexLiteral, RexNode}
+import org.apache.calcite.rel.{RelCollation, RelCollationTraitDef, RelNode}
+import org.apache.calcite.rex.{RexCall, RexFieldAccess, RexLiteral, RexNode}
 import org.apache.calcite.sql.`type`.SqlTypeFamily
 import org.apache.calcite.util.Litmus
-
-import java.util
-import java.util.function.Supplier
+import org.apache.flink.table.planner.plan.nodes.FlinkConventions
 
 /**
  * Sub-class of [[Snapshot]] that is a relational expression which returns the contents of a
  * relation expression as it was at a given time in the past.
  */
 class FlinkLogicalSnapshot(
-    cluster: RelOptCluster,
-    traits: RelTraitSet,
-    child: RelNode,
-    period: RexNode)
+                            cluster: RelOptCluster,
+                            traits: RelTraitSet,
+                            child: RelNode,
+                            period: RexNode)
   extends Snapshot(cluster, traits, child, period)
-  with FlinkLogicalRel {
+    with FlinkLogicalRel {
 
   isValid(Litmus.THROW, null)
 
@@ -53,6 +52,7 @@ class FlinkLogicalSnapshot(
     period match {
       case _: RexFieldAccess =>
       // pass
+      case r: RexCall if "NOW".equals(r.op.getName) =>
       case lit: RexLiteral =>
         return litmus.fail(String.format(msg, s"a constant timestamp '${lit.toString}'"))
       case _ =>

@@ -68,8 +68,9 @@ import static org.apache.flink.table.runtime.util.StreamRecordUtils.insertRecord
 import static org.apache.flink.table.runtime.util.StreamRecordUtils.updateAfterRecord;
 import static org.apache.flink.table.runtime.util.StreamRecordUtils.updateBeforeRecord;
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.toUtcTimestampMills;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * {@link WindowOperator} tests for {@link AggregateWindowOperator} or {@link
@@ -325,7 +326,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test
@@ -641,7 +642,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test
@@ -707,7 +708,7 @@ public class WindowOperatorTest {
         assertor.assertOutputEqualsSorted(
                 "Output was not correct.", expectedOutput, testHarness.getOutput());
 
-        assertThat(operator.getNumLateRecordsDropped().getCount()).isEqualTo(1);
+        assertEquals(1, operator.getNumLateRecordsDropped().getCount());
 
         testHarness.close();
     }
@@ -995,7 +996,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test
@@ -1144,7 +1145,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test
@@ -1310,7 +1311,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test
@@ -1391,7 +1392,7 @@ public class WindowOperatorTest {
                                 localMills(6000L),
                                 localMills(5999L))));
 
-        assertThat(operator.getWatermarkLatency().getValue()).isEqualTo(0L);
+        assertEquals(0L, operator.getWatermarkLatency().getValue());
         assertor.assertOutputEqualsSorted(
                 "Output was not correct.", expectedOutput, testHarness.getOutput());
 
@@ -1441,7 +1442,7 @@ public class WindowOperatorTest {
         testHarness.initializeState(snapshotV2);
         testHarness.open();
 
-        assertThat(operator.getWatermarkLatency().getValue()).isEqualTo(0L);
+        assertEquals(0L, operator.getWatermarkLatency().getValue());
 
         testHarness.processElement(insertRecord("key1", 3, 2500L));
 
@@ -1508,13 +1509,13 @@ public class WindowOperatorTest {
                 "Output was not correct.", expectedOutput, testHarness.getOutput());
 
         testHarness.setProcessingTime(18000);
-        assertThat(operator.getWatermarkLatency().getValue()).isEqualTo(1L);
+        assertEquals(1L, operator.getWatermarkLatency().getValue());
 
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
-        assertThat(operator.getNumLateRecordsDropped().getCount()).isEqualTo(1);
+        assertEquals("Close was not called.", 2, closeCalled.get());
+        assertEquals(1, operator.getNumLateRecordsDropped().getCount());
     }
 
     @Test
@@ -1685,7 +1686,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test
@@ -1747,7 +1748,7 @@ public class WindowOperatorTest {
         assertor.assertOutputEqualsSorted(
                 "Output was not correct.", expectedOutput, testHarness.getOutput());
 
-        assertThat(operator.getNumLateRecordsDropped().getCount()).isEqualTo(1);
+        assertEquals(1, operator.getNumLateRecordsDropped().getCount());
 
         testHarness.close();
     }
@@ -1838,10 +1839,10 @@ public class WindowOperatorTest {
         testHarness.processElement(insertRecord("key2", 1, timestamp));
 
         // the garbage collection timer would wrap-around
-        assertThat(window.maxTimestamp() + lateness).isLessThan(window.maxTimestamp());
+        assertTrue(window.maxTimestamp() + lateness < window.maxTimestamp());
 
         // and it would prematurely fire with watermark (Long.MAX_VALUE - 1500)
-        assertThat(window.maxTimestamp() + lateness).isLessThan(Long.MAX_VALUE - 1500);
+        assertTrue(window.maxTimestamp() + lateness < Long.MAX_VALUE - 1500);
 
         // if we don't correctly prevent wrap-around in the garbage collection
         // timers this watermark will clean our window state for the just-added
@@ -1849,8 +1850,8 @@ public class WindowOperatorTest {
         testHarness.processWatermark(new Watermark(Long.MAX_VALUE - 1500));
 
         // this watermark is before the end timestamp of our only window
-        assertThat(Long.MAX_VALUE - 1500).isLessThan(window.maxTimestamp());
-        assertThat(window.maxTimestamp()).isLessThan(Long.MAX_VALUE);
+        assertTrue(Long.MAX_VALUE - 1500 < window.maxTimestamp());
+        assertTrue(window.maxTimestamp() < Long.MAX_VALUE);
 
         // push in a watermark that will trigger computation of our window
         testHarness.processWatermark(new Watermark(window.maxTimestamp()));
@@ -1947,7 +1948,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test
@@ -2032,7 +2033,7 @@ public class WindowOperatorTest {
         testHarness.close();
 
         // we close once in the rest...
-        assertThat(closeCalled.get()).as("Close was not called.").isEqualTo(2);
+        assertEquals("Close was not called.", 2, closeCalled.get());
     }
 
     @Test

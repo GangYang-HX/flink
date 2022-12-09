@@ -62,17 +62,17 @@ import java.util.concurrent.ScheduledFuture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link FileWriter}. */
-class FileWriterTest {
+public class FileWriterTest {
 
     private MetricListener metricListener;
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         metricListener = new MetricListener();
     }
 
     @Test
-    void testPreCommit(@TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testPreCommit(@TempDir java.nio.file.Path tempDir) throws Exception {
         Path path = new Path(tempDir.toUri());
 
         FileWriter<String> fileWriter =
@@ -91,7 +91,7 @@ class FileWriterTest {
     }
 
     @Test
-    void testSnapshotAndRestore(@TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testSnapshotAndRestore(@TempDir java.nio.file.Path tempDir) throws Exception {
         Path path = new Path(tempDir.toUri());
 
         FileWriter<String> fileWriter =
@@ -128,7 +128,7 @@ class FileWriterTest {
     }
 
     @Test
-    void testMergingForRescaling(@TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testMergingForRescaling(@TempDir java.nio.file.Path tempDir) throws Exception {
         Path path = new Path(tempDir.toUri());
 
         FileWriter<String> firstFileWriter =
@@ -191,7 +191,8 @@ class FileWriterTest {
     }
 
     @Test
-    void testBucketIsRemovedWhenNotActive(@TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testBucketIsRemovedWhenNotActive(@TempDir java.nio.file.Path tempDir)
+            throws Exception {
         Path path = new Path(tempDir.toUri());
 
         FileWriter<String> fileWriter =
@@ -209,7 +210,7 @@ class FileWriterTest {
     }
 
     @Test
-    void testOnProcessingTime(@TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testOnProcessingTime(@TempDir java.nio.file.Path tempDir) throws Exception {
         Path path = new Path(tempDir.toUri());
 
         // Create the processing timer service starts from 10.
@@ -275,17 +276,19 @@ class FileWriterTest {
     }
 
     @Test
-    void testContextPassingNormalExecution(@TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testContextPassingNormalExecution(@TempDir java.nio.file.Path tempDir)
+            throws Exception {
         testCorrectTimestampPassingInContext(1L, 2L, 3L, tempDir);
     }
 
     @Test
-    void testContextPassingNullTimestamp(@TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testContextPassingNullTimestamp(@TempDir java.nio.file.Path tempDir)
+            throws Exception {
         testCorrectTimestampPassingInContext(null, 4L, 5L, tempDir);
     }
 
     @Test
-    void testNumberRecordsOutCounter(@TempDir java.nio.file.Path tempDir)
+    public void testNumberRecordsOutCounter(@TempDir java.nio.file.Path tempDir)
             throws IOException, InterruptedException {
         Path path = new Path(tempDir.toUri());
 

@@ -49,6 +49,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -107,6 +108,7 @@ public class TaskManagerRunnerStartupTest extends TestLogger {
      * Tests that the TaskManagerRunner startup fails synchronously when the I/O directories are not
      * writable.
      */
+    @Ignore
     @Test
     public void testIODirectoryNotWritable() throws Exception {
         File nonWritable = tempFolder.newFolder();
@@ -224,7 +226,7 @@ public class TaskManagerRunnerStartupTest extends TestLogger {
                         ".taskmanager..Status.Flink.Memory.Managed.Used",
                         ".taskmanager..Status.Flink.Memory.Managed.Total",
                         ".taskmanager..Status.JVM.Threads.Count",
-                        ".taskmanager..Status.JVM.CPU.Load",
+                        ".taskmanager..Status.JVM.CPU.Load1",
                         ".taskmanager..Status.JVM.CPU.Time",
                         ".taskmanager..Status.Network.TotalMemorySegments",
                         ".taskmanager..Status.Network.AvailableMemorySegments",

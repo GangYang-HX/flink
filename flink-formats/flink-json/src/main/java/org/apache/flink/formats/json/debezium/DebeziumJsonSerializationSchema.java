@@ -67,8 +67,7 @@ public class DebeziumJsonSerializationSchema implements SerializationSchema<RowD
     }
 
     @Override
-    public void open(InitializationContext context) throws Exception {
-        jsonSerializer.open(context);
+    public void open(InitializationContext context) {
         genericRowData = new GenericRowData(3);
     }
 

@@ -18,7 +18,7 @@
 
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 
-import { ColorKey, ConfigService } from '@flink-runtime-web/services';
+import { COLOR_MAP, ColorKey } from 'config';
 
 @Component({
   selector: 'flink-job-badge',
@@ -29,9 +29,7 @@ import { ColorKey, ConfigService } from '@flink-runtime-web/services';
 export class JobBadgeComponent {
   @Input() public state: string;
 
-  constructor(private readonly configService: ConfigService) {}
-
   public backgroundColor(state: string): string {
-    return this.configService.COLOR_MAP[state as ColorKey];
+    return COLOR_MAP[state as ColorKey];
   }
 }

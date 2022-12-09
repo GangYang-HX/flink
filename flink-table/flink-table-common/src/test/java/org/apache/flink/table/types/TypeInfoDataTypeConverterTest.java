@@ -28,21 +28,27 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.utils.DataTypeFactoryMock;
 import org.apache.flink.table.types.utils.TypeInfoDataTypeConverter;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.time.DayOfWeek;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import static org.apache.flink.table.types.utils.DataTypeFactoryMock.dummyRaw;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link TypeInfoDataTypeConverter}. */
-class TypeInfoDataTypeConverterTest {
+@RunWith(Parameterized.class)
+public class TypeInfoDataTypeConverterTest {
 
-    private static Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
                 TestSpec.forType(Types.INT).expectDataType(DataTypes.INT().notNull()),
                 TestSpec.forType(Types.BIG_DEC)
                         .expectDataType(DataTypes.DECIMAL(38, 18).nullable()),
@@ -112,9 +118,10 @@ class TypeInfoDataTypeConverterTest {
                         .expectDataType(dummyRaw(DayOfWeek.class)));
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testConversion(TestSpec testSpec) {
+    @Parameter public TestSpec testSpec;
+
+    @Test
+    public void testConversion() {
         assertThat(TypeInfoDataTypeConverter.toDataType(testSpec.typeFactory, testSpec.typeInfo))
                 .isEqualTo(testSpec.expectedDataType);
     }

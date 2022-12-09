@@ -116,7 +116,7 @@ run sdist.
         LIB_PATH = os.path.join(FLINK_HOME, "lib")
         OPT_PATH = os.path.join(FLINK_HOME, "opt")
         OPT_PYTHON_JAR_NAME = os.path.basename(
-            find_file_path(os.path.join(OPT_PATH, "flink-python*.jar")))
+            find_file_path(os.path.join(OPT_PATH, "flink-python_*.jar")))
         OPT_SQL_CLIENT_JAR_NAME = os.path.basename(
             find_file_path(os.path.join(OPT_PATH, "flink-sql-client*.jar")))
         LICENSES_PATH = os.path.join(FLINK_HOME, "licenses")
@@ -225,8 +225,7 @@ run sdist.
             'License :: OSI Approved :: Apache Software License',
             'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
-            'Programming Language :: Python :: 3.8',
-            'Programming Language :: Python :: 3.9'],
+            'Programming Language :: Python :: 3.8'],
     )
 finally:
     if in_flink_source:

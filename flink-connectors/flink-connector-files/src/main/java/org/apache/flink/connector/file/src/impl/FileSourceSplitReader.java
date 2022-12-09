@@ -51,8 +51,10 @@ final class FileSourceSplitReader<T, SplitT extends FileSourceSplit>
 
     private final Queue<SplitT> splits;
 
-    @Nullable private BulkFormat.Reader<T> currentReader;
-    @Nullable private String currentSplitId;
+    @Nullable
+    private BulkFormat.Reader<T> currentReader;
+    @Nullable
+    private String currentSplitId;
 
     public FileSourceSplitReader(Configuration config, BulkFormat<T, SplitT> readerFactory) {
         this.config = config;
@@ -84,7 +86,8 @@ final class FileSourceSplitReader<T, SplitT extends FileSourceSplit>
     }
 
     @Override
-    public void wakeUp() {}
+    public void wakeUp() {
+    }
 
     @Override
     public void close() throws Exception {
@@ -102,14 +105,13 @@ final class FileSourceSplitReader<T, SplitT extends FileSourceSplit>
         if (nextSplit == null) {
             throw new IOException("Cannot fetch from another split - no split remaining");
         }
-
         currentSplitId = nextSplit.splitId();
-
         final Optional<CheckpointedPosition> position = nextSplit.getReaderPosition();
         currentReader =
                 position.isPresent()
                         ? readerFactory.restoreReader(config, nextSplit)
                         : readerFactory.createReader(config, nextSplit);
+        LOG.info("currentReader init finished,currentReader={}", currentReader);
     }
 
     private FileRecords<T> finishSplit() throws IOException {

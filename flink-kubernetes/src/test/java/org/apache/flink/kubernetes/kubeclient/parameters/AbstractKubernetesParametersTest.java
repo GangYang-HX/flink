@@ -24,14 +24,14 @@ import org.apache.flink.core.testutils.CommonTestUtils;
 import org.apache.flink.kubernetes.configuration.KubernetesConfigOptions;
 import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.util.StringUtils;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.function.RunnableWithException;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import io.fabric8.kubernetes.api.model.HostAlias;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -39,65 +39,69 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 
-import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.apache.flink.core.testutils.CommonTestUtils.assertThrows;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.is;
 
 /** General tests for the {@link AbstractKubernetesParameters}. */
-public class AbstractKubernetesParametersTest {
+public class AbstractKubernetesParametersTest extends TestLogger {
 
     private final Configuration flinkConfig = new Configuration();
     private final TestingKubernetesParameters testingKubernetesParameters =
             new TestingKubernetesParameters(flinkConfig);
 
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
     @Test
-    void testClusterIdMustNotBeBlank() {
+    public void testClusterIdMustNotBeBlank() {
         flinkConfig.set(KubernetesConfigOptions.CLUSTER_ID, "  ");
-        assertThatThrownBy(testingKubernetesParameters::getClusterId)
-                .satisfies(anyCauseMatches(IllegalArgumentException.class, "must not be blank"));
+        assertThrows(
+                "must not be blank",
+                IllegalArgumentException.class,
+                testingKubernetesParameters::getClusterId);
     }
 
     @Test
-    void testClusterIdLengthLimitation() {
+    public void testClusterIdLengthLimitation() {
         final String stringWithIllegalLength =
                 StringUtils.generateRandomAlphanumericString(
                         new Random(), Constants.MAXIMUM_CHARACTERS_OF_CLUSTER_ID + 1);
         flinkConfig.set(KubernetesConfigOptions.CLUSTER_ID, stringWithIllegalLength);
-        assertThatThrownBy(testingKubernetesParameters::getClusterId)
-                .satisfies(
-                        anyCauseMatches(
-                                IllegalArgumentException.class,
-                                "must be no more than "
-                                        + Constants.MAXIMUM_CHARACTERS_OF_CLUSTER_ID
-                                        + " characters"));
+        assertThrows(
+                "must be no more than "
+                        + Constants.MAXIMUM_CHARACTERS_OF_CLUSTER_ID
+                        + " characters",
+                IllegalArgumentException.class,
+                testingKubernetesParameters::getClusterId);
     }
 
     @Test
-    void getConfigDirectory() {
+    public void getConfigDirectory() {
         final String confDir = "/path/of/flink-conf";
         flinkConfig.set(DeploymentOptionsInternal.CONF_DIR, confDir);
-        assertThat(testingKubernetesParameters.getConfigDirectory()).isEqualTo(confDir);
+        assertThat(testingKubernetesParameters.getConfigDirectory(), is(confDir));
     }
 
     @Test
-    void getConfigDirectoryFallbackToPodConfDir() {
+    public void getConfigDirectoryFallbackToPodConfDir() {
         final String confDirInPod = flinkConfig.get(KubernetesConfigOptions.FLINK_CONF_DIR);
-        assertThat(testingKubernetesParameters.getConfigDirectory()).isEqualTo(confDirInPod);
+        assertThat(testingKubernetesParameters.getConfigDirectory(), is(confDirInPod));
     }
 
     @Test
-    void testGetLocalHadoopConfigurationDirectoryReturnEmptyWhenHadoopEnvIsNotSet()
+    public void testGetLocalHadoopConfigurationDirectoryReturnEmptyWhenHadoopEnvIsNotSet()
             throws Exception {
         runTestWithEmptyEnv(
                 () -> {
                     final Optional<String> optional =
                             testingKubernetesParameters.getLocalHadoopConfigurationDirectory();
-                    assertThat(optional).isNotPresent();
+                    assertThat(optional.isPresent(), is(false));
                 });
     }
 
     @Test
-    void testGetLocalHadoopConfigurationDirectoryFromHadoopConfDirEnv() throws Exception {
+    public void testGetLocalHadoopConfigurationDirectoryFromHadoopConfDirEnv() throws Exception {
         runTestWithEmptyEnv(
                 () -> {
                     final String hadoopConfDir = "/etc/hadoop/conf";
@@ -105,40 +109,54 @@ public class AbstractKubernetesParametersTest {
 
                     final Optional<String> optional =
                             testingKubernetesParameters.getLocalHadoopConfigurationDirectory();
-                    assertThat(optional).isPresent();
-                    assertThat(optional.get()).isEqualTo(hadoopConfDir);
+                    assertThat(optional.isPresent(), is(true));
+                    assertThat(optional.get(), is(hadoopConfDir));
                 });
     }
 
     @Test
-    void testGetLocalHadoopConfigurationDirectoryFromHadoop2HomeEnv(@TempDir Path temporaryFolder)
-            throws Exception {
+    public void testGetLocalHadoopConfigurationDirectoryFromHadoop2HomeEnv() throws Exception {
         runTestWithEmptyEnv(
                 () -> {
-                    final String hadoopHome = temporaryFolder.toAbsolutePath().toString();
-                    Files.createDirectories(temporaryFolder.resolve(Paths.get("etc", "hadoop")));
+                    final String hadoopHome = temporaryFolder.getRoot().getAbsolutePath();
+                    temporaryFolder.newFolder("etc", "hadoop");
                     setEnv(Constants.ENV_HADOOP_HOME, hadoopHome);
 
                     final Optional<String> optional =
                             testingKubernetesParameters.getLocalHadoopConfigurationDirectory();
-                    assertThat(optional).isPresent();
-                    assertThat(optional.get()).isEqualTo(hadoopHome + "/etc/hadoop");
+                    assertThat(optional.isPresent(), is(true));
+                    assertThat(optional.get(), is(hadoopHome + "/etc/hadoop"));
                 });
     }
 
     @Test
-    void testGetLocalHadoopConfigurationDirectoryFromHadoop1HomeEnv(@TempDir Path temporaryFolder)
-            throws Exception {
+    public void testGetLocalHadoopConfigurationDirectoryFromHadoop1HomeEnv() throws Exception {
         runTestWithEmptyEnv(
                 () -> {
-                    final String hadoopHome = temporaryFolder.toAbsolutePath().toString();
-                    Files.createDirectory(temporaryFolder.resolve("conf"));
+                    final String hadoopHome = temporaryFolder.getRoot().getAbsolutePath();
+                    temporaryFolder.newFolder("conf");
                     setEnv(Constants.ENV_HADOOP_HOME, hadoopHome);
 
                     final Optional<String> optional =
                             testingKubernetesParameters.getLocalHadoopConfigurationDirectory();
-                    assertThat(optional).isPresent();
-                    assertThat(optional.get()).isEqualTo(hadoopHome + "/conf");
+                    assertThat(optional.isPresent(), is(true));
+                    assertThat(optional.get(), is(hadoopHome + "/conf"));
+                });
+    }
+
+    @Test
+    public void testGetHostAliases() throws Exception {
+        runTestWithEmptyEnv(
+                () -> {
+                    List<HostAlias> aliases = testingKubernetesParameters.getHostAliases();
+                    assertThat(aliases.isEmpty(), is(true));
+                    flinkConfig.setString(
+                            KubernetesConfigOptions.KUBERNETES_HOST_ALIASES.key(),
+                            "test.com:127.0.0.1,flink.com:127.0.0.2");
+                    aliases = testingKubernetesParameters.getHostAliases();
+                    assertThat(aliases.size(), is(2));
+                    assertThat(aliases.get(0).getHostnames(), contains("test.com"));
+                    assertThat(aliases.get(0).getIp(), is("127.0.0.1"));
                 });
     }
 

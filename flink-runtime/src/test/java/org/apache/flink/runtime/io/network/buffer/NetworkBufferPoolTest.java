@@ -326,15 +326,6 @@ public class NetworkBufferPoolTest extends TestLogger {
     }
 
     @Test
-    public void testEmptyPoolSegmentsUsage() throws IOException {
-        try (CloseableRegistry closeableRegistry = new CloseableRegistry()) {
-            NetworkBufferPool globalPool = new NetworkBufferPool(0, 128);
-            closeableRegistry.registerCloseable(globalPool::destroy);
-            assertEquals(0, globalPool.getRequestedSegmentsUsage());
-        }
-    }
-
-    @Test
     public void testSegmentsUsage() throws IOException {
         try (CloseableRegistry closeableRegistry = new CloseableRegistry()) {
             NetworkBufferPool globalPool = new NetworkBufferPool(50, 128);

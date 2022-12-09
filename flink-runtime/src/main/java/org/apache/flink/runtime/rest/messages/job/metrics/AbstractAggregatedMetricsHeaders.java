@@ -21,14 +21,13 @@ package org.apache.flink.runtime.rest.messages.job.metrics;
 import org.apache.flink.runtime.rest.HttpMethodWrapper;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
-import org.apache.flink.runtime.rest.messages.RuntimeMessageHeaders;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
 /** Based {@link MessageHeaders} class for aggregating metrics. */
 public abstract class AbstractAggregatedMetricsHeaders<
                 P extends AbstractAggregatedMetricsParameters<?>>
-        implements RuntimeMessageHeaders<EmptyRequestBody, AggregatedMetricsResponseBody, P> {
+        implements MessageHeaders<EmptyRequestBody, AggregatedMetricsResponseBody, P> {
     @Override
     public Class<AggregatedMetricsResponseBody> getResponseClass() {
         return AggregatedMetricsResponseBody.class;

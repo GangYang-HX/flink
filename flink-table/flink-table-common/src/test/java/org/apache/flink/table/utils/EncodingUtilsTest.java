@@ -18,47 +18,47 @@
 
 package org.apache.flink.table.utils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.Serializable;
 import java.util.Objects;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link org.apache.flink.table.utils.EncodingUtils}. */
-class EncodingUtilsTest {
+public class EncodingUtilsTest {
 
     @Test
-    void testObjectStringEncoding() {
+    public void testObjectStringEncoding() {
         final MyPojo pojo = new MyPojo(33, "Hello");
         final String base64 = EncodingUtils.encodeObjectToString(pojo);
-        assertThat(EncodingUtils.decodeStringToObject(base64, Serializable.class)).isEqualTo(pojo);
+        assertEquals(pojo, EncodingUtils.decodeStringToObject(base64, Serializable.class));
     }
 
     @Test
-    void testStringBase64Encoding() {
+    public void testStringBase64Encoding() {
         final String string = "Hello, this is apache flink.";
         final String base64 = EncodingUtils.encodeStringToBase64(string);
-        assertThat(base64).isEqualTo("SGVsbG8sIHRoaXMgaXMgYXBhY2hlIGZsaW5rLg==");
-        assertThat(EncodingUtils.decodeBase64ToString(base64)).isEqualTo(string);
+        assertEquals("SGVsbG8sIHRoaXMgaXMgYXBhY2hlIGZsaW5rLg==", base64);
+        assertEquals(string, EncodingUtils.decodeBase64ToString(base64));
     }
 
     @Test
-    void testMd5Hex() {
+    public void testMd5Hex() {
         final String string = "Hello, world! How are you? 高精确";
-        assertThat(EncodingUtils.hex(EncodingUtils.md5(string)))
-                .isEqualTo("983abac84e994b4ba73be177e5cc298b");
+        assertEquals(
+                "983abac84e994b4ba73be177e5cc298b", EncodingUtils.hex(EncodingUtils.md5(string)));
     }
 
     @Test
-    void testJavaEscaping() {
-        assertThat(EncodingUtils.escapeJava("\\hello\"world'space/"))
-                .isEqualTo("\\\\hello\\\"world'space/");
+    public void testJavaEscaping() {
+        assertEquals(
+                "\\\\hello\\\"world'space/", EncodingUtils.escapeJava("\\hello\"world'space/"));
     }
 
     @Test
-    void testRepetition() {
-        assertThat(EncodingUtils.repeat("we", 3)).isEqualTo("wewewe");
+    public void testRepetition() {
+        assertEquals("wewewe", EncodingUtils.repeat("we", 3));
     }
 
     // --------------------------------------------------------------------------------------------

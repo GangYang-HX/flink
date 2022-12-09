@@ -20,19 +20,22 @@ package org.apache.flink.table.types.inference.strategies;
 
 import org.apache.flink.table.types.inference.InputTypeStrategiesTestBase;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized;
 
+import java.util.List;
+
+import static java.util.Arrays.asList;
 import static org.apache.flink.table.api.DataTypes.INT;
 import static org.apache.flink.table.api.DataTypes.STRING;
 import static org.apache.flink.table.types.inference.InputTypeStrategies.explicit;
 import static org.apache.flink.table.types.inference.InputTypeStrategies.repeatingSequence;
 
 /** Tests for {@link RepeatingSequenceInputTypeStrategy}. */
-class RepeatingSequenceInputTypeStrategyTest extends InputTypeStrategiesTestBase {
+public class RepeatingSequenceInputTypeStrategyTest extends InputTypeStrategiesTestBase {
 
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return asList(
                 TestSpec.forStrategy(
                                 "Single occurrence",
                                 repeatingSequence(explicit(INT()), explicit(STRING())))

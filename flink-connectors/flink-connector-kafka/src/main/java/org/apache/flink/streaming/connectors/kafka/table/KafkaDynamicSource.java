@@ -42,6 +42,7 @@ import org.apache.flink.table.connector.format.DecodingFormat;
 import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
+import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.connector.source.abilities.SupportsWatermarkPushDown;
 import org.apache.flink.table.data.GenericMapData;
@@ -78,7 +79,7 @@ import java.util.stream.Stream;
 /** A version-agnostic Kafka {@link ScanTableSource}. */
 @Internal
 public class KafkaDynamicSource
-        implements ScanTableSource, SupportsReadingMetadata, SupportsWatermarkPushDown {
+        implements ScanTableSource, SupportsReadingMetadata, SupportsWatermarkPushDown, SupportsProjectionPushDown {
 
     private static final String KAFKA_TRANSFORMATION = "kafka";
 
@@ -93,7 +94,8 @@ public class KafkaDynamicSource
     protected List<String> metadataKeys;
 
     /** Watermark strategy that is used to generate per-partition watermark. */
-    protected @Nullable WatermarkStrategy<RowData> watermarkStrategy;
+    protected @Nullable
+    WatermarkStrategy<RowData> watermarkStrategy;
 
     // --------------------------------------------------------------------------------------------
     // Format attributes
@@ -105,7 +107,8 @@ public class KafkaDynamicSource
     protected final DataType physicalDataType;
 
     /** Optional format for decoding keys from Kafka. */
-    protected final @Nullable DecodingFormat<DeserializationSchema<RowData>> keyDecodingFormat;
+    protected final @Nullable
+    DecodingFormat<DeserializationSchema<RowData>> keyDecodingFormat;
 
     /** Format for decoding values from Kafka. */
     protected final DecodingFormat<DeserializationSchema<RowData>> valueDecodingFormat;
@@ -117,7 +120,8 @@ public class KafkaDynamicSource
     protected final int[] valueProjection;
 
     /** Prefix that needs to be removed from fields when constructing the physical data type. */
-    protected final @Nullable String keyPrefix;
+    protected final @Nullable
+    String keyPrefix;
 
     // --------------------------------------------------------------------------------------------
     // Kafka-specific attributes
@@ -153,6 +157,8 @@ public class KafkaDynamicSource
     protected final boolean upsertMode;
 
     protected final String tableIdentifier;
+
+    protected int[][] projectedFields;
 
     public KafkaDynamicSource(
             DataType physicalDataType,
@@ -476,10 +482,10 @@ public class KafkaDynamicSource
         // adjust value format projection to include value format's metadata columns at the end
         final int[] adjustedValueProjection =
                 IntStream.concat(
-                                IntStream.of(valueProjection),
-                                IntStream.range(
-                                        keyProjection.length + valueProjection.length,
-                                        adjustedPhysicalArity))
+                        IntStream.of(valueProjection),
+                        IntStream.range(
+                                keyProjection.length + valueProjection.length,
+                                adjustedPhysicalArity))
                         .toArray();
 
         return new DynamicKafkaDeserializationSchema(
@@ -494,7 +500,8 @@ public class KafkaDynamicSource
                 upsertMode);
     }
 
-    private @Nullable DeserializationSchema<RowData> createDeserialization(
+    private @Nullable
+    DeserializationSchema<RowData> createDeserialization(
             DynamicTableSource.Context context,
             @Nullable DecodingFormat<DeserializationSchema<RowData>> format,
             int[] projection,
@@ -507,6 +514,16 @@ public class KafkaDynamicSource
             physicalFormatDataType = DataTypeUtils.stripRowPrefix(physicalFormatDataType, prefix);
         }
         return format.createRuntimeDecoder(context, physicalFormatDataType);
+    }
+
+    @Override
+    public boolean supportsNestedProjection() {
+        return false;
+    }
+
+    @Override
+    public void applyProjection(int[][] projectedFields, DataType producedDataType) {
+        this.projectedFields = projectedFields;
     }
 
     // --------------------------------------------------------------------------------------------

@@ -51,7 +51,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.apache.flink.table.runtime.util.StreamRecordUtils.insertRecord;
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.toUtcTimestampMills;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for window rank operators created by {@link WindowRankOperatorBuilder}. */
 @RunWith(Parameterized.class)
@@ -239,7 +239,7 @@ public class WindowRankOperatorTest {
         ASSERTER.assertOutputEqualsSorted(
                 "Output was not correct.", expectedOutput, testHarness.getOutput());
 
-        assertThat(operator.getNumLateRecordsDropped().getCount()).isEqualTo(1);
+        assertEquals(1, operator.getNumLateRecordsDropped().getCount());
 
         testHarness.close();
     }

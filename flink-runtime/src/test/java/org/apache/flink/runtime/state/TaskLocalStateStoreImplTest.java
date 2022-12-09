@@ -51,13 +51,13 @@ import static org.junit.Assert.assertTrue;
 /** Test for the {@link TaskLocalStateStoreImpl}. */
 public class TaskLocalStateStoreImplTest extends TestLogger {
 
-    protected TemporaryFolder temporaryFolder;
-    protected File[] allocationBaseDirs;
-    protected TaskLocalStateStoreImpl taskLocalStateStore;
-    protected JobID jobID;
-    protected AllocationID allocationID;
-    protected JobVertexID jobVertexID;
-    protected int subtaskIdx;
+    private TemporaryFolder temporaryFolder;
+    private File[] allocationBaseDirs;
+    private TaskLocalStateStoreImpl taskLocalStateStore;
+    private JobID jobID;
+    private AllocationID allocationID;
+    private JobVertexID jobVertexID;
+    private int subtaskIdx;
 
     @Before
     public void before() throws Exception {
@@ -216,7 +216,7 @@ public class TaskLocalStateStoreImplTest extends TestLogger {
     }
 
     @Nonnull
-    protected TaskStateSnapshot createTaskStateSnapshot() {
+    private TaskStateSnapshot createTaskStateSnapshot() {
         final Map<OperatorID, OperatorSubtaskState> operatorSubtaskStates = new HashMap<>();
         operatorSubtaskStates.put(new OperatorID(), OperatorSubtaskState.builder().build());
         operatorSubtaskStates.put(new OperatorID(), OperatorSubtaskState.builder().build());
@@ -273,7 +273,7 @@ public class TaskLocalStateStoreImplTest extends TestLogger {
         return taskStateSnapshots;
     }
 
-    protected static final class TestingTaskStateSnapshot extends TaskStateSnapshot {
+    private static final class TestingTaskStateSnapshot extends TaskStateSnapshot {
         private static final long serialVersionUID = 2046321877379917040L;
 
         private boolean isDiscarded = false;

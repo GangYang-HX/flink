@@ -29,6 +29,7 @@ import org.apache.calcite.plan.hep.HepRelVertex
 import org.apache.calcite.plan.volcano.RelSubset
 import org.apache.calcite.rel.core.AggregateCall
 import org.apache.calcite.rex.{RexCall, RexFieldAccess, RexInputRef, RexNode, RexProgram}
+import org.apache.calcite.rex.{RexCall, RexFieldAccess, RexNode}
 import org.apache.calcite.sql.SqlKind
 
 import java.util

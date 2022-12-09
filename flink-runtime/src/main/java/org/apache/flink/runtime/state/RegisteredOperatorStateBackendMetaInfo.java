@@ -103,12 +103,6 @@ public class RegisteredOperatorStateBackendMetaInfo<S> extends RegisteredStateMe
     }
 
     @Nonnull
-    @Override
-    public RegisteredOperatorStateBackendMetaInfo<S> withSerializerUpgradesAllowed() {
-        return new RegisteredOperatorStateBackendMetaInfo<>(snapshot());
-    }
-
-    @Nonnull
     public OperatorStateHandle.Mode getAssignmentMode() {
         return assignmentMode;
     }

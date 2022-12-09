@@ -23,7 +23,7 @@ import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 
 /** Tests for the {@link WritableComparator}. */
-class WritableComparatorTest extends ComparatorTestBase<StringArrayWritable> {
+public class WritableComparatorTest extends ComparatorTestBase<StringArrayWritable> {
 
     StringArrayWritable[] data =
             new StringArrayWritable[] {

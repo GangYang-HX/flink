@@ -17,7 +17,7 @@
 ################################################################################
 import unittest
 
-from pyflink.table.expressions import col, call, lit, row_interval
+from pyflink.table import expressions as expr
 from pyflink.table.types import DataTypes
 from pyflink.table.udf import udaf, udf, AggregateFunction
 from pyflink.testing import source_sink_utils
@@ -45,10 +45,13 @@ class BatchPandasUDAFITTests(PyFlinkBatchTableTestCase):
                  DataTypes.FIELD("b", DataTypes.SMALLINT()),
                  DataTypes.FIELD("c", DataTypes.INT())]))
 
-        sink_table_ddl = """
-        CREATE TABLE Results(a TINYINT, b FLOAT,c ROW<a INT, b INT>) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c'],
+            [DataTypes.TINYINT(), DataTypes.FLOAT(),
+             DataTypes.ROW(
+                 [DataTypes.FIELD("a", DataTypes.INT()),
+                  DataTypes.FIELD("b", DataTypes.INT())])])
+        self.t_env.register_table_sink("Results", table_sink)
         # general udf
         add = udf(lambda a: a + 1, result_type=DataTypes.INT())
         # pandas udf
@@ -58,7 +61,7 @@ class BatchPandasUDAFITTests(PyFlinkBatchTableTestCase):
                             [DataTypes.FIELD("a", DataTypes.INT()),
                              DataTypes.FIELD("b", DataTypes.INT())]),
                         func_type="pandas")
-        t.group_by(t.a) \
+        t.group_by("a") \
             .select(t.a, mean_udaf(add(t.b)), max_udaf(substract(t.c))) \
             .execute_insert("Results") \
             .wait()
@@ -75,12 +78,12 @@ class BatchPandasUDAFITTests(PyFlinkBatchTableTestCase):
                  DataTypes.FIELD("b", DataTypes.SMALLINT()),
                  DataTypes.FIELD("c", DataTypes.INT())]))
 
-        sink_table_ddl = """
-        CREATE TABLE Results(a INT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a'],
+            [DataTypes.INT()])
         min_add = udaf(lambda a, b, c: a.min() + b.min() + c.min(),
                        result_type=DataTypes.INT(), func_type="pandas")
+        self.t_env.register_table_sink("Results", table_sink)
         t.select(min_add(t.a, t.b, t.c)) \
             .execute_insert("Results") \
             .wait()
@@ -95,20 +98,19 @@ class BatchPandasUDAFITTests(PyFlinkBatchTableTestCase):
                  DataTypes.FIELD("b", DataTypes.SMALLINT()),
                  DataTypes.FIELD("c", DataTypes.INT())]))
 
-        sink_table_ddl = """
-        CREATE TABLE Results(a TINYINT, b INT, c FLOAT, d INT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
-        self.t_env.get_config().get_configuration().set_string('python.metric.enabled', 'true')
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c', 'd'],
+            [DataTypes.TINYINT(), DataTypes.INT(), DataTypes.FLOAT(), DataTypes.INT()])
+        self.t_env.register_table_sink("Results", table_sink)
         self.t_env.get_config().set('python.metric.enabled', 'true')
         self.t_env.register_function("max_add", udaf(MaxAdd(),
                                                      result_type=DataTypes.INT(),
                                                      func_type="pandas"))
         self.t_env.create_temporary_system_function("mean_udaf", mean_udaf)
-        t.group_by(t.a) \
-            .select(t.a,  (t.a + 1).alias("b"), (t.a + 2).alias("c")) \
-            .group_by(t.a, t.b) \
-            .select(t.a, t.b, mean_udaf(t.b), call("max_add", t.b, t.c, 1)) \
+        t.group_by("a") \
+            .select("a, a + 1 as b, a + 2 as c") \
+            .group_by("a, b") \
+            .select("a, b, mean_udaf(b), max_add(b, c, 1)") \
             .execute_insert("Results") \
             .wait()
         actual = source_sink_utils.results()
@@ -131,24 +133,29 @@ class BatchPandasUDAFITTests(PyFlinkBatchTableTestCase):
                  DataTypes.FIELD("b", DataTypes.SMALLINT()),
                  DataTypes.FIELD("c", DataTypes.INT()),
                  DataTypes.FIELD("rowtime", DataTypes.TIMESTAMP(3))]))
-        sink_table_ddl = """
-        CREATE TABLE Results(a TIMESTAMP(3), b TIMESTAMP(3), c FLOAT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c'],
+            [
+                DataTypes.TIMESTAMP(3),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.FLOAT()
+            ])
+        self.t_env.register_table_sink("Results", table_sink)
         self.t_env.create_temporary_system_function("mean_udaf", mean_udaf)
-        tumble_window = Tumble.over(lit(1).hours) \
-            .on(col("rowtime")) \
+        tumble_window = Tumble.over(expr.lit(1).hours) \
+            .on(expr.col("rowtime")) \
             .alias("w")
         t.window(tumble_window) \
-            .group_by(col("w")) \
-            .select(col("w").start, col("w").end, mean_udaf(t.b)) \
+            .group_by("w") \
+            .select("w.start, w.end, mean_udaf(b)") \
             .execute_insert("Results") \
             .wait()
 
         actual = source_sink_utils.results()
         self.assert_equals(actual,
-                           ["+I[2018-03-11T03:00, 2018-03-11T04:00, 2.2]",
-                            "+I[2018-03-11T04:00, 2018-03-11T05:00, 8.0]"])
+                           ["+I[2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2.2]",
+                            "+I[2018-03-11 04:00:00.0, 2018-03-11 05:00:00.0, 8.0]"])
 
     def test_slide_group_window_aggregate_function(self):
         import datetime
@@ -167,39 +174,41 @@ class BatchPandasUDAFITTests(PyFlinkBatchTableTestCase):
                  DataTypes.FIELD("b", DataTypes.SMALLINT()),
                  DataTypes.FIELD("c", DataTypes.INT()),
                  DataTypes.FIELD("rowtime", DataTypes.TIMESTAMP(3))]))
-        sink_table_ddl = """
-        CREATE TABLE Results(
-        a TINYINT, b TIMESTAMP(3), c TIMESTAMP(3), d FLOAT, e INT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c', 'd', 'e'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.FLOAT(),
+                DataTypes.INT()
+            ])
+        self.t_env.register_table_sink("Results", table_sink)
         self.t_env.register_function("max_add", udaf(MaxAdd(),
                                                      result_type=DataTypes.INT(),
                                                      func_type="pandas"))
         self.t_env.create_temporary_system_function("mean_udaf", mean_udaf)
-        slide_window = Slide.over(lit(1).hours) \
-            .every(lit(30).minutes) \
-            .on(col("rowtime")) \
+        slide_window = Slide.over(expr.lit(1).hours) \
+            .every(expr.lit(30).minutes) \
+            .on(expr.col("rowtime")) \
             .alias("w")
         t.window(slide_window) \
-            .group_by(t.a, col("w")) \
-            .select(t.a,
-                    col("w").start,
-                    col("w").end,
-                    mean_udaf(t.b),
-                    call("max_add", t.b, t.c, 1)) \
+            .group_by("a, w") \
+            .select("a, w.start, w.end, mean_udaf(b), max_add(b, c, 1)") \
             .execute_insert("Results") \
             .wait()
         actual = source_sink_utils.results()
         self.assert_equals(actual,
-                           ["+I[1, 2018-03-11T02:30, 2018-03-11T03:30, 2.0, 6]",
-                            "+I[1, 2018-03-11T03:00, 2018-03-11T04:00, 2.5, 7]",
-                            "+I[1, 2018-03-11T03:30, 2018-03-11T04:30, 5.5, 14]",
-                            "+I[1, 2018-03-11T04:00, 2018-03-11T05:00, 8.0, 14]",
-                            "+I[2, 2018-03-11T02:30, 2018-03-11T03:30, 1.0, 4]",
-                            "+I[2, 2018-03-11T03:00, 2018-03-11T04:00, 2.0, 10]",
-                            "+I[2, 2018-03-11T03:30, 2018-03-11T04:30, 3.0, 10]",
-                            "+I[3, 2018-03-11T03:00, 2018-03-11T04:00, 2.0, 7]",
-                            "+I[3, 2018-03-11T02:30, 2018-03-11T03:30, 2.0, 7]"])
+                           ["+I[1, 2018-03-11 02:30:00.0, 2018-03-11 03:30:00.0, 2.0, 6]",
+                            "+I[1, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2.5, 7]",
+                            "+I[1, 2018-03-11 03:30:00.0, 2018-03-11 04:30:00.0, 5.5, 14]",
+                            "+I[1, 2018-03-11 04:00:00.0, 2018-03-11 05:00:00.0, 8.0, 14]",
+                            "+I[2, 2018-03-11 02:30:00.0, 2018-03-11 03:30:00.0, 1.0, 4]",
+                            "+I[2, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2.0, 10]",
+                            "+I[2, 2018-03-11 03:30:00.0, 2018-03-11 04:30:00.0, 3.0, 10]",
+                            "+I[3, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2.0, 7]",
+                            "+I[3, 2018-03-11 02:30:00.0, 2018-03-11 03:30:00.0, 2.0, 7]"])
 
     def test_over_window_aggregate_function(self):
         import datetime
@@ -217,12 +226,13 @@ class BatchPandasUDAFITTests(PyFlinkBatchTableTestCase):
                  DataTypes.FIELD("b", DataTypes.SMALLINT()),
                  DataTypes.FIELD("c", DataTypes.INT()),
                  DataTypes.FIELD("rowtime", DataTypes.TIMESTAMP(3))]))
-        sink_table_ddl = """
-            CREATE TABLE Results(
-            a TINYINT, b FLOAT, c INT, d FLOAT, e FLOAT, f FLOAT, g FLOAT, h FLOAT, i FLOAT,
-            j FLOAT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'],
+            [DataTypes.TINYINT(), DataTypes.FLOAT(), DataTypes.INT(), DataTypes.FLOAT(),
+             DataTypes.FLOAT(), DataTypes.FLOAT(), DataTypes.FLOAT(), DataTypes.FLOAT(),
+             DataTypes.FLOAT(), DataTypes.FLOAT()])
+        self.t_env.register_table_sink("Results", table_sink)
         self.t_env.create_temporary_system_function("mean_udaf", mean_udaf)
         self.t_env.register_function("max_add", udaf(MaxAdd(),
                                                      result_type=DataTypes.INT(),
@@ -311,30 +321,31 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
         """ % source_path
         self.t_env.execute_sql(source_table)
         t = self.t_env.from_path("source_table")
-        sink_table_ddl = """
-            CREATE TABLE Results(a TINYINT, b TIMESTAMP(3), c TIMESTAMP(3), d FLOAT)
-            WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
-        t.window(Slide.over(lit(1).hours)
-                 .every(lit(30).minutes)
-                 .on(col("rowtime"))
-                 .alias("w")) \
-            .group_by(t.a, t.b, col("w")) \
-            .select(t.a, col("w").start, col("w").end, mean_udaf(t.c).alias("b")) \
+
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c', 'd'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.FLOAT()])
+        self.t_env.register_table_sink("Results", table_sink)
+        t.window(Slide.over("1.hours").every("30.minutes").on("rowtime").alias("w")) \
+            .group_by("a, b, w") \
+            .select("a, w.start, w.end, mean_udaf(c) as b") \
             .execute_insert("Results") \
             .wait()
         actual = source_sink_utils.results()
         self.assert_equals(actual,
-                           ["+I[1, 2018-03-11T02:30, 2018-03-11T03:30, 2.0]",
-                            "+I[1, 2018-03-11T03:00, 2018-03-11T04:00, 2.5]",
-                            "+I[1, 2018-03-11T03:30, 2018-03-11T04:30, 5.5]",
-                            "+I[1, 2018-03-11T04:00, 2018-03-11T05:00, 8.0]",
-                            "+I[2, 2018-03-11T02:30, 2018-03-11T03:30, 1.0]",
-                            "+I[2, 2018-03-11T03:00, 2018-03-11T04:00, 2.0]",
-                            "+I[2, 2018-03-11T03:30, 2018-03-11T04:30, 3.0]",
-                            "+I[3, 2018-03-11T03:00, 2018-03-11T04:00, 2.0]",
-                            "+I[3, 2018-03-11T02:30, 2018-03-11T03:30, 2.0]"])
+                           ["+I[1, 2018-03-11 02:30:00.0, 2018-03-11 03:30:00.0, 2.0]",
+                            "+I[1, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2.5]",
+                            "+I[1, 2018-03-11 03:30:00.0, 2018-03-11 04:30:00.0, 5.5]",
+                            "+I[1, 2018-03-11 04:00:00.0, 2018-03-11 05:00:00.0, 8.0]",
+                            "+I[2, 2018-03-11 02:30:00.0, 2018-03-11 03:30:00.0, 1.0]",
+                            "+I[2, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2.0]",
+                            "+I[2, 2018-03-11 03:30:00.0, 2018-03-11 04:30:00.0, 3.0]",
+                            "+I[3, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2.0]",
+                            "+I[3, 2018-03-11 02:30:00.0, 2018-03-11 03:30:00.0, 2.0]"])
         os.remove(source_path)
 
     def test_sliding_group_window_over_proctime(self):
@@ -356,13 +367,10 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
         """
         self.t_env.execute_sql(source_table)
         t = self.t_env.from_path("source_table")
-        iterator = t.select(t.a, t.proctime) \
-            .window(Slide.over(lit(1).seconds)
-                    .every(lit(1).seconds)
-                    .on(t.proctime)
-                    .alias("w")) \
-            .group_by(t.a, col("w")) \
-            .select(mean_udaf(t.a).alias("b"), col("w").start).execute().collect()
+        iterator = t.select("a, proctime") \
+            .window(Slide.over("1.seconds").every("1.seconds").on("proctime").alias("w")) \
+            .group_by("a, w") \
+            .select("mean_udaf(a) as b, w.start").execute().collect()
         result = [i for i in iterator]
         # if the WindowAssigner.isEventTime() does not return false,
         # the w.start would be 1970-01-01
@@ -411,16 +419,16 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
         """ % source_path
         self.t_env.execute_sql(source_table)
         t = self.t_env.from_path("source_table")
-        sink_table_ddl = """
-        CREATE TABLE Results(a TINYINT, d FLOAT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
-        t.window(Slide.over(row_interval(2))
-                 .every(row_interval(1))
-                 .on(t.protime)
-                 .alias("w")) \
-            .group_by(t.a, t.b, col("w")) \
-            .select(t.a, mean_udaf(t.c).alias("b")) \
+
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'd'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.FLOAT()])
+        self.t_env.register_table_sink("Results", table_sink)
+        t.window(Slide.over("2.rows").every("1.rows").on("protime").alias("w")) \
+            .group_by("a, b, w") \
+            .select("a, mean_udaf(c) as b") \
             .execute_insert("Results") \
             .wait()
         actual = source_sink_utils.results()
@@ -468,27 +476,26 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
         self.t_env.execute_sql(source_table)
         t = self.t_env.from_path("source_table")
 
-        sink_table_ddl = """
-        CREATE TABLE Results(
-        a TINYINT, b TIMESTAMP(3), c TIMESTAMP(3), d TIMESTAMP(3), e FLOAT)
-        WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
-        t.window(Tumble.over(lit(1).hours).on(t.rowtime).alias("w")) \
-            .group_by(t.a, t.b, col("w")) \
-            .select(t.a,
-                    col("w").start,
-                    col("w").end,
-                    col("w").rowtime,
-                    mean_udaf(t.c).alias("b")) \
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c', 'd', 'e'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.TIMESTAMP(3),
+                DataTypes.FLOAT()])
+        self.t_env.register_table_sink("Results", table_sink)
+        t.window(Tumble.over("1.hours").on("rowtime").alias("w")) \
+            .group_by("a, b, w") \
+            .select("a, w.start, w.end, w.rowtime, mean_udaf(c) as b") \
             .execute_insert("Results") \
             .wait()
         actual = source_sink_utils.results()
         self.assert_equals(actual, [
-            "+I[1, 2018-03-11T03:00, 2018-03-11T04:00, 2018-03-11T03:59:59.999, 2.5]",
-            "+I[1, 2018-03-11T04:00, 2018-03-11T05:00, 2018-03-11T04:59:59.999, 8.0]",
-            "+I[2, 2018-03-11T03:00, 2018-03-11T04:00, 2018-03-11T03:59:59.999, 2.0]",
-            "+I[3, 2018-03-11T03:00, 2018-03-11T04:00, 2018-03-11T03:59:59.999, 2.0]",
+            "+I[1, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2018-03-11 03:59:59.999, 2.5]",
+            "+I[1, 2018-03-11 04:00:00.0, 2018-03-11 05:00:00.0, 2018-03-11 04:59:59.999, 8.0]",
+            "+I[2, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2018-03-11 03:59:59.999, 2.0]",
+            "+I[3, 2018-03-11 03:00:00.0, 2018-03-11 04:00:00.0, 2018-03-11 03:59:59.999, 2.0]",
         ])
         os.remove(source_path)
 
@@ -535,13 +542,15 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
         self.t_env.execute_sql(source_table)
         t = self.t_env.from_path("source_table")
 
-        sink_table_ddl = """
-        CREATE TABLE Results(a TINYINT, d FLOAT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
-        t.window(Tumble.over(row_interval(2)).on(t.protime).alias("w")) \
-            .group_by(t.a, t.b, col("w")) \
-            .select(t.a, mean_udaf(t.c).alias("b")) \
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'd'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.FLOAT()])
+        self.t_env.register_table_sink("Results", table_sink)
+        t.window(Tumble.over("2.rows").on("protime").alias("w")) \
+            .group_by("a, b, w") \
+            .select("a, mean_udaf(c) as b") \
             .execute_insert("Results") \
             .wait()
         actual = source_sink_utils.results()
@@ -587,10 +596,13 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
             )
         """ % source_path
         self.t_env.execute_sql(source_table)
-        sink_table_ddl = """
-        CREATE TABLE Results(a TINYINT, b FLOAT, c SMALLINT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.FLOAT(),
+                DataTypes.SMALLINT()])
+        self.t_env.register_table_sink("Results", table_sink)
         self.t_env.execute_sql("""
             insert into Results
             select a,
@@ -652,10 +664,13 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
             )
         """ % source_path
         self.t_env.execute_sql(source_table)
-        sink_table_ddl = """
-        CREATE TABLE Results(a TINYINT, b FLOAT, c SMALLINT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.FLOAT(),
+                DataTypes.SMALLINT()])
+        self.t_env.register_table_sink("Results", table_sink)
         self.t_env.execute_sql("""
             insert into Results
             select a,
@@ -717,10 +732,13 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
             )
         """ % source_path
         self.t_env.execute_sql(source_table)
-        sink_table_ddl = """
-        CREATE TABLE Results(a TINYINT, b FLOAT, c SMALLINT) WITH ('connector'='test-sink')
-        """
-        self.t_env.execute_sql(sink_table_ddl)
+        table_sink = source_sink_utils.TestAppendSink(
+            ['a', 'b', 'c'],
+            [
+                DataTypes.TINYINT(),
+                DataTypes.FLOAT(),
+                DataTypes.SMALLINT()])
+        self.t_env.register_table_sink("Results", table_sink)
         self.t_env.execute_sql("""
             insert into Results
             select a,
@@ -742,6 +760,7 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
                             "+I[3, 2.0, 4]"])
         os.remove(source_path)
 
+    @unittest.skip("Python UDFs are currently unsupported in JSON plan")
     def test_execute_over_aggregate_from_json_plan(self):
         # create source file path
         tmp_dir = self.tempdir
@@ -805,7 +824,7 @@ class StreamPandasUDAFITTests(PyFlinkStreamTableTestCase):
             from source_table
         """)
         from py4j.java_gateway import get_method
-        get_method(json_plan.execute(), "await")()
+        get_method(self.t_env._j_tenv.executePlan(json_plan), "await")()
 
         import glob
         lines = [line.strip() for file in glob.glob(sink_path + '/*') for line in open(file, 'r')]

@@ -22,7 +22,7 @@ import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 
 /** Test for {@link StringSerializer}. */
-class StringSerializerTest extends SerializerTestBase<String> {
+public class StringSerializerTest extends SerializerTestBase<String> {
 
     @Override
     protected TypeSerializer<String> createSerializer() {

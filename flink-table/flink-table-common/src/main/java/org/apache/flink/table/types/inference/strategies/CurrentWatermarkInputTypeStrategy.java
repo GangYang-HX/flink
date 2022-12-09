@@ -56,17 +56,23 @@ class CurrentWatermarkInputTypeStrategy implements InputTypeStrategy {
 
         final DataType dataType = argumentDataTypes.get(0);
         if (!LogicalTypeChecks.canBeTimeAttributeType(dataType.getLogicalType())) {
-            return callContext.fail(
-                    throwOnFailure,
-                    "CURRENT_WATERMARK() must be called with a single rowtime attribute argument, but '%s' cannot be a time attribute.",
-                    dataType.getLogicalType().asSummaryString());
+            if (throwOnFailure) {
+                throw callContext.newValidationError(
+                        "CURRENT_WATERMARK() must be called with a single rowtime attribute argument, but '%s' cannot be a time attribute.",
+                        dataType.getLogicalType().asSummaryString());
+            }
+
+            return Optional.empty();
         }
 
         if (!LogicalTypeChecks.isRowtimeAttribute(dataType.getLogicalType())) {
-            return callContext.fail(
-                    throwOnFailure,
-                    "The argument of CURRENT_WATERMARK() must be a rowtime attribute, but was '%s'.",
-                    dataType.getLogicalType().asSummaryString());
+            if (throwOnFailure) {
+                throw callContext.newValidationError(
+                        "The argument of CURRENT_WATERMARK() must be a rowtime attribute, but was '%s'.",
+                        dataType.getLogicalType().asSummaryString());
+            }
+
+            return Optional.empty();
         }
 
         return Optional.of(Collections.singletonList(dataType));

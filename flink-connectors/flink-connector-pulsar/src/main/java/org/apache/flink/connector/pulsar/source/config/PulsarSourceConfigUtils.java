@@ -29,7 +29,6 @@ import org.apache.pulsar.client.api.Schema;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -59,6 +58,7 @@ import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSA
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_REPLICATE_SUBSCRIPTION_STATE;
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_RETRY_ENABLE;
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_RETRY_LETTER_TOPIC;
+import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_SUBSCRIPTION_INITIAL_POSITION;
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_SUBSCRIPTION_MODE;
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_SUBSCRIPTION_NAME;
 import static org.apache.flink.connector.pulsar.source.PulsarSourceOptions.PULSAR_SUBSCRIPTION_TYPE;
@@ -106,12 +106,11 @@ public final class PulsarSourceConfigUtils {
         configuration.useOption(
                 PULSAR_MAX_TOTAL_RECEIVER_QUEUE_SIZE_ACROSS_PARTITIONS,
                 builder::maxTotalReceiverQueueSizeAcrossPartitions);
-        configuration.useOption(
-                PULSAR_CONSUMER_NAME,
-                consumerName -> String.format(consumerName, UUID.randomUUID()),
-                builder::consumerName);
+        configuration.useOption(PULSAR_CONSUMER_NAME, builder::consumerName);
         configuration.useOption(PULSAR_READ_COMPACTED, builder::readCompacted);
         configuration.useOption(PULSAR_PRIORITY_LEVEL, builder::priorityLevel);
+        configuration.useOption(
+                PULSAR_SUBSCRIPTION_INITIAL_POSITION, builder::subscriptionInitialPosition);
         createDeadLetterPolicy(configuration).ifPresent(builder::deadLetterPolicy);
         configuration.useOption(
                 PULSAR_AUTO_UPDATE_PARTITIONS_INTERVAL_SECONDS,

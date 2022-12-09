@@ -18,31 +18,29 @@
 import datetime
 import decimal
 import os
-import sys
 import uuid
-from collections import defaultdict
-from typing import Tuple
-
-import pytest
+from typing import Collection, Iterable
 
 from pyflink.common import Row, Configuration
 from pyflink.common.time import Time
+from pyflink.common.serializer import TypeSerializer
 from pyflink.common.typeinfo import Types
 from pyflink.common.watermark_strategy import WatermarkStrategy, TimestampAssigner
-from pyflink.datastream import (TimeCharacteristic, RuntimeContext, SlotSharingGroup)
+from pyflink.datastream import (TimeCharacteristic, RuntimeContext, WindowAssigner, Trigger,
+                                TriggerResult, CountWindow, SlotSharingGroup)
 from pyflink.datastream.data_stream import DataStream
 from pyflink.datastream.functions import (AggregateFunction, CoMapFunction, CoFlatMapFunction,
                                           MapFunction, FilterFunction, FlatMapFunction,
                                           KeyedCoProcessFunction, KeyedProcessFunction, KeySelector,
-                                          ProcessFunction, ReduceFunction, CoProcessFunction,
-                                          BroadcastProcessFunction, KeyedBroadcastProcessFunction)
-from pyflink.datastream.output_tag import OutputTag
+                                          ProcessFunction, ProcessWindowFunction, ReduceFunction,
+                                          WindowFunction)
 from pyflink.datastream.state import (ValueStateDescriptor, ListStateDescriptor, MapStateDescriptor,
                                       ReducingStateDescriptor, ReducingState, AggregatingState,
                                       AggregatingStateDescriptor, StateTtlConfig)
-from pyflink.datastream.tests.test_util import DataStreamTestSinkFunction
+from pyflink.datastream.window import (CountWindowSerializer, MergingWindowAssigner, TimeWindow,
+                                       TimeWindowSerializer)
 from pyflink.java_gateway import get_gateway
-from pyflink.metrics import Counter, Meter, Distribution
+from pyflink.datastream.tests.test_util import DataStreamTestSinkFunction
 from pyflink.testing.test_case_utils import PyFlinkBatchTestCase, PyFlinkStreamingTestCase
 from pyflink.util.java_utils import get_j_env_configuration
 
@@ -123,218 +121,6 @@ class DataStreamTests(object):
                     "<Row('deeefg', 7, Decimal('4'))>"]
         self.assert_equals_sorted(expected, results)
 
-    def test_array_type_info(self):
-        ds = self.env.from_collection([(1, [1.1, None, 1.30], [None, 'hi', 'flink']),
-                                       (2, [None, 2.2, 2.3], ['hello', None, 'flink']),
-                                       (3, [3.1, 3.2, None], ['hello', 'hi', None])],
-                                      type_info=Types.ROW([Types.INT(),
-                                                           Types.BASIC_ARRAY(Types.FLOAT()),
-                                                           Types.OBJECT_ARRAY(Types.STRING())]))
-
-        ds.map(lambda x: x, output_type=Types.ROW([Types.INT(),
-                                                   Types.BASIC_ARRAY(Types.FLOAT()),
-                                                   Types.OBJECT_ARRAY(Types.STRING())]))\
-            .add_sink(self.test_sink)
-        self.env.execute("test basic array type info")
-        results = self.test_sink.get_results()
-        expected = ['+I[1, [1.1, null, 1.3], [null, hi, flink]]',
-                    '+I[2, [null, 2.2, 2.3], [hello, null, flink]]',
-                    '+I[3, [3.1, 3.2, null], [hello, hi, null]]']
-        self.assert_equals_sorted(expected, results)
-
-    def test_partition_custom(self):
-        ds = self.env.from_collection([('a', 0), ('b', 0), ('c', 1), ('d', 1), ('e', 2),
-                                       ('f', 7), ('g', 7), ('h', 8), ('i', 8), ('j', 9)],
-                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
-
-        expected_num_partitions = 5
-
-        def my_partitioner(key, num_partitions):
-            assert expected_num_partitions == num_partitions
-            return key % num_partitions
-
-        partitioned_stream = ds.map(lambda x: x, output_type=Types.ROW([Types.STRING(),
-                                                                        Types.INT()]))\
-            .set_parallelism(4).partition_custom(my_partitioner, lambda x: x[1])
-
-        JPartitionCustomTestMapFunction = get_gateway().jvm\
-            .org.apache.flink.python.util.PartitionCustomTestMapFunction
-        test_map_stream = DataStream(partitioned_stream
-                                     ._j_data_stream.map(JPartitionCustomTestMapFunction()))
-        test_map_stream.set_parallelism(expected_num_partitions).add_sink(self.test_sink)
-
-        self.env.execute('test_partition_custom')
-
-    def test_keyed_process_function_with_state(self):
-        self.env.get_config().set_auto_watermark_interval(2000)
-        self.env.set_stream_time_characteristic(TimeCharacteristic.EventTime)
-        data_stream = self.env.from_collection([(1, 'hi', '1603708211000'),
-                                                (2, 'hello', '1603708224000'),
-                                                (3, 'hi', '1603708226000'),
-                                                (4, 'hello', '1603708289000'),
-                                                (5, 'hi', '1603708291000'),
-                                                (6, 'hello', '1603708293000')],
-                                               type_info=Types.ROW([Types.INT(), Types.STRING(),
-                                                                    Types.STRING()]))
-
-        class MyTimestampAssigner(TimestampAssigner):
-
-            def extract_timestamp(self, value, record_timestamp) -> int:
-                return int(value[2])
-
-        class MyProcessFunction(KeyedProcessFunction):
-
-            def __init__(self):
-                self.value_state = None
-                self.list_state = None
-                self.map_state = None
-
-            def open(self, runtime_context: RuntimeContext):
-                value_state_descriptor = ValueStateDescriptor('value_state', Types.INT())
-                self.value_state = runtime_context.get_state(value_state_descriptor)
-                list_state_descriptor = ListStateDescriptor('list_state', Types.INT())
-                self.list_state = runtime_context.get_list_state(list_state_descriptor)
-                map_state_descriptor = MapStateDescriptor('map_state', Types.INT(), Types.STRING())
-                state_ttl_config = StateTtlConfig \
-                    .new_builder(Time.seconds(1)) \
-                    .set_update_type(StateTtlConfig.UpdateType.OnReadAndWrite) \
-                    .set_state_visibility(
-                        StateTtlConfig.StateVisibility.ReturnExpiredIfNotCleanedUp) \
-                    .disable_cleanup_in_background() \
-                    .build()
-                map_state_descriptor.enable_time_to_live(state_ttl_config)
-                self.map_state = runtime_context.get_map_state(map_state_descriptor)
-
-            def process_element(self, value, ctx):
-                current_value = self.value_state.value()
-                self.value_state.update(value[0])
-                current_list = [_ for _ in self.list_state.get()]
-                self.list_state.add(value[0])
-                map_entries = {k: v for k, v in self.map_state.items()}
-                keys = sorted(map_entries.keys())
-                map_entries_string = [str(k) + ': ' + str(map_entries[k]) for k in keys]
-                map_entries_string = '{' + ', '.join(map_entries_string) + '}'
-                self.map_state.put(value[0], value[1])
-                current_key = ctx.get_current_key()
-                yield "current key: {}, current value state: {}, current list state: {}, " \
-                      "current map state: {}, current value: {}".format(str(current_key),
-                                                                        str(current_value),
-                                                                        str(current_list),
-                                                                        map_entries_string,
-                                                                        str(value))
-
-            def on_timer(self, timestamp, ctx):
-                pass
-
-        watermark_strategy = WatermarkStrategy.for_monotonous_timestamps() \
-            .with_timestamp_assigner(MyTimestampAssigner())
-        data_stream.assign_timestamps_and_watermarks(watermark_strategy) \
-            .key_by(lambda x: x[1], key_type=Types.STRING()) \
-            .process(MyProcessFunction(), output_type=Types.STRING()) \
-            .add_sink(self.test_sink)
-        self.env.execute('test time stamp assigner with keyed process function')
-        results = self.test_sink.get_results()
-        expected = ["current key: hi, current value state: None, current list state: [], "
-                    "current map state: {}, current value: Row(f0=1, f1='hi', "
-                    "f2='1603708211000')",
-                    "current key: hello, current value state: None, "
-                    "current list state: [], current map state: {}, current value: Row(f0=2,"
-                    " f1='hello', f2='1603708224000')",
-                    "current key: hi, current value state: 1, current list state: [1], "
-                    "current map state: {1: hi}, current value: Row(f0=3, f1='hi', "
-                    "f2='1603708226000')",
-                    "current key: hello, current value state: 2, current list state: [2], "
-                    "current map state: {2: hello}, current value: Row(f0=4, f1='hello', "
-                    "f2='1603708289000')",
-                    "current key: hi, current value state: 3, current list state: [1, 3], "
-                    "current map state: {1: hi, 3: hi}, current value: Row(f0=5, f1='hi', "
-                    "f2='1603708291000')",
-                    "current key: hello, current value state: 4, current list state: [2, 4],"
-                    " current map state: {2: hello, 4: hello}, current value: Row(f0=6, "
-                    "f1='hello', f2='1603708293000')"]
-        self.assert_equals_sorted(expected, results)
-
-    def test_reducing_state(self):
-        self.env.set_parallelism(2)
-        data_stream = self.env.from_collection([
-            (1, 'hi'), (2, 'hello'), (3, 'hi'), (4, 'hello'), (5, 'hi'), (6, 'hello')],
-            type_info=Types.TUPLE([Types.INT(), Types.STRING()]))
-
-        class MyProcessFunction(KeyedProcessFunction):
-
-            def __init__(self):
-                self.reducing_state = None  # type: ReducingState
-
-            def open(self, runtime_context: RuntimeContext):
-                self.reducing_state = runtime_context.get_reducing_state(
-                    ReducingStateDescriptor(
-                        'reducing_state', lambda i, i2: i + i2, Types.INT()))
-
-            def process_element(self, value, ctx):
-                self.reducing_state.add(value[0])
-                yield self.reducing_state.get(), value[1]
-
-        data_stream.key_by(lambda x: x[1], key_type=Types.STRING()) \
-            .process(MyProcessFunction(), output_type=Types.TUPLE([Types.INT(), Types.STRING()])) \
-            .add_sink(self.test_sink)
-        self.env.execute('test_reducing_state')
-        result = self.test_sink.get_results()
-        expected_result = ['(1,hi)', '(2,hello)', '(4,hi)', '(6,hello)', '(9,hi)', '(12,hello)']
-        result.sort()
-        expected_result.sort()
-        self.assertEqual(expected_result, result)
-
-    def test_aggregating_state(self):
-        self.env.set_parallelism(2)
-        data_stream = self.env.from_collection([
-            (1, 'hi'), (2, 'hello'), (3, 'hi'), (4, 'hello'), (5, 'hi'), (6, 'hello')],
-            type_info=Types.TUPLE([Types.INT(), Types.STRING()]))
-
-        class MyAggregateFunction(AggregateFunction):
-
-            def create_accumulator(self):
-                return 0
-
-            def add(self, value, accumulator):
-                return value + accumulator
-
-            def get_result(self, accumulator):
-                return accumulator
-
-            def merge(self, acc_a, acc_b):
-                return acc_a + acc_b
-
-        class MyProcessFunction(KeyedProcessFunction):
-
-            def __init__(self):
-                self.aggregating_state = None  # type: AggregatingState
-
-            def open(self, runtime_context: RuntimeContext):
-                descriptor = AggregatingStateDescriptor(
-                    'aggregating_state', MyAggregateFunction(), Types.INT())
-                state_ttl_config = StateTtlConfig \
-                    .new_builder(Time.seconds(1)) \
-                    .set_update_type(StateTtlConfig.UpdateType.OnReadAndWrite) \
-                    .disable_cleanup_in_background() \
-                    .build()
-                descriptor.enable_time_to_live(state_ttl_config)
-                self.aggregating_state = runtime_context.get_aggregating_state(descriptor)
-
-            def process_element(self, value, ctx):
-                self.aggregating_state.add(value[0])
-                yield self.aggregating_state.get(), value[1]
-
-        config = Configuration(
-            j_configuration=get_j_env_configuration(self.env._j_stream_execution_environment))
-        config.set_integer("python.fn-execution.bundle.size", 1)
-        data_stream.key_by(lambda x: x[1], key_type=Types.STRING()) \
-            .process(MyProcessFunction(), output_type=Types.TUPLE([Types.INT(), Types.STRING()])) \
-            .add_sink(self.test_sink)
-        self.env.execute('test_aggregating_state')
-        results = self.test_sink.get_results()
-        expected = ['(1,hi)', '(2,hello)', '(4,hi)', '(6,hello)', '(9,hi)', '(12,hello)']
-        self.assert_equals_sorted(expected, results)
-
     def test_basic_co_operations(self):
         python_file_dir = os.path.join(self.tempdir, "python_file_dir_" + str(uuid.uuid4()))
         os.mkdir(python_file_dir)
@@ -371,6 +157,34 @@ class DataStreamTests(object):
         expected = ['4', '5', '6', '7', '8', '3', '5', '7', '9', '11', '3', '5', '7', '9', '11']
         self.assert_equals_sorted(expected, results)
 
+    def test_basic_co_operations_with_output_type(self):
+        class MyCoMapFunction(CoMapFunction):
+
+            def map1(self, value):
+                return value + 2
+
+            def map2(self, value):
+                return value + 1
+
+        class MyCoFlatMapFunction(CoFlatMapFunction):
+
+            def flat_map1(self, value):
+                yield value + 1
+
+            def flat_map2(self, value):
+                yield value - 1
+
+        ds_1 = self.env.from_collection([1, 2, 3, 4, 5])
+        ds_2 = ds_1.map(lambda x: x * 2)
+
+        (ds_1.connect(ds_2).flat_map(MyCoFlatMapFunction(), output_type=Types.INT())
+             .connect(ds_2).map(MyCoMapFunction(), output_type=Types.INT())
+             .add_sink(self.test_sink))
+        self.env.execute("test_basic_co_operations_with_output_type")
+        results = self.test_sink.get_results()
+        expected = ['4', '5', '6', '7', '8', '3', '5', '7', '9', '11', '3', '5', '7', '9', '11']
+        self.assert_equals_sorted(expected, results)
+
     def test_keyed_co_process(self):
         self.env.set_parallelism(1)
         ds1 = self.env.from_collection([("a", 1), ("b", 2), ("c", 3)],
@@ -397,361 +211,6 @@ class DataStreamTests(object):
                     "<Row('c', 3)>",
                     "<Row('d', 2)>",
                     "<Row('on_timer', 4)>"]
-        self.assert_equals_sorted(expected, results)
-
-    def test_co_broadcast_process(self):
-        ds = self.env.from_collection([1, 2, 3, 4, 5], type_info=Types.INT())  # type: DataStream
-        ds_broadcast = self.env.from_collection(
-            [(0, "a"), (1, "b")], type_info=Types.TUPLE([Types.INT(), Types.STRING()])
-        )  # type: DataStream
-
-        class MyBroadcastProcessFunction(BroadcastProcessFunction):
-            def __init__(self, map_state_desc):
-                self._map_state_desc = map_state_desc
-                self._cache = defaultdict(list)
-
-            def process_element(self, value: int, ctx: BroadcastProcessFunction.ReadOnlyContext):
-                ro_broadcast_state = ctx.get_broadcast_state(self._map_state_desc)
-                key = value % 2
-                if ro_broadcast_state.contains(key):
-                    if self._cache.get(key) is not None:
-                        for v in self._cache[key]:
-                            yield ro_broadcast_state.get(key) + str(v)
-                        self._cache[key].clear()
-                    yield ro_broadcast_state.get(key) + str(value)
-                else:
-                    self._cache[key].append(value)
-
-            def process_broadcast_element(
-                self, value: Tuple[int, str], ctx: BroadcastProcessFunction.Context
-            ):
-                key = value[0]
-                yield str(key) + value[1]
-                broadcast_state = ctx.get_broadcast_state(self._map_state_desc)
-                broadcast_state.put(key, value[1])
-                if self._cache.get(key) is not None:
-                    for v in self._cache[key]:
-                        yield value[1] + str(v)
-                    self._cache[key].clear()
-
-        map_state_desc = MapStateDescriptor(
-            "mapping", key_type_info=Types.INT(), value_type_info=Types.STRING()
-        )
-        ds.connect(ds_broadcast.broadcast(map_state_desc)).process(
-            MyBroadcastProcessFunction(map_state_desc), output_type=Types.STRING()
-        ).add_sink(self.test_sink)
-
-        self.env.execute("test_co_broadcast_process")
-        expected = ["0a", "0a", "1b", "1b", "a2", "a4", "b1", "b3", "b5"]
-        self.assert_equals_sorted(expected, self.test_sink.get_results())
-
-    def test_keyed_co_broadcast_process(self):
-        ds = self.env.from_collection(
-            [(1, '1603708211000'),
-             (2, '1603708212000'),
-             (3, '1603708213000'),
-             (4, '1603708214000')],
-            type_info=Types.ROW([Types.INT(), Types.STRING()]))  # type: DataStream
-        ds_broadcast = self.env.from_collection(
-            [(0, '1603708215000', 'a'),
-             (1, '1603708215000', 'b')],
-            type_info=Types.ROW([Types.INT(), Types.STRING(), Types.STRING()])
-        )  # type: DataStream
-        watermark_strategy = WatermarkStrategy.for_monotonous_timestamps() \
-            .with_timestamp_assigner(SecondColumnTimestampAssigner())
-        ds = ds.assign_timestamps_and_watermarks(watermark_strategy)
-        ds_broadcast = ds_broadcast.assign_timestamps_and_watermarks(watermark_strategy)
-
-        def _create_string(s, t):
-            return 'value: {}, ts: {}'.format(s, t)
-
-        class MyKeyedBroadcastProcessFunction(KeyedBroadcastProcessFunction):
-            def __init__(self, map_state_desc):
-                self._map_state_desc = map_state_desc
-                self._cache = None
-
-            def open(self, runtime_context: RuntimeContext):
-                self._cache = defaultdict(list)
-
-            def process_element(
-                self, value: Tuple[int, str], ctx: KeyedBroadcastProcessFunction.ReadOnlyContext
-            ):
-                ro_broadcast_state = ctx.get_broadcast_state(self._map_state_desc)
-                key = value[0] % 2
-                if ro_broadcast_state.contains(key):
-                    if self._cache.get(key) is not None:
-                        for v in self._cache[key]:
-                            yield _create_string(ro_broadcast_state.get(key) + str(v[0]), v[1])
-                        self._cache[key].clear()
-                    yield _create_string(ro_broadcast_state.get(key) + str(value[0]), value[1])
-                else:
-                    self._cache[key].append(value)
-                ctx.timer_service().register_event_time_timer(ctx.timestamp() + 10000)
-
-            def process_broadcast_element(
-                self, value: Tuple[int, str, str], ctx: KeyedBroadcastProcessFunction.Context
-            ):
-                key = value[0]
-                yield _create_string(str(key) + value[2], ctx.timestamp())
-                broadcast_state = ctx.get_broadcast_state(self._map_state_desc)
-                broadcast_state.put(key, value[2])
-                if self._cache.get(key) is not None:
-                    for v in self._cache[key]:
-                        yield _create_string(value[2] + str(v[0]), v[1])
-                    self._cache[key].clear()
-
-            def on_timer(self, timestamp: int, ctx: KeyedBroadcastProcessFunction.OnTimerContext):
-                yield _create_string(ctx.get_current_key(), timestamp)
-
-        map_state_desc = MapStateDescriptor(
-            "mapping", key_type_info=Types.INT(), value_type_info=Types.STRING()
-        )
-        ds.key_by(lambda t: t[0]).connect(ds_broadcast.broadcast(map_state_desc)).process(
-            MyKeyedBroadcastProcessFunction(map_state_desc), output_type=Types.STRING()
-        ).add_sink(self.test_sink)
-
-        self.env.execute("test_keyed_co_broadcast_process")
-        expected = [
-            'value: 0a, ts: 1603708215000',
-            'value: 0a, ts: 1603708215000',
-            'value: 1, ts: 1603708221000',
-            'value: 1b, ts: 1603708215000',
-            'value: 1b, ts: 1603708215000',
-            'value: 2, ts: 1603708222000',
-            'value: 3, ts: 1603708223000',
-            'value: 4, ts: 1603708224000',
-            'value: a2, ts: 1603708212000',
-            'value: a4, ts: 1603708214000',
-            'value: b1, ts: 1603708211000',
-            'value: b3, ts: 1603708213000'
-        ]
-        self.assert_equals_sorted(expected, self.test_sink.get_results())
-
-    def test_side_output_chained_with_upstream_operator(self):
-        tag = OutputTag("side", Types.INT())
-
-        ds = self.env.from_collection([('a', 0), ('b', 1), ('c', 2)],
-                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
-
-        class MyProcessFunction(ProcessFunction):
-
-            def process_element(self, value, ctx: 'ProcessFunction.Context'):
-                yield value[0]
-                yield tag, value[1]
-
-        ds2 = ds.map(lambda e: (e[0], e[1]+1)) \
-            .process(MyProcessFunction(), output_type=Types.STRING())
-        main_sink = DataStreamTestSinkFunction()
-        ds2.add_sink(main_sink)
-        side_sink = DataStreamTestSinkFunction()
-        ds2.get_side_output(tag).add_sink(side_sink)
-
-        self.env.execute("test_side_output_chained_with_upstream_operator")
-        main_expected = ['a', 'b', 'c']
-        self.assert_equals_sorted(main_expected, main_sink.get_results())
-        side_expected = ['1', '2', '3']
-        self.assert_equals_sorted(side_expected, side_sink.get_results())
-
-    def test_process_multiple_side_output(self):
-        tag1 = OutputTag("side1", Types.INT())
-        tag2 = OutputTag("side2", Types.STRING())
-
-        ds = self.env.from_collection([('a', 0), ('b', 1), ('c', 2)],
-                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
-
-        class MyProcessFunction(ProcessFunction):
-
-            def process_element(self, value, ctx: 'ProcessFunction.Context'):
-                yield value[0]
-                yield tag1, value[1]
-                yield tag2, value[0] + str(value[1])
-
-        ds2 = ds.process(MyProcessFunction(), output_type=Types.STRING())
-        main_sink = DataStreamTestSinkFunction()
-        ds2.add_sink(main_sink)
-        side1_sink = DataStreamTestSinkFunction()
-        ds2.get_side_output(tag1).add_sink(side1_sink)
-        side2_sink = DataStreamTestSinkFunction()
-        ds2.get_side_output(tag2).add_sink(side2_sink)
-
-        self.env.execute("test_process_multiple_side_output")
-        main_expected = ['a', 'b', 'c']
-        self.assert_equals_sorted(main_expected, main_sink.get_results())
-        side1_expected = ['0', '1', '2']
-        self.assert_equals_sorted(side1_expected, side1_sink.get_results())
-        side2_expected = ['a0', 'b1', 'c2']
-        self.assert_equals_sorted(side2_expected, side2_sink.get_results())
-
-    def test_co_process_side_output(self):
-        tag = OutputTag("side", Types.INT())
-
-        class MyCoProcessFunction(CoProcessFunction):
-
-            def process_element1(self, value, ctx: 'CoProcessFunction.Context'):
-                yield value[0]
-                yield tag, value[1]
-
-            def process_element2(self, value, ctx: 'CoProcessFunction.Context'):
-                yield value[1]
-                yield tag, value[0]
-
-        ds1 = self.env.from_collection([('a', 0), ('b', 1), ('c', 2)],
-                                       type_info=Types.ROW([Types.STRING(), Types.INT()]))
-        ds2 = self.env.from_collection([(3, 'c'), (1, 'a'), (0, 'd')],
-                                       type_info=Types.ROW([Types.INT(), Types.STRING()]))
-        ds3 = ds1.connect(ds2).process(MyCoProcessFunction(), output_type=Types.STRING())
-        ds3.add_sink(self.test_sink)
-        side_sink = DataStreamTestSinkFunction()
-        ds3.get_side_output(tag).add_sink(side_sink)
-
-        self.env.execute("test_co_process_side_output")
-        main_expected = ['a', 'a', 'b', 'c', 'c', 'd']
-        self.assert_equals_sorted(main_expected, self.test_sink.get_results())
-        side_expected = ['0', '0', '1', '1', '2', '3']
-        self.assert_equals_sorted(side_expected, side_sink.get_results())
-
-    def test_keyed_process_side_output(self):
-        tag = OutputTag("side", Types.INT())
-
-        ds = self.env.from_collection([('a', 1), ('b', 2), ('a', 3), ('b', 4)],
-                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
-
-        class MyKeyedProcessFunction(KeyedProcessFunction):
-
-            def __init__(self):
-                self.reducing_state = None  # type: ReducingState
-
-            def open(self, context: RuntimeContext):
-                self.reducing_state = context.get_reducing_state(
-                    ReducingStateDescriptor("reduce", lambda i, j: i+j, Types.INT())
-                )
-
-            def process_element(self, value, ctx: 'KeyedProcessFunction.Context'):
-                yield value[1]
-                self.reducing_state.add(value[1])
-                yield tag, self.reducing_state.get()
-
-        ds2 = ds.key_by(lambda e: e[0]).process(MyKeyedProcessFunction(),
-                                                output_type=Types.INT())
-        main_sink = DataStreamTestSinkFunction()
-        ds2.add_sink(main_sink)
-        side_sink = DataStreamTestSinkFunction()
-        ds2.get_side_output(tag).add_sink(side_sink)
-
-        self.env.execute("test_keyed_process_side_output")
-        main_expected = ['1', '2', '3', '4']
-        self.assert_equals_sorted(main_expected, main_sink.get_results())
-        side_expected = ['1', '2', '4', '6']
-        self.assert_equals_sorted(side_expected, side_sink.get_results())
-
-    def test_keyed_co_process_side_output(self):
-        tag = OutputTag("side", Types.INT())
-
-        ds1 = self.env.from_collection([('a', 1), ('b', 2), ('a', 3), ('b', 4)],
-                                       type_info=Types.ROW([Types.STRING(), Types.INT()]))
-        ds2 = self.env.from_collection([(8, 'a'), (7, 'b'), (6, 'a'), (5, 'b')],
-                                       type_info=Types.ROW([Types.INT(), Types.STRING()]))
-
-        class MyKeyedCoProcessFunction(KeyedCoProcessFunction):
-
-            def __init__(self):
-                self.reducing_state = None  # type: ReducingState
-
-            def open(self, context: RuntimeContext):
-                self.reducing_state = context.get_reducing_state(
-                    ReducingStateDescriptor("reduce", lambda i, j: i+j, Types.INT())
-                )
-
-            def process_element1(self, value, ctx: 'KeyedCoProcessFunction.Context'):
-                yield value[1]
-                self.reducing_state.add(1)
-                yield tag, self.reducing_state.get()
-
-            def process_element2(self, value, ctx: 'KeyedCoProcessFunction.Context'):
-                yield value[0]
-                self.reducing_state.add(1)
-                yield tag, self.reducing_state.get()
-
-        ds3 = ds1.key_by(lambda e: e[0])\
-            .connect(ds2.key_by(lambda e: e[1]))\
-            .process(MyKeyedCoProcessFunction(), output_type=Types.INT())
-        main_sink = DataStreamTestSinkFunction()
-        ds3.add_sink(main_sink)
-        side_sink = DataStreamTestSinkFunction()
-        ds3.get_side_output(tag).add_sink(side_sink)
-
-        self.env.execute("test_keyed_co_process_side_output")
-        main_expected = ['1', '2', '3', '4', '5', '6', '7', '8']
-        self.assert_equals_sorted(main_expected, main_sink.get_results())
-        side_expected = ['1', '1', '2', '2', '3', '3', '4', '4']
-        self.assert_equals_sorted(side_expected, side_sink.get_results())
-
-
-class DataStreamStreamingTests(DataStreamTests):
-
-    def test_reduce_with_state(self):
-        ds = self.env.from_collection([('a', 0), ('c', 1), ('d', 1), ('b', 0), ('e', 1)],
-                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
-        keyed_stream = ds.key_by(MyKeySelector(), key_type=Types.INT())
-
-        with self.assertRaises(Exception):
-            keyed_stream.name("keyed stream")
-
-        keyed_stream.reduce(MyReduceFunction()).add_sink(self.test_sink)
-        self.env.execute('key_by_test')
-        results = self.test_sink.get_results(False)
-        expected = ['+I[a, 0]', '+I[ab, 0]', '+I[c, 1]', '+I[cd, 1]', '+I[cde, 1]']
-        self.assert_equals_sorted(expected, results)
-
-
-class DataStreamBatchTests(DataStreamTests):
-
-    def test_reduce_with_state(self):
-        ds = self.env.from_collection([('a', 0), ('c', 1), ('d', 1), ('b', 0), ('e', 1)],
-                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
-        keyed_stream = ds.key_by(MyKeySelector(), key_type=Types.INT())
-
-        with self.assertRaises(Exception):
-            keyed_stream.name("keyed stream")
-
-        keyed_stream.reduce(MyReduceFunction()).add_sink(self.test_sink)
-        self.env.execute('key_by_test')
-        results = self.test_sink.get_results(False)
-        expected = ['+I[ab, 0]', '+I[cde, 1]']
-        self.assert_equals_sorted(expected, results)
-
-
-class ProcessDataStreamTests(DataStreamTests):
-    """
-    The tests only tested in Process Mode.
-    """
-
-    def test_basic_co_operations_with_output_type(self):
-        class MyCoMapFunction(CoMapFunction):
-
-            def map1(self, value):
-                return value + 2
-
-            def map2(self, value):
-                return value + 1
-
-        class MyCoFlatMapFunction(CoFlatMapFunction):
-
-            def flat_map1(self, value):
-                yield value + 1
-
-            def flat_map2(self, value):
-                yield value - 1
-
-        ds_1 = self.env.from_collection([1, 2, 3, 4, 5])
-        ds_2 = ds_1.map(lambda x: x * 2)
-
-        (ds_1.connect(ds_2).flat_map(MyCoFlatMapFunction(), output_type=Types.INT())
-            .connect(ds_2).map(MyCoMapFunction(), output_type=Types.INT())
-            .add_sink(self.test_sink))
-        self.env.execute("test_basic_co_operations_with_output_type")
-        results = self.test_sink.get_results()
-        expected = ['4', '5', '6', '7', '8', '3', '5', '7', '9', '11', '3', '5', '7', '9', '11']
         self.assert_equals_sorted(expected, results)
 
     def test_keyed_co_map(self):
@@ -1046,7 +505,7 @@ class ProcessDataStreamTests(DataStreamTests):
     def test_basic_array_type_info(self):
         ds = self.env.from_collection([(1, [1.1, None, 1.30], [None, 'hi', 'flink']),
                                        (2, [None, 2.2, 2.3], ['hello', None, 'flink']),
-                                       (3, [3.1, 3.2, None], ['hello', 'hi', None])],
+                                      (3, [3.1, 3.2, None], ['hello', 'hi', None])],
                                       type_info=Types.ROW([Types.INT(),
                                                            Types.BASIC_ARRAY(Types.FLOAT()),
                                                            Types.BASIC_ARRAY(Types.STRING())]))
@@ -1132,41 +591,229 @@ class ProcessDataStreamTests(DataStreamTests):
                     "-9223372036854775808, current_value: Row(f0=4, f1='1603708289000')"]
         self.assert_equals_sorted(expected, results)
 
-    def test_process_side_output(self):
-        tag = OutputTag("side", Types.INT())
+    def test_keyed_process_function_with_state(self):
+        self.env.get_config().set_auto_watermark_interval(2000)
+        self.env.set_stream_time_characteristic(TimeCharacteristic.EventTime)
+        data_stream = self.env.from_collection([(1, 'hi', '1603708211000'),
+                                                (2, 'hello', '1603708224000'),
+                                                (3, 'hi', '1603708226000'),
+                                                (4, 'hello', '1603708289000'),
+                                                (5, 'hi', '1603708291000'),
+                                                (6, 'hello', '1603708293000')],
+                                               type_info=Types.ROW([Types.INT(), Types.STRING(),
+                                                                    Types.STRING()]))
 
-        ds = self.env.from_collection([('a', 0), ('b', 1), ('c', 2)],
-                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
+        class MyTimestampAssigner(TimestampAssigner):
 
-        class MyProcessFunction(ProcessFunction):
+            def extract_timestamp(self, value, record_timestamp) -> int:
+                return int(value[2])
 
-            def process_element(self, value, ctx: 'ProcessFunction.Context'):
-                yield value[0]
-                yield tag, value[1]
+        class MyProcessFunction(KeyedProcessFunction):
 
-        ds2 = ds.process(MyProcessFunction(), output_type=Types.STRING())
-        main_sink = DataStreamTestSinkFunction()
-        ds2.add_sink(main_sink)
-        side_sink = DataStreamTestSinkFunction()
-        ds2.get_side_output(tag).add_sink(side_sink)
+            def __init__(self):
+                self.value_state = None
+                self.list_state = None
+                self.map_state = None
 
-        self.env.execute("test_process_side_output")
-        main_expected = ['a', 'b', 'c']
-        self.assert_equals_sorted(main_expected, main_sink.get_results())
-        side_expected = ['0', '1', '2']
-        self.assert_equals_sorted(side_expected, side_sink.get_results())
+            def open(self, runtime_context: RuntimeContext):
+                value_state_descriptor = ValueStateDescriptor('value_state', Types.INT())
+                self.value_state = runtime_context.get_state(value_state_descriptor)
+                list_state_descriptor = ListStateDescriptor('list_state', Types.INT())
+                self.list_state = runtime_context.get_list_state(list_state_descriptor)
+                map_state_descriptor = MapStateDescriptor('map_state', Types.INT(), Types.STRING())
+                state_ttl_config = StateTtlConfig \
+                    .new_builder(Time.seconds(1)) \
+                    .set_update_type(StateTtlConfig.UpdateType.OnReadAndWrite) \
+                    .set_state_visibility(
+                        StateTtlConfig.StateVisibility.ReturnExpiredIfNotCleanedUp) \
+                    .disable_cleanup_in_background() \
+                    .build()
+                map_state_descriptor.enable_time_to_live(state_ttl_config)
+                self.map_state = runtime_context.get_map_state(map_state_descriptor)
 
-    def test_java_list_deserialization(self):
-        row_type_info = Types.ROW_NAMED(['list'], [Types.LIST(Types.INT())])
-        ds = self.env.from_collection([Row(list=[1, 2, 3])], type_info=row_type_info)
-        ds.map(lambda e: str(e), Types.STRING()).add_sink(self.test_sink)
-        self.env.execute('test_java_list_deserialization')
-        expected = ['Row(list=[1, 2, 3])']
-        self.assert_equals(self.test_sink.get_results(), expected)
+            def process_element(self, value, ctx):
+                current_value = self.value_state.value()
+                self.value_state.update(value[0])
+                current_list = [_ for _ in self.list_state.get()]
+                self.list_state.add(value[0])
+                map_entries = {k: v for k, v in self.map_state.items()}
+                keys = sorted(map_entries.keys())
+                map_entries_string = [str(k) + ': ' + str(map_entries[k]) for k in keys]
+                map_entries_string = '{' + ', '.join(map_entries_string) + '}'
+                self.map_state.put(value[0], value[1])
+                current_key = ctx.get_current_key()
+                yield "current key: {}, current value state: {}, current list state: {}, " \
+                      "current map state: {}, current value: {}".format(str(current_key),
+                                                                        str(current_value),
+                                                                        str(current_list),
+                                                                        map_entries_string,
+                                                                        str(value))
+
+            def on_timer(self, timestamp, ctx):
+                pass
+
+        watermark_strategy = WatermarkStrategy.for_monotonous_timestamps() \
+            .with_timestamp_assigner(MyTimestampAssigner())
+        data_stream.assign_timestamps_and_watermarks(watermark_strategy) \
+            .key_by(lambda x: x[1], key_type=Types.STRING()) \
+            .process(MyProcessFunction(), output_type=Types.STRING()) \
+            .add_sink(self.test_sink)
+        self.env.execute('test time stamp assigner with keyed process function')
+        results = self.test_sink.get_results()
+        expected = ["current key: hi, current value state: None, current list state: [], "
+                    "current map state: {}, current value: Row(f0=1, f1='hi', "
+                    "f2='1603708211000')",
+                    "current key: hello, current value state: None, "
+                    "current list state: [], current map state: {}, current value: Row(f0=2,"
+                    " f1='hello', f2='1603708224000')",
+                    "current key: hi, current value state: 1, current list state: [1], "
+                    "current map state: {1: hi}, current value: Row(f0=3, f1='hi', "
+                    "f2='1603708226000')",
+                    "current key: hello, current value state: 2, current list state: [2], "
+                    "current map state: {2: hello}, current value: Row(f0=4, f1='hello', "
+                    "f2='1603708289000')",
+                    "current key: hi, current value state: 3, current list state: [1, 3], "
+                    "current map state: {1: hi, 3: hi}, current value: Row(f0=5, f1='hi', "
+                    "f2='1603708291000')",
+                    "current key: hello, current value state: 4, current list state: [2, 4],"
+                    " current map state: {2: hello, 4: hello}, current value: Row(f0=6, "
+                    "f1='hello', f2='1603708293000')"]
+        self.assert_equals_sorted(expected, results)
+
+    def test_reducing_state(self):
+        self.env.set_parallelism(2)
+        data_stream = self.env.from_collection([
+            (1, 'hi'), (2, 'hello'), (3, 'hi'), (4, 'hello'), (5, 'hi'), (6, 'hello')],
+            type_info=Types.TUPLE([Types.INT(), Types.STRING()]))
+
+        class MyProcessFunction(KeyedProcessFunction):
+
+            def __init__(self):
+                self.reducing_state = None  # type: ReducingState
+
+            def open(self, runtime_context: RuntimeContext):
+                self.reducing_state = runtime_context.get_reducing_state(
+                    ReducingStateDescriptor(
+                        'reducing_state', lambda i, i2: i + i2, Types.INT()))
+
+            def process_element(self, value, ctx):
+                self.reducing_state.add(value[0])
+                yield self.reducing_state.get(), value[1]
+
+        data_stream.key_by(lambda x: x[1], key_type=Types.STRING()) \
+            .process(MyProcessFunction(), output_type=Types.TUPLE([Types.INT(), Types.STRING()])) \
+            .add_sink(self.test_sink)
+        self.env.execute('test_reducing_state')
+        result = self.test_sink.get_results()
+        expected_result = ['(1,hi)', '(2,hello)', '(4,hi)', '(6,hello)', '(9,hi)', '(12,hello)']
+        result.sort()
+        expected_result.sort()
+        self.assertEqual(expected_result, result)
+
+    def test_aggregating_state(self):
+        self.env.set_parallelism(2)
+        data_stream = self.env.from_collection([
+            (1, 'hi'), (2, 'hello'), (3, 'hi'), (4, 'hello'), (5, 'hi'), (6, 'hello')],
+            type_info=Types.TUPLE([Types.INT(), Types.STRING()]))
+
+        class MyAggregateFunction(AggregateFunction):
+
+            def create_accumulator(self):
+                return 0
+
+            def add(self, value, accumulator):
+                return value + accumulator
+
+            def get_result(self, accumulator):
+                return accumulator
+
+            def merge(self, acc_a, acc_b):
+                return acc_a + acc_b
+
+        class MyProcessFunction(KeyedProcessFunction):
+
+            def __init__(self):
+                self.aggregating_state = None  # type: AggregatingState
+
+            def open(self, runtime_context: RuntimeContext):
+                descriptor = AggregatingStateDescriptor(
+                    'aggregating_state', MyAggregateFunction(), Types.INT())
+                state_ttl_config = StateTtlConfig \
+                    .new_builder(Time.seconds(1)) \
+                    .set_update_type(StateTtlConfig.UpdateType.OnReadAndWrite) \
+                    .disable_cleanup_in_background() \
+                    .build()
+                descriptor.enable_time_to_live(state_ttl_config)
+                self.aggregating_state = runtime_context.get_aggregating_state(descriptor)
+
+            def process_element(self, value, ctx):
+                self.aggregating_state.add(value[0])
+                yield self.aggregating_state.get(), value[1]
+
+        config = Configuration(
+            j_configuration=get_j_env_configuration(self.env._j_stream_execution_environment))
+        config.set_integer("python.fn-execution.bundle.size", 1)
+        data_stream.key_by(lambda x: x[1], key_type=Types.STRING()) \
+            .process(MyProcessFunction(), output_type=Types.TUPLE([Types.INT(), Types.STRING()])) \
+            .add_sink(self.test_sink)
+        self.env.execute('test_aggregating_state')
+        results = self.test_sink.get_results()
+        expected = ['(1,hi)', '(2,hello)', '(4,hi)', '(6,hello)', '(9,hi)', '(12,hello)']
+        self.assert_equals_sorted(expected, results)
+
+    def test_count_window(self):
+        self.env.set_parallelism(2)
+        data_stream = self.env.from_collection([
+            (1, 'hi'), (2, 'hello'), (3, 'hi'), (4, 'hello'), (5, 'hi'), (6, 'hello')],
+            type_info=Types.TUPLE([Types.INT(), Types.STRING()]))  # type: DataStream
+        data_stream.key_by(lambda x: x[1], key_type=Types.STRING()) \
+            .window(SimpleCountWindowAssigner()) \
+            .apply(SumWindowFunction(), Types.TUPLE([Types.STRING(), Types.INT()])) \
+            .add_sink(self.test_sink)
+
+        self.env.execute('test_count_window')
+        results = self.test_sink.get_results()
+        expected = ['(hello,12)', '(hi,9)']
+        self.assert_equals_sorted(expected, results)
+
+    def test_time_window(self):
+        self.env.set_parallelism(1)
+        data_stream = self.env.from_collection([
+            ('hi', 1), ('hi', 2), ('hi', 3), ('hi', 6), ('hi', 8), ('hi', 9), ('hi', 15)],
+            type_info=Types.TUPLE([Types.STRING(), Types.INT()]))  # type: DataStream
+        watermark_strategy = WatermarkStrategy.for_monotonous_timestamps() \
+            .with_timestamp_assigner(SecondColumnTimestampAssigner())
+        data_stream.assign_timestamps_and_watermarks(watermark_strategy) \
+            .key_by(lambda x: x[0], key_type=Types.STRING()) \
+            .window(SimpleMergeTimeWindowAssigner()) \
+            .process(CountWindowProcessFunction(), Types.TUPLE([Types.STRING(), Types.INT()])) \
+            .add_sink(self.test_sink)
+
+        self.env.execute('test_time_window')
+        results = self.test_sink.get_results()
+        expected = ['(hi,1)', '(hi,3)', '(hi,3)']
+        self.assert_equals_sorted(expected, results)
+
+    def test_session_window_late_merge(self):
+        self.env.set_parallelism(1)
+        data_stream = self.env.from_collection([
+            ('hi', 0), ('hi', 2), ('hi', 1)],
+            type_info=Types.TUPLE([Types.STRING(), Types.INT()]))  # type: DataStream
+        watermark_strategy = WatermarkStrategy.for_monotonous_timestamps() \
+            .with_timestamp_assigner(SecondColumnTimestampAssigner())
+        data_stream.assign_timestamps_and_watermarks(watermark_strategy) \
+            .key_by(lambda x: x[0], key_type=Types.STRING()) \
+            .window(SimpleMergeTimeWindowAssigner()) \
+            .process(CountWindowProcessFunction(), Types.TUPLE([Types.STRING(), Types.INT()])) \
+            .add_sink(self.test_sink)
+
+        self.env.execute('test_session_window_late_merge')
+        results = self.test_sink.get_results()
+        expected = ['(hi,3)']
+        self.assert_equals_sorted(expected, results)
 
 
-class ProcessDataStreamStreamingTests(DataStreamStreamingTests, ProcessDataStreamTests,
-                                      PyFlinkStreamingTestCase):
+class StreamingModeDataStreamTests(DataStreamTests, PyFlinkStreamingTestCase):
     def test_data_stream_name(self):
         ds = self.env.from_collection([(1, 'Hi', 'Hello'), (2, 'Hello', 'Hi')])
         test_name = 'test_name'
@@ -1275,6 +922,29 @@ class ProcessDataStreamStreamingTests(DataStreamStreamingTests, ProcessDataStrea
         shuffle_node = exec_plan['nodes'][1]
         pre_ship_strategy = shuffle_node['predecessors'][0]['ship_strategy']
         self.assertEqual(pre_ship_strategy, 'SHUFFLE')
+
+    def test_partition_custom(self):
+        ds = self.env.from_collection([('a', 0), ('b', 0), ('c', 1), ('d', 1), ('e', 2),
+                                       ('f', 7), ('g', 7), ('h', 8), ('i', 8), ('j', 9)],
+                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
+
+        expected_num_partitions = 5
+
+        def my_partitioner(key, num_partitions):
+            assert expected_num_partitions == num_partitions
+            return key % num_partitions
+
+        partitioned_stream = ds.map(lambda x: x, output_type=Types.ROW([Types.STRING(),
+                                                                        Types.INT()]))\
+            .set_parallelism(4).partition_custom(my_partitioner, lambda x: x[1])
+
+        JPartitionCustomTestMapFunction = get_gateway().jvm\
+            .org.apache.flink.python.util.PartitionCustomTestMapFunction
+        test_map_stream = DataStream(partitioned_stream
+                                     ._j_data_stream.map(JPartitionCustomTestMapFunction()))
+        test_map_stream.set_parallelism(expected_num_partitions).add_sink(self.test_sink)
+
+        self.env.execute('test_partition_custom')
 
     def test_keyed_stream_partitioning(self):
         ds = self.env.from_collection([('ab', 1), ('bdc', 2), ('cfgs', 3), ('deeefg', 4)])
@@ -1438,91 +1108,25 @@ class ProcessDataStreamStreamingTests(DataStreamStreamingTests, ProcessDataStrea
         ds = self.env.from_collection([(1, 'a'), (2, 'a'), (3, 'a'), (4, 'b')],
                                       type_info=Types.ROW([Types.INT(), Types.STRING()]))
         ds.key_by(lambda a: a[1]) \
-            .reduce(lambda a, b: Row(a[0] + b[0], b[1])) \
-            .add_sink(self.test_sink)
+          .reduce(lambda a, b: Row(a[0] + b[0], b[1])) \
+          .add_sink(self.test_sink)
         self.env.execute('reduce_function_test')
         results = self.test_sink.get_results()
         expected = ["+I[1, a]", "+I[3, a]", "+I[6, a]", "+I[4, b]"]
         self.assert_equals_sorted(expected, results)
 
-    def test_keyed_sum(self):
-        self.env.set_parallelism(1)
-        ds = self.env.from_collection(
-            [(1, 1), (1, 2), (1, 3), (2, 5), (2, 1)],
-            type_info=Types.ROW_NAMED(["v1", "v2"], [Types.INT(), Types.INT()])
-        )
+    def test_reduce_with_state(self):
+        ds = self.env.from_collection([('a', 0), ('b', 0), ('c', 1), ('d', 1), ('e', 1)],
+                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
+        keyed_stream = ds.key_by(MyKeySelector(), key_type=Types.INT())
 
-        ds.key_by(lambda x: x[0]) \
-            .sum("v2") \
-            .key_by(lambda x: x[0]) \
-            .sum(1) \
-            .map(lambda x: (x[1], x[0]), output_type=Types.TUPLE([Types.INT(), Types.INT()])) \
-            .key_by(lambda x: x[1]) \
-            .sum() \
-            .add_sink(self.test_sink)
+        with self.assertRaises(Exception):
+            keyed_stream.name("keyed stream")
 
-        self.env.execute("key_by_sum_test_stream")
+        keyed_stream.reduce(MyReduceFunction()).add_sink(self.test_sink)
+        self.env.execute('key_by_test')
         results = self.test_sink.get_results(False)
-        expected = ['(1,1)', '(5,1)', '(15,1)', '(5,2)', '(16,2)']
-        self.assert_equals_sorted(expected, results)
-
-    def test_keyed_min_and_max(self):
-        self.env.set_parallelism(1)
-        ds = self.env.from_collection([('a', 3, 0), ('a', 1, 1), ('b', 5, 1), ('b', 3, 1)],
-                                      type_info=Types.ROW_NAMED(
-                                          ["v1", "v2", "v3"],
-                                          [Types.STRING(), Types.INT(), Types.INT()])
-                                      )
-        # 1th operator min: ('a', 3, 0), ('a', 1, 0), ('b', 5, 1), ('b', 3, 1)
-        # 2th operator max: ('a', 3, 0), ('a', 3, 0), ('b', 5, 1), ('b', 5, 1)
-        # 3th operator max: ('a', 1), ('a', 1), ('b', 1), ('b', 1)
-        # 4th operator min: ('a', 'a', 'b', 'b')
-        ds.key_by(lambda x: x[0]) \
-            .min("v2") \
-            .map(lambda x: (x[0], x[1], x[2]),
-                 output_type=Types.TUPLE([Types.STRING(), Types.INT(), Types.INT()])) \
-            .key_by(lambda x: x[2]) \
-            .max(1) \
-            .map(lambda x: (x[0], 1), output_type=Types.TUPLE([Types.STRING(), Types.INT()])) \
-            .key_by(lambda x: x[1]) \
-            .max() \
-            .map(lambda x: x[0], output_type=Types.STRING()) \
-            .key_by(lambda x: x) \
-            .min() \
-            .add_sink(self.test_sink)
-
-        self.env.execute("key_by_min_max_test_stream")
-        results = self.test_sink.get_results(False)
-        expected = ['a', 'a', 'b', 'b']
-        self.assert_equals_sorted(expected, results)
-
-    def test_keyed_min_by_and_max_by(self):
-        self.env.set_parallelism(1)
-        ds = self.env.from_collection([('a', 3, 0), ('a', 1, 1), ('b', 5, 0), ('b', 3, 1)],
-                                      type_info=Types.ROW_NAMED(
-                                          ["v1", "v2", "v3"],
-                                          [Types.STRING(), Types.INT(), Types.INT()])
-                                      )
-        # 1th operator min_by: ('a', 3, 0), ('a', 1, 1), ('b', 5, 0), ('b', 3, 1)
-        # 2th operator max_by: ('a', 3, 0), ('a', 3, 0), ('b', 5, 0), ('b', 5, 0)
-        # 3th operator min_by: ('a', 3, 0), ('a', 3, 0), ('a', 3, 0), ('a', 3, 0)
-        # 4th operator max_by: ('a', 'a', 'a', 'a')
-        ds.key_by(lambda x: x[0]) \
-            .min_by("v2") \
-            .map(lambda x: (x[0], x[1], x[2]),
-                 output_type=Types.TUPLE([Types.STRING(), Types.INT(), Types.INT()])) \
-            .key_by(lambda x: x[2]) \
-            .max_by(1) \
-            .key_by(lambda x: x[2]) \
-            .min_by() \
-            .map(lambda x: x[0], output_type=Types.STRING()) \
-            .key_by(lambda x: x) \
-            .max_by() \
-            .add_sink(self.test_sink)
-
-        self.env.execute("key_by_min_by_max_by_test_stream")
-        results = self.test_sink.get_results(False)
-        expected = ['a', 'a', 'a', 'a']
+        expected = ['+I[a, 0]', '+I[ab, 0]', '+I[c, 1]', '+I[cd, 1]', '+I[cde, 1]']
         self.assert_equals_sorted(expected, results)
 
     def test_function_with_error(self):
@@ -1559,8 +1163,7 @@ class ProcessDataStreamStreamingTests(DataStreamStreamingTests, ProcessDataStrea
         self.assert_equals_sorted(expected, results)
 
 
-class ProcessDataStreamBatchTests(DataStreamBatchTests, ProcessDataStreamTests,
-                                  PyFlinkBatchTestCase):
+class BatchModeDataStreamTests(DataStreamTests, PyFlinkBatchTestCase):
 
     def test_timestamp_assigner_and_watermark_strategy(self):
         self.env.set_parallelism(1)
@@ -1618,171 +1221,19 @@ class ProcessDataStreamBatchTests(DataStreamBatchTests, ProcessDataStreamTests,
         expected = ["+I[6, a]", "+I[7, b]"]
         self.assert_equals_sorted(expected, results)
 
-    def test_keyed_sum(self):
-        self.env.set_parallelism(1)
-        ds = self.env.from_collection(
-            [(1, 1), (1, 2), (1, 3), (5, 1), (5, 5)],
-            type_info=Types.ROW_NAMED(["v1", "v2"], [Types.INT(), Types.INT()])
-        )
+    def test_reduce_with_state(self):
+        ds = self.env.from_collection([('a', 0), ('c', 1), ('d', 1), ('b', 0), ('e', 1)],
+                                      type_info=Types.ROW([Types.STRING(), Types.INT()]))
+        keyed_stream = ds.key_by(MyKeySelector(), key_type=Types.INT())
 
-        def flat_map_func1(data):
-            for i in data:
-                yield 12, i
+        with self.assertRaises(Exception):
+            keyed_stream.name("keyed stream")
 
-        def flat_map_func2(data):
-            for i in data:
-                yield i
-
-        # First sum operator: Test Row type data and pass in field names.
-        # Second sum operator: Test Row type data and use parameter default value: 0.
-        # Third sum operator: Test Tuple type data and pass in field index number.
-        # Fourthly sum operator: Test Number(int) type data.
-        ds.key_by(lambda x: x[0]) \
-            .sum("v2") \
-            .key_by(lambda x: x[1]) \
-            .sum() \
-            .flat_map(flat_map_func1, output_type=Types.TUPLE([Types.INT(), Types.INT()])) \
-            .key_by(lambda x: x[0]) \
-            .sum(1) \
-            .flat_map(flat_map_func2, output_type=Types.INT()) \
-            .key_by(lambda x: x) \
-            .sum() \
-            .add_sink(self.test_sink)
-
-        self.env.execute("key_by_sum_test_batch")
+        keyed_stream.reduce(MyReduceFunction()).add_sink(self.test_sink)
+        self.env.execute('key_by_test')
         results = self.test_sink.get_results(False)
-        expected = ['24']
-        self.assertEqual(expected, results)
-
-    def test_keyed_min_and_max(self):
-        self.env.set_parallelism(1)
-        ds = self.env.from_collection(
-            [(1, '9', 0), (1, '5', 1), (1, '6', 2), (5, '5', 0), (5, '3', 1)],
-            type_info=Types.ROW_NAMED(["v1", "v2", "v3"],
-                                      [Types.INT(), Types.STRING(), Types.INT()])
-        )
-
-        def flat_map_func(data):
-            for i in data:
-                yield int(i)
-
-        ds.key_by(lambda x: x[0]) \
-            .min("v2") \
-            .map(lambda x: (x[0], x[1], x[2]),
-                 output_type=Types.TUPLE([Types.INT(), Types.STRING(), Types.INT()])) \
-            .key_by(lambda x: x[2]) \
-            .max(0) \
-            .flat_map(flat_map_func, output_type=Types.INT()) \
-            .key_by(lambda x: x) \
-            .min() \
-            .key_by(lambda x: x) \
-            .max() \
-            .add_sink(self.test_sink)
-
-        self.env.execute("key_by_min_max_test_batch")
-        results = self.test_sink.get_results(False)
-        expected = ['0', '5']
+        expected = ['+I[ab, 0]', '+I[cde, 1]']
         self.assert_equals_sorted(expected, results)
-
-    def test_keyed_min_by_and_max_by(self):
-        self.env.set_parallelism(1)
-        ds = self.env.from_collection(
-            [(1, '9', 0), (1, '5', 1), (1, '6', 2), (5, '5', 0), (5, '3', 1)],
-            type_info=Types.ROW_NAMED(["v1", "v2", "v3"],
-                                      [Types.INT(), Types.STRING(), Types.INT()])
-        )
-
-        def flat_map_func1(data):
-            for i in data:
-                yield int(i), 1
-
-        def flat_map_func2(data):
-            for i in data:
-                yield i
-
-        ds.key_by(lambda x: x[0]) \
-            .min_by("v2") \
-            .map(lambda x: (x[0], x[1], x[2]),
-                 output_type=Types.TUPLE([Types.INT(), Types.STRING(), Types.INT()])) \
-            .key_by(lambda x: x[2]) \
-            .max_by(0) \
-            .flat_map(flat_map_func1, output_type=Types.TUPLE([Types.INT(), Types.INT()])) \
-            .key_by(lambda x: [1]) \
-            .min_by() \
-            .flat_map(flat_map_func2, output_type=Types.INT()) \
-            .key_by(lambda x: x) \
-            .max_by() \
-            .add_sink(self.test_sink)
-
-        self.env.execute("key_by_min_by_max_by_test_batch")
-        results = self.test_sink.get_results(False)
-        expected = ['1']
-        self.assert_equals_sorted(expected, results)
-
-
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="requires python3.7")
-class EmbeddedDataStreamStreamTests(DataStreamStreamingTests, PyFlinkStreamingTestCase):
-    def setUp(self):
-        super(EmbeddedDataStreamStreamTests, self).setUp()
-        config = get_j_env_configuration(self.env._j_stream_execution_environment)
-        config.setString("python.execution-mode", "thread")
-
-    def test_metrics(self):
-        ds = self.env.from_collection(
-            [('ab', 'a', decimal.Decimal(1)),
-             ('bdc', 'a', decimal.Decimal(2)),
-             ('cfgs', 'a', decimal.Decimal(3)),
-             ('deeefg', 'a', decimal.Decimal(4))],
-            type_info=Types.TUPLE(
-                [Types.STRING(), Types.STRING(), Types.BIG_DEC()]))
-
-        class MyMapFunction(MapFunction):
-            def __init__(self):
-                self.counter = None  # type: Counter
-                self.counter_value = 0
-                self.meter = None  # type: Meter
-                self.meter_value = 0
-                self.value_to_expose = 0
-                self.distribution = None  # type: Distribution
-
-            def open(self, runtime_context: RuntimeContext):
-                self.counter = runtime_context.get_metrics_group().counter("my_counter")
-                self.meter = runtime_context.get_metrics_group().meter('my_meter', 1)
-                runtime_context.get_metrics_group().gauge("my_gauge", lambda: self.value_to_expose)
-                self.distribution = runtime_context.get_metrics_group().distribution(
-                    "my_distribution")
-
-            def map(self, value):
-                self.counter.inc()
-                self.counter_value += 1
-                assert self.counter.get_count() == self.counter_value
-
-                self.meter.mark_event(1)
-                self.meter_value += 1
-                assert self.meter.get_count() == self.meter_value
-
-                self.value_to_expose += 1
-
-                self.distribution.update(int(value[2]))
-
-                return Row(value[0], len(value[0]), value[2])
-
-        (ds.key_by(lambda value: value[1])
-         .map(MyMapFunction(),
-              output_type=Types.ROW([Types.STRING(), Types.INT(), Types.BIG_DEC()]))
-         .add_sink(self.test_sink))
-        self.env.execute('test_basic_operations')
-        results = self.test_sink.get_results()
-        expected = ['+I[ab, 2, 1]', '+I[bdc, 3, 2]', '+I[cfgs, 4, 3]', '+I[deeefg, 6, 4]']
-        self.assert_equals_sorted(expected, results)
-
-
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="requires python3.7")
-class EmbeddedDataStreamBatchTests(DataStreamBatchTests, PyFlinkBatchTestCase):
-    def setUp(self):
-        super(EmbeddedDataStreamBatchTests, self).setUp()
-        config = get_j_env_configuration(self.env._j_stream_execution_environment)
-        config.setString("python.execution-mode", "thread")
 
 
 class MyKeySelector(KeySelector):
@@ -1872,3 +1323,175 @@ class SecondColumnTimestampAssigner(TimestampAssigner):
 
     def extract_timestamp(self, value, record_timestamp) -> int:
         return int(value[1])
+
+
+class SimpleCountWindowTrigger(Trigger[tuple, CountWindow]):
+
+    def __init__(self):
+        self._window_size = 3
+        self._count_state_descriptor = ReducingStateDescriptor(
+            "trigger_counter", lambda a, b: a + b, Types.BIG_INT())
+
+    def on_element(self,
+                   element: tuple,
+                   timestamp: int,
+                   window: CountWindow,
+                   ctx: Trigger.TriggerContext) -> TriggerResult:
+        state = ctx.get_partitioned_state(self._count_state_descriptor)  # type: ReducingState
+        state.add(1)
+        if state.get() >= self._window_size:
+            return TriggerResult.FIRE_AND_PURGE
+        else:
+            return TriggerResult.CONTINUE
+
+    def on_processing_time(self,
+                           time: int,
+                           window: CountWindow,
+                           ctx: Trigger.TriggerContext) -> TriggerResult:
+        return TriggerResult.CONTINUE
+
+    def on_event_time(self,
+                      time: int,
+                      window: CountWindow,
+                      ctx: Trigger.TriggerContext) -> TriggerResult:
+        return TriggerResult.CONTINUE
+
+    def on_merge(self, window: CountWindow, ctx: Trigger.OnMergeContext) -> None:
+        pass
+
+    def clear(self, window: CountWindow, ctx: Trigger.TriggerContext) -> None:
+        state = ctx.get_partitioned_state(self._count_state_descriptor)
+        state.clear()
+
+
+class SimpleCountWindowAssigner(WindowAssigner[tuple, CountWindow]):
+
+    def __init__(self):
+        self._window_id = 0
+        self._window_size = 3
+        self._counter_state_descriptor = ReducingStateDescriptor(
+            "assigner_counter", lambda a, b: a + b, Types.BIG_INT())
+
+    def assign_windows(self,
+                       element: tuple,
+                       timestamp: int,
+                       context: WindowAssigner.WindowAssignerContext) -> Collection[CountWindow]:
+        counter = context.get_runtime_context().get_reducing_state(
+            self._counter_state_descriptor)
+        if counter.get() is None:
+            counter.add(0)
+        result = [CountWindow(counter.get() // self._window_size)]
+        counter.add(1)
+        return result
+
+    def get_default_trigger(self, env) -> Trigger[tuple, CountWindow]:
+        return SimpleCountWindowTrigger()
+
+    def get_window_serializer(self) -> TypeSerializer[CountWindow]:
+        return CountWindowSerializer()
+
+    def is_event_time(self) -> bool:
+        return False
+
+
+class SumWindowFunction(WindowFunction[tuple, tuple, str, CountWindow]):
+
+    def apply(self, key: str, window: CountWindow, inputs: Iterable[tuple]):
+        result = 0
+        for i in inputs:
+            result += i[0]
+        return [(key, result)]
+
+
+class SimpleTimeWindowTrigger(Trigger[tuple, TimeWindow]):
+
+    def on_element(self,
+                   element: tuple,
+                   timestamp: int,
+                   window: TimeWindow,
+                   ctx: 'Trigger.TriggerContext') -> TriggerResult:
+        return TriggerResult.CONTINUE
+
+    def on_processing_time(self,
+                           time: int,
+                           window: TimeWindow,
+                           ctx: 'Trigger.TriggerContext') -> TriggerResult:
+        return TriggerResult.CONTINUE
+
+    def on_event_time(self,
+                      time: int,
+                      window: TimeWindow,
+                      ctx: 'Trigger.TriggerContext') -> TriggerResult:
+        if time >= window.max_timestamp():
+            return TriggerResult.FIRE_AND_PURGE
+        else:
+            return TriggerResult.CONTINUE
+
+    def on_merge(self,
+                 window: TimeWindow,
+                 ctx: 'Trigger.OnMergeContext') -> None:
+        pass
+
+    def clear(self,
+              window: TimeWindow,
+              ctx: 'Trigger.TriggerContext') -> None:
+        pass
+
+
+class SimpleMergeTimeWindowAssigner(MergingWindowAssigner[tuple, TimeWindow]):
+
+    def merge_windows(self,
+                      windows: Iterable[TimeWindow],
+                      callback: 'MergingWindowAssigner.MergeCallback[TimeWindow]') -> None:
+        sorted_windows = list(windows)
+        sorted_windows.sort()
+        merged = []
+        current_merge = None
+        current_merge_set = set()
+
+        for candidate in sorted_windows:
+            if current_merge is None:
+                current_merge = candidate
+                current_merge_set.add(candidate)
+            elif current_merge.intersects(candidate):
+                current_merge = current_merge.cover(candidate)
+                current_merge_set.add(candidate)
+            else:
+                merged.append((current_merge, current_merge_set))
+                current_merge = candidate
+                current_merge_set = set()
+                current_merge_set.add(candidate)
+
+        if current_merge is not None:
+            merged.append((current_merge, current_merge_set))
+
+        for merge_key, merge_set in merged:
+            if len(merge_set) > 1:
+                callback.merge(merge_set, merge_key)
+
+    def assign_windows(self,
+                       element: tuple,
+                       timestamp: int,
+                       context: 'WindowAssigner.WindowAssignerContext') -> Collection[TimeWindow]:
+        return [TimeWindow(timestamp, timestamp + 2)]
+
+    def get_default_trigger(self, env) -> Trigger[tuple, TimeWindow]:
+        return SimpleTimeWindowTrigger()
+
+    def get_window_serializer(self) -> TypeSerializer[TimeWindow]:
+        return TimeWindowSerializer()
+
+    def is_event_time(self) -> bool:
+        return True
+
+
+class CountWindowProcessFunction(ProcessWindowFunction[tuple, tuple, str, CountWindow]):
+
+    def process(self,
+                key: str,
+                content: ProcessWindowFunction.Context,
+                elements: Iterable[tuple]) -> Iterable[tuple]:
+        return [(key, len([e for e in elements]))]
+
+    def clear(self, context: ProcessWindowFunction.Context) -> None:
+        pass

@@ -24,46 +24,48 @@ import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.configuration.RestOptions;
 import org.apache.flink.configuration.SecurityOptions;
 import org.apache.flink.runtime.clusterframework.BootstrapTools;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.yarn.YarnConfigKeys;
 
 import org.apache.hadoop.yarn.api.ApplicationConstants;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import javax.annotation.Nonnull;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertThat;
 
 /** Tests for the {@link YarnEntrypointUtils}. */
-class YarnEntrypointUtilsTest {
+public class YarnEntrypointUtilsTest extends TestLogger {
 
-    @TempDir private static Path tempBaseDir;
+    @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
 
     /**
      * Tests that the REST ports are correctly set when loading a {@link Configuration} with
      * unspecified REST options.
      */
     @Test
-    void testRestPortOptionsUnspecified() throws IOException {
+    public void testRestPortOptionsUnspecified() throws IOException {
         final Configuration initialConfiguration = new Configuration();
 
         final Configuration configuration = loadConfiguration(initialConfiguration);
 
         // having not specified the ports should set the rest bind port to 0
-        assertThat(configuration.getString(RestOptions.BIND_PORT)).isEqualTo("0");
+        assertThat(configuration.getString(RestOptions.BIND_PORT), is(equalTo("0")));
     }
 
     /** Tests that the binding REST port is set to the REST port if set. */
     @Test
-    void testRestPortSpecified() throws IOException {
+    public void testRestPortSpecified() throws IOException {
         final Configuration initialConfiguration = new Configuration();
         final int port = 1337;
         initialConfiguration.setInteger(RestOptions.PORT, port);
@@ -71,12 +73,13 @@ class YarnEntrypointUtilsTest {
         final Configuration configuration = loadConfiguration(initialConfiguration);
 
         // if the bind port is not specified it should fall back to the rest port
-        assertThat(configuration.getString(RestOptions.BIND_PORT)).isEqualTo(String.valueOf(port));
+        assertThat(
+                configuration.getString(RestOptions.BIND_PORT), is(equalTo(String.valueOf(port))));
     }
 
     /** Tests that the binding REST port has precedence over the REST port if both are set. */
     @Test
-    void testRestPortAndBindingPortSpecified() throws IOException {
+    public void testRestPortAndBindingPortSpecified() throws IOException {
         final Configuration initialConfiguration = new Configuration();
         final int port = 1337;
         final String bindingPortRange = "1337-7331";
@@ -86,28 +89,27 @@ class YarnEntrypointUtilsTest {
         final Configuration configuration = loadConfiguration(initialConfiguration);
 
         // bind port should have precedence over the rest port
-        assertThat(configuration.getString(RestOptions.BIND_PORT)).isEqualTo(bindingPortRange);
+        assertThat(configuration.getString(RestOptions.BIND_PORT), is(equalTo(bindingPortRange)));
     }
 
     @Test
-    void testParsingValidKerberosEnv() throws IOException {
+    public void testParsingValidKerberosEnv() throws IOException {
         final Configuration initialConfiguration = new Configuration();
         Map<String, String> env = new HashMap<>();
-        File keytabFile =
-                Files.createTempFile(tempBaseDir, UUID.randomUUID().toString(), "").toFile();
+        File keytabFile = TEMPORARY_FOLDER.newFile();
         env.put(YarnConfigKeys.LOCAL_KEYTAB_PATH, keytabFile.getAbsolutePath());
         env.put(YarnConfigKeys.KEYTAB_PRINCIPAL, "starlord");
 
         Configuration configuration = loadConfiguration(initialConfiguration, env);
 
-        assertThat(configuration.get(SecurityOptions.KERBEROS_LOGIN_KEYTAB))
-                .isEqualTo(keytabFile.getAbsolutePath());
-        assertThat(configuration.get(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL))
-                .isEqualTo("starlord");
+        assertThat(
+                configuration.get(SecurityOptions.KERBEROS_LOGIN_KEYTAB),
+                is(keytabFile.getAbsolutePath()));
+        assertThat(configuration.get(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL), is("starlord"));
     }
 
     @Test
-    void testParsingKerberosEnvWithMissingKeytab() throws IOException {
+    public void testParsingKerberosEnvWithMissingKeytab() throws IOException {
         final Configuration initialConfiguration = new Configuration();
         Map<String, String> env = new HashMap<>();
         env.put(YarnConfigKeys.LOCAL_KEYTAB_PATH, "/hopefully/doesnt/exist");
@@ -116,12 +118,12 @@ class YarnEntrypointUtilsTest {
         Configuration configuration = loadConfiguration(initialConfiguration, env);
 
         // both keytab and principal should be null
-        assertThat(configuration.get(SecurityOptions.KERBEROS_LOGIN_KEYTAB)).isNull();
-        assertThat(configuration.get(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL)).isNull();
+        assertThat(configuration.get(SecurityOptions.KERBEROS_LOGIN_KEYTAB), nullValue());
+        assertThat(configuration.get(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL), nullValue());
     }
 
     @Test
-    void testDynamicParameterOverloading() throws IOException {
+    public void testDynamicParameterOverloading() throws IOException {
         final Configuration initialConfiguration = new Configuration();
         initialConfiguration.set(JobManagerOptions.JVM_METASPACE, MemorySize.ofMebiBytes(1));
 
@@ -130,8 +132,9 @@ class YarnEntrypointUtilsTest {
         Configuration overloadedConfiguration =
                 loadConfiguration(initialConfiguration, dynamicParameters);
 
-        assertThat(overloadedConfiguration.get(JobManagerOptions.JVM_METASPACE))
-                .isEqualTo(MemorySize.MAX_VALUE);
+        assertThat(
+                overloadedConfiguration.get(JobManagerOptions.JVM_METASPACE),
+                is(MemorySize.MAX_VALUE));
     }
 
     @Nonnull
@@ -159,8 +162,7 @@ class YarnEntrypointUtilsTest {
             Configuration dynamicParameters,
             Map<String, String> env)
             throws IOException {
-        final File workingDirectory =
-                Files.createTempDirectory(tempBaseDir, UUID.randomUUID().toString()).toFile();
+        final File workingDirectory = TEMPORARY_FOLDER.newFolder();
         env.put(ApplicationConstants.Environment.NM_HOST.key(), "foobar");
         BootstrapTools.writeConfiguration(
                 initialConfiguration, new File(workingDirectory, "flink-conf.yaml"));

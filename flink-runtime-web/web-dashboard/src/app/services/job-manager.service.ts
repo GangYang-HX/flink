@@ -21,54 +21,41 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import {
-  JobManagerLogItem,
-  JobManagerThreadDump,
-  JobMetric,
-  MetricMap,
-  JobManagerLogDetail,
-  ClusterConfiguration,
-  EnvironmentInfo
-} from '@flink-runtime-web/interfaces';
-
-import { ConfigService } from './config.service';
+import { BASE_URL } from 'config';
+import { JobManagerLogItem, JobManagerThreadDump } from 'interfaces';
 
 @Injectable({
   providedIn: 'root'
 })
 export class JobManagerService {
-  constructor(private readonly httpClient: HttpClient, private readonly configService: ConfigService) {}
+  constructor(private readonly httpClient: HttpClient) {}
 
-  loadConfig(): Observable<ClusterConfiguration[]> {
-    return this.httpClient.get<ClusterConfiguration[]>(`${this.configService.BASE_URL}/jobmanager/config`);
+  public loadConfig(): Observable<Array<{ key: string; value: string }>> {
+    return this.httpClient.get<Array<{ key: string; value: string }>>(`${BASE_URL}/jobmanager/config`);
   }
 
-  loadEnvironment(): Observable<EnvironmentInfo> {
-    return this.httpClient.get<EnvironmentInfo>(`${this.configService.BASE_URL}/jobmanager/environment`);
-  }
-
-  loadLogs(): Observable<string> {
-    return this.httpClient.get(`${this.configService.BASE_URL}/jobmanager/log`, {
+  public loadLogs(): Observable<string> {
+    return this.httpClient.get(`${BASE_URL}/jobmanager/log`, {
       responseType: 'text',
       headers: new HttpHeaders().append('Cache-Control', 'no-cache')
     });
   }
 
-  loadStdout(): Observable<string> {
-    return this.httpClient.get(`${this.configService.BASE_URL}/jobmanager/stdout`, {
+  public loadStdout(): Observable<string> {
+    return this.httpClient.get(`${BASE_URL}/jobmanager/stdout`, {
       responseType: 'text',
       headers: new HttpHeaders().append('Cache-Control', 'no-cache')
     });
   }
 
-  loadLogList(): Observable<JobManagerLogItem[]> {
+  public loadLogList(): Observable<JobManagerLogItem[]> {
     return this.httpClient
-      .get<{ logs: JobManagerLogItem[] }>(`${this.configService.BASE_URL}/jobmanager/logs`)
+      .get<{ logs: JobManagerLogItem[] }>(`${BASE_URL}/jobmanager/logs`)
       .pipe(map(data => data.logs));
   }
 
-  loadLog(logName: string): Observable<JobManagerLogDetail> {
-    const url = `${this.configService.BASE_URL}/jobmanager/logs/${logName}`;
+  public loadLog(logName: string): Observable<{ data: string; url: string }> {
+    const url = `${BASE_URL}/jobmanager/logs/${logName}`;
     return this.httpClient
       .get(url, { responseType: 'text', headers: new HttpHeaders().append('Cache-Control', 'no-cache') })
       .pipe(
@@ -81,46 +68,32 @@ export class JobManagerService {
       );
   }
 
-  loadThreadDump(): Observable<string> {
-    return this.httpClient.get<JobManagerThreadDump>(`${this.configService.BASE_URL}/jobmanager/thread-dump`).pipe(
+  public loadThreadDump(): Observable<string> {
+    return this.httpClient.get<JobManagerThreadDump>(`${BASE_URL}/jobmanager/thread-dump`).pipe(
       map(JobManagerThreadDump => {
         return JobManagerThreadDump.threadInfos.map(threadInfo => threadInfo.stringifiedThreadInfo).join('');
       })
     );
   }
 
-  loadMetricsName(): Observable<string[]> {
+  public getMetricsName(): Observable<string[]> {
     return this.httpClient
-      .get<Array<{ id: string }>>(`${this.configService.BASE_URL}/jobmanager/metrics`)
+      .get<Array<{ id: string }>>(`${BASE_URL}/jobmanager/metrics`)
       .pipe(map(arr => arr.map(item => item.id)));
   }
 
-  loadMetrics(listOfMetricName: string[]): Observable<MetricMap> {
+  public getMetrics(listOfMetricName: string[]): Observable<{ [p: string]: number }> {
     const metricName = listOfMetricName.join(',');
-    return this.httpClient.get<JobMetric[]>(`${this.configService.BASE_URL}/jobmanager/metrics?get=${metricName}`).pipe(
-      map(arr => {
-        const result: MetricMap = {};
-        arr.forEach(item => {
-          result[item.id] = parseInt(item.value, 10);
-        });
-        return result;
-      })
-    );
-  }
-
-  loadHistoryServerConfig(jobId: string): Observable<ClusterConfiguration[]> {
-    return this.httpClient.get<ClusterConfiguration[]>(
-      `${this.configService.BASE_URL}/jobs/${jobId}/jobmanager/config`
-    );
-  }
-
-  loadHistoryServerEnvironment(jobId: string): Observable<EnvironmentInfo> {
-    return this.httpClient.get<EnvironmentInfo>(`${this.configService.BASE_URL}/jobs/${jobId}/jobmanager/environment`);
-  }
-
-  loadHistoryServerJobManagerLogUrl(jobId: string): Observable<string> {
     return this.httpClient
-      .get<{ url: string }>(`${this.configService.BASE_URL}/jobs/${jobId}/jobmanager/log-url`)
-      .pipe(map(data => data.url));
+      .get<Array<{ id: string; value: string }>>(`${BASE_URL}/jobmanager/metrics?get=${metricName}`)
+      .pipe(
+        map(arr => {
+          const result: { [id: string]: number } = {};
+          arr.forEach(item => {
+            result[item.id] = parseInt(item.value, 10);
+          });
+          return result;
+        })
+      );
   }
 }

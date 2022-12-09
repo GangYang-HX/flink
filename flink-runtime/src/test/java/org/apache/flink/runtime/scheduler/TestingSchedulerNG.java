@@ -127,6 +127,11 @@ public class TestingSchedulerNG implements SchedulerNG {
     }
 
     @Override
+    public void notifyPartitionDataAvailable(ResultPartitionID partitionID) {
+        failOperation();
+    }
+
+    @Override
     public ExecutionGraphInfo requestJob() {
         failOperation();
         return null;

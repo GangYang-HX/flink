@@ -166,7 +166,11 @@ public final class GenericRowData implements RowData {
 
     @Override
     public StringData getString(int pos) {
-        return (StringData) this.fields[pos];
+        try {
+            return (StringData) this.fields[pos];
+        } catch (Exception e) {
+            return StringData.fromString(String.valueOf(this.fields[pos]));
+        }
     }
 
     @Override

@@ -181,7 +181,7 @@ public class JdbcConnectorOptions extends JdbcConnectionOptions {
             }
 
             return new JdbcConnectorOptions(
-                    dialect.appendDefaultUrlProperties(dbURL),
+                    dbURL,
                     tableName,
                     driverName,
                     username,

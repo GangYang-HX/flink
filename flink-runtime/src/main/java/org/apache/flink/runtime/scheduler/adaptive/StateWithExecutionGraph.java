@@ -167,6 +167,10 @@ abstract class StateWithExecutionGraph implements State {
         return logger;
     }
 
+    void notifyPartitionDataAvailable(ResultPartitionID partitionID) {
+        executionGraph.notifyPartitionDataAvailable(partitionID);
+    }
+
     SerializedInputSplit requestNextInputSplit(
             JobVertexID vertexID, ExecutionAttemptID executionAttempt) throws IOException {
         return executionGraphHandler.requestNextInputSplit(vertexID, executionAttempt);

@@ -168,7 +168,7 @@ public abstract class AbstractFileSource<T, SplitT extends FileSourceSplit>
 
     @Override
     public SimpleVersionedSerializer<PendingSplitsCheckpoint<SplitT>>
-            getEnumeratorCheckpointSerializer() {
+    getEnumeratorCheckpointSerializer() {
         return new PendingSplitsCheckpointSerializer<>(getSplitSerializer());
     }
 

@@ -21,7 +21,6 @@ package org.apache.flink.formats.json;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.types.Row;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
@@ -53,8 +52,6 @@ import static org.junit.internal.matchers.ThrowableMessageMatcher.hasMessage;
 /** Tests for the {@link JsonRowDeserializationSchema}. */
 public class JsonRowDeserializationSchemaTest {
 
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
-
     @Rule public ExpectedException thrown = ExpectedException.none();
 
     /** Tests simple deserialization using type information. */
@@ -76,8 +73,10 @@ public class JsonRowDeserializationSchemaTest {
         innerMap.put("key", 234);
         nestedMap.put("inner_map", innerMap);
 
+        ObjectMapper objectMapper = new ObjectMapper();
+
         // Root
-        ObjectNode root = OBJECT_MAPPER.createObjectNode();
+        ObjectNode root = objectMapper.createObjectNode();
         root.put("id", id);
         root.put("name", name);
         root.put("bytes", bytes);
@@ -90,7 +89,7 @@ public class JsonRowDeserializationSchemaTest {
         root.putObject("map").put("flink", 123);
         root.putObject("map2map").putObject("inner_map").put("key", 234);
 
-        byte[] serializedJson = OBJECT_MAPPER.writeValueAsBytes(root);
+        byte[] serializedJson = objectMapper.writeValueAsBytes(root);
 
         JsonRowDeserializationSchema deserializationSchema =
                 new JsonRowDeserializationSchema.Builder(
@@ -150,8 +149,10 @@ public class JsonRowDeserializationSchemaTest {
                 };
         final String[] strings = new String[] {"one", "two", "three"};
 
+        final ObjectMapper objectMapper = new ObjectMapper();
+
         // Root
-        ObjectNode root = OBJECT_MAPPER.createObjectNode();
+        ObjectNode root = objectMapper.createObjectNode();
         root.put("id", id.longValue());
         root.putNull("idOrNull");
         root.put("name", name);
@@ -163,7 +164,7 @@ public class JsonRowDeserializationSchemaTest {
         root.putArray("strings").add("one").add("two").add("three");
         root.putObject("nested").put("booleanField", true).put("decimalField", 12);
 
-        final byte[] serializedJson = OBJECT_MAPPER.writeValueAsBytes(root);
+        final byte[] serializedJson = objectMapper.writeValueAsBytes(root);
 
         JsonRowDeserializationSchema deserializationSchema =
                 new JsonRowDeserializationSchema.Builder(
@@ -211,10 +212,12 @@ public class JsonRowDeserializationSchemaTest {
     /** Tests deserialization with non-existing field name. */
     @Test
     public void testMissingNode() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+
         // Root
-        ObjectNode root = OBJECT_MAPPER.createObjectNode();
+        ObjectNode root = objectMapper.createObjectNode();
         root.put("id", 123123123);
-        byte[] serializedJson = OBJECT_MAPPER.writeValueAsBytes(root);
+        byte[] serializedJson = objectMapper.writeValueAsBytes(root);
 
         TypeInformation<Row> rowTypeInformation =
                 Types.ROW_NAMED(new String[] {"name"}, Types.STRING);

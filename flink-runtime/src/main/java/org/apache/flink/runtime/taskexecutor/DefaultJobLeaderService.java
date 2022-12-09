@@ -28,8 +28,11 @@ import org.apache.flink.runtime.jobmaster.JMTMRegistrationSuccess;
 import org.apache.flink.runtime.jobmaster.JobMasterGateway;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.jobmaster.TaskManagerRegistrationInformation;
+import org.apache.flink.runtime.leaderretrieval.HybridLeaderRetrievalService;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalListener;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
+import org.apache.flink.runtime.metrics.MetricNames;
+import org.apache.flink.runtime.metrics.groups.TaskManagerMetricGroup;
 import org.apache.flink.runtime.registration.RegisteredRpcConnection;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.registration.RetryingRegistration;
@@ -90,6 +93,8 @@ public class DefaultJobLeaderService implements JobLeaderService {
     /** Job leader listener listening for job leader changes. */
     private JobLeaderListener jobLeaderListener;
 
+    private TaskManagerMetricGroup taskManagerMetricGroup;
+
     public DefaultJobLeaderService(
             UnresolvedTaskManagerLocation location,
             RetryingRegistrationConfiguration retryingRegistrationConfiguration) {
@@ -133,6 +138,22 @@ public class DefaultJobLeaderService implements JobLeaderService {
             this.jobLeaderListener = Preconditions.checkNotNull(initialJobLeaderListener);
             state = DefaultJobLeaderService.State.STARTED;
         }
+    }
+
+    @Override
+    public void start(
+            String initialOwnerAddress,
+            RpcService initialRpcService,
+            HighAvailabilityServices initialHighAvailabilityServices,
+            JobLeaderListener initialJobLeaderListener,
+            TaskManagerMetricGroup initialMetricGroup) {
+        start(
+                initialOwnerAddress,
+                initialRpcService,
+                initialHighAvailabilityServices,
+                initialJobLeaderListener);
+
+        this.taskManagerMetricGroup = Preconditions.checkNotNull(initialMetricGroup);
     }
 
     @Override
@@ -193,6 +214,18 @@ public class DefaultJobLeaderService implements JobLeaderService {
 
         final LeaderRetrievalService leaderRetrievalService =
                 highAvailabilityServices.getJobManagerLeaderRetriever(jobId, defaultTargetAddress);
+
+        if (leaderRetrievalService instanceof HybridLeaderRetrievalService) {
+            HybridLeaderRetrievalService hybridLeaderRetrievalService =
+                    (HybridLeaderRetrievalService) leaderRetrievalService;
+
+            taskManagerMetricGroup.gauge(
+                    MetricNames.ZK_AVAILABLE,
+                    () -> hybridLeaderRetrievalService.zkAvailable() ? 1 : 0);
+            taskManagerMetricGroup.gauge(
+                    MetricNames.NUM_SWITCH_FILESYSTEM,
+                    () -> hybridLeaderRetrievalService.getSwitchFileSystemNum());
+        }
 
         DefaultJobLeaderService.JobManagerLeaderListener jobManagerLeaderListener =
                 new JobManagerLeaderListener(jobId);

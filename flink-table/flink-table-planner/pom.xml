@@ -23,7 +23,8 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-table</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-table-planner_${scala.binary.version}</artifactId>
@@ -36,6 +37,10 @@ under the License.
 	</description>
 
 	<packaging>jar</packaging>
+
+	<properties>
+		<maven.test.skip>true</maven.test.skip>
+	</properties>
 
 	<dependencies>
 		<!-- Mainly used for calcite-core, relocated in org.apache.flink.calcite.shaded by the shade plugin -->
@@ -182,6 +187,12 @@ under the License.
 			</exclusions>
 		</dependency>
 
+		<dependency>
+			<!-- For legacy string expressions in Table API -->
+			<groupId>org.scala-lang.modules</groupId>
+			<artifactId>scala-parser-combinators_${scala.binary.version}</artifactId>
+		</dependency>
+
 		<!-- Test dependencies -->
 
 		<dependency>
@@ -209,6 +220,15 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-core</artifactId>
+			<version>${project.version}</version>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<!-- SuccessException used in TestValuesTableFactory -->
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-tests</artifactId>
 			<version>${project.version}</version>
 			<type>test-jar</type>
 			<scope>test</scope>
@@ -351,6 +371,9 @@ under the License.
 							<!-- flink-table-planner dependencies -->
 							<include>org.apache.flink:flink-sql-parser</include>
 							<include>org.apache.flink:flink-sql-parser-hive</include>
+
+							<!-- For legacy string expressions in Table API -->
+							<include>org.scala-lang.modules:scala-parser-combinators_${scala.binary.version}</include>
 						</includes>
 					</artifactSet>
 					<relocations>
@@ -395,6 +418,16 @@ under the License.
 				</configuration>
 			</plugin>
 
+			<!-- Scala Code Style, most of the configuration done via plugin management -->
+			<plugin>
+				<groupId>org.scalastyle</groupId>
+				<artifactId>scalastyle-maven-plugin</artifactId>
+				<configuration>
+                    <skip>true</skip>
+					<configLocation>${project.basedir}/../../tools/maven/scalastyle-config.xml</configLocation>
+				</configuration>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
@@ -423,32 +456,6 @@ under the License.
 							</includes>
 							<!-- override reuseForks to true to reduce testing time -->
 							<reuseForks>true</reuseForks>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-
-			<!-- deploy value connector's source code when user uses it. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-source-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>attach-test-sources</id>
-						<goals>
-							<goal>test-jar-no-fork</goal>
-						</goals>
-						<configuration>
-							<archive>
-								<!-- Globally exclude maven metadata, because it may accidentally bundle files we don't intend to -->
-								<addMavenDescriptor>false</addMavenDescriptor>
-							</archive>
-							<includes>
-								<!-- Only include factories sources, because this is where the value connector is stored. -->
-								<include>**/factories/**</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
-							</includes>
 						</configuration>
 					</execution>
 				</executions>

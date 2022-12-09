@@ -25,8 +25,7 @@ import org.apache.flink.testutils.DeeplyEqualsChecker;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.arrow.vector.ipc.ArrowStreamWriter;
-import org.assertj.core.api.HamcrestCondition;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,15 +33,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /**
  * Abstract test base for {@link ArrowReader} and {@link ArrowWriter}.
  *
  * @param <T> the elment type.
  */
-abstract class ArrowReaderWriterTestBase<T> {
+public abstract class ArrowReaderWriterTestBase<T> {
 
     private final DeeplyEqualsChecker checker;
 
@@ -55,7 +54,7 @@ abstract class ArrowReaderWriterTestBase<T> {
     }
 
     @Test
-    void testBasicFunctionality() {
+    public void testBasicFunctionality() {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             Tuple2<ArrowWriter<T>, ArrowStreamWriter> tuple2 = createArrowWriter(baos);
@@ -73,12 +72,10 @@ abstract class ArrowReaderWriterTestBase<T> {
                     createArrowReader(new ByteArrayInputStream(baos.toByteArray()));
             for (int i = 0; i < testData.length; i++) {
                 RowData deserialized = arrowReader.read(i);
-                assertThat(deserialized)
-                        .as("Deserialized value is wrong.")
-                        .is(
-                                HamcrestCondition.matching(
-                                        CustomEqualityMatcher.deeplyEquals(testData[i])
-                                                .withChecker(checker)));
+                assertThat(
+                        "Deserialized value is wrong.",
+                        deserialized,
+                        CustomEqualityMatcher.deeplyEquals(testData[i]).withChecker(checker));
             }
         } catch (Exception e) {
             System.err.println(e.getMessage());

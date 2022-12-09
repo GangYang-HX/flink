@@ -46,9 +46,11 @@ import org.apache.flink.runtime.executiongraph.IntermediateResult;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
 import org.apache.flink.runtime.executiongraph.failover.flip1.ResultPartitionAvailabilityChecker;
+import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguration;
 import org.apache.flink.runtime.query.KvStateLocationRegistry;
 import org.apache.flink.runtime.scheduler.InternalFailuresListener;
@@ -59,7 +61,6 @@ import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.util.OptionalFailure;
 import org.apache.flink.util.SerializedValue;
-import org.apache.flink.util.TernaryBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -222,16 +223,6 @@ class StateTrackingMockExecutionGraph implements ExecutionGraph {
     }
 
     @Override
-    public TernaryBoolean isChangelogStateBackendEnabled() {
-        return TernaryBoolean.fromBoolean(false);
-    }
-
-    @Override
-    public Optional<String> getChangelogStorageName() {
-        return Optional.empty();
-    }
-
-    @Override
     public StringifiedAccumulatorResult[] getAccumulatorResultsStringified() {
         return new StringifiedAccumulatorResult[0];
     }
@@ -264,13 +255,13 @@ class StateTrackingMockExecutionGraph implements ExecutionGraph {
     public void enableCheckpointing(
             CheckpointCoordinatorConfiguration chkConfig,
             List<MasterTriggerRestoreHook<?>> masterHooks,
+            Map<OperatorID, String> operatorDescriptions,
             CheckpointIDCounter checkpointIDCounter,
             CompletedCheckpointStore checkpointStore,
             StateBackend checkpointStateBackend,
             CheckpointStorage checkpointStorage,
             CheckpointStatsTracker statsTracker,
-            CheckpointsCleaner checkpointsCleaner,
-            String changelogStorage) {
+            CheckpointsCleaner checkpointsCleaner) {
         throw new UnsupportedOperationException();
     }
 
@@ -342,6 +333,11 @@ class StateTrackingMockExecutionGraph implements ExecutionGraph {
 
     @Override
     public void initFailureCause(Throwable t, long timestamp) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void notifyPartitionDataAvailable(ResultPartitionID partitionId) {
         throw new UnsupportedOperationException();
     }
 

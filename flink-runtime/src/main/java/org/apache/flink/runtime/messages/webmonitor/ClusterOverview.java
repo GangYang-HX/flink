@@ -21,11 +21,7 @@ package org.apache.flink.runtime.messages.webmonitor;
 import org.apache.flink.runtime.resourcemanager.ResourceOverview;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonInclude;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonInclude.Include;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
-
-import javax.annotation.Nullable;
 
 /**
  * Response to the {@link RequestStatusOverview} message, carrying a description of the Flink
@@ -38,8 +34,6 @@ public class ClusterOverview extends JobsOverview {
     public static final String FIELD_NAME_TASKMANAGERS = "taskmanagers";
     public static final String FIELD_NAME_SLOTS_TOTAL = "slots-total";
     public static final String FIELD_NAME_SLOTS_AVAILABLE = "slots-available";
-    public static final String FIELD_NAME_TASKMANAGERS_BLOCKED = "taskmanagers-blocked";
-    public static final String FIELD_NAME_SLOTS_FREE_AND_BLOCKED = "slots-free-and-blocked";
 
     @JsonProperty(FIELD_NAME_TASKMANAGERS)
     private final int numTaskManagersConnected;
@@ -50,24 +44,11 @@ public class ClusterOverview extends JobsOverview {
     @JsonProperty(FIELD_NAME_SLOTS_AVAILABLE)
     private final int numSlotsAvailable;
 
-    @JsonProperty(FIELD_NAME_TASKMANAGERS_BLOCKED)
-    @JsonInclude(Include.NON_DEFAULT)
-    private final int numTaskManagersBlocked;
-
-    @JsonProperty(FIELD_NAME_SLOTS_FREE_AND_BLOCKED)
-    @JsonInclude(Include.NON_DEFAULT)
-    private final int numSlotsFreeAndBlocked;
-
     @JsonCreator
-    // numTaskManagersBlocked and numSlotsFreeAndBlocked is Nullable since Jackson will assign null
-    // if the field is absent while parsing
     public ClusterOverview(
             @JsonProperty(FIELD_NAME_TASKMANAGERS) int numTaskManagersConnected,
             @JsonProperty(FIELD_NAME_SLOTS_TOTAL) int numSlotsTotal,
             @JsonProperty(FIELD_NAME_SLOTS_AVAILABLE) int numSlotsAvailable,
-            @JsonProperty(FIELD_NAME_TASKMANAGERS_BLOCKED) @Nullable Integer numTaskManagersBlocked,
-            @JsonProperty(FIELD_NAME_SLOTS_FREE_AND_BLOCKED) @Nullable
-                    Integer numSlotsFreeAndBlocked,
             @JsonProperty(FIELD_NAME_JOBS_RUNNING) int numJobsRunningOrPending,
             @JsonProperty(FIELD_NAME_JOBS_FINISHED) int numJobsFinished,
             @JsonProperty(FIELD_NAME_JOBS_CANCELLED) int numJobsCancelled,
@@ -78,8 +59,18 @@ public class ClusterOverview extends JobsOverview {
         this.numTaskManagersConnected = numTaskManagersConnected;
         this.numSlotsTotal = numSlotsTotal;
         this.numSlotsAvailable = numSlotsAvailable;
-        this.numTaskManagersBlocked = numTaskManagersBlocked == null ? 0 : numTaskManagersBlocked;
-        this.numSlotsFreeAndBlocked = numSlotsFreeAndBlocked == null ? 0 : numSlotsFreeAndBlocked;
+    }
+
+    public ClusterOverview(
+            int numTaskManagersConnected,
+            int numSlotsTotal,
+            int numSlotsAvailable,
+            JobsOverview jobs1,
+            JobsOverview jobs2) {
+        super(jobs1, jobs2);
+        this.numTaskManagersConnected = numTaskManagersConnected;
+        this.numSlotsTotal = numSlotsTotal;
+        this.numSlotsAvailable = numSlotsAvailable;
     }
 
     public ClusterOverview(ResourceOverview resourceOverview, JobsOverview jobsOverview) {
@@ -87,8 +78,6 @@ public class ClusterOverview extends JobsOverview {
                 resourceOverview.getNumberTaskManagers(),
                 resourceOverview.getNumberRegisteredSlots(),
                 resourceOverview.getNumberFreeSlots(),
-                resourceOverview.getNumberBlockedTaskManagers(),
-                resourceOverview.getNumberBlockedFreeSlots(),
                 jobsOverview.getNumJobsRunningOrPending(),
                 jobsOverview.getNumJobsFinished(),
                 jobsOverview.getNumJobsCancelled(),
@@ -107,13 +96,6 @@ public class ClusterOverview extends JobsOverview {
         return numSlotsAvailable;
     }
 
-    public int getNumTaskManagersBlocked() {
-        return numTaskManagersBlocked;
-    }
-
-    public int getNumSlotsFreeAndBlocked() {
-        return numSlotsFreeAndBlocked;
-    }
     // ------------------------------------------------------------------------
 
     @Override
@@ -125,8 +107,6 @@ public class ClusterOverview extends JobsOverview {
             return this.numTaskManagersConnected == that.numTaskManagersConnected
                     && this.numSlotsTotal == that.numSlotsTotal
                     && this.numSlotsAvailable == that.numSlotsAvailable
-                    && this.numTaskManagersBlocked == that.numTaskManagersBlocked
-                    && this.numSlotsFreeAndBlocked == that.numSlotsFreeAndBlocked
                     && this.getNumJobsRunningOrPending() == that.getNumJobsRunningOrPending()
                     && this.getNumJobsFinished() == that.getNumJobsFinished()
                     && this.getNumJobsCancelled() == that.getNumJobsCancelled()
@@ -142,8 +122,6 @@ public class ClusterOverview extends JobsOverview {
         result = 31 * result + numTaskManagersConnected;
         result = 31 * result + numSlotsTotal;
         result = 31 * result + numSlotsAvailable;
-        result = 31 * result + numTaskManagersBlocked;
-        result = 31 * result + numSlotsFreeAndBlocked;
         return result;
     }
 
@@ -152,16 +130,10 @@ public class ClusterOverview extends JobsOverview {
         return "StatusOverview {"
                 + "numTaskManagersConnected="
                 + numTaskManagersConnected
-                + (numTaskManagersBlocked == 0
-                        ? ""
-                        : (", numTaskManagersBlocked=" + numTaskManagersBlocked))
                 + ", numSlotsTotal="
                 + numSlotsTotal
                 + ", numSlotsAvailable="
                 + numSlotsAvailable
-                + (numSlotsFreeAndBlocked == 0
-                        ? ""
-                        : (", numSlotsFreeAndBlocked=" + numSlotsFreeAndBlocked))
                 + ", numJobsRunningOrPending="
                 + getNumJobsRunningOrPending()
                 + ", numJobsFinished="

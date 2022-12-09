@@ -17,7 +17,8 @@
 
 package org.apache.flink.connector.kafka.sink;
 
-class TransactionalIdFactory {
+/** TransactionalIdFactory. */
+public class TransactionalIdFactory {
     private static final String TRANSACTIONAL_ID_DELIMITER = "-";
 
     /**

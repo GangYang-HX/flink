@@ -21,7 +21,7 @@ import org.apache.flink.table.api._
 import org.apache.flink.table.expressions.TimeIntervalUnit
 import org.apache.flink.table.planner.codegen.CodeGenException
 import org.apache.flink.table.planner.expressions.utils.ExpressionTestBase
-import org.apache.flink.table.planner.utils.{DateTimeTestUtil, TableConfigUtils}
+import org.apache.flink.table.planner.utils.DateTimeTestUtil
 import org.apache.flink.table.planner.utils.DateTimeTestUtil._
 import org.apache.flink.table.types.DataType
 import org.apache.flink.types.Row
@@ -140,7 +140,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testTimestampLtzCastInUTC(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("UTC"))
+    config.setLocalTimeZone(ZoneId.of("UTC"))
 
     // DATE -> TIMESTAMP_LTZ
     testSqlApi("CAST(f0 AS TIMESTAMP_LTZ(3))", "1990-10-14 00:00:00.000")
@@ -157,7 +157,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testTimestampLtzCastInShanghai(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
+    config.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
 
     // DATE -> TIMESTAMP_LTZ
     testSqlApi("CAST(f0 AS TIMESTAMP_LTZ(3))", "1990-10-14 00:00:00.000")
@@ -545,7 +545,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testDateFormat(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("UTC"))
+    config.setLocalTimeZone(ZoneId.of("UTC"))
 
     testSqlApi("DATE_FORMAT('2018-03-14 01:02:03', 'yyyy/MM/dd HH:mm:ss')", "2018/03/14 01:02:03")
 
@@ -564,7 +564,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testDateFormatShanghai(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
+    config.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
 
     testSqlApi("DATE_FORMAT('2018-03-14 01:02:03', 'yyyy/MM/dd HH:mm:ss')", "2018/03/14 01:02:03")
 
@@ -584,7 +584,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testDateFormatLosAngeles(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("America/Los_Angeles"))
+    config.setLocalTimeZone(ZoneId.of("America/Los_Angeles"))
 
     testSqlApi("DATE_FORMAT('2018-03-14 01:02:03', 'yyyy/MM/dd HH:mm:ss')", "2018/03/14 01:02:03")
 
@@ -625,7 +625,6 @@ class TemporalTypesTest extends ExpressionTestBase {
     testSqlApi("EXTRACT(MONTH FROM TO_DATE('2018-01-01'))", "1")
     testSqlApi("EXTRACT(YEAR FROM TO_DATE('2018-01-01'))", "2018")
     testSqlApi("EXTRACT(QUARTER FROM TO_DATE('2018-01-01'))", "1")
-    testSqlApi("EXTRACT(EPOCH FROM TO_DATE('2018-01-01'))", "1514764800")
 
     // Floor & Ceil
     // TODO: fix this legacy bug
@@ -635,7 +634,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testTemporalShanghai(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
+    config.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
 
     testSqlApi(timestampLtz("2018-03-14 19:01:02.123"), "2018-03-14 19:01:02.123")
     testSqlApi(timestampLtz("2018-03-14 19:00:00.010"), "2018-03-14 19:00:00.010")
@@ -700,20 +699,16 @@ class TemporalTypesTest extends ExpressionTestBase {
     testSqlApi(s"EXTRACT(ISOYEAR FROM ${timestampLtz("2005-01-03 00:00:00")})", "2005")
     testSqlApi(s"EXTRACT(ISODOW FROM ${timestampLtz("2005-01-03 00:00:00")})", "1")
 
-    testSqlApi(s"EXTRACT(EPOCH FROM ${timestampLtz("2021-12-22 12:13:14")})", "1640175194")
-
     // FLOOR & CEIL
     testSqlApi("FLOOR(TIME '12:44:31' TO MINUTE)", "12:44:00")
     testSqlApi("FLOOR(TIME '12:44:31' TO HOUR)", "12:00:00")
     testSqlApi("CEIL(TIME '12:44:31' TO MINUTE)", "12:45:00")
     testSqlApi("CEIL(TIME '12:44:31' TO HOUR)", "13:00:00")
 
-    testSqlApi("FLOOR(DATE '2021-02-27' TO DAY)", "2021-02-27")
-    testSqlApi("FLOOR(DATE '2021-02-27' TO WEEK)", "2021-02-21")
-    testSqlApi("FLOOR(DATE '2021-03-01' TO WEEK)", "2021-02-28")
-    testSqlApi("CEIL(DATE '2021-02-27' TO DAY)", "2021-02-28")
-    testSqlApi("CEIL(DATE '2021-02-27' TO WEEK)", "2021-02-28")
-    testSqlApi("CEIL(DATE '2021-03-01' TO WEEK)", "2021-03-07")
+    testSqlApi("FLOOR( DATE '2021-02-27' TO WEEK)", "2021-02-21")
+    testSqlApi("FLOOR( DATE '2021-03-01' TO WEEK)", "2021-02-28")
+    testSqlApi("CEIL( DATE '2021-02-27' TO WEEK)", "2021-02-28")
+    testSqlApi("CEIL( DATE '2021-03-01' TO WEEK)", "2021-03-07")
     testSqlApi("CEIL(DATE '2018-01-02' TO DECADE)", "2020-01-01")
     testSqlApi("CEIL(DATE '2018-03-27' TO CENTURY)", "2101-01-01")
     testSqlApi("CEIL(DATE '2018-01-02' TO MILLENNIUM)", "3001-01-01")
@@ -812,7 +807,7 @@ class TemporalTypesTest extends ExpressionTestBase {
     // due to conventions for local time zone changes such as Daylight Saving Time (DST),
     // it is possible for UNIX_TIMESTAMP() to map two values that are distinct in a non-UTC
     // time zone to the same Unix timestamp value
-    tableConfig.setLocalTimeZone(ZoneId.of("MET")) // Europe/Amsterdam
+    config.setLocalTimeZone(ZoneId.of("MET")) // Europe/Amsterdam
 
     testSqlApi("UNIX_TIMESTAMP('2005-03-27 03:00:00')", "1111885200")
     testSqlApi("UNIX_TIMESTAMP('2005-03-27 02:00:00')", "1111885200")
@@ -822,7 +817,7 @@ class TemporalTypesTest extends ExpressionTestBase {
   @Test
   def testHourUnitRangoonTimeZone(): Unit = {
     // Asia/Rangoon UTC Offset 6.5
-    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Rangoon"))
+    config.setLocalTimeZone(ZoneId.of("Asia/Rangoon"))
 
     val t1 = timestampLtz("2018-03-20 06:10:31")
     val t2 = timestampLtz("2018-03-20 06:00:00")
@@ -840,10 +835,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
     testSqlApi("DATE_FORMAT(cast(NULL as varchar), 'yyyy/MM/dd HH:mm:ss')", nullable)
 
-    testAllApis(
-      fromUnixtime(nullOf(DataTypes.BIGINT())),
-      "FROM_UNIXTIME(cast(NULL as bigInt))",
-      nullable)
+    testSqlApi("FROM_UNIXTIME(cast(NULL as bigInt))", nullable)
 
     testSqlApi("TO_DATE(cast(NULL as varchar))", nullable)
 
@@ -889,15 +881,9 @@ class TemporalTypesTest extends ExpressionTestBase {
     val fmt3 = "yy-MM-dd HH-mm-ss"
     val sdf3 = new SimpleDateFormat(fmt3, Locale.US)
 
-    testAllApis(fromUnixtime('f21), "from_unixtime(f21)", sdf1.format(new Timestamp(44000)))
-    testAllApis(
-      fromUnixtime('f21, fmt2),
-      s"from_unixtime(f21, '$fmt2')",
-      sdf2.format(new Timestamp(44000)))
-    testAllApis(
-      fromUnixtime('f21, fmt3),
-      s"from_unixtime(f21, '$fmt3')",
-      sdf3.format(new Timestamp(44000)))
+    testSqlApi("from_unixtime(f21)", sdf1.format(new Timestamp(44000)))
+    testSqlApi(s"from_unixtime(f21, '$fmt2')", sdf2.format(new Timestamp(44000)))
+    testSqlApi(s"from_unixtime(f21, '$fmt3')", sdf3.format(new Timestamp(44000)))
 
     testSqlApi("from_unixtime(f22)", sdf1.format(new Timestamp(3000)))
     testSqlApi(s"from_unixtime(f22, '$fmt2')", sdf2.format(new Timestamp(3000)))
@@ -912,7 +898,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testFromUnixTimeInTokyo(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Tokyo"))
+    config.setLocalTimeZone(ZoneId.of("Asia/Tokyo"))
     val fmt = "yy-MM-dd HH-mm-ss"
     testSqlApi("from_unixtime(f21)", "1970-01-01 09:00:44")
     testSqlApi(s"from_unixtime(f21, '$fmt')", "70-01-01 09-00-44")
@@ -939,7 +925,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testUnixTimestampInTokyo(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Tokyo"))
+    config.setLocalTimeZone(ZoneId.of("Asia/Tokyo"))
     testSqlApi("UNIX_TIMESTAMP('2015-07-24 10:00:00')", "1437699600")
     testSqlApi("UNIX_TIMESTAMP('2015/07/24 10:00:00.5', 'yyyy/MM/dd HH:mm:ss.S')", "1437699600")
   }
@@ -1105,7 +1091,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testToTimestampLtzShanghai(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
+    config.setLocalTimeZone(ZoneId.of("Asia/Shanghai"))
 
     // INT -> TIMESTAMP_LTZ
     testAllApis(toTimestampLtz(100, 0), "TO_TIMESTAMP_LTZ(100, 0)", "1970-01-01 08:01:40.000")
@@ -1152,7 +1138,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testToTimestampLtzUTC(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("UTC"))
+    config.setLocalTimeZone(ZoneId.of("UTC"))
     testAllApis(toTimestampLtz(100, 0), "TO_TIMESTAMP_LTZ(100, 0)", "1970-01-01 00:01:40.000")
 
     testAllApis(toTimestampLtz(100, 0), "TO_TIMESTAMP_LTZ(100, 0)", "1970-01-01 00:01:40.000")
@@ -1164,7 +1150,7 @@ class TemporalTypesTest extends ExpressionTestBase {
 
   @Test
   def testBoundaryForToTimestampLtz(): Unit = {
-    tableConfig.setLocalTimeZone(ZoneId.of("UTC"))
+    config.setLocalTimeZone(ZoneId.of("UTC"))
 
     // INT
     testAllApis(
@@ -1283,8 +1269,8 @@ class TemporalTypesTest extends ExpressionTestBase {
     )
     testExpectedTableApiException(
       toTimestampLtz("test_string_type", 0),
-      "Unsupported argument type. " +
-        "Expected type of family 'NUMERIC' but actual type was 'CHAR(16) NOT NULL'"
+      "toTimestampLtz(test_string_type, 0) requires numeric type for the first input," +
+        " but the actual type 'String'."
     )
 
     // invalid type for the second input
@@ -1297,8 +1283,8 @@ class TemporalTypesTest extends ExpressionTestBase {
 
     testExpectedTableApiException(
       toTimestampLtz(123, "test_string_type"),
-      "Unsupported argument type. " +
-        "Expected type of family 'INTEGER_NUMERIC' but actual type was 'CHAR(16) NOT NULL'"
+      "toTimestampLtz(123, test_string_type) requires numeric type for the second input," +
+        " but the actual type 'String'."
     )
   }
 
@@ -1455,12 +1441,12 @@ class TemporalTypesTest extends ExpressionTestBase {
     testData.setField(
       23,
       localDateTime("1970-01-01 00:00:00.123456789")
-        .atZone(TableConfigUtils.getLocalTimeZone(tableConfig))
+        .atZone(config.getLocalTimeZone)
         .toInstant)
     testData.setField(
       24,
       localDateTime("1970-01-01 00:00:00.123456789")
-        .atZone(TableConfigUtils.getLocalTimeZone(tableConfig))
+        .atZone(config.getLocalTimeZone)
         .toInstant)
     testData.setField(25, localDateTime("1970-01-01 00:00:00.123456789").toInstant(ZoneOffset.UTC))
     testData.setField(26, new Integer(124).byteValue())

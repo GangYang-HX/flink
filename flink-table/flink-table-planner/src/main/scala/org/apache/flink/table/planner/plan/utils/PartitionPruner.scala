@@ -24,7 +24,6 @@ import org.apache.flink.table.api.{TableConfig, TableException}
 import org.apache.flink.table.data.{DecimalDataUtils, GenericRowData, StringData, TimestampData}
 import org.apache.flink.table.planner.codegen.{ConstantCodeGeneratorContext, ExprCodeGenerator, FunctionCodeGenerator}
 import org.apache.flink.table.planner.codegen.CodeGenUtils.DEFAULT_COLLECTOR_TERM
-import org.apache.flink.table.planner.utils.TableConfigUtils
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo
 import org.apache.flink.table.types.logical.{BooleanType, DecimalType, LogicalType}
 import org.apache.flink.table.types.logical.LogicalTypeRoot._
@@ -80,7 +79,6 @@ object PartitionPruner {
    */
   def prunePartitions(
       tableConfig: TableConfig,
-      classLoader: ClassLoader,
       partitionFieldNames: Array[String],
       partitionFieldTypes: Array[LogicalType],
       allPartitions: JList[JMap[String, String]],
@@ -93,7 +91,7 @@ object PartitionPruner {
     val inputType = InternalTypeInfo.ofFields(partitionFieldTypes, partitionFieldNames).toRowType
     val returnType: LogicalType = new BooleanType(false)
 
-    val ctx = new ConstantCodeGeneratorContext(tableConfig, classLoader)
+    val ctx = new ConstantCodeGeneratorContext(tableConfig)
     val collectorTerm = DEFAULT_COLLECTOR_TERM
 
     val exprGenerator = new ExprCodeGenerator(ctx, false)
@@ -116,7 +114,7 @@ object PartitionPruner {
       inputType,
       collectorTerm = collectorTerm)
 
-    val function = genFunction.newInstance(classLoader)
+    val function = genFunction.newInstance(Thread.currentThread().getContextClassLoader)
     val richMapFunction = function match {
       case r: RichMapFunction[GenericRowData, Boolean] => r
       case _ => throw new TableException("RichMapFunction[GenericRowData, Boolean] required here")
@@ -131,7 +129,7 @@ object PartitionPruner {
       allPartitions.foreach {
         partition =>
           val row = convertPartitionToRow(
-            TableConfigUtils.getLocalTimeZone(tableConfig),
+            tableConfig.getLocalTimeZone,
             partitionFieldNames,
             partitionFieldTypes,
             partition)

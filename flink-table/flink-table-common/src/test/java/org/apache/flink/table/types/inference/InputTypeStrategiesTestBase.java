@@ -27,9 +27,9 @@ import org.apache.flink.table.types.inference.utils.CallContextMock;
 import org.apache.flink.table.types.inference.utils.FunctionDefinitionMock;
 import org.apache.flink.table.types.utils.DataTypeFactoryMock;
 
-import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import javax.annotation.Nullable;
 
@@ -39,50 +39,45 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Base class for testing {@link InputTypeStrategy}. */
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@RunWith(Parameterized.class)
 public abstract class InputTypeStrategiesTestBase {
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("testData")
-    void testStrategy(TestSpec testSpec) {
+    @Parameterized.Parameter public TestSpec testSpec;
+
+    @Test
+    public void testStrategy() {
         if (testSpec.expectedSignature != null) {
-            assertThat(generateSignature(testSpec)).isEqualTo(testSpec.expectedSignature);
+            assertThat(generateSignature()).isEqualTo(testSpec.expectedSignature);
         }
         for (List<DataType> actualArgumentTypes : testSpec.actualArgumentTypes) {
             if (testSpec.expectedErrorMessage != null) {
-                assertThatThrownBy(() -> runTypeInference(actualArgumentTypes, testSpec))
+                assertThatThrownBy(() -> runTypeInference(actualArgumentTypes))
                         .satisfies(
                                 anyCauseMatches(
                                         ValidationException.class, testSpec.expectedErrorMessage));
             } else if (testSpec.expectedArgumentTypes != null) {
-                assertThat(
-                                runTypeInference(actualArgumentTypes, testSpec)
-                                        .getExpectedArgumentTypes())
+                assertThat(runTypeInference(actualArgumentTypes).getExpectedArgumentTypes())
                         .isEqualTo(testSpec.expectedArgumentTypes);
             }
         }
     }
 
-    protected abstract Stream<TestSpec> testData();
-
     // --------------------------------------------------------------------------------------------
 
-    private String generateSignature(TestSpec testSpec) {
+    private String generateSignature() {
         final FunctionDefinitionMock functionDefinitionMock = new FunctionDefinitionMock();
         functionDefinitionMock.functionKind = FunctionKind.SCALAR;
         return TypeInferenceUtil.generateSignature(
-                createTypeInference(testSpec), "f", functionDefinitionMock);
+                createTypeInference(), "f", functionDefinitionMock);
     }
 
-    private TypeInferenceUtil.Result runTypeInference(
-            List<DataType> actualArgumentTypes, TestSpec testSpec) {
+    private TypeInferenceUtil.Result runTypeInference(List<DataType> actualArgumentTypes) {
         final FunctionDefinitionMock functionDefinitionMock = new FunctionDefinitionMock();
         functionDefinitionMock.functionKind = FunctionKind.SCALAR;
 
@@ -128,10 +123,10 @@ public abstract class InputTypeStrategiesTestBase {
             surroundingInfo = null;
         }
         return TypeInferenceUtil.runTypeInference(
-                createTypeInference(testSpec), callContextMock, surroundingInfo);
+                createTypeInference(), callContextMock, surroundingInfo);
     }
 
-    private TypeInference createTypeInference(TestSpec testSpec) {
+    private TypeInference createTypeInference() {
         final TypeInference.Builder builder =
                 TypeInference.newBuilder()
                         .inputTypeStrategy(testSpec.strategy)

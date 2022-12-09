@@ -77,25 +77,14 @@ class FloorCeilCallGen(
                  |""".stripMargin
 
             // for Unix Date / Unix Time
-            case MILLENNIUM | CENTURY | DECADE | YEAR | QUARTER | MONTH | WEEK | DAY =>
+            case MILLENNIUM | CENTURY | DECADE | YEAR | QUARTER | MONTH | WEEK =>
               operand.resultType.getTypeRoot match {
                 case LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE =>
-                  unit match {
-                    case DAY =>
-                      val longTerm = s"${terms.head}.getMillisecond()"
-                      s"""
-                         |$TIMESTAMP_DATA.fromEpochMillis(${qualifyMethod(arithmeticMethod)}(
-                         |  $longTerm,
-                         |  (long) ${unit.startUnit.multiplier.intValue()}))
-                       """.stripMargin
-                    case _ =>
-                      val longTerm = s"${terms.head}.getMillisecond()"
-                      s"""
-                         |$TIMESTAMP_DATA.fromEpochMillis(
-                         |  ${qualifyMethod(temporalMethod.get)}(${terms(1)}, $longTerm))
+                  val longTerm = s"${terms.head}.getMillisecond()"
+                  s"""
+                     |$TIMESTAMP_DATA.fromEpochMillis(
+                     |  ${qualifyMethod(temporalMethod.get)}(${terms(1)}, $longTerm))
                    """.stripMargin
-                  }
-
                 case _ =>
                   s"""
                      |($internalType) ${qualifyMethod(temporalMethod.get)}(
@@ -105,26 +94,12 @@ class FloorCeilCallGen(
             case _ =>
               operand.resultType.getTypeRoot match {
                 case LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE =>
-                  val millis = s"${terms.head}.getMillisecond()"
-
-                  unit match {
-                    case MILLISECOND =>
-                      s"""
-                         |$TIMESTAMP_DATA.fromEpochMillis(
-                         |    $millis + ${qualifyMethod(arithmeticIntegralMethod.get)}(${terms.head}.getNanoOfMillisecond(), 1000_000L) / 1000_000L)
-                        """.stripMargin
-
-                    case _ => s"""
-                                 |$TIMESTAMP_DATA.fromEpochMillis(
-                                 |  ${qualifyMethod(arithmeticIntegralMethod.get)}(
-                                 |    $millis,
-                                 |    (long) ${unit.startUnit.multiplier.intValue()}))
-                   """.stripMargin
-
-                  }
-                case LogicalTypeRoot.DATE =>
+                  val longTerm = s"${terms.head}.getMillisecond()"
                   s"""
-                     |  ${terms.head}
+                     |$TIMESTAMP_DATA.fromEpochMillis(
+                     |  ${qualifyMethod(arithmeticIntegralMethod.get)}(
+                     |    $longTerm,
+                     |    (long) ${unit.startUnit.multiplier.intValue()}))
                    """.stripMargin
                 case _ =>
                   s"""

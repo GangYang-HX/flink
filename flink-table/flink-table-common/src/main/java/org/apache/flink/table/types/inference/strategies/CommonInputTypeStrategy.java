@@ -25,7 +25,6 @@ import org.apache.flink.table.types.inference.ArgumentCount;
 import org.apache.flink.table.types.inference.CallContext;
 import org.apache.flink.table.types.inference.InputTypeStrategy;
 import org.apache.flink.table.types.inference.Signature;
-import org.apache.flink.table.types.inference.Signature.Argument;
 import org.apache.flink.table.types.logical.LegacyTypeInformationType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeMerging;
@@ -42,7 +41,7 @@ import java.util.stream.IntStream;
 @Internal
 public final class CommonInputTypeStrategy implements InputTypeStrategy {
 
-    private static final Argument COMMON_ARGUMENT = Argument.ofGroup("COMMON");
+    private static final Signature.Argument COMMON_ARGUMENT = Signature.Argument.of("<COMMON>");
 
     private final ArgumentCount argumentCount;
 
@@ -71,10 +70,11 @@ public final class CommonInputTypeStrategy implements InputTypeStrategy {
         Optional<LogicalType> commonType = LogicalTypeMerging.findCommonType(argumentTypes);
 
         if (!commonType.isPresent()) {
-            return callContext.fail(
-                    throwOnFailure,
-                    "Could not find a common type for arguments: %s",
-                    argumentDataTypes);
+            if (throwOnFailure) {
+                throw callContext.newValidationError(
+                        "Could not find a common type for arguments: %s", argumentDataTypes);
+            }
+            return Optional.empty();
         }
 
         return commonType.map(
@@ -96,9 +96,9 @@ public final class CommonInputTypeStrategy implements InputTypeStrategy {
                     .collect(Collectors.toList());
         }
 
-        List<Argument> arguments =
+        List<Signature.Argument> arguments =
                 new ArrayList<>(Collections.nCopies(numberOfMandatoryArguments, COMMON_ARGUMENT));
-        arguments.add(Argument.ofGroupVarying("COMMON"));
+        arguments.add(Signature.Argument.of("<COMMON>..."));
         return Collections.singletonList(Signature.of(arguments));
     }
 

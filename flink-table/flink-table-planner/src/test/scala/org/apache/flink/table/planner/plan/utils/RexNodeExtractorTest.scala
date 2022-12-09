@@ -18,8 +18,9 @@
 package org.apache.flink.table.planner.plan.utils
 
 import org.apache.flink.api.common.typeinfo.Types
-import org.apache.flink.table.api._
+import org.apache.flink.table.api.{DataTypes, TableConfig}
 import org.apache.flink.table.catalog.{CatalogManager, FunctionCatalog}
+import org.apache.flink.table.delegation.ExpressionParser
 import org.apache.flink.table.expressions.ApiExpressionUtils.{unresolvedCall, unresolvedRef, valueLiteral}
 import org.apache.flink.table.expressions.Expression
 import org.apache.flink.table.functions.{AggregateFunctionDefinition, FunctionIdentifier}
@@ -30,7 +31,6 @@ import org.apache.flink.table.planner.expressions.utils.Func1
 import org.apache.flink.table.planner.functions.sql.FlinkSqlOperatorTable
 import org.apache.flink.table.planner.functions.utils.ScalarSqlFunction
 import org.apache.flink.table.planner.utils.{DateTimeTestUtil, IntSumAggFunction}
-import org.apache.flink.table.resource.ResourceManager
 import org.apache.flink.table.utils.CatalogManagerMocks
 
 import org.apache.calcite.rel.`type`.RelDataType
@@ -44,7 +44,6 @@ import org.junit.Assert.{assertArrayEquals, assertEquals, assertThat, assertTrue
 import org.junit.Test
 
 import java.math.BigDecimal
-import java.net.URL
 import java.time.ZoneId
 import java.util.{Arrays, List => JList, TimeZone}
 
@@ -52,15 +51,10 @@ import scala.collection.JavaConverters._
 
 /** Test for [[RexNodeExtractor]]. */
 class RexNodeExtractorTest extends RexNodeTestBase {
-  val tableConfig = TableConfig.getDefault
-  val resourceManager = ResourceManager.createResourceManager(
-    new Array[URL](0),
-    Thread.currentThread.getContextClassLoader,
-    tableConfig.getConfiguration)
   val catalogManager: CatalogManager = CatalogManagerMocks.createEmptyCatalogManager()
   val moduleManager = new ModuleManager
   private val functionCatalog =
-    new FunctionCatalog(tableConfig, resourceManager, catalogManager, moduleManager)
+    new FunctionCatalog(TableConfig.getDefault, catalogManager, moduleManager)
 
   @Test
   def testExtractRefInputFields(): Unit = {
@@ -115,8 +109,8 @@ class RexNodeExtractorTest extends RexNodeTestBase {
     val builder: RexBuilder = new FlinkRexBuilder(typeFactory)
     val expr = buildConditionExpr()
 
-    val firstExp = $"id" > 6
-    val secondExp = $"amount" * $"price" < 100
+    val firstExp = ExpressionParser.INSTANCE.parseExpression("id > 6")
+    val secondExp = ExpressionParser.INSTANCE.parseExpression("amount * price < 100")
     val expected: Array[Expression] = Array(firstExp, secondExp)
 
     val (convertedExpressions, unconvertedRexNodes) =
@@ -140,7 +134,8 @@ class RexNodeExtractorTest extends RexNodeTestBase {
     val (convertedExpressions, unconvertedRexNodes) =
       extractConjunctiveConditions(a, -1, allFieldNames, relBuilder, functionCatalog)
 
-    val expected: Array[Expression] = Array($"amount" >= $"id")
+    val expected: Array[Expression] = Array(
+      ExpressionParser.INSTANCE.parseExpression("amount >= id"))
     assertExpressionArrayEquals(expected, convertedExpressions)
     assertEquals(0, unconvertedRexNodes.length)
   }
@@ -185,9 +180,9 @@ class RexNodeExtractorTest extends RexNodeTestBase {
       extractConjunctiveConditions(complexNode, -1, allFieldNames, relBuilder, functionCatalog)
 
     val expected: Array[Expression] = Array(
-      $"amount" < 100 || $"price" === 100 || $"price" === 200,
-      $"id" > 100 || $"price" === 100 || $"price" === 200,
-      !($"amount" <= $"id")
+      ExpressionParser.INSTANCE.parseExpression("amount < 100 || price == 100 || price === 200"),
+      ExpressionParser.INSTANCE.parseExpression("id > 100 || price == 100 || price === 200"),
+      ExpressionParser.INSTANCE.parseExpression("!(amount <= id)")
     )
     assertExpressionArrayEquals(expected, convertedExpressions)
     assertEquals(0, unconvertedRexNodes.length)
@@ -221,10 +216,10 @@ class RexNodeExtractorTest extends RexNodeTestBase {
       extractConjunctiveConditions(and, -1, allFieldNames, relBuilder, functionCatalog)
 
     val expected: Array[Expression] = Array(
-      $"amount" < 100,
-      $"amount" <= $"id",
-      $"id" > 100,
-      $"price" === 100
+      ExpressionParser.INSTANCE.parseExpression("amount < 100"),
+      ExpressionParser.INSTANCE.parseExpression("amount <= id"),
+      ExpressionParser.INSTANCE.parseExpression("id > 100"),
+      ExpressionParser.INSTANCE.parseExpression("price === 100")
     )
 
     assertExpressionArrayEquals(expected, convertedExpressions)
@@ -371,16 +366,16 @@ class RexNodeExtractorTest extends RexNodeTestBase {
       extractConjunctiveConditions(complexExpr, -1, allFieldNames, relBuilder, functionCatalog)
 
     val expected: Array[Expression] = Array(
-      $"amount" < $"id",
-      $"amount" <= $"id",
-      $"amount" !== $"id",
-      $"amount" === $"id",
-      $"amount" >= $"id",
-      $"amount" > $"id",
-      $"amount" + $"id" === 100,
-      $"amount" - $"id" === 100,
-      $"amount" * $"id" === 100,
-      $"amount" / $"id" === 100
+      ExpressionParser.INSTANCE.parseExpression("amount < id"),
+      ExpressionParser.INSTANCE.parseExpression("amount <= id"),
+      ExpressionParser.INSTANCE.parseExpression("amount <> id"),
+      ExpressionParser.INSTANCE.parseExpression("amount == id"),
+      ExpressionParser.INSTANCE.parseExpression("amount >= id"),
+      ExpressionParser.INSTANCE.parseExpression("amount > id"),
+      ExpressionParser.INSTANCE.parseExpression("amount + id == 100"),
+      ExpressionParser.INSTANCE.parseExpression("amount - id == 100"),
+      ExpressionParser.INSTANCE.parseExpression("amount * id == 100"),
+      ExpressionParser.INSTANCE.parseExpression("amount / id == 100")
     )
     assertExpressionArrayEquals(expected, convertedExpressions)
     assertEquals(0, unconvertedRexNodes.length)
@@ -476,7 +471,9 @@ class RexNodeExtractorTest extends RexNodeTestBase {
       convertedExpressions(2).toString)
     assertEquals(0, unconvertedRexNodes.length)
 
-    assertExpressionArrayEquals(Array($"amount" <= $"id"), Array(convertedExpressions(1)))
+    assertExpressionArrayEquals(
+      Array(ExpressionParser.INSTANCE.parseExpression("amount <= id")),
+      Array(convertedExpressions(1)))
   }
 
   @Test

@@ -29,7 +29,7 @@ import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link FieldNamedPreparedStatementImpl}. */
 public class FieldNamedPreparedStatementImplTest {
@@ -43,10 +43,10 @@ public class FieldNamedPreparedStatementImplTest {
     @Test
     public void testInsertStatement() {
         String insertStmt = dialect.getInsertIntoStatement(tableName, fieldNames);
-        assertThat(insertStmt)
-                .isEqualTo(
-                        "INSERT INTO `tbl`(`id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__`) "
-                                + "VALUES (:id, :name, :email, :ts, :field1, :field_2, :__field_3__)");
+        assertEquals(
+                "INSERT INTO `tbl`(`id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__`) "
+                        + "VALUES (:id, :name, :email, :ts, :field1, :field_2, :__field_3__)",
+                insertStmt);
         NamedStatementMatcher.parsedSql(
                         "INSERT INTO `tbl`(`id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__`) "
                                 + "VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -63,8 +63,8 @@ public class FieldNamedPreparedStatementImplTest {
     @Test
     public void testDeleteStatement() {
         String deleteStmt = dialect.getDeleteStatement(tableName, keyFields);
-        assertThat(deleteStmt)
-                .isEqualTo("DELETE FROM `tbl` WHERE `id` = :id AND `__field_3__` = :__field_3__");
+        assertEquals(
+                "DELETE FROM `tbl` WHERE `id` = :id AND `__field_3__` = :__field_3__", deleteStmt);
         NamedStatementMatcher.parsedSql("DELETE FROM `tbl` WHERE `id` = ? AND `__field_3__` = ?")
                 .parameter("id", singletonList(1))
                 .parameter("__field_3__", singletonList(2))
@@ -74,8 +74,9 @@ public class FieldNamedPreparedStatementImplTest {
     @Test
     public void testRowExistsStatement() {
         String rowExistStmt = dialect.getRowExistsStatement(tableName, keyFields);
-        assertThat(rowExistStmt)
-                .isEqualTo("SELECT 1 FROM `tbl` WHERE `id` = :id AND `__field_3__` = :__field_3__");
+        assertEquals(
+                "SELECT 1 FROM `tbl` WHERE `id` = :id AND `__field_3__` = :__field_3__",
+                rowExistStmt);
         NamedStatementMatcher.parsedSql("SELECT 1 FROM `tbl` WHERE `id` = ? AND `__field_3__` = ?")
                 .parameter("id", singletonList(1))
                 .parameter("__field_3__", singletonList(2))
@@ -85,11 +86,11 @@ public class FieldNamedPreparedStatementImplTest {
     @Test
     public void testUpdateStatement() {
         String updateStmt = dialect.getUpdateStatement(tableName, fieldNames, keyFields);
-        assertThat(updateStmt)
-                .isEqualTo(
-                        "UPDATE `tbl` SET `id` = :id, `name` = :name, `email` = :email, `ts` = :ts, "
-                                + "`field1` = :field1, `field_2` = :field_2, `__field_3__` = :__field_3__ "
-                                + "WHERE `id` = :id AND `__field_3__` = :__field_3__");
+        assertEquals(
+                "UPDATE `tbl` SET `id` = :id, `name` = :name, `email` = :email, `ts` = :ts, "
+                        + "`field1` = :field1, `field_2` = :field_2, `__field_3__` = :__field_3__ "
+                        + "WHERE `id` = :id AND `__field_3__` = :__field_3__",
+                updateStmt);
         NamedStatementMatcher.parsedSql(
                         "UPDATE `tbl` SET `id` = ?, `name` = ?, `email` = ?, `ts` = ?, `field1` = ?, "
                                 + "`field_2` = ?, `__field_3__` = ? WHERE `id` = ? AND `__field_3__` = ?")
@@ -106,13 +107,13 @@ public class FieldNamedPreparedStatementImplTest {
     @Test
     public void testUpsertStatement() {
         String upsertStmt = dialect.getUpsertStatement(tableName, fieldNames, keyFields).get();
-        assertThat(upsertStmt)
-                .isEqualTo(
-                        "INSERT INTO `tbl`(`id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__`) "
-                                + "VALUES (:id, :name, :email, :ts, :field1, :field_2, :__field_3__) "
-                                + "ON DUPLICATE KEY UPDATE `id`=VALUES(`id`), `name`=VALUES(`name`), "
-                                + "`email`=VALUES(`email`), `ts`=VALUES(`ts`), `field1`=VALUES(`field1`),"
-                                + " `field_2`=VALUES(`field_2`), `__field_3__`=VALUES(`__field_3__`)");
+        assertEquals(
+                "INSERT INTO `tbl`(`id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__`) "
+                        + "VALUES (:id, :name, :email, :ts, :field1, :field_2, :__field_3__) "
+                        + "ON DUPLICATE KEY UPDATE `id`=VALUES(`id`), `name`=VALUES(`name`), "
+                        + "`email`=VALUES(`email`), `ts`=VALUES(`ts`), `field1`=VALUES(`field1`),"
+                        + " `field_2`=VALUES(`field_2`), `__field_3__`=VALUES(`__field_3__`)",
+                upsertStmt);
         NamedStatementMatcher.parsedSql(
                         "INSERT INTO `tbl`(`id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__`) "
                                 + "VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE "
@@ -131,10 +132,10 @@ public class FieldNamedPreparedStatementImplTest {
     @Test
     public void testSelectStatement() {
         String selectStmt = dialect.getSelectFromStatement(tableName, fieldNames, keyFields);
-        assertThat(selectStmt)
-                .isEqualTo(
-                        "SELECT `id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__` FROM `tbl` "
-                                + "WHERE `id` = :id AND `__field_3__` = :__field_3__");
+        assertEquals(
+                "SELECT `id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__` FROM `tbl` "
+                        + "WHERE `id` = :id AND `__field_3__` = :__field_3__",
+                selectStmt);
         NamedStatementMatcher.parsedSql(
                         "SELECT `id`, `name`, `email`, `ts`, `field1`, `field_2`, `__field_3__` FROM `tbl` "
                                 + "WHERE `id` = ? AND `__field_3__` = ?")
@@ -162,8 +163,8 @@ public class FieldNamedPreparedStatementImplTest {
             Map<String, List<Integer>> actualParams = new HashMap<>();
             String actualParsedStmt =
                     FieldNamedPreparedStatementImpl.parseNamedStatement(statement, actualParams);
-            assertThat(actualParsedStmt).isEqualTo(parsedSql);
-            assertThat(actualParams).isEqualTo(parameterMap);
+            assertEquals(parsedSql, actualParsedStmt);
+            assertEquals(parameterMap, actualParams);
         }
     }
 }

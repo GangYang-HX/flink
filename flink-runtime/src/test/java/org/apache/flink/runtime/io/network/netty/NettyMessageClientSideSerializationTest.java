@@ -30,16 +30,13 @@ import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGate;
-import org.apache.flink.util.TestLoggerExtension;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.embedded.EmbeddedChannel;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Random;
@@ -54,21 +51,24 @@ import static org.apache.flink.runtime.io.network.netty.NettyTestUtil.verifyErro
 import static org.apache.flink.runtime.io.network.partition.InputChannelTestUtils.createRemoteInputChannel;
 import static org.apache.flink.runtime.io.network.partition.InputChannelTestUtils.createSingleInputGate;
 import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for the serialization and deserialization of the various {@link NettyMessage} sub-classes
  * sent from server side to client side.
  */
-@ExtendWith(TestLoggerExtension.class)
-class NettyMessageClientSideSerializationTest {
+public class NettyMessageClientSideSerializationTest extends TestLogger {
 
     private static final int BUFFER_SIZE = 1024;
 
-    private final Random random = new Random();
-    private static BufferCompressor compressor;
+    private static final BufferCompressor COMPRESSOR = new BufferCompressor(BUFFER_SIZE, "LZ4");
 
-    private static BufferDecompressor decompressor;
+    private static final BufferDecompressor DECOMPRESSOR =
+            new BufferDecompressor(BUFFER_SIZE, "LZ4");
+
+    private final Random random = new Random();
 
     private EmbeddedChannel channel;
 
@@ -78,8 +78,8 @@ class NettyMessageClientSideSerializationTest {
 
     private InputChannelID inputChannelId;
 
-    @BeforeEach
-    void setup() throws IOException, InterruptedException {
+    @Before
+    public void setup() throws IOException, InterruptedException {
         networkBufferPool = new NetworkBufferPool(8, BUFFER_SIZE);
         inputGate = createSingleInputGate(1, networkBufferPool);
         RemoteInputChannel inputChannel =
@@ -100,8 +100,8 @@ class NettyMessageClientSideSerializationTest {
         inputChannelId = inputChannel.getInputChannelId();
     }
 
-    @AfterEach
-    void tearDown() throws IOException {
+    @After
+    public void tearDown() throws IOException {
         if (inputGate != null) {
             inputGate.close();
         }
@@ -117,46 +117,43 @@ class NettyMessageClientSideSerializationTest {
     }
 
     @Test
-    void testErrorResponseWithoutErrorMessage() {
+    public void testErrorResponseWithoutErrorMessage() {
         testErrorResponse(new ErrorResponse(new IllegalStateException(), inputChannelId));
     }
 
     @Test
-    void testErrorResponseWithErrorMessage() {
+    public void testErrorResponseWithErrorMessage() {
         testErrorResponse(
                 new ErrorResponse(
                         new IllegalStateException("Illegal illegal illegal"), inputChannelId));
     }
 
     @Test
-    void testErrorResponseWithFatalError() {
+    public void testErrorResponseWithFatalError() {
         testErrorResponse(new ErrorResponse(new IllegalStateException("Illegal illegal illegal")));
     }
 
     @Test
-    void testOrdinaryBufferResponse() {
+    public void testOrdinaryBufferResponse() {
         testBufferResponse(false, false);
     }
 
     @Test
-    void testBufferResponseWithReadOnlySlice() {
+    public void testBufferResponseWithReadOnlySlice() {
         testBufferResponse(true, false);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"LZ4", "LZO", "ZSTD"})
-    void testCompressedBufferResponse(final String codecFactoryName) {
-        compressor = new BufferCompressor(BUFFER_SIZE, codecFactoryName);
-        decompressor = new BufferDecompressor(BUFFER_SIZE, codecFactoryName);
+    @Test
+    public void testCompressedBufferResponse() {
         testBufferResponse(false, true);
     }
 
     @Test
-    void testBacklogAnnouncement() {
+    public void testBacklogAnnouncement() {
         BacklogAnnouncement expected = new BacklogAnnouncement(1024, inputChannelId);
         BacklogAnnouncement actual = encodeAndDecode(expected, channel);
-        assertThat(actual.backlog).isEqualTo(expected.backlog);
-        assertThat(actual.receiverId).isEqualTo(expected.receiverId);
+        assertEquals(expected.backlog, actual.backlog);
+        assertEquals(expected.receiverId, actual.receiverId);
     }
 
     private void testErrorResponse(ErrorResponse expect) {
@@ -181,7 +178,7 @@ class NettyMessageClientSideSerializationTest {
         if (testReadOnlyBuffer) {
             testBuffer = buffer.readOnlySlice();
         } else if (testCompressedBuffer) {
-            testBuffer = compressor.compressToOriginalBuffer(buffer);
+            testBuffer = COMPRESSOR.compressToOriginalBuffer(buffer);
         }
 
         BufferResponse expected =
@@ -192,22 +189,22 @@ class NettyMessageClientSideSerializationTest {
                         random.nextInt(Integer.MAX_VALUE));
         BufferResponse actual = encodeAndDecode(expected, channel);
 
-        assertThat(buffer.isRecycled()).isTrue();
-        assertThat(testBuffer.isRecycled()).isTrue();
-        assertThat(actual.getBuffer())
-                .as("The request input channel should always have available buffers in this test.")
-                .isNotNull();
+        assertTrue(buffer.isRecycled());
+        assertTrue(testBuffer.isRecycled());
+        assertNotNull(
+                "The request input channel should always have available buffers in this test.",
+                actual.getBuffer());
 
         Buffer decodedBuffer = actual.getBuffer();
         if (testCompressedBuffer) {
-            assertThat(actual.isCompressed).isTrue();
+            assertTrue(actual.isCompressed);
             decodedBuffer = decompress(decodedBuffer);
         }
 
         verifyBufferResponseHeader(expected, actual);
-        assertThat(decodedBuffer.readableBytes()).isEqualTo(BUFFER_SIZE);
+        assertEquals(BUFFER_SIZE, decodedBuffer.readableBytes());
         for (int i = 0; i < BUFFER_SIZE; i += 8) {
-            assertThat(decodedBuffer.asByteBuf().readLong()).isEqualTo(i);
+            assertEquals(i, decodedBuffer.asByteBuf().readLong());
         }
 
         // Release the received message.
@@ -216,7 +213,7 @@ class NettyMessageClientSideSerializationTest {
             decodedBuffer.recycleBuffer();
         }
 
-        assertThat(actual.getBuffer().isRecycled()).isTrue();
+        assertTrue(actual.getBuffer().isRecycled());
     }
 
     private Buffer decompress(Buffer buffer) {
@@ -224,6 +221,6 @@ class NettyMessageClientSideSerializationTest {
         Buffer compressedBuffer = new NetworkBuffer(segment, FreeingBufferRecycler.INSTANCE);
         buffer.asByteBuf().readBytes(compressedBuffer.asByteBuf(), buffer.readableBytes());
         compressedBuffer.setCompressed(true);
-        return decompressor.decompressToOriginalBuffer(compressedBuffer);
+        return DECOMPRESSOR.decompressToOriginalBuffer(compressedBuffer);
     }
 }

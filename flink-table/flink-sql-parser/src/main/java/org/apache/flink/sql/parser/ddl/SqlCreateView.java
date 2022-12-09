@@ -125,6 +125,12 @@ public class SqlCreateView extends SqlCreate {
         query.unparse(writer, leftPrec, rightPrec);
     }
 
+    protected void printIndent(SqlWriter writer) {
+        writer.sep(",", false);
+        writer.newlineAndIndent();
+        writer.print("  ");
+    }
+
     public boolean isTemporary() {
         return isTemporary;
     }

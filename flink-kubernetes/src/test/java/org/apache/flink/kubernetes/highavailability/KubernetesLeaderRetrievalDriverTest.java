@@ -18,22 +18,24 @@
 
 package org.apache.flink.kubernetes.highavailability;
 
+import org.apache.flink.core.testutils.FlinkMatchers;
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClient;
 import org.apache.flink.kubernetes.kubeclient.resources.KubernetesConfigMap;
 import org.apache.flink.kubernetes.utils.Constants;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Collections;
 
-import static org.apache.flink.core.testutils.FlinkAssertions.assertThatChainOfCauses;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 
 /** Tests for the {@link KubernetesLeaderRetrievalDriver}. */
-class KubernetesLeaderRetrievalDriverTest extends KubernetesHighAvailabilityTestBase {
+public class KubernetesLeaderRetrievalDriverTest extends KubernetesHighAvailabilityTestBase {
 
     @Test
-    void testErrorForwarding() throws Exception {
+    public void testErrorForwarding() throws Exception {
         new Context() {
             {
                 runTest(
@@ -47,15 +49,16 @@ class KubernetesLeaderRetrievalDriverTest extends KubernetesHighAvailabilityTest
                             final String errMsg =
                                     "Error while watching the ConfigMap " + LEADER_CONFIGMAP_NAME;
                             retrievalEventHandler.waitForError();
-                            assertThatChainOfCauses(retrievalEventHandler.getError())
-                                    .anySatisfy(t -> assertThat(t).hasMessageContaining(errMsg));
+                            assertThat(
+                                    retrievalEventHandler.getError(),
+                                    FlinkMatchers.containsMessage(errMsg));
                         });
             }
         };
     }
 
     @Test
-    void testKubernetesLeaderRetrievalOnModified() throws Exception {
+    public void testKubernetesLeaderRetrievalOnModified() throws Exception {
         new Context() {
             {
                 runTest(
@@ -73,15 +76,14 @@ class KubernetesLeaderRetrievalDriverTest extends KubernetesHighAvailabilityTest
                             callbackHandler.onModified(
                                     Collections.singletonList(getLeaderConfigMap()));
 
-                            assertThat(retrievalEventHandler.waitForNewLeader())
-                                    .isEqualTo(newLeader);
+                            assertThat(retrievalEventHandler.waitForNewLeader(), is(newLeader));
                         });
             }
         };
     }
 
     @Test
-    void testKubernetesLeaderRetrievalOnModifiedWithEmpty() throws Exception {
+    public void testKubernetesLeaderRetrievalOnModifiedWithEmpty() throws Exception {
         new Context() {
             {
                 runTest(
@@ -96,7 +98,7 @@ class KubernetesLeaderRetrievalDriverTest extends KubernetesHighAvailabilityTest
                             callbackHandler.onModified(
                                     Collections.singletonList(getLeaderConfigMap()));
                             retrievalEventHandler.waitForEmptyLeaderInformation();
-                            assertThat(retrievalEventHandler.getAddress()).isNull();
+                            assertThat(retrievalEventHandler.getAddress(), is(nullValue()));
                         });
             }
         };

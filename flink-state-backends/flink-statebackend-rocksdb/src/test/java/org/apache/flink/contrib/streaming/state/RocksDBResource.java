@@ -30,7 +30,6 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
-import org.rocksdb.Statistics;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,8 +49,6 @@ public class RocksDBResource extends ExternalResource {
 
     /** Factory for {@link DBOptions} and {@link ColumnFamilyOptions}. */
     private final RocksDBOptionsFactory optionsFactory;
-
-    private final boolean enableStatistics;
 
     /** Temporary folder that provides the working directory for the RocksDB instance. */
     private TemporaryFolder temporaryFolder;
@@ -81,14 +78,8 @@ public class RocksDBResource extends ExternalResource {
     private ArrayList<AutoCloseable> handlesToClose = new ArrayList<>();
 
     public RocksDBResource() {
-        this(false);
-    }
-
-    public RocksDBResource(boolean enableStatistics) {
         this(
                 new RocksDBOptionsFactory() {
-                    private static final long serialVersionUID = 1L;
-
                     @Override
                     public DBOptions createDBOptions(
                             DBOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
@@ -120,14 +111,11 @@ public class RocksDBResource extends ExternalResource {
 
                         return new ColumnFamilyOptions().optimizeForPointLookup(40960);
                     }
-                },
-                enableStatistics);
+                });
     }
 
-    public RocksDBResource(
-            @Nonnull RocksDBOptionsFactory optionsFactory, boolean enableStatistics) {
+    public RocksDBResource(@Nonnull RocksDBOptionsFactory optionsFactory) {
         this.optionsFactory = optionsFactory;
-        this.enableStatistics = enableStatistics;
     }
 
     public ColumnFamilyHandle getDefaultColumnFamily() {
@@ -144,10 +132,6 @@ public class RocksDBResource extends ExternalResource {
 
     public ReadOptions getReadOptions() {
         return readOptions;
-    }
-
-    public DBOptions getDbOptions() {
-        return dbOptions;
     }
 
     public RocksDBWriteBatchWrapper getBatchWrapper() {
@@ -181,11 +165,6 @@ public class RocksDBResource extends ExternalResource {
                                         .setStatsDumpPeriodSec(0),
                                 handlesToClose)
                         .setCreateIfMissing(true);
-        if (enableStatistics) {
-            Statistics statistics = new Statistics();
-            dbOptions.setStatistics(statistics);
-            handlesToClose.add(statistics);
-        }
         this.columnFamilyOptions =
                 optionsFactory.createColumnOptions(new ColumnFamilyOptions(), handlesToClose);
         this.writeOptions = new WriteOptions();

@@ -35,9 +35,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.function.Consumer;
 
-import static org.apache.flink.connector.testutils.formats.SchemaTestUtils.open;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 /** Tests for {@link CsvRowSerializationSchema} and {@link CsvRowDeserializationSchema}. */
 public class CsvRowDeSerializationSchemaTest {
@@ -158,40 +159,44 @@ public class CsvRowDeSerializationSchemaTest {
 
     @Test
     public void testDeserializeParseError() throws Exception {
-        assertThatThrownBy(() -> testDeserialization(false, false, "Test,null,Test"))
-                .isInstanceOf(IOException.class);
+        try {
+            testDeserialization(false, false, "Test,null,Test"); // null not supported
+            fail("Missing field should cause failure.");
+        } catch (IOException e) {
+            // valid exception
+        }
     }
 
     @Test
     public void testDeserializeUnsupportedNull() throws Exception {
         // unsupported null for integer
-        assertThat(testDeserialization(true, false, "Test,null,Test"))
-                .isEqualTo(Row.of("Test", null, "Test"));
+        assertEquals(
+                Row.of("Test", null, "Test"), testDeserialization(true, false, "Test,null,Test"));
     }
 
     @Test
     public void testDeserializeIncompleteRow() throws Exception {
         // last two columns are missing
-        assertThat(testDeserialization(true, false, "Test")).isEqualTo(Row.of("Test", null, null));
+        assertEquals(Row.of("Test", null, null), testDeserialization(true, false, "Test"));
     }
 
     @Test
     public void testDeserializeMoreColumnsThanExpected() throws Exception {
         // one additional string column
-        assertThat(testDeserialization(true, false, "Test,12,Test,Test")).isNull();
+        assertNull(testDeserialization(true, false, "Test,12,Test,Test"));
     }
 
     @Test
     public void testDeserializeIgnoreComment() throws Exception {
         // # is part of the string
-        assertThat(testDeserialization(false, false, "#Test,12,Test"))
-                .isEqualTo(Row.of("#Test", 12, "Test"));
+        assertEquals(
+                Row.of("#Test", 12, "Test"), testDeserialization(false, false, "#Test,12,Test"));
     }
 
     @Test
     public void testDeserializeAllowComment() throws Exception {
         // entire row is ignored
-        assertThat(testDeserialization(true, true, "#Test,12,Test")).isNull();
+        assertNull(testDeserialization(true, true, "#Test,12,Test"));
     }
 
     @Test
@@ -200,18 +205,21 @@ public class CsvRowDeSerializationSchemaTest {
         final CsvRowSerializationSchema.Builder serSchemaBuilder =
                 new CsvRowSerializationSchema.Builder(rowInfo).setLineDelimiter("\r");
 
-        assertThat(serialize(serSchemaBuilder, Row.of("Test", 12, "Hello")))
-                .isEqualTo("Test,12,Hello\r".getBytes());
+        assertArrayEquals(
+                "Test,12,Hello\r".getBytes(),
+                serialize(serSchemaBuilder, Row.of("Test", 12, "Hello")));
 
         serSchemaBuilder.setQuoteCharacter('#');
 
-        assertThat(serialize(serSchemaBuilder, Row.of("Test", 12, "2019-12-26 12:12:12")))
-                .isEqualTo("Test,12,#2019-12-26 12:12:12#\r".getBytes());
+        assertArrayEquals(
+                "Test,12,#2019-12-26 12:12:12#\r".getBytes(),
+                serialize(serSchemaBuilder, Row.of("Test", 12, "2019-12-26 12:12:12")));
 
         serSchemaBuilder.disableQuoteCharacter();
 
-        assertThat(serialize(serSchemaBuilder, Row.of("Test", 12, "2019-12-26 12:12:12")))
-                .isEqualTo("Test,12,2019-12-26 12:12:12\r".getBytes());
+        assertArrayEquals(
+                "Test,12,2019-12-26 12:12:12\r".getBytes(),
+                serialize(serSchemaBuilder, Row.of("Test", 12, "2019-12-26 12:12:12")));
     }
 
     @Test
@@ -220,8 +228,9 @@ public class CsvRowDeSerializationSchemaTest {
         final CsvRowSerializationSchema.Builder serSchemaBuilder =
                 new CsvRowSerializationSchema.Builder(rowInfo).setLineDelimiter("");
 
-        assertThat(serialize(serSchemaBuilder, Row.of("Test", 12, "Hello")))
-                .isEqualTo("Test,12,Hello".getBytes());
+        assertArrayEquals(
+                "Test,12,Hello".getBytes(),
+                serialize(serSchemaBuilder, Row.of("Test", 12, "Hello")));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -315,14 +324,14 @@ public class CsvRowDeSerializationSchemaTest {
                 new CsvRowSerializationSchema.Builder(rowInfo);
         serializationConfig.accept(serSchemaBuilder);
         final byte[] serializedRow = serialize(serSchemaBuilder, expectedRow);
-        assertThat(new String(serializedRow)).isEqualTo(expectedCsv);
+        assertEquals(expectedCsv, new String(serializedRow));
 
         // deserialization
         final CsvRowDeserializationSchema.Builder deserSchemaBuilder =
                 new CsvRowDeserializationSchema.Builder(rowInfo);
         deserializationConfig.accept(deserSchemaBuilder);
         final Row deserializedRow = deserialize(deserSchemaBuilder, expectedCsv);
-        assertThat(deserializedRow).isEqualTo(expectedRow);
+        assertEquals(expectedRow, deserializedRow);
     }
 
     private <T> void testField(
@@ -341,7 +350,7 @@ public class CsvRowDeSerializationSchemaTest {
                 new CsvRowDeserializationSchema.Builder(rowInfo);
         deserializationConfig.accept(deserSchemaBuilder);
         final Row deserializedRow = deserialize(deserSchemaBuilder, csv);
-        assertThat(deserializedRow).isEqualTo(expectedRow);
+        assertEquals(expectedRow, deserializedRow);
     }
 
     private Row testDeserialization(
@@ -362,7 +371,7 @@ public class CsvRowDeSerializationSchemaTest {
         Row deserializedRow =
                 deserialize(
                         deserSchemaBuilder, new String(serialize(serSchemaBuilder, originalRow)));
-        assertThat(originalRow).isEqualTo(deserializedRow);
+        assertEquals(deserializedRow, originalRow);
     }
 
     private static byte[] serialize(CsvRowSerializationSchema.Builder serSchemaBuilder, Row row)
@@ -373,7 +382,6 @@ public class CsvRowDeSerializationSchemaTest {
                 InstantiationUtil.deserializeObject(
                         InstantiationUtil.serializeObject(serSchemaBuilder.build()),
                         CsvRowDeSerializationSchemaTest.class.getClassLoader());
-        open(schema);
         return schema.serialize(row);
     }
 
@@ -385,7 +393,6 @@ public class CsvRowDeSerializationSchemaTest {
                 InstantiationUtil.deserializeObject(
                         InstantiationUtil.serializeObject(deserSchemaBuilder.build()),
                         CsvRowDeSerializationSchemaTest.class.getClassLoader());
-        open(schema);
         return schema.deserialize(csv.getBytes());
     }
 }

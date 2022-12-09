@@ -17,8 +17,6 @@
 
 package org.apache.flink.state.changelog;
 
-import org.apache.flink.annotation.Internal;
-
 import java.io.IOException;
 import java.util.Collection;
 
@@ -29,8 +27,7 @@ import java.util.Collection;
  * @param <Value> the type of state values
  * @param <Namespace> the type of namespace
  */
-@Internal
-public interface KvStateChangeLogger<Value, Namespace> extends StateChangeLogger<Value, Namespace> {
+interface KvStateChangeLogger<Value, Namespace> extends StateChangeLogger<Value, Namespace> {
 
     void namespacesMerged(Namespace target, Collection<Namespace> sources) throws IOException;
 }

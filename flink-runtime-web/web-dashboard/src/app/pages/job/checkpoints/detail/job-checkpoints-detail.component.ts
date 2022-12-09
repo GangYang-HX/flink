@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { forkJoin, Subject } from 'rxjs';
-import { first, takeUntil } from 'rxjs/operators';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit } from '@angular/core';
+import { forkJoin } from 'rxjs';
+import { first } from 'rxjs/operators';
 
 import {
   CheckpointCompletedStatistics,
@@ -26,10 +26,8 @@ import {
   JobDetailCorrect,
   VerticesItem,
   CheckpointConfig
-} from '@flink-runtime-web/interfaces';
-import { JobService } from '@flink-runtime-web/services';
-
-import { JobLocalService } from '../../job-local.service';
+} from 'interfaces';
+import { JobService } from 'services';
 
 @Component({
   selector: 'flink-job-checkpoints-detail',
@@ -37,7 +35,7 @@ import { JobLocalService } from '../../job-local.service';
   styleUrls: ['./job-checkpoints-detail.component.less'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class JobCheckpointsDetailComponent implements OnInit, OnDestroy {
+export class JobCheckpointsDetailComponent implements OnInit {
   public readonly trackById = (_: number, node: VerticesItem): string => node.id;
 
   public innerCheckPoint: CheckpointCompletedStatistics;
@@ -59,29 +57,15 @@ export class JobCheckpointsDetailComponent implements OnInit, OnDestroy {
     return this.innerCheckPoint;
   }
 
-  private destroy$ = new Subject<void>();
-
-  constructor(
-    private readonly jobService: JobService,
-    private readonly jobLocalService: JobLocalService,
-    private readonly cdr: ChangeDetectorRef
-  ) {}
+  constructor(private readonly jobService: JobService, private readonly cdr: ChangeDetectorRef) {}
 
   public ngOnInit(): void {
-    this.jobLocalService
-      .jobDetailChanges()
-      .pipe(first(), takeUntil(this.destroy$))
-      .subscribe(data => {
-        this.jobDetail = data;
-        this.listOfVertex = data!.vertices;
-        this.cdr.markForCheck();
-        this.refresh();
-      });
-  }
-
-  public ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
+    this.jobService.jobDetail$.pipe(first()).subscribe(data => {
+      this.jobDetail = data;
+      this.listOfVertex = data!.vertices;
+      this.cdr.markForCheck();
+      this.refresh();
+    });
   }
 
   public refresh(): void {
@@ -90,33 +74,31 @@ export class JobCheckpointsDetailComponent implements OnInit, OnDestroy {
       forkJoin([
         this.jobService.loadCheckpointConfig(this.jobDetail.jid),
         this.jobService.loadCheckpointDetails(this.jobDetail.jid, this.checkPoint.id)
-      ])
-        .pipe(takeUntil(this.destroy$))
-        .subscribe(
-          ([config, detail]) => {
-            this.checkPointConfig = config;
-            this.checkPointDetail = detail;
-            if (this.checkPointDetail.checkpoint_type === 'CHECKPOINT') {
-              if (this.checkPointConfig.unaligned_checkpoints) {
-                this.checkPointType = 'unaligned checkpoint';
-              } else {
-                this.checkPointType = 'aligned checkpoint';
-              }
-            } else if (this.checkPointDetail.checkpoint_type === 'SYNC_SAVEPOINT') {
-              this.checkPointType = 'savepoint on cancel';
-            } else if (this.checkPointDetail.checkpoint_type === 'SAVEPOINT') {
-              this.checkPointType = 'savepoint';
+      ]).subscribe(
+        ([config, detail]) => {
+          this.checkPointConfig = config;
+          this.checkPointDetail = detail;
+          if (this.checkPointDetail.checkpoint_type === 'CHECKPOINT') {
+            if (this.checkPointConfig.unaligned_checkpoints) {
+              this.checkPointType = 'unaligned checkpoint';
             } else {
-              this.checkPointType = '-';
+              this.checkPointType = 'aligned checkpoint';
             }
-            this.isLoading = false;
-            this.cdr.markForCheck();
-          },
-          () => {
-            this.isLoading = false;
-            this.cdr.markForCheck();
+          } else if (this.checkPointDetail.checkpoint_type === 'SYNC_SAVEPOINT') {
+            this.checkPointType = 'savepoint on cancel';
+          } else if (this.checkPointDetail.checkpoint_type === 'SAVEPOINT') {
+            this.checkPointType = 'savepoint';
+          } else {
+            this.checkPointType = '-';
           }
-        );
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        },
+        () => {
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        }
+      );
     }
   }
 }

@@ -95,7 +95,7 @@ public class TimestampColumnReader extends AbstractColumnReader<WritableTimestam
         return int96ToTimestamp(utcTimestamp, buffer.getLong(), buffer.getInt());
     }
 
-    public static TimestampData int96ToTimestamp(
+    private static TimestampData int96ToTimestamp(
             boolean utcTimestamp, long nanosOfDay, int julianDay) {
         long millisecond = julianDayToMillis(julianDay) + (nanosOfDay / NANOS_PER_MILLISECOND);
 

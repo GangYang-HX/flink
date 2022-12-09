@@ -24,20 +24,20 @@ import org.apache.flink.table.module.CoreModule;
 import org.apache.flink.table.module.CoreModuleFactory;
 import org.apache.flink.table.module.Module;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Collections;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Test for {@link org.apache.flink.table.module.CoreModule} created by {@link
  * org.apache.flink.table.module.CoreModuleFactory}.
  */
-class CoreModuleFactoryTest {
+public class CoreModuleFactoryTest {
 
     @Test
-    void test() {
+    public void test() {
         final CoreModule expectedModule = CoreModule.INSTANCE;
 
         final Module actualModule =
@@ -47,6 +47,6 @@ class CoreModuleFactoryTest {
                         new Configuration(),
                         Thread.currentThread().getContextClassLoader());
 
-        assertThat(actualModule).isEqualTo(expectedModule);
+        assertEquals(expectedModule, actualModule);
     }
 }

@@ -89,11 +89,8 @@ public class FlinkKubeClientFactory {
         }
 
         final String namespace = flinkConfig.getString(KubernetesConfigOptions.NAMESPACE);
-        final String userAgent =
-                flinkConfig.getString(KubernetesConfigOptions.KUBERNETES_CLIENT_USER_AGENT);
+        LOG.debug("Setting namespace of Kubernetes client to {}", namespace);
         config.setNamespace(namespace);
-        config.setUserAgent(userAgent);
-        LOG.debug("Setting Kubernetes client namespace: {}, userAgent: {}", namespace, userAgent);
 
         final NamespacedKubernetesClient client = new DefaultKubernetesClient(config);
         final int poolSize =

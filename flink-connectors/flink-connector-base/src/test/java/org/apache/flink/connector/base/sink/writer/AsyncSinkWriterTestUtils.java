@@ -24,7 +24,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Utils class for {@link AsyncSinkWriter} related test. */
 public class AsyncSinkWriterTestUtils {
@@ -46,21 +46,21 @@ public class AsyncSinkWriterTestUtils {
     public static <T extends Serializable> void assertThatBufferStatesAreEqual(
             BufferedRequestState<T> actual, BufferedRequestState<T> expected) {
         // Equal states must have equal sizes
-        assertThat(actual.getStateSize()).isEqualTo(expected.getStateSize());
+        assertEquals(actual.getStateSize(), expected.getStateSize());
 
         // Equal states must have the same number of requests.
         int actualLength = actual.getBufferedRequestEntries().size();
-        assertThat(actualLength).isEqualTo(expected.getBufferedRequestEntries().size());
+        assertEquals(actualLength, expected.getBufferedRequestEntries().size());
 
         List<RequestEntryWrapper<T>> actualRequests = actual.getBufferedRequestEntries();
         List<RequestEntryWrapper<T>> expectedRequests = expected.getBufferedRequestEntries();
 
         // Equal states must have same requests in the same order.
         for (int i = 0; i < actualLength; i++) {
-            assertThat(actualRequests.get(i).getRequestEntry())
-                    .isEqualTo(expectedRequests.get(i).getRequestEntry());
-            assertThat(actualRequests.get(i).getSize())
-                    .isEqualTo(expectedRequests.get(i).getSize());
+            assertEquals(
+                    actualRequests.get(i).getRequestEntry(),
+                    expectedRequests.get(i).getRequestEntry());
+            assertEquals(actualRequests.get(i).getSize(), expectedRequests.get(i).getSize());
         }
     }
 }

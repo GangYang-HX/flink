@@ -166,9 +166,8 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
 
         final AggsHandlerCodeGenerator generator =
                 new AggsHandlerCodeGenerator(
-                                new CodeGeneratorContext(
-                                        config, planner.getFlinkContext().getClassLoader()),
-                                planner.createRelBuilder(),
+                                new CodeGeneratorContext(config.getTableConfig()),
+                                planner.getRelBuilder(),
                                 JavaScalaConversionUtil.toScala(inputRowType.getChildren()),
                                 // TODO: heap state backend do not copy key currently,
                                 //  we have to copy input field
@@ -184,7 +183,6 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
 
         final AggregateInfoList aggInfoList =
                 AggregateUtil.transformToStreamAggregateInfoList(
-                        planner.getTypeFactory(),
                         inputRowType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         aggCallNeedRetractions,
@@ -203,8 +201,7 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
                         .map(LogicalTypeDataTypeConverter::fromDataTypeToLogicalType)
                         .toArray(LogicalType[]::new);
         final GeneratedRecordEqualiser recordEqualiser =
-                new EqualiserCodeGenerator(
-                                aggValueTypes, planner.getFlinkContext().getClassLoader())
+                new EqualiserCodeGenerator(aggValueTypes)
                         .generateRecordEqualiser("GroupAggValueEqualiser");
         final int inputCountIndex = aggInfoList.getIndexOfCountStar();
         final boolean isMiniBatchEnabled =
@@ -247,10 +244,7 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
 
         // set KeyType and Selector for state
         final RowDataKeySelector selector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(),
-                        grouping,
-                        InternalTypeInfo.of(inputRowType));
+                KeySelectorUtil.getRowDataSelector(grouping, InternalTypeInfo.of(inputRowType));
         transform.setStateKeySelector(selector);
         transform.setStateKeyType(selector.getProducedType());
 

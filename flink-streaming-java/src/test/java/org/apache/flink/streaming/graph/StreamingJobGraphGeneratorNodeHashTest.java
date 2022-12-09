@@ -174,7 +174,7 @@ public class StreamingJobGraphGeneratorNodeHashTest extends TestLogger {
                 .map(new NoOpMapFunction())
                 .filter(new NoOpFilterFunction())
                 .addSink(new DiscardingSink<>());
-
+        env.getConfig().setUseStreamGraphHasherV3(false);
         JobGraph jobGraph = env.getStreamGraph().getJobGraph();
 
         JobVertexID sourceId = jobGraph.getVerticesSortedTopologicallyFromSources().get(0).getID();
@@ -217,7 +217,7 @@ public class StreamingJobGraphGeneratorNodeHashTest extends TestLogger {
                 .startNewChain()
                 .filter(new NoOpFilterFunction())
                 .addSink(new DiscardingSink<>());
-
+        env.getConfig().setUseStreamGraphHasherV3(false);
         JobGraph jobGraph = env.getStreamGraph().getJobGraph();
 
         JobVertex chainedMap = jobGraph.getVerticesSortedTopologicallyFromSources().get(1);

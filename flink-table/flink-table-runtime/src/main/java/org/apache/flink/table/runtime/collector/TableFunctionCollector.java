@@ -56,6 +56,9 @@ public abstract class TableFunctionCollector<T> extends AbstractRichFunction
     /** Resets the flag to indicate whether [[collect(T)]] has been called. */
     public void reset() {
         this.collected = false;
+        if (collector instanceof TableFunctionCollector) {
+            ((TableFunctionCollector) collector).reset();
+        }
     }
 
     /** Output final result of this UDTF to downstreams. */

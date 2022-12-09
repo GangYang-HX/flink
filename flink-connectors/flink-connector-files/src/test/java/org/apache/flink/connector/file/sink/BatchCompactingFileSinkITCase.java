@@ -29,18 +29,21 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.minicluster.RpcServiceSharing;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
-import org.apache.flink.test.junit5.MiniClusterExtension;
+import org.apache.flink.test.util.MiniClusterWithClientResource;
 
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.Rule;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 /** Tests the compaction of the {@link FileSink} in BATCH mode. */
-class BatchCompactingFileSinkITCase extends BatchExecutionFileSinkITCase {
+@RunWith(Parameterized.class)
+public class BatchCompactingFileSinkITCase extends BatchExecutionFileSinkITCase {
 
     private static final int PARALLELISM = 4;
 
-    @RegisterExtension
-    private static final MiniClusterExtension MINI_CLUSTER_RESOURCE =
-            new MiniClusterExtension(
+    @Rule
+    public final MiniClusterWithClientResource miniClusterResource =
+            new MiniClusterWithClientResource(
                     new MiniClusterResourceConfiguration.Builder()
                             .setNumberTaskManagers(1)
                             .setNumberSlotsPerTaskManager(PARALLELISM)

@@ -21,7 +21,6 @@ package org.apache.flink.runtime.jobmaster;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
-import org.apache.flink.core.testutils.FlinkAssertions;
 import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.queryablestate.KvStateID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
@@ -36,6 +35,7 @@ import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
+import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.TestingRpcService;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
@@ -55,7 +55,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
@@ -116,80 +115,85 @@ public class JobMasterQueryableStateTest extends TestLogger {
 
     @Test
     public void testRequestKvStateWithoutRegistration() throws Exception {
-        try (final JobMaster jobMaster =
-                new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster()) {
+        final JobMaster jobMaster = new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster();
 
-            jobMaster.start();
+        jobMaster.start();
 
-            final JobMasterGateway jobMasterGateway =
-                    jobMaster.getSelfGateway(JobMasterGateway.class);
+        final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
-            registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
+        registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
 
-            assertThatThrownBy(
-                            () ->
-                                    jobMasterGateway
-                                            .requestKvStateLocation(JOB_GRAPH.getJobID(), "unknown")
-                                            .get())
-                    .satisfies(FlinkAssertions.anyCauseMatches(UnknownKvStateLocation.class));
+        try {
+            // lookup location
+            try {
+                jobMasterGateway.requestKvStateLocation(JOB_GRAPH.getJobID(), "unknown").get();
+                fail("Expected to fail with UnknownKvStateLocation");
+            } catch (Exception e) {
+                assertTrue(
+                        ExceptionUtils.findThrowable(e, UnknownKvStateLocation.class).isPresent());
+            }
+        } finally {
+            RpcUtils.terminateRpcEndpoint(jobMaster, testingTimeout);
         }
     }
 
     @Test
     public void testRequestKvStateOfWrongJob() throws Exception {
-        try (final JobMaster jobMaster =
-                new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster()) {
+        final JobMaster jobMaster = new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster();
 
-            jobMaster.start();
+        jobMaster.start();
 
-            final JobMasterGateway jobMasterGateway =
-                    jobMaster.getSelfGateway(JobMasterGateway.class);
+        final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
-            registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
+        registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
 
-            assertThatThrownBy(
-                            () ->
-                                    jobMasterGateway
-                                            .requestKvStateLocation(new JobID(), "unknown")
-                                            .get())
-                    .satisfies(FlinkAssertions.anyCauseMatches(FlinkJobNotFoundException.class));
+        try {
+            // lookup location
+            try {
+                jobMasterGateway.requestKvStateLocation(new JobID(), "unknown").get();
+                fail("Expected to fail with FlinkJobNotFoundException");
+            } catch (Exception e) {
+                assertThat(e, containsCause(FlinkJobNotFoundException.class));
+            }
+        } finally {
+            RpcUtils.terminateRpcEndpoint(jobMaster, testingTimeout);
         }
     }
 
     @Test
     public void testRequestKvStateWithIrrelevantRegistration() throws Exception {
-        try (final JobMaster jobMaster =
-                new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster()) {
+        final JobMaster jobMaster = new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster();
 
-            jobMaster.start();
+        jobMaster.start();
 
-            final JobMasterGateway jobMasterGateway =
-                    jobMaster.getSelfGateway(JobMasterGateway.class);
+        final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
-            registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
+        registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
 
+        try {
             // register an irrelevant KvState
-            assertThatThrownBy(
-                            () ->
-                                    registerKvState(
-                                            jobMasterGateway,
-                                            new JobID(),
-                                            new JobVertexID(),
-                                            "any-name"))
-                    .satisfies(FlinkAssertions.anyCauseMatches(FlinkJobNotFoundException.class));
+            try {
+                registerKvState(jobMasterGateway, new JobID(), new JobVertexID(), "any-name");
+                fail("Expected to fail with FlinkJobNotFoundException.");
+            } catch (Exception e) {
+                assertThat(e, containsCause(FlinkJobNotFoundException.class));
+            }
+        } finally {
+            RpcUtils.terminateRpcEndpoint(jobMaster, testingTimeout);
         }
     }
 
     @Test
     public void testRegisterKvState() throws Exception {
-        try (JobMaster jobMaster = new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster()) {
-            jobMaster.start();
+        final JobMaster jobMaster = new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster();
 
-            final JobMasterGateway jobMasterGateway =
-                    jobMaster.getSelfGateway(JobMasterGateway.class);
+        jobMaster.start();
 
-            registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
+        final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
+        registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
+
+        try {
             final String registrationName = "register-me";
             final KvStateID kvStateID = new KvStateID();
             final KeyGroupRange keyGroupRange = new KeyGroupRange(0, 0);
@@ -219,21 +223,22 @@ public class JobMasterQueryableStateTest extends TestLogger {
             assertEquals(kvStateID, location.getKvStateID(keyGroupRange.getStartKeyGroup()));
             assertEquals(
                     address, location.getKvStateServerAddress(keyGroupRange.getStartKeyGroup()));
+        } finally {
+            RpcUtils.terminateRpcEndpoint(jobMaster, testingTimeout);
         }
     }
 
     @Test
     public void testUnregisterKvState() throws Exception {
-        try (final JobMaster jobMaster =
-                new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster()) {
+        final JobMaster jobMaster = new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster();
 
-            jobMaster.start();
+        jobMaster.start();
 
-            final JobMasterGateway jobMasterGateway =
-                    jobMaster.getSelfGateway(JobMasterGateway.class);
+        final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
-            registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
+        registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
 
+        try {
             final String registrationName = "register-me";
             final KvStateID kvStateID = new KvStateID();
             final KeyGroupRange keyGroupRange = new KeyGroupRange(0, 0);
@@ -266,21 +271,22 @@ public class JobMasterQueryableStateTest extends TestLogger {
             } catch (Exception e) {
                 assertThat(e, containsCause(UnknownKvStateLocation.class));
             }
+        } finally {
+            RpcUtils.terminateRpcEndpoint(jobMaster, testingTimeout);
         }
     }
 
     @Test
     public void testDuplicatedKvStateRegistrationsFailTask() throws Exception {
-        try (final JobMaster jobMaster =
-                new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster()) {
+        final JobMaster jobMaster = new JobMasterBuilder(JOB_GRAPH, rpcService).createJobMaster();
 
-            jobMaster.start();
+        jobMaster.start();
 
-            final JobMasterGateway jobMasterGateway =
-                    jobMaster.getSelfGateway(JobMasterGateway.class);
+        final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
-            registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
+        registerSlotsRequiredForJobExecution(jobMasterGateway, JOB_GRAPH.getJobID());
 
+        try {
             // duplicate registration fails task
 
             final String registrationName = "duplicate-me";
@@ -303,6 +309,8 @@ public class JobMasterQueryableStateTest extends TestLogger {
                         jobMasterGateway.requestJobStatus(testingTimeout).get(),
                         either(is(JobStatus.FAILED)).or(is(JobStatus.FAILING)));
             }
+        } finally {
+            RpcUtils.terminateRpcEndpoint(jobMaster, testingTimeout);
         }
     }
 

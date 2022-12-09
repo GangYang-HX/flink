@@ -21,29 +21,32 @@ package org.apache.flink.table.planner.functions;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized;
+
+import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.flink.table.api.Expressions.$;
 import static org.apache.flink.table.api.Expressions.call;
 
 /** Test String functions correct behaviour. */
-class StringFunctionsITCase extends BuiltInFunctionTestBase {
+public class StringFunctionsITCase extends BuiltInFunctionTestBase {
 
-    @Override
-    Stream<TestSetSpec> getTestSetSpecs() {
-        return Stream.of(
-                TestSetSpec.forFunction(
-                                BuiltInFunctionDefinitions.REGEXP_EXTRACT, "Check return type")
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Arrays.asList(
+                TestSpec.forFunction(BuiltInFunctionDefinitions.REGEXP_EXTRACT, "Check return type")
                         .onFieldsWithData("22", "ABC")
                         .testResult(
-                                call("regexpExtract", $("f0"), "[A-Z]+"),
-                                "REGEXP_EXTRACT(f0,'[A-Z]+')",
-                                null,
-                                DataTypes.STRING().nullable())
-                        .testResult(
-                                call("regexpExtract", $("f1"), "[A-Z]+"),
-                                "REGEXP_EXTRACT(f1, '[A-Z]+')",
-                                "ABC",
-                                DataTypes.STRING().nullable()));
+                                resultSpec(
+                                        call("regexpExtract", $("f0"), "[A-Z]+"),
+                                        "REGEXP_EXTRACT(f0,'[A-Z]+')",
+                                        null,
+                                        DataTypes.STRING().nullable()),
+                                resultSpec(
+                                        call("regexpExtract", $("f1"), "[A-Z]+"),
+                                        "REGEXP_EXTRACT(f1, '[A-Z]+')",
+                                        "ABC",
+                                        DataTypes.STRING().nullable())));
     }
 }

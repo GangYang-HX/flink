@@ -19,7 +19,7 @@ package org.apache.flink.table.planner.plan.nodes.physical.stream
 
 import org.apache.calcite.plan.{RelOptCluster, RelTraitSet}
 import org.apache.calcite.rel.{RelNode, SingleRel}
-import org.apache.calcite.rel.core.{Aggregate, AggregateCall}
+import org.apache.calcite.rel.core.Aggregate
 
 /**
  * Base stream physical RelNode for unbounded group aggregate.
@@ -42,8 +42,6 @@ import org.apache.calcite.rel.core.{Aggregate, AggregateCall}
 abstract class StreamPhysicalGroupAggregateBase(
     cluster: RelOptCluster,
     traitSet: RelTraitSet,
-    inputRel: RelNode,
-    val grouping: Array[Int],
-    val aggCalls: Seq[AggregateCall])
+    inputRel: RelNode)
   extends SingleRel(cluster, traitSet, inputRel)
   with StreamPhysicalRel {}

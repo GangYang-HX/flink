@@ -417,17 +417,14 @@ public class HiveCatalogITCase {
     public void testConcurrentAccessHiveCatalog() throws Exception {
         int numThreads = 5;
         ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
-        try {
-            Callable<List<String>> listDBCallable = () -> hiveCatalog.listDatabases();
-            List<Future<List<String>>> listDBFutures = new ArrayList<>();
-            for (int i = 0; i < numThreads; i++) {
-                listDBFutures.add(executorService.submit(listDBCallable));
-            }
-            for (Future<List<String>> future : listDBFutures) {
-                future.get(5, TimeUnit.SECONDS);
-            }
-        } finally {
-            executorService.shutdown();
+        Callable<List<String>> listDBCallable = () -> hiveCatalog.listDatabases();
+        List<Future<List<String>>> listDBFutures = new ArrayList<>();
+        for (int i = 0; i < numThreads; i++) {
+            listDBFutures.add(executorService.submit(listDBCallable));
+        }
+        executorService.shutdown();
+        for (Future<List<String>> future : listDBFutures) {
+            future.get(5, TimeUnit.SECONDS);
         }
     }
 

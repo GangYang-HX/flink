@@ -28,10 +28,10 @@ import org.junit.jupiter.api.Test;
 import static org.apache.flink.table.test.TableAssertions.assertThat;
 
 /** Tests for {@link JoinedRowData}. */
-class JoinedRowDataTest {
+public class JoinedRowDataTest {
 
     @Test
-    void testJoinedRows() {
+    public void testJoinedRows() {
         final RowData row1 = GenericRowData.of(1L, 2L);
         final RowData row2 = GenericRowData.of(3L, StringData.fromString("4"));
         final RowData joinedRow = new JoinedRowData(row1, row2);
@@ -44,14 +44,14 @@ class JoinedRowDataTest {
     }
 
     @Test
-    void testJoinedRowKind() {
+    public void testJoinedRowKind() {
         final RowData joinedRow =
                 new JoinedRowData(RowKind.DELETE, GenericRowData.of(), GenericRowData.of());
         assertThat(joinedRow).hasKind(RowKind.DELETE);
     }
 
     @Test
-    void testReplace() {
+    public void testReplace() {
         final RowData row1 = GenericRowData.of(1L);
         final RowData row2 = GenericRowData.of(2L);
         final JoinedRowData joinedRow = new JoinedRowData(row1, row2);

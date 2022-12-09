@@ -36,7 +36,6 @@ import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
-import org.apache.flink.runtime.scheduler.DefaultSchedulerBuilder;
 import org.apache.flink.runtime.scheduler.SchedulerBase;
 import org.apache.flink.runtime.scheduler.SchedulerTestingUtils;
 import org.apache.flink.runtime.scheduler.TestingPhysicalSlot;
@@ -49,8 +48,6 @@ import org.apache.flink.runtime.shuffle.ShuffleTestUtils;
 import org.apache.flink.runtime.taskmanager.LocalTaskManagerLocation;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.ClassRule;
@@ -64,7 +61,6 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 import static org.hamcrest.Matchers.contains;
@@ -78,8 +74,8 @@ import static org.junit.Assert.assertTrue;
 public class ExecutionPartitionLifecycleTest extends TestLogger {
 
     @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
+    public static final TestingComponentMainThreadExecutor.Resource EXECUTOR_RESOURCE =
+            new TestingComponentMainThreadExecutor.Resource();
 
     private Execution execution;
     private ResultPartitionDeploymentDescriptor descriptor;
@@ -160,7 +156,7 @@ public class ExecutionPartitionLifecycleTest extends TestLogger {
                 execution -> {
                     execution.cancel();
                     execution.completeCancelling(
-                            Collections.emptyMap(), new IOMetrics(0, 0, 0, 0, 0, 0, 0), false);
+                            Collections.emptyMap(), new IOMetrics(0, 0, 0, 0), false);
                 },
                 PartitionReleaseResult.STOP_TRACKING);
     }
@@ -183,7 +179,7 @@ public class ExecutionPartitionLifecycleTest extends TestLogger {
                                 new Exception("Test exception"),
                                 false,
                                 Collections.emptyMap(),
-                                new IOMetrics(0, 0, 0, 0, 0, 0, 0),
+                                new IOMetrics(0, 0, 0, 0),
                                 false,
                                 true),
                 PartitionReleaseResult.STOP_TRACKING);
@@ -280,10 +276,8 @@ public class ExecutionPartitionLifecycleTest extends TestLogger {
 
         final JobGraph jobGraph = JobGraphTestUtils.batchJobGraph(producerVertex, consumerVertex);
         final SchedulerBase scheduler =
-                new DefaultSchedulerBuilder(
-                                jobGraph,
-                                ComponentMainThreadExecutorServiceAdapter.forMainThread(),
-                                EXECUTOR_RESOURCE.getExecutor())
+                SchedulerTestingUtils.newSchedulerBuilder(
+                                jobGraph, ComponentMainThreadExecutorServiceAdapter.forMainThread())
                         .setExecutionSlotAllocatorFactory(
                                 SchedulerTestingUtils.newSlotSharingExecutionSlotAllocatorFactory(
                                         physicalSlotProvider))

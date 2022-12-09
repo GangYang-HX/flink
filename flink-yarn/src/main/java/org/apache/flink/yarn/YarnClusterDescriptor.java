@@ -52,9 +52,6 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmanager.HighAvailabilityMode;
 import org.apache.flink.runtime.jobmanager.JobManagerProcessSpec;
 import org.apache.flink.runtime.jobmanager.JobManagerProcessUtils;
-import org.apache.flink.runtime.security.token.DelegationTokenConverter;
-import org.apache.flink.runtime.security.token.DelegationTokenManager;
-import org.apache.flink.runtime.security.token.KerberosDelegationTokenManager;
 import org.apache.flink.runtime.util.HadoopUtils;
 import org.apache.flink.util.CollectionUtil;
 import org.apache.flink.util.FlinkException;
@@ -72,7 +69,6 @@ import org.apache.flink.yarn.entrypoint.YarnSessionClusterEntrypoint;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.protocolrecords.GetNewApplicationResponse;
@@ -111,7 +107,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URLDecoder;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -132,7 +127,6 @@ import static org.apache.flink.configuration.ConfigConstants.ENV_FLINK_OPT_DIR;
 import static org.apache.flink.runtime.entrypoint.component.FileJobGraphRetriever.JOB_GRAPH_FILE_PATH;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
-import static org.apache.flink.yarn.YarnConfigKeys.ENV_FLINK_CLASSPATH;
 import static org.apache.flink.yarn.YarnConfigKeys.LOCAL_RESOURCE_DESCRIPTOR_SEPARATOR;
 
 /** The descriptor with deployment information for deploying a Flink cluster on Yarn. */
@@ -550,14 +544,13 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                     flinkConfiguration.getBoolean(SecurityOptions.KERBEROS_FETCH_DELEGATION_TOKEN);
             final boolean yarnAccessFSEnabled =
                     !CollectionUtil.isNullOrEmpty(
-                            flinkConfiguration.get(
-                                    SecurityOptions.KERBEROS_HADOOP_FILESYSTEMS_TO_ACCESS));
+                            flinkConfiguration.get(YarnConfigOptions.YARN_ACCESS));
             if (!fetchToken && yarnAccessFSEnabled) {
                 throw new IllegalConfigurationException(
                         String.format(
                                 "When %s is disabled, %s must be disabled as well.",
                                 SecurityOptions.KERBEROS_FETCH_DELEGATION_TOKEN.key(),
-                                SecurityOptions.KERBEROS_HADOOP_FILESYSTEMS_TO_ACCESS.key()));
+                                YarnConfigOptions.YARN_ACCESS.key()));
             }
         }
 
@@ -811,10 +804,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         ApplicationSubmissionContext appContext = yarnApplication.getApplicationSubmissionContext();
 
         final List<Path> providedLibDirs =
-                Utils.getQualifiedRemoteProvidedLibDirs(configuration, yarnConfiguration);
-
-        final Optional<Path> providedUsrLibDir =
-                Utils.getQualifiedRemoteProvidedUsrLib(configuration, yarnConfiguration);
+                Utils.getQualifiedRemoteSharedPaths(configuration, yarnConfiguration);
 
         Path stagingDirPath = getStagingDir(fs);
         FileSystem stagingDirFs = stagingDirPath.getFileSystem(yarnConfiguration);
@@ -854,9 +844,11 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
 
             activateHighAvailabilitySupport(appContext);
         } else {
-            // set number of application retries to 1 in the default case
-            appContext.setMaxAppAttempts(
-                    configuration.getInteger(YarnConfigOptions.APPLICATION_ATTEMPTS.key(), 1));
+            // Set number of application retries to 1 when not set HA, and don't use YarnConfigOptions.APPLICATION_ATTEMPTS!!!
+            // For example, if use YarnConfigOptions.APPLICATION_ATTEMPTS whose value is set to 2, YARN will restart JM if JM failed.
+            // But JM will not restart from the latest checkpoint(because we don't set HA, Flink don't know the latest checkpoint).
+            // Instead, JM will restart from the checkpoint that submitted to YARN in the first time, which is unexpected.
+            appContext.setMaxAppAttempts(1);
         }
 
         final Set<Path> userJarFiles = new HashSet<>();
@@ -873,6 +865,14 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         if (jarUrls != null
                 && YarnApplicationClusterEntryPoint.class.getName().equals(yarnClusterEntrypoint)) {
             userJarFiles.addAll(jarUrls.stream().map(Path::new).collect(Collectors.toSet()));
+        }
+
+        final List<URI> classPaths =
+                ConfigUtils.decodeListFromConfig(
+                        configuration, PipelineOptions.CLASSPATHS, URI::create);
+        if (classPaths != null
+                && YarnApplicationClusterEntryPoint.class.getName().equals(yarnClusterEntrypoint)) {
+            userJarFiles.addAll(classPaths.stream().map(Path::new).collect(Collectors.toSet()));
         }
 
         // only for per job mode
@@ -948,17 +948,8 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                                 : Path.CUR_DIR,
                         LocalResourceType.FILE);
 
-        // usrlib in remote will be used first.
-        if (providedUsrLibDir.isPresent()) {
-            final List<String> usrLibClassPaths =
-                    fileUploader.registerMultipleLocalResources(
-                            Collections.singletonList(providedUsrLibDir.get()),
-                            Path.CUR_DIR,
-                            LocalResourceType.FILE);
-            userClassPaths.addAll(usrLibClassPaths);
-        } else if (ClusterEntrypointUtils.tryFindUserLibDirectory().isPresent()) {
-            // local usrlib will be automatically shipped if it exists and there is no remote
-            // usrlib.
+        // usrlib will be automatically shipped if it exists.
+        if (ClusterEntrypointUtils.tryFindUserLibDirectory().isPresent()) {
             final Set<File> usrLibShipFiles = new HashSet<>();
             addUsrLibFolderToShipFiles(usrLibShipFiles);
             final List<String> usrLibClassPaths =
@@ -1150,12 +1141,9 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         final ContainerLaunchContext amContainer =
                 setupApplicationMasterContainer(yarnClusterEntrypoint, hasKrb5, processSpec);
 
-        // New delegation token framework
-        if (configuration.getBoolean(SecurityOptions.KERBEROS_FETCH_DELEGATION_TOKEN)) {
-            setTokensFor(amContainer);
-        }
-        // Old delegation token framework
+        // setup security tokens
         if (UserGroupInformation.isSecurityEnabled()) {
+            // set HDFS delegation tokens when security is enabled
             LOG.info("Adding delegation token to the AM container.");
             final List<Path> pathsToObtainToken = new ArrayList<>();
             boolean fetchToken =
@@ -1163,9 +1151,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
             if (fetchToken) {
                 List<Path> yarnAccessList =
                         ConfigUtils.decodeListFromConfig(
-                                configuration,
-                                SecurityOptions.KERBEROS_HADOOP_FILESYSTEMS_TO_ACCESS,
-                                Path::new);
+                                configuration, YarnConfigOptions.YARN_ACCESS, Path::new);
                 pathsToObtainToken.addAll(yarnAccessList);
                 pathsToObtainToken.addAll(fileUploader.getRemotePaths());
             }
@@ -1176,12 +1162,34 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         fileUploader.close();
 
         // Setup CLASSPATH and environment variables for ApplicationMaster
-        final Map<String, String> appMasterEnv =
-                generateApplicationMasterEnv(
-                        fileUploader,
-                        classPathBuilder.toString(),
-                        localResourceDescFlinkJar.toString(),
-                        appId.toString());
+        final Map<String, String> appMasterEnv = new HashMap<>();
+        // set user specified app master environment variables
+        appMasterEnv.putAll(
+                ConfigurationUtils.getPrefixedKeyValuePairs(
+                        ResourceManagerOptions.CONTAINERIZED_MASTER_ENV_PREFIX, configuration));
+        // set Flink app class path
+        appMasterEnv.put(YarnConfigKeys.ENV_FLINK_CLASSPATH, classPathBuilder.toString());
+
+        // Set FLINK_OPT_DIR to `opt` folder under working dir in container
+        appMasterEnv.put(
+                ENV_FLINK_OPT_DIR, Path.CUR_DIR + "/" + ConfigConstants.DEFAULT_FLINK_OPT_DIR);
+
+        // set Flink on YARN internal configuration values
+        appMasterEnv.put(YarnConfigKeys.FLINK_DIST_JAR, localResourceDescFlinkJar.toString());
+        appMasterEnv.put(YarnConfigKeys.ENV_APP_ID, appId.toString());
+        appMasterEnv.put(YarnConfigKeys.ENV_CLIENT_HOME_DIR, fileUploader.getHomeDir().toString());
+        appMasterEnv.put(
+                YarnConfigKeys.ENV_CLIENT_SHIP_FILES,
+                encodeYarnLocalResourceDescriptorListToString(
+                        fileUploader.getEnvShipResourceList()));
+        appMasterEnv.put(
+                YarnConfigKeys.FLINK_YARN_FILES,
+                fileUploader.getApplicationDir().toUri().toString());
+
+        // https://github.com/apache/hadoop/blob/trunk/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-site/src/site/markdown/YarnApplicationSecurity.md#identity-on-an-insecure-cluster-hadoop_user_name
+        appMasterEnv.put(
+                YarnConfigKeys.ENV_HADOOP_USER_NAME,
+                UserGroupInformation.getCurrentUser().getUserName());
 
         if (localizedKeytabPath != null) {
             appMasterEnv.put(YarnConfigKeys.LOCAL_KEYTAB_PATH, localizedKeytabPath);
@@ -1200,6 +1208,9 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         if (remoteKrb5Path != null) {
             appMasterEnv.put(YarnConfigKeys.ENV_KRB5_PATH, remoteKrb5Path.toString());
         }
+
+        // set classpath from YARN configuration
+        Utils.setupYarnClassPath(yarnConfiguration, appMasterEnv);
 
         amContainer.setEnvironment(appMasterEnv);
 
@@ -1301,21 +1312,6 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                                     option);
                             configuration.removeConfig(option);
                         });
-    }
-
-    private void setTokensFor(ContainerLaunchContext containerLaunchContext) throws Exception {
-        LOG.info("Adding delegation tokens to the AM container.");
-
-        Credentials credentials = new Credentials();
-
-        DelegationTokenManager delegationTokenManager =
-                new KerberosDelegationTokenManager(flinkConfiguration, null, null);
-        delegationTokenManager.obtainDelegationTokens(credentials);
-
-        ByteBuffer tokens = ByteBuffer.wrap(DelegationTokenConverter.serialize(credentials));
-        containerLaunchContext.setTokens(tokens);
-
-        LOG.info("Delegation tokens added to the AM container.");
     }
 
     /**
@@ -1886,44 +1882,5 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                         + "Note that killing Flink might not clean up all job artifacts and temporary files.",
                 yarnApplicationId,
                 yarnApplicationId);
-    }
-
-    @VisibleForTesting
-    Map<String, String> generateApplicationMasterEnv(
-            final YarnApplicationFileUploader fileUploader,
-            final String classPathStr,
-            final String localFlinkJarStr,
-            final String appIdStr)
-            throws IOException {
-        final Map<String, String> env = new HashMap<>();
-        // set user specified app master environment variables
-        env.putAll(
-                ConfigurationUtils.getPrefixedKeyValuePairs(
-                        ResourceManagerOptions.CONTAINERIZED_MASTER_ENV_PREFIX,
-                        this.flinkConfiguration));
-        // set Flink app class path
-        env.put(ENV_FLINK_CLASSPATH, classPathStr);
-        // Set FLINK_LIB_DIR to `lib` folder under working dir in container
-        env.put(ENV_FLINK_LIB_DIR, Path.CUR_DIR + "/" + ConfigConstants.DEFAULT_FLINK_LIB_DIR);
-        // Set FLINK_OPT_DIR to `opt` folder under working dir in container
-        env.put(ENV_FLINK_OPT_DIR, Path.CUR_DIR + "/" + ConfigConstants.DEFAULT_FLINK_OPT_DIR);
-        // set Flink on YARN internal configuration values
-        env.put(YarnConfigKeys.FLINK_DIST_JAR, localFlinkJarStr);
-        env.put(YarnConfigKeys.ENV_APP_ID, appIdStr);
-        env.put(YarnConfigKeys.ENV_CLIENT_HOME_DIR, fileUploader.getHomeDir().toString());
-        env.put(
-                YarnConfigKeys.ENV_CLIENT_SHIP_FILES,
-                encodeYarnLocalResourceDescriptorListToString(
-                        fileUploader.getEnvShipResourceList()));
-        env.put(
-                YarnConfigKeys.FLINK_YARN_FILES,
-                fileUploader.getApplicationDir().toUri().toString());
-        // https://github.com/apache/hadoop/blob/trunk/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-site/src/site/markdown/YarnApplicationSecurity.md#identity-on-an-insecure-cluster-hadoop_user_name
-        env.put(
-                YarnConfigKeys.ENV_HADOOP_USER_NAME,
-                UserGroupInformation.getCurrentUser().getUserName());
-        // set classpath from YARN configuration
-        Utils.setupYarnClassPath(this.yarnConfiguration, env);
-        return env;
     }
 }

@@ -33,14 +33,14 @@ import org.junit.Test;
 
 import javax.annotation.Nullable;
 
-import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
+import static org.junit.Assert.assertThat;
 
 /** Tests for {@link InputConversionOperator}. */
 public class InputConversionOperatorTest {
 
     @Test
-    public void testInvalidRecords() {
+    public void testInvalidRecords() throws Exception {
         final InputConversionOperator<Row> operator =
                 new InputConversionOperator<>(
                         createConverter(DataTypes.ROW(DataTypes.FIELD("f", DataTypes.INT()))),
@@ -50,29 +50,26 @@ public class InputConversionOperatorTest {
                         true);
 
         // invalid record due to missing field
-        assertThatThrownBy(
-                        () ->
-                                operator.processElement(
-                                        new StreamRecord<>(Row.ofKind(RowKind.INSERT))))
-                .satisfies(
-                        anyCauseMatches(
-                                FlinkRuntimeException.class,
-                                "Error during input conversion from external DataStream "
-                                        + "API to internal Table API data structures"));
+        try {
+            operator.processElement(new StreamRecord<>(Row.ofKind(RowKind.INSERT)));
+        } catch (FlinkRuntimeException e) {
+            assertThat(
+                    e,
+                    containsMessage(
+                            "Error during input conversion from external DataStream "
+                                    + "API to internal Table API data structures"));
+        }
 
         // invalid row kind
-        assertThatThrownBy(
-                        () ->
-                                operator.processElement(
-                                        new StreamRecord<>(Row.ofKind(RowKind.DELETE, 12))))
-                .satisfies(
-                        anyCauseMatches(
-                                FlinkRuntimeException.class,
-                                "Conversion expects insert-only records"));
+        try {
+            operator.processElement(new StreamRecord<>(Row.ofKind(RowKind.DELETE, 12)));
+        } catch (FlinkRuntimeException e) {
+            assertThat(e, containsMessage("Conversion expects insert-only records"));
+        }
     }
 
     @Test
-    public void testInvalidEventTime() {
+    public void testInvalidEventTime() throws Exception {
         final InputConversionOperator<Row> operator =
                 new InputConversionOperator<>(
                         createConverter(DataTypes.ROW(DataTypes.FIELD("f", DataTypes.INT()))),
@@ -80,14 +77,11 @@ public class InputConversionOperatorTest {
                         true,
                         false,
                         true);
-        assertThatThrownBy(
-                        () ->
-                                operator.processElement(
-                                        new StreamRecord<>(Row.ofKind(RowKind.INSERT, 12))))
-                .satisfies(
-                        anyCauseMatches(
-                                FlinkRuntimeException.class,
-                                "Could not find timestamp in DataStream API record."));
+        try {
+            operator.processElement(new StreamRecord<>(Row.ofKind(RowKind.INSERT, 12)));
+        } catch (FlinkRuntimeException e) {
+            assertThat(e, containsMessage("Could not find timestamp in DataStream API record."));
+        }
     }
 
     @Test

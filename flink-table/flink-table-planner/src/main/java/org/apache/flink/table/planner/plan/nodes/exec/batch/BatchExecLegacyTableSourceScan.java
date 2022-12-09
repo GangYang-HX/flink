@@ -88,7 +88,6 @@ public class BatchExecLegacyTableSourceScan extends CommonExecLegacyTableSourceS
     protected Transformation<RowData> createConversionTransformationIfNeeded(
             StreamExecutionEnvironment streamExecEnv,
             ExecNodeConfig config,
-            ClassLoader classLoader,
             Transformation<?> sourceTransform,
             @Nullable RexNode rowtimeExpression) {
         final int[] fieldIndexes = computeIndexMapping(false);
@@ -100,7 +99,7 @@ public class BatchExecLegacyTableSourceScan extends CommonExecLegacyTableSourceS
                     TableSourceUtil.fixPrecisionForProducedDataType(
                             tableSource, (RowType) getOutputType());
             return ScanUtil.convertToInternalRow(
-                    new CodeGeneratorContext(config, classLoader),
+                    new CodeGeneratorContext(config.getTableConfig()),
                     (Transformation<Object>) sourceTransform,
                     fieldIndexes,
                     fixedProducedDataType,

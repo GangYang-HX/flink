@@ -24,12 +24,10 @@ import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.Test;
 
 /** Tests for {@link KeyAndValueSerializer}, which verify variable length keys. */
-class VariableLengthKeyAndValueSerializerTest
+public class VariableLengthKeyAndValueSerializerTest
         extends SerializerTestBase<Tuple2<byte[], StreamRecord<String>>> {
 
     @Override
@@ -55,16 +53,14 @@ class VariableLengthKeyAndValueSerializerTest
     }
 
     @Override
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void testConfigSnapshotInstantiation() {
-        assertThatThrownBy(() -> super.testConfigSnapshotInstantiation())
-                .isInstanceOf(UnsupportedOperationException.class);
+        super.testConfigSnapshotInstantiation();
     }
 
     @Override
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void testSnapshotConfigurationAndReconfigure() throws Exception {
-        assertThatThrownBy(() -> super.testSnapshotConfigurationAndReconfigure())
-                .isInstanceOf(UnsupportedOperationException.class);
+        super.testSnapshotConfigurationAndReconfigure();
     }
 }

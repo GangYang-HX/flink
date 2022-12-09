@@ -34,11 +34,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.SINK_PARTITION_COMMIT_WATERMARK_TIME_ZONE;
-import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
+import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSource;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for {@link FileSystemTableFactory}. */
 public class FileSystemTableFactoryTest {
@@ -60,10 +62,10 @@ public class FileSystemTableFactoryTest {
         descriptor.putString("testcsv.my_option", "my_value");
 
         DynamicTableSource source = createTableSource(SCHEMA, descriptor.asMap());
-        assertThat(source).isInstanceOf(FileSystemTableSource.class);
+        assertTrue(source instanceof FileSystemTableSource);
 
         DynamicTableSink sink = createTableSink(SCHEMA, descriptor.asMap());
-        assertThat(sink).isInstanceOf(FileSystemTableSink.class);
+        assertTrue(sink instanceof FileSystemTableSink);
     }
 
     @Test
@@ -72,11 +74,18 @@ public class FileSystemTableFactoryTest {
         descriptor.putString(FactoryUtil.CONNECTOR.key(), "filesystem");
         descriptor.putString("path", "/tmp");
 
-        assertThatThrownBy(() -> createTableSource(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Missing required options are:\n\nformat"));
+        try {
+            createTableSource(SCHEMA, descriptor.asMap());
+        } catch (ValidationException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause.toString(), cause instanceof ValidationException);
+            assertTrue(
+                    cause.getMessage(),
+                    cause.getMessage().contains("Missing required options are:\n\nformat"));
+            return;
+        }
+
+        fail("Should fail by ValidationException.");
     }
 
     @Test
@@ -85,11 +94,18 @@ public class FileSystemTableFactoryTest {
         descriptor.putString(FactoryUtil.CONNECTOR.key(), "filesystem");
         descriptor.putString("path", "/tmp");
 
-        assertThatThrownBy(() -> createTableSink(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Missing required options are:\n\nformat"));
+        try {
+            createTableSink(SCHEMA, descriptor.asMap());
+        } catch (ValidationException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause.toString(), cause instanceof ValidationException);
+            assertTrue(
+                    cause.getMessage(),
+                    cause.getMessage().contains("Missing required options are:\n\nformat"));
+            return;
+        }
+
+        fail("Should fail by ValidationException.");
     }
 
     @Test
@@ -100,10 +116,18 @@ public class FileSystemTableFactoryTest {
         descriptor.putString("format", "csv");
         descriptor.putString("my_option", "my");
 
-        assertThatThrownBy(() -> createTableSource(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class, "Unsupported options:\n\nmy_option"));
+        try {
+            createTableSource(SCHEMA, descriptor.asMap());
+        } catch (ValidationException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause.toString(), cause instanceof ValidationException);
+            assertTrue(
+                    cause.getMessage(),
+                    cause.getMessage().contains("Unsupported options:\n\nmy_option"));
+            return;
+        }
+
+        fail("Should fail by ValidationException.");
     }
 
     @Test
@@ -114,10 +138,18 @@ public class FileSystemTableFactoryTest {
         descriptor.putString("format", "csv");
         descriptor.putString("my_option", "my");
 
-        assertThatThrownBy(() -> createTableSink(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class, "Unsupported options:\n\nmy_option"));
+        try {
+            createTableSink(SCHEMA, descriptor.asMap());
+        } catch (ValidationException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause.toString(), cause instanceof ValidationException);
+            assertTrue(
+                    cause.getMessage(),
+                    cause.getMessage().contains("Unsupported options:\n\nmy_option"));
+            return;
+        }
+
+        fail("Should fail by ValidationException.");
     }
 
     @Test
@@ -128,13 +160,22 @@ public class FileSystemTableFactoryTest {
         descriptor.putString("format", "csv");
         descriptor.putString(SINK_PARTITION_COMMIT_WATERMARK_TIME_ZONE.key(), "UTC+8");
 
-        assertThatThrownBy(() -> createTableSource(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "The supported watermark time zone is either a full name such "
-                                        + "as 'America/Los_Angeles', or a custom time zone id such "
-                                        + "as 'GMT-08:00', but configured time zone is 'UTC+8'."));
+        try {
+            createTableSource(SCHEMA, descriptor.asMap());
+        } catch (ValidationException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause.toString(), cause instanceof ValidationException);
+            assertTrue(
+                    cause.getMessage(),
+                    cause.getMessage()
+                            .contains(
+                                    "The supported watermark time zone is either a full name such "
+                                            + "as 'America/Los_Angeles', or a custom time zone id such "
+                                            + "as 'GMT-08:00', but configured time zone is 'UTC+8'."));
+            return;
+        }
+
+        fail("Should fail by ValidationException.");
     }
 
     @Test
@@ -144,17 +185,23 @@ public class FileSystemTableFactoryTest {
         descriptor.putString("path", "/tmp");
         descriptor.putString("format", "invalid");
 
-        assertThatThrownBy(() -> createTableSource(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Could not find any format factory for identifier 'invalid' in the classpath."));
+        Exception expected =
+                new ValidationException(
+                        "Could not find any format factory for identifier 'invalid' in the classpath.");
 
-        assertThatThrownBy(() -> createTableSink(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Could not find any format factory for identifier 'invalid' in the classpath."));
+        try {
+            createTableSource(SCHEMA, descriptor.asMap());
+            fail("Should fail");
+        } catch (Exception e) {
+            assertThat(e.getCause(), containsCause(expected));
+        }
+
+        try {
+            createTableSink(SCHEMA, descriptor.asMap());
+            fail("Should fail");
+        } catch (Exception e) {
+            assertThat(e.getCause(), containsCause(expected));
+        }
     }
 
     @Test
@@ -164,21 +211,25 @@ public class FileSystemTableFactoryTest {
         descriptor.putString("path", "/tmp");
         descriptor.putString("format", "test-format");
 
-        assertThatThrownBy(() -> createTableSource(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "One or more required options are missing.\n\n"
-                                        + "Missing required options are:\n\n"
-                                        + "delimiter"));
+        Exception expected =
+                new ValidationException(
+                        "One or more required options are missing.\n\n"
+                                + "Missing required options are:\n\n"
+                                + "delimiter");
 
-        assertThatThrownBy(() -> createTableSink(SCHEMA, descriptor.asMap()))
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "One or more required options are missing.\n\n"
-                                        + "Missing required options are:\n\n"
-                                        + "delimiter"));
+        try {
+            createTableSource(SCHEMA, descriptor.asMap());
+            fail("Should fail");
+        } catch (Exception e) {
+            assertThat(e.getCause().getCause(), containsCause(expected));
+        }
+
+        try {
+            createTableSink(SCHEMA, descriptor.asMap());
+            fail("Should fail");
+        } catch (Exception e) {
+            assertThat(e.getCause().getCause(), containsCause(expected));
+        }
     }
 
     @Test
@@ -190,7 +241,7 @@ public class FileSystemTableFactoryTest {
         descriptor.put("testcsv.my_option", "my_value");
 
         DynamicTableSource source = createTableSource(SCHEMA, descriptor);
-        assertThat(source).isInstanceOf(FileSystemTableSource.class);
+        assertTrue(source instanceof FileSystemTableSource);
 
         Map<String, DataType> readableMetadata = new HashMap<>();
         readableMetadata.put("file.path", DataTypes.STRING().notNull());
@@ -198,7 +249,6 @@ public class FileSystemTableFactoryTest {
         readableMetadata.put("file.size", DataTypes.BIGINT().notNull());
         readableMetadata.put("file.modification-time", DataTypes.TIMESTAMP_LTZ(3).notNull());
 
-        assertThat(((FileSystemTableSource) source).listReadableMetadata())
-                .isEqualTo(readableMetadata);
+        assertEquals(readableMetadata, ((FileSystemTableSource) source).listReadableMetadata());
     }
 }

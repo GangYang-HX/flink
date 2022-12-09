@@ -27,11 +27,12 @@ import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.runtime.state.StateSnapshotTransformer;
 import org.apache.flink.runtime.state.heap.CopyOnWriteSkipListStateMapTestUtils.SnapshotVerificationMode;
 import org.apache.flink.util.IOUtils;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.function.TriFunction;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -56,10 +57,15 @@ import static org.apache.flink.runtime.state.heap.CopyOnWriteSkipListStateMapTes
 import static org.apache.flink.runtime.state.heap.CopyOnWriteSkipListStateMapTestUtils.verifySnapshotWithTransform;
 import static org.apache.flink.runtime.state.heap.CopyOnWriteSkipListStateMapTestUtils.verifySnapshotWithoutTransform;
 import static org.apache.flink.runtime.state.heap.CopyOnWriteSkipListStateMapTestUtils.verifyState;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link CopyOnWriteSkipListStateMap}. */
-class CopyOnWriteSkipListStateMapComplexOpTest {
+public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 
     private final TypeSerializer<Integer> keySerializer = IntSerializer.INSTANCE;
     private final TypeSerializer<Long> namespaceSerializer = LongSerializer.INSTANCE;
@@ -96,8 +102,8 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
     private CopyOnWriteSkipListStateMap<Integer, Long, String> stateMapWithStates;
     private Map<Long, Map<Integer, String>> referenceStates;
 
-    @BeforeEach
-    void setUp() {
+    @Before
+    public void setUp() {
         int maxAllocateSize = 256;
         spaceAllocator = new TestAllocator(maxAllocateSize);
         // do not remove states physically when get, put, remove and snapshot
@@ -117,8 +123,8 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         }
     }
 
-    @AfterEach
-    void tearDown() {
+    @After
+    public void tearDown() {
         stateMapWithStates.close();
         referenceStates.clear();
         IOUtils.closeQuietly(spaceAllocator);
@@ -126,13 +132,13 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
 
     /** Test remove namespace. */
     @Test
-    void testPurgeNamespace() {
+    public void testPurgeNamespace() {
         verify(purgeNamespace(false));
     }
 
     /** Test remove namespace. */
     @Test
-    void testPurgeNamespaceWithSnapshot() {
+    public void testPurgeNamespaceWithSnapshot() {
         CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot =
                 stateMapWithStates.stateSnapshot();
         TestExecutionResult result = purgeNamespace(true);
@@ -172,8 +178,8 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         for (long namespace : removedNamespaces) {
             referenceStates.remove(namespace);
             // verify namespace related stuff.
-            assertThat(stateMapWithStates.sizeOfNamespace(namespace)).isEqualTo(0);
-            assertThat(stateMapWithStates.getKeys(namespace).iterator()).isExhausted();
+            assertEquals(0, stateMapWithStates.sizeOfNamespace(namespace));
+            assertFalse(stateMapWithStates.getKeys(namespace).iterator().hasNext());
         }
 
         return new TestExecutionResult(totalSize, totalSizeIncludingLogicalRemove, totalSpaceSize);
@@ -184,7 +190,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
      * shouldn't.
      */
     @Test
-    void testPutAndPutWithSnapshot() {
+    public void testPutAndPutWithSnapshot() {
         CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot =
                 stateMapWithStates.stateSnapshot();
         TestExecutionResult result = testPutAndPut();
@@ -204,10 +210,10 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
                 putExistingKeyWithSnapshot(totalSize, totalSize * 2, key, namespace, value);
 
         // put (key 1, namespace 1) again, old value should be replaced and space will not increase
-        assertThat(stateMapWithStates.putAndGetOld(key, namespace, newValue)).isEqualTo("11");
+        assertEquals("11", stateMapWithStates.putAndGetOld(key, namespace, newValue));
         addToReferenceState(referenceStates, key, namespace, newValue);
-        assertThat(stateMapWithStates.get(key, namespace)).isEqualTo("111");
-        assertThat(stateMapWithStates.containsKey(key, namespace)).isTrue();
+        assertEquals("111", stateMapWithStates.get(key, namespace));
+        assertTrue(stateMapWithStates.containsKey(key, namespace));
         return new TestExecutionResult(totalSize, totalSize, totalSpaceNumber);
     }
 
@@ -215,7 +221,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
      * Test put -> remove during snapshot, put should trigger copy-on-write and remove shouldn't.
      */
     @Test
-    void testPutAndRemoveWithSnapshot() {
+    public void testPutAndRemoveWithSnapshot() {
         CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot =
                 stateMapWithStates.stateSnapshot();
         TestExecutionResult result = testPutAndRemove();
@@ -238,14 +244,15 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
                 putExistingKeyWithSnapshot(totalSize, totalSize * 2, key, namespace, value);
 
         // remove (key 6, namespace 6), and it should be logically removed
-        assertThat(stateMapWithStates.removeAndGetOld(key, namespace)).isEqualTo(value);
+        assertEquals(value, stateMapWithStates.removeAndGetOld(key, namespace));
         removeFromReferenceState(referenceStates, key, namespace);
         totalSize--;
         // with snapshot, it should be a logical remove
         totalLogicallyRemovedKey++;
-        assertThat(stateMapWithStates.get(key, namespace)).isNull();
-        assertThat(stateMapWithStates.containsKey(key, namespace)).isFalse();
-        assertThat(stateMapWithStates.getLogicallyRemovedNodes()).hasSize(totalLogicallyRemovedKey);
+        assertNull(stateMapWithStates.get(key, namespace));
+        assertFalse(stateMapWithStates.containsKey(key, namespace));
+        assertEquals(
+                totalLogicallyRemovedKey, stateMapWithStates.getLogicallyRemovedNodes().size());
 
         return new TestExecutionResult(
                 totalSize, totalSizeIncludingLogicalRemovedKey, totalSpaceNumber);
@@ -259,10 +266,10 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         addToReferenceState(referenceStates, key, namespace, value);
         // copy-on-write should happen, a space for new value should be allocated
         totalSpaceNumber += 1;
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(totalSpaceNumber);
-        assertThat(stateMapWithStates.get(key, namespace)).isEqualTo(value);
-        assertThat(stateMapWithStates.containsKey(key, namespace)).isTrue();
-        assertThat(stateMapWithStates.size()).isEqualTo(totalSize);
+        assertEquals(totalSpaceNumber, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(value, stateMapWithStates.get(key, namespace));
+        assertTrue(stateMapWithStates.containsKey(key, namespace));
+        assertThat(stateMapWithStates.size(), is(totalSize));
         verifyState(referenceStates, stateMapWithStates);
         return totalSpaceNumber;
     }
@@ -271,7 +278,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
      * Test remove -> put during snapshot, remove should trigger copy-on-write and put shouldn't.
      */
     @Test
-    void testRemoveAndPutWithSnapshot() {
+    public void testRemoveAndPutWithSnapshot() {
         CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot =
                 stateMapWithStates.stateSnapshot();
         TestExecutionResult result = testRemoveAndPut();
@@ -301,13 +308,14 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         int totalSpaceNumber = result.totalSpaceNumber;
 
         // put (key 8, namespace 8) again
-        assertThat(stateMapWithStates.putAndGetOld(key, namespace, value)).isNull();
+        assertNull(stateMapWithStates.putAndGetOld(key, namespace, value));
         addToReferenceState(referenceStates, key, namespace, value);
         totalSize++;
         totalLogicallyRemovedKey--;
-        assertThat(stateMapWithStates.get(key, namespace)).isEqualTo(value);
-        assertThat(stateMapWithStates.containsKey(key, namespace)).isTrue();
-        assertThat(stateMapWithStates.getLogicallyRemovedNodes()).hasSize(totalLogicallyRemovedKey);
+        assertEquals(value, stateMapWithStates.get(key, namespace));
+        assertTrue(stateMapWithStates.containsKey(key, namespace));
+        assertEquals(
+                totalLogicallyRemovedKey, stateMapWithStates.getLogicallyRemovedNodes().size());
         return new TestExecutionResult(
                 totalSize, totalSizeIncludingLogicalRemovedKey, totalSpaceNumber);
     }
@@ -317,7 +325,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
      * second shouldn't.
      */
     @Test
-    void testRemoveAndRemoveWithSnapshot() {
+    public void testRemoveAndRemoveWithSnapshot() {
         final int key = 4;
         final long namespace = 4L;
         final String value = "16";
@@ -341,17 +349,19 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         int totalSpaceNumber = result.totalSpaceNumber;
 
         // remove (key 4, namespace 4) again, and nothing should happen
-        assertThat(stateMapWithStates.removeAndGetOld(key, namespace)).isNull();
-        assertThat(stateMapWithStates.getLogicallyRemovedNodes()).hasSize(totalLogicallyRemovedKey);
+        assertNull(stateMapWithStates.removeAndGetOld(key, namespace));
+        assertEquals(
+                totalLogicallyRemovedKey, stateMapWithStates.getLogicallyRemovedNodes().size());
 
         snapshot.release();
 
         // remove (key 4, namespace 4) again after snapshot released, should be physically removed
-        assertThat(stateMapWithStates.removeAndGetOld(key, namespace)).isNull();
+        assertNull(stateMapWithStates.removeAndGetOld(key, namespace));
         totalLogicallyRemovedKey--;
         totalSizeIncludingLogicalRemovedKey--;
         totalSpaceNumber -= 3; // key, value and one copy-on-write by remove
-        assertThat(stateMapWithStates.getLogicallyRemovedNodes()).hasSize(totalLogicallyRemovedKey);
+        assertEquals(
+                totalLogicallyRemovedKey, stateMapWithStates.getLogicallyRemovedNodes().size());
 
         verify(
                 new TestExecutionResult(
@@ -371,18 +381,18 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         int totalLogicallyRemovedKey = 0;
         int totalSpaceNumber = initTotalSpaceSize;
         int totalSizeIncludingLogicalRemovedKey = totalSize;
-        assertThat(stateMap.removeAndGetOld(key, namespace)).isEqualTo(value);
+        assertEquals(value, stateMap.removeAndGetOld(key, namespace));
         removeFromReferenceState(referenceStates, key, namespace);
         totalSize--;
         // with snapshot, it should be a logical remove with copy-on-write
         totalLogicallyRemovedKey++;
         totalSpaceNumber += 1;
-        assertThat(stateMap.get(key, namespace)).isNull();
-        assertThat(stateMap.containsKey(key, namespace)).isFalse();
-        assertThat(stateMap.size()).isEqualTo(totalSize);
-        assertThat(stateMap.getLogicallyRemovedNodes()).hasSize(totalLogicallyRemovedKey);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(totalSpaceNumber);
-        assertThat(stateMap.totalSize()).isEqualTo(totalSizeIncludingLogicalRemovedKey);
+        assertNull(stateMap.get(key, namespace));
+        assertFalse(stateMap.containsKey(key, namespace));
+        assertThat(stateMap.size(), is(totalSize));
+        assertEquals(totalLogicallyRemovedKey, stateMap.getLogicallyRemovedNodes().size());
+        assertEquals(totalSpaceNumber, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(totalSizeIncludingLogicalRemovedKey, stateMap.totalSize());
         verifyState(referenceStates, stateMap);
         return new RemoveResult(
                 totalLogicallyRemovedKey, totalSizeIncludingLogicalRemovedKey, totalSpaceNumber);
@@ -390,7 +400,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
 
     /** Test snapshot unmodifiable. */
     @Test
-    void testSnapshotUnmodifiable() throws IOException {
+    public void testSnapshotUnmodifiable() throws IOException {
         final int key = 1;
         final int newKey = 101;
         final long namespace = 1L;
@@ -431,7 +441,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
 
     /** Tests that remove states physically when get is invoked. */
     @Test
-    void testPhysicallyRemoveWithGet() throws IOException {
+    public void testPhysicallyRemoveWithGet() throws IOException {
         testPhysicallyRemoveWithFunction(
                 (map, reference, i) -> {
                     map.get(i, (long) i);
@@ -441,17 +451,17 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
 
     /** Tests that remove states physically when contains is invoked. */
     @Test
-    void testPhysicallyRemoveWithContains() throws IOException {
+    public void testPhysicallyRemoveWithContains() throws IOException {
         testPhysicallyRemoveWithFunction(
                 (map, reference, i) -> {
-                    assertThat(map.containsKey(i, (long) i)).isFalse();
+                    assertFalse(map.containsKey(i, (long) i));
                     return 0;
                 });
     }
 
     /** Tests that remove states physically when remove is invoked. */
     @Test
-    void testPhysicallyRemoveWithRemove() throws IOException {
+    public void testPhysicallyRemoveWithRemove() throws IOException {
         testPhysicallyRemoveWithFunction(
                 (map, reference, i) -> {
                     map.remove(i, (long) i);
@@ -461,17 +471,17 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
 
     /** Tests that remove states physically when removeAndGetOld is invoked. */
     @Test
-    void testPhysicallyRemoveWithRemoveAndGetOld() throws IOException {
+    public void testPhysicallyRemoveWithRemoveAndGetOld() throws IOException {
         testPhysicallyRemoveWithFunction(
                 (map, reference, i) -> {
-                    assertThat(map.removeAndGetOld(i, (long) i)).isNull();
+                    assertNull(map.removeAndGetOld(i, (long) i));
                     return 0;
                 });
     }
 
     /** Tests that remove states physically when put is invoked. */
     @Test
-    void testPhysicallyRemoveWithPut() throws IOException {
+    public void testPhysicallyRemoveWithPut() throws IOException {
         testPhysicallyRemoveWithFunction(
                 (map, reference, i) -> {
                     map.put(i, (long) i, String.valueOf(i));
@@ -482,10 +492,10 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
 
     /** Tests that remove states physically when putAndGetOld is invoked. */
     @Test
-    void testPhysicallyRemoveWithPutAndGetOld() throws IOException {
+    public void testPhysicallyRemoveWithPutAndGetOld() throws IOException {
         testPhysicallyRemoveWithFunction(
                 (map, reference, i) -> {
-                    assertThat(map.putAndGetOld(i, (long) i, String.valueOf(i))).isNull();
+                    assertNull(map.putAndGetOld(i, (long) i, String.valueOf(i)));
                     addToReferenceState(reference, i, (long) i, String.valueOf(i));
                     return 1;
                 });
@@ -522,22 +532,22 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         for (int i = 0; i <= 100; i += 2) {
             expectedSize += f.apply(stateMap, referenceStates, i);
         }
-        assertThat(stateMap.size()).isEqualTo(expectedSize);
-        assertThat(stateMap.totalSize()).isEqualTo(expectedSize);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(expectedSize * 2);
+        assertEquals(expectedSize, stateMap.size());
+        assertEquals(expectedSize, stateMap.totalSize());
+        assertEquals(expectedSize * 2, spaceAllocator.getTotalSpaceNumber());
         verifyState(referenceStates, stateMap);
         stateMap.close();
     }
 
     /** Tests that remove states physically during sync part of snapshot. */
     @Test
-    void testPhysicallyRemoveDuringSyncPartOfSnapshotWithIterator() throws IOException {
+    public void testPhysicallyRemoveDuringSyncPartOfSnapshotWithIterator() throws IOException {
         testPhysicallyRemoveDuringSyncPartOfSnapshot(SnapshotVerificationMode.ITERATOR);
     }
 
     /** Tests that remove states physically during sync part of snapshot. */
     @Test
-    void testPhysicallyRemoveDuringSyncPartOfSnapshot() throws IOException {
+    public void testPhysicallyRemoveDuringSyncPartOfSnapshot() throws IOException {
         testPhysicallyRemoveDuringSyncPartOfSnapshot(SnapshotVerificationMode.SERIALIZED);
     }
 
@@ -563,7 +573,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         }
         verifyState(referenceStates, stateMap);
 
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(totalStateSize * 2);
+        assertEquals(totalStateSize * 2, spaceAllocator.getTotalSpaceNumber());
 
         Map<Long, Map<Integer, String>> expectedSnapshot1 =
                 snapshotReferenceStates(referenceStates);
@@ -576,13 +586,14 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
             stateMap.remove(i, (long) i);
             removeFromReferenceState(referenceStates, i, (long) i);
         }
-        assertThat(spaceAllocator.getTotalSpaceNumber())
-                .isEqualTo(totalSizeIncludingLogicallyRemovedStates * 3);
-        assertThat(totalStateSize).isEqualTo(0);
-        assertThat(stateMap.size()).isEqualTo(totalStateSize);
-        assertThat(stateMap.totalSize()).isEqualTo(totalSizeIncludingLogicallyRemovedStates);
-        assertThat(stateMap.getLogicallyRemovedNodes())
-                .hasSize(totalSizeIncludingLogicallyRemovedStates);
+        assertEquals(
+                totalSizeIncludingLogicallyRemovedStates * 3, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(0, totalStateSize);
+        assertEquals(totalStateSize, stateMap.size());
+        assertEquals(totalSizeIncludingLogicallyRemovedStates, stateMap.totalSize());
+        assertEquals(
+                totalSizeIncludingLogicallyRemovedStates,
+                stateMap.getLogicallyRemovedNodes().size());
         verifyState(referenceStates, stateMap);
 
         verifySnapshotWithoutTransform(
@@ -595,8 +606,8 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         snapshot1.release();
 
         // no spaces should be free
-        assertThat(spaceAllocator.getTotalSpaceNumber())
-                .isEqualTo(totalSizeIncludingLogicallyRemovedStates * 3);
+        assertEquals(
+                totalSizeIncludingLogicallyRemovedStates * 3, spaceAllocator.getTotalSpaceNumber());
         verifyState(referenceStates, stateMap);
 
         Map<Long, Map<Integer, String>> expectedSnapshot2 =
@@ -606,12 +617,13 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
 
         // all state should be removed physically
         int totalSizeIncludingLogicallyRemovedStatesAfterSecondSnapshot = 0;
-        assertThat(stateMap.totalSize()).isEqualTo(totalStateSize);
-        assertThat(stateMap.totalSize())
-                .isEqualTo(totalSizeIncludingLogicallyRemovedStatesAfterSecondSnapshot);
-        assertThat(stateMap.getLogicallyRemovedNodes())
-                .hasSize(totalSizeIncludingLogicallyRemovedStatesAfterSecondSnapshot);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(0);
+        assertEquals(totalStateSize, stateMap.totalSize());
+        assertEquals(
+                totalSizeIncludingLogicallyRemovedStatesAfterSecondSnapshot, stateMap.totalSize());
+        assertEquals(
+                totalSizeIncludingLogicallyRemovedStatesAfterSecondSnapshot,
+                stateMap.getLogicallyRemovedNodes().size());
+        assertEquals(0, spaceAllocator.getTotalSpaceNumber());
 
         verifySnapshotWithoutTransform(
                 expectedSnapshot2,
@@ -622,17 +634,17 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
                 verificationMode);
         snapshot2.release();
 
-        assertThat(stateMap.size()).isEqualTo(0);
-        assertThat(stateMap.totalSize()).isEqualTo(0);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(0);
-        assertThat(stateMap.iterator()).isExhausted();
+        assertEquals(0, stateMap.size());
+        assertEquals(0, stateMap.totalSize());
+        assertEquals(0, spaceAllocator.getTotalSpaceNumber());
+        assertFalse(stateMap.iterator().hasNext());
 
         stateMap.close();
     }
 
     /** Tests that snapshots prune useless values. */
     @Test
-    void testSnapshotPruneValues() throws IOException {
+    public void testSnapshotPruneValues() throws IOException {
         TestAllocator spaceAllocator = new TestAllocator(256);
         // set logicalRemovedKeysRatio to 0 so that all logically removed states will be deleted
         // when snapshot
@@ -692,11 +704,11 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot6 =
                 stateMap.stateSnapshot();
 
-        assertThat(stateMap.getStateMapVersion()).isEqualTo(6);
-        assertThat(stateMap.getHighestRequiredSnapshotVersionPlusOne()).isEqualTo(6);
-        assertThat(stateMap.getSnapshotVersions()).hasSize(6);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(5);
-        assertThat(getAllValuesOfNode(stateMap, spaceAllocator, node)).isEqualTo(referenceValues);
+        assertEquals(6, stateMap.getStateMapVersion());
+        assertEquals(6, stateMap.getHighestRequiredSnapshotVersionPlusOne());
+        assertEquals(6, stateMap.getSnapshotVersions().size());
+        assertEquals(5, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(referenceValues, getAllValuesOfNode(stateMap, spaceAllocator, node));
 
         Map<Long, Map<Integer, String>> referenceStates = new HashMap<>();
         referenceStates.put(1L, new HashMap<>());
@@ -706,9 +718,9 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         verifySnapshotWithoutTransform(
                 referenceStates, snapshot1, keySerializer, namespaceSerializer, stateSerializer);
         snapshot1.release();
-        assertThat(getAllValuesOfNode(stateMap, spaceAllocator, node)).isEqualTo(referenceValues);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(5);
-        assertThat(stateMap.getHighestFinishedSnapshotVersion()).isEqualTo(1);
+        assertEquals(referenceValues, getAllValuesOfNode(stateMap, spaceAllocator, node));
+        assertEquals(5, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(1, stateMap.getHighestFinishedSnapshotVersion());
 
         // complete snapshot 3, and v0 will be removed
         referenceStates.get(1L).put(1, "2");
@@ -716,18 +728,18 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
                 referenceStates, snapshot3, keySerializer, namespaceSerializer, stateSerializer);
         snapshot3.release();
         referenceValues.remove(referenceValues.size() - 1);
-        assertThat(getAllValuesOfNode(stateMap, spaceAllocator, node)).isEqualTo(referenceValues);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(4);
-        assertThat(stateMap.getHighestFinishedSnapshotVersion()).isEqualTo(1);
+        assertEquals(referenceValues, getAllValuesOfNode(stateMap, spaceAllocator, node));
+        assertEquals(4, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(1, stateMap.getHighestFinishedSnapshotVersion());
 
         // complete snapshot 2, and no value will be removed
         referenceStates.get(1L).put(1, "1");
         verifySnapshotWithoutTransform(
                 referenceStates, snapshot2, keySerializer, namespaceSerializer, stateSerializer);
         snapshot2.release();
-        assertThat(getAllValuesOfNode(stateMap, spaceAllocator, node)).isEqualTo(referenceValues);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(4);
-        assertThat(stateMap.getHighestFinishedSnapshotVersion()).isEqualTo(3);
+        assertEquals(referenceValues, getAllValuesOfNode(stateMap, spaceAllocator, node));
+        assertEquals(4, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(3, stateMap.getHighestFinishedSnapshotVersion());
 
         // add node to pruning set to prevent snapshot4 to prune
         stateMap.getPruningValueNodes().add(node);
@@ -736,9 +748,9 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         verifySnapshotWithoutTransform(
                 referenceStates, snapshot4, keySerializer, namespaceSerializer, stateSerializer);
         snapshot4.release();
-        assertThat(getAllValuesOfNode(stateMap, spaceAllocator, node)).isEqualTo(referenceValues);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(4);
-        assertThat(stateMap.getHighestFinishedSnapshotVersion()).isEqualTo(4);
+        assertEquals(referenceValues, getAllValuesOfNode(stateMap, spaceAllocator, node));
+        assertEquals(4, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(4, stateMap.getHighestFinishedSnapshotVersion());
 
         stateMap.getPruningValueNodes().remove(node);
 
@@ -748,34 +760,34 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
         snapshot5.release();
         referenceValues.remove(referenceValues.size() - 1);
         referenceValues.remove(referenceValues.size() - 1);
-        assertThat(getAllValuesOfNode(stateMap, spaceAllocator, node)).isEqualTo(referenceValues);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(2);
-        assertThat(stateMap.getHighestFinishedSnapshotVersion()).isEqualTo(5);
+        assertEquals(referenceValues, getAllValuesOfNode(stateMap, spaceAllocator, node));
+        assertEquals(2, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(5, stateMap.getHighestFinishedSnapshotVersion());
 
         // complete snapshot 6, no value will be removed
         verifySnapshotWithoutTransform(
                 referenceStates, snapshot6, keySerializer, namespaceSerializer, stateSerializer);
         snapshot6.release();
-        assertThat(getAllValuesOfNode(stateMap, spaceAllocator, node)).isEqualTo(referenceValues);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(2);
-        assertThat(stateMap.getHighestFinishedSnapshotVersion()).isEqualTo(6);
+        assertEquals(referenceValues, getAllValuesOfNode(stateMap, spaceAllocator, node));
+        assertEquals(2, spaceAllocator.getTotalSpaceNumber());
+        assertEquals(6, stateMap.getHighestFinishedSnapshotVersion());
 
-        assertThat(stateMap.removeAndGetOld(1, 1L)).isEqualTo("3");
-        assertThat(stateMap.size()).isEqualTo(0);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(0);
+        assertEquals("3", stateMap.removeAndGetOld(1, 1L));
+        assertEquals(0, stateMap.size());
+        assertEquals(0, spaceAllocator.getTotalSpaceNumber());
 
         stateMap.close();
     }
 
     /** Tests concurrent snapshots. */
     @Test
-    void testConcurrentSnapshots() throws IOException {
+    public void testConcurrentSnapshots() throws IOException {
         testConcurrentSnapshots(SnapshotVerificationMode.SERIALIZED);
     }
 
     /** Tests concurrent snapshots. */
     @Test
-    void testConcurrentSnapshotsWithIterator() throws IOException {
+    public void testConcurrentSnapshotsWithIterator() throws IOException {
         testConcurrentSnapshots(SnapshotVerificationMode.ITERATOR);
     }
 
@@ -960,7 +972,7 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
             for (Map.Entry<Integer, String> keyEntry : namespaceEntry.getValue().entrySet()) {
                 int key = keyEntry.getKey();
                 // namespace should be equal to key
-                assertThat(key).isEqualTo(namespace);
+                assertEquals(namespace, key);
                 switch (op) {
                     case 0:
                         stateMap.remove(key, namespace);
@@ -993,10 +1005,9 @@ class CopyOnWriteSkipListStateMapComplexOpTest {
     }
 
     private void verify(@Nonnull TestExecutionResult result) {
-        assertThat(stateMapWithStates.size()).isEqualTo(result.totalSize);
-        assertThat(stateMapWithStates.totalSize())
-                .isEqualTo(result.totalSizeIncludingLogicalRemove);
-        assertThat(spaceAllocator.getTotalSpaceNumber()).isEqualTo(result.totalSpaceSize);
+        assertEquals(result.totalSize, stateMapWithStates.size());
+        assertEquals(result.totalSizeIncludingLogicalRemove, stateMapWithStates.totalSize());
+        assertEquals(result.totalSpaceSize, spaceAllocator.getTotalSpaceNumber());
         verifyState(referenceStates, stateMapWithStates);
     }
 

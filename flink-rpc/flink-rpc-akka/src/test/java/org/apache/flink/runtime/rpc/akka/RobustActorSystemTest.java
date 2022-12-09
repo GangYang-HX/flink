@@ -18,26 +18,28 @@
 package org.apache.flink.runtime.rpc.akka;
 
 import org.apache.flink.runtime.rpc.RpcUtils;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.TestingUncaughtExceptionHandler;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.japi.pf.ReceiveBuilder;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 
 /** Tests for the {@link RobustActorSystem}. */
-class RobustActorSystemTest {
+public class RobustActorSystemTest extends TestLogger {
 
     private RobustActorSystem robustActorSystem = null;
     private TestingUncaughtExceptionHandler testingUncaughtExceptionHandler = null;
 
-    @BeforeEach
-    void setup() {
+    @Before
+    public void setup() {
         testingUncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
         robustActorSystem =
                 RobustActorSystem.create(
@@ -47,14 +49,14 @@ class RobustActorSystemTest {
                         testingUncaughtExceptionHandler);
     }
 
-    @AfterEach
-    void teardown() {
+    @After
+    public void teardown() {
         robustActorSystem.terminate();
         testingUncaughtExceptionHandler = null;
     }
 
     @Test
-    void testUncaughtExceptionHandler() {
+    public void testUncaughtExceptionHandler() {
         final Error error = new UnknownError("Foobar");
 
         robustActorSystem
@@ -67,11 +69,11 @@ class RobustActorSystemTest {
         final Throwable uncaughtException =
                 testingUncaughtExceptionHandler.waitForUncaughtException();
 
-        assertThat(uncaughtException).isSameAs(error);
+        assertThat(uncaughtException, is(error));
     }
 
     @Test
-    void testUncaughtExceptionHandlerFromActor() {
+    public void testUncaughtExceptionHandlerFromActor() {
         final Error error = new UnknownError();
         final ActorRef actor =
                 robustActorSystem.actorOf(Props.create(UncaughtExceptionActor.class, error));
@@ -81,7 +83,7 @@ class RobustActorSystemTest {
         final Throwable uncaughtException =
                 testingUncaughtExceptionHandler.waitForUncaughtException();
 
-        assertThat(uncaughtException).isSameAs(error);
+        assertThat(uncaughtException, is(error));
     }
 
     private static class UncaughtExceptionActor extends AbstractActor {

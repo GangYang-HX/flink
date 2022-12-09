@@ -23,7 +23,7 @@ under the License.
 	<parent>
 		<artifactId>flink-end-to-end-tests</artifactId>
 		<groupId>org.apache.flink</groupId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.15.1-SNAPSHOT</version>
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 
@@ -31,7 +31,7 @@ under the License.
 	<name>Flink : E2E Tests : Pulsar</name>
 
 	<properties>
-		<pulsar.version>2.10.0</pulsar.version>
+		<pulsar.version>2.9.1</pulsar.version>
 		<bouncycastle.version>1.69</bouncycastle.version>
 	</properties>
 

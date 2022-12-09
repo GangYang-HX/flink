@@ -18,7 +18,9 @@
 
 package org.apache.flink.table.factories;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -30,93 +32,95 @@ import static org.apache.flink.table.factories.TestTableSinkFactory.FORMAT_PATH;
 import static org.apache.flink.table.factories.TestTableSinkFactory.FORMAT_TYPE_VALUE_TEST;
 import static org.apache.flink.table.factories.TestTableSinkFactory.REQUIRED_TEST;
 import static org.apache.flink.table.factories.TestTableSinkFactory.REQUIRED_TEST_VALUE;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for testing table sink discovery using {@link TableFactoryService}. The tests assume the
  * table sink factory {@link TestTableSinkFactory} is registered.
  */
-class TableSinkFactoryServiceTest {
+public class TableSinkFactoryServiceTest {
+
+    @Rule public ExpectedException thrown = ExpectedException.none();
 
     @Test
-    void testValidProperties() {
+    public void testValidProperties() {
         Map<String, String> props = properties();
-        assertThat(TableFactoryService.find(TableSinkFactory.class, props))
-                .isInstanceOf(TestTableSinkFactory.class);
+        assertTrue(
+                TableFactoryService.find(TableSinkFactory.class, props)
+                        instanceof TestTableSinkFactory);
     }
 
     @Test
-    void testInvalidContext() {
+    public void testInvalidContext() {
+        thrown.expect(NoMatchingTableFactoryException.class);
         Map<String, String> props = properties();
         props.put(CONNECTOR_TYPE, "unknown-connector-type");
-        assertThatThrownBy(() -> TableFactoryService.find(TableSinkFactory.class, props))
-                .isInstanceOf(NoMatchingTableFactoryException.class)
-                .hasMessageContaining("Could not find a suitable table factory");
+        TableFactoryService.find(TableSinkFactory.class, props);
     }
 
     @Test
-    void testDifferentContextVersion() {
+    public void testDifferentContextVersion() {
         Map<String, String> props = properties();
         props.put(CONNECTOR_PROPERTY_VERSION, "2");
         // the table source should still be found
-        assertThat(TableFactoryService.find(TableSinkFactory.class, props))
-                .isInstanceOf(TestTableSinkFactory.class);
+        assertTrue(
+                TableFactoryService.find(TableSinkFactory.class, props)
+                        instanceof TestTableSinkFactory);
     }
 
     @Test
-    void testUnsupportedProperty() {
+    public void testUnsupportedProperty() {
+        thrown.expect(NoMatchingTableFactoryException.class);
+        thrown.expectMessage(
+                "The matching candidates:\n"
+                        + "org.apache.flink.table.factories.TestTableSinkFactory\n"
+                        + "Unsupported property keys:\n"
+                        + "format.path_new");
         Map<String, String> props = properties();
         props.put("format.path_new", "/new/path");
-        assertThatThrownBy(() -> TableFactoryService.find(TableSinkFactory.class, props))
-                .isInstanceOf(NoMatchingTableFactoryException.class)
-                .hasMessageContaining(
-                        "The matching candidates:\n"
-                                + "org.apache.flink.table.factories.TestTableSinkFactory\n"
-                                + "Unsupported property keys:\n"
-                                + "format.path_new");
+        TableFactoryService.find(TableSinkFactory.class, props);
     }
 
     @Test
-    void testMissingProperty() {
+    public void testMissingProperty() {
+        thrown.expect(NoMatchingTableFactoryException.class);
+        thrown.expectMessage(
+                "The matching candidates:\n"
+                        + "org.apache.flink.table.factories.TestTableSinkFactory\n"
+                        + "Missing properties:\n"
+                        + "format.type=test");
         Map<String, String> props = properties();
         props.remove(TableFactoryService.FORMAT_TYPE);
-        assertThatThrownBy(() -> TableFactoryService.find(TableSinkFactory.class, props))
-                .isInstanceOf(NoMatchingTableFactoryException.class)
-                .hasMessageContaining(
-                        "The matching candidates:\n"
-                                + "org.apache.flink.table.factories.TestTableSinkFactory\n"
-                                + "Missing properties:\n"
-                                + "format.type=test");
+        TableFactoryService.find(TableSinkFactory.class, props);
     }
 
     @Test
-    void testMismatchedProperty() {
+    public void testMismatchedProperty() {
+        thrown.expect(NoMatchingTableFactoryException.class);
+        thrown.expectMessage(
+                "The matching candidates:\n"
+                        + "org.apache.flink.table.factories.TestTableSinkFactory\n"
+                        + "Mismatched properties:\n"
+                        + "'format.type' expects 'test', but is 'test_new'");
         Map<String, String> props = properties();
         props.put(TableFactoryService.FORMAT_TYPE, FORMAT_TYPE_VALUE_TEST + "_new");
-        assertThatThrownBy(() -> TableFactoryService.find(TableSinkFactory.class, props))
-                .isInstanceOf(NoMatchingTableFactoryException.class)
-                .hasMessageContaining(
-                        "The matching candidates:\n"
-                                + "org.apache.flink.table.factories.TestTableSinkFactory\n"
-                                + "Mismatched properties:\n"
-                                + "'format.type' expects 'test', but is 'test_new'");
+        TableFactoryService.find(TableSinkFactory.class, props);
     }
 
     @Test
-    void testMissingAndMismatchedProperty() {
+    public void testMissingAndMismatchedProperty() {
+        thrown.expect(NoMatchingTableFactoryException.class);
+        thrown.expectMessage(
+                "The matching candidates:\n"
+                        + "org.apache.flink.table.factories.TestTableSinkFactory\n"
+                        + "Missing properties:\n"
+                        + "required.test=required-0\n"
+                        + "Mismatched properties:\n"
+                        + "'format.type' expects 'test', but is 'test_new'");
         Map<String, String> props = properties();
         props.put(TableFactoryService.FORMAT_TYPE, FORMAT_TYPE_VALUE_TEST + "_new");
         props.remove(REQUIRED_TEST);
-        assertThatThrownBy(() -> TableFactoryService.find(TableSinkFactory.class, props))
-                .isInstanceOf(NoMatchingTableFactoryException.class)
-                .hasMessageContaining(
-                        "The matching candidates:\n"
-                                + "org.apache.flink.table.factories.TestTableSinkFactory\n"
-                                + "Missing properties:\n"
-                                + "required.test=required-0\n"
-                                + "Mismatched properties:\n"
-                                + "'format.type' expects 'test', but is 'test_new'");
+        TableFactoryService.find(TableSinkFactory.class, props);
     }
 
     private Map<String, String> properties() {

@@ -48,7 +48,7 @@ public class FileLock {
         }
         this.file =
                 path.getParent() == null
-                        ? new File(TEMP_DIR, normalizedFileName)
+                        ? new File(normalizedFileName)
                         : new File(path.getParent().toString(), normalizedFileName);
     }
 

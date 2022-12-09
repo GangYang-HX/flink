@@ -31,6 +31,6 @@ public interface ColumnBatchFactory<SplitT extends FileSourceSplit> extends Seri
     VectorizedColumnBatch create(SplitT split, ColumnVector[] vectors);
 
     static <SplitT extends FileSourceSplit> ColumnBatchFactory<SplitT> withoutExtraFields() {
-        return (split, vectors) -> new VectorizedColumnBatch(vectors);
+        return (ColumnBatchFactory<SplitT>) (split, vectors) -> new VectorizedColumnBatch(vectors);
     }
 }

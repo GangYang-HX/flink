@@ -114,10 +114,7 @@ class BatchingStateChangeUploadScheduler implements StateChangeUploadScheduler {
                 retryPolicy,
                 delegate,
                 SchedulerFactory.create(1, "ChangelogUploadScheduler", LOG),
-                new RetryingExecutor(
-                        numUploadThreads,
-                        metricGroup.getAttemptsPerUpload(),
-                        metricGroup.getTotalAttemptsPerUpload()),
+                new RetryingExecutor(numUploadThreads, metricGroup.getAttemptsPerUpload()),
                 metricGroup);
     }
 

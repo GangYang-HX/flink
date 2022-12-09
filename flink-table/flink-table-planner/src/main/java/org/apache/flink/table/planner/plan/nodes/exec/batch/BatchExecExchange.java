@@ -158,10 +158,7 @@ public class BatchExecExchange extends CommonExecExchange implements BatchExecNo
             case HASH:
                 partitioner =
                         createHashPartitioner(
-                                ((HashDistribution) requiredDistribution),
-                                inputType,
-                                config,
-                                planner.getFlinkContext().getClassLoader());
+                                ((HashDistribution) requiredDistribution), inputType, config);
                 parallelism = ExecutionConfig.PARALLELISM_DEFAULT;
                 break;
             case KEEP_INPUT_AS_IS:
@@ -184,8 +181,7 @@ public class BatchExecExchange extends CommonExecExchange implements BatchExecNo
                                     createHashPartitioner(
                                             ((HashDistribution) inputDistribution),
                                             inputType,
-                                            config,
-                                            planner.getFlinkContext().getClassLoader()));
+                                            config));
                 }
                 parallelism = inputTransform.getParallelism();
                 break;
@@ -205,10 +201,7 @@ public class BatchExecExchange extends CommonExecExchange implements BatchExecNo
     }
 
     private BinaryHashPartitioner createHashPartitioner(
-            HashDistribution hashDistribution,
-            RowType inputType,
-            ExecNodeConfig config,
-            ClassLoader classLoader) {
+            HashDistribution hashDistribution, RowType inputType, ExecNodeConfig config) {
         int[] keys = hashDistribution.getKeys();
         String[] fieldNames =
                 Arrays.stream(keys)
@@ -216,7 +209,7 @@ public class BatchExecExchange extends CommonExecExchange implements BatchExecNo
                         .toArray(String[]::new);
         return new BinaryHashPartitioner(
                 HashCodeGenerator.generateRowHash(
-                        new CodeGeneratorContext(config, classLoader),
+                        new CodeGeneratorContext(config.getTableConfig()),
                         inputType,
                         "HashPartitioner",
                         keys),

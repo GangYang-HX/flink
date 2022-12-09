@@ -18,6 +18,7 @@
 
 package org.apache.flink.table.catalog;
 
+import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.util.StringUtils;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -44,5 +45,10 @@ public abstract class AbstractCatalog implements Catalog {
     @Override
     public String getDefaultDatabase() {
         return defaultDatabase;
+    }
+
+    @Override
+    public void setCurrentDataSource(String dataSource) throws CatalogException {
+        throw new UnsupportedOperationException();
     }
 }

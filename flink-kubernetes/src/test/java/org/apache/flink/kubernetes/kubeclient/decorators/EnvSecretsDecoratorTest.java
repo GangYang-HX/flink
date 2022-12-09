@@ -23,14 +23,14 @@ import org.apache.flink.kubernetes.kubeclient.FlinkPod;
 import org.apache.flink.kubernetes.kubeclient.KubernetesJobManagerTestBase;
 
 import io.fabric8.kubernetes.api.model.EnvVar;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** General tests for the {@link EnvSecretsDecorator}. */
-class EnvSecretsDecoratorTest extends KubernetesJobManagerTestBase {
+public class EnvSecretsDecoratorTest extends KubernetesJobManagerTestBase {
 
     private static final String ENV_NAME = "MY_FOO";
     private static final String ENV_SERCET_KEY = "env:MY_FOO,secret:foo,key:key_foo";
@@ -52,10 +52,11 @@ class EnvSecretsDecoratorTest extends KubernetesJobManagerTestBase {
     }
 
     @Test
-    void testWhetherPodOrContainerIsDecorated() {
+    public void testWhetherPodOrContainerIsDecorated() {
         final FlinkPod resultFlinkPod = envSecretsDecorator.decorateFlinkPod(baseFlinkPod);
         List<EnvVar> envVarList = resultFlinkPod.getMainContainer().getEnv();
 
-        assertThat(envVarList).extracting(EnvVar::getName).containsExactly(ENV_NAME);
+        assertEquals(1, envVarList.size());
+        assertEquals(ENV_NAME, envVarList.get(0).getName());
     }
 }

@@ -55,9 +55,6 @@ import java.util.List;
 
 import scala.math.BigInt;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsText;
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsTuples;
-
 /**
  * Integration tests for {@link GroupReduceFunction}, {@link RichGroupReduceFunction}, and {@link
  * GroupCombineFunction}.

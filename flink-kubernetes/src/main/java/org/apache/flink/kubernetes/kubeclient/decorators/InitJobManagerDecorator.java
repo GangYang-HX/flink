@@ -32,7 +32,9 @@ import io.fabric8.kubernetes.api.model.ContainerPort;
 import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.EnvVarBuilder;
+import io.fabric8.kubernetes.api.model.EnvVarSource;
 import io.fabric8.kubernetes.api.model.EnvVarSourceBuilder;
+import io.fabric8.kubernetes.api.model.ObjectFieldSelector;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.ResourceRequirements;
 
@@ -43,9 +45,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.kubernetes.utils.Constants.API_VERSION;
-import static org.apache.flink.kubernetes.utils.Constants.DNS_PLOICY_DEFAULT;
-import static org.apache.flink.kubernetes.utils.Constants.DNS_PLOICY_HOSTNETWORK;
 import static org.apache.flink.kubernetes.utils.Constants.ENV_FLINK_POD_IP_ADDRESS;
+import static org.apache.flink.kubernetes.utils.Constants.ENV_FLINK_POD_NAME;
 import static org.apache.flink.kubernetes.utils.Constants.POD_IP_FIELD_PATH;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -63,7 +64,6 @@ public class InitJobManagerDecorator extends AbstractKubernetesStepDecorator {
     @Override
     public FlinkPod decorateFlinkPod(FlinkPod flinkPod) {
         final PodBuilder basicPodBuilder = new PodBuilder(flinkPod.getPodWithoutMainContainer());
-
         // Overwrite fields
         final String serviceAccountName =
                 KubernetesUtils.resolveUserDefinedValue(
@@ -83,10 +83,8 @@ public class InitJobManagerDecorator extends AbstractKubernetesStepDecorator {
                 .withServiceAccount(serviceAccountName)
                 .withServiceAccountName(serviceAccountName)
                 .withHostNetwork(kubernetesJobManagerParameters.isHostNetworkEnabled())
-                .withDnsPolicy(
-                        kubernetesJobManagerParameters.isHostNetworkEnabled()
-                                ? DNS_PLOICY_HOSTNETWORK
-                                : DNS_PLOICY_DEFAULT)
+                .withDnsPolicy(kubernetesJobManagerParameters.getDnsPolicy())
+                .withHostAliases(kubernetesJobManagerParameters.getHostAliases())
                 .endSpec();
 
         // Merge fields
@@ -152,6 +150,7 @@ public class InitJobManagerDecorator extends AbstractKubernetesStepDecorator {
         mainContainerBuilder
                 .addAllToPorts(getContainerPorts())
                 .addAllToEnv(getCustomizedEnvs())
+                .addToEnv(getPodNameEnv())
                 .addNewEnv()
                 .withName(ENV_FLINK_POD_IP_ADDRESS)
                 .withValueFrom(
@@ -160,6 +159,8 @@ public class InitJobManagerDecorator extends AbstractKubernetesStepDecorator {
                                 .build())
                 .endEnv();
         getFlinkLogDirEnv().ifPresent(mainContainerBuilder::addToEnv);
+        getFlinkGlobalJobId().ifPresent(mainContainerBuilder::addToEnv);
+        getFlinkGlobalJobInstanceId().ifPresent(mainContainerBuilder::addToEnv);
         return mainContainerBuilder.build();
     }
 
@@ -197,5 +198,23 @@ public class InitJobManagerDecorator extends AbstractKubernetesStepDecorator {
         return kubernetesJobManagerParameters
                 .getFlinkLogDirInPod()
                 .map(logDir -> new EnvVar(Constants.ENV_FLINK_LOG_DIR, logDir, null));
+    }
+
+    private Optional<EnvVar> getFlinkGlobalJobId() {
+        return kubernetesJobManagerParameters
+                .getFlinkGlobalJobId()
+                .map(id -> new EnvVar(Constants.ENV_FLINK_GLOBAL_JOB_ID, id, null));
+    }
+
+    private Optional<EnvVar> getFlinkGlobalJobInstanceId() {
+        return kubernetesJobManagerParameters
+                .getFlinkGlobalJobInstanceId()
+                .map(id -> new EnvVar(Constants.ENV_FLINK_GLOBAL_JOB_INSTANCE_ID, id, null));
+    }
+
+    private static EnvVar getPodNameEnv() {
+        EnvVarSource source = new EnvVarSource();
+        source.setFieldRef(new ObjectFieldSelector(API_VERSION, "metadata.name"));
+        return new EnvVar(ENV_FLINK_POD_NAME, null, source);
     }
 }

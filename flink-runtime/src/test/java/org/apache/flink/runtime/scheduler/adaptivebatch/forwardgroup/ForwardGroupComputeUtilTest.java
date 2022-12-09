@@ -28,26 +28,20 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.scheduler.adaptivebatch.AdaptiveBatchScheduler;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorExtension;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.junit.Assert.assertEquals;
 
 /** Unit tests for {@link ForwardGroupComputeUtil}. */
-class ForwardGroupComputeUtilTest {
-    @RegisterExtension
-    static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorExtension();
-
+public class ForwardGroupComputeUtilTest extends TestLogger {
     /**
      * Tests that the computation of the job graph with isolated vertices works correctly.
      *
@@ -60,7 +54,7 @@ class ForwardGroupComputeUtilTest {
      * </pre>
      */
     @Test
-    void testIsolatedVertices() throws Exception {
+    public void testIsolatedVertices() throws Exception {
         JobVertex v1 = new JobVertex("v1");
         JobVertex v2 = new JobVertex("v2");
         JobVertex v3 = new JobVertex("v3");
@@ -81,14 +75,14 @@ class ForwardGroupComputeUtilTest {
      * </pre>
      */
     @Test
-    void testVariousResultPartitionTypesBetweenVertices() throws Exception {
+    public void testVariousResultPartitionTypesBetweenVertices() throws Exception {
         testThreeVerticesConnectSequentially(false, true, 1, 2);
         testThreeVerticesConnectSequentially(false, false, 0);
         testThreeVerticesConnectSequentially(true, true, 1, 3);
     }
 
     private void testThreeVerticesConnectSequentially(
-            boolean isForward1, boolean isForward2, int numOfGroups, Integer... groupSizes)
+            boolean isForward1, boolean isForward2, int numOfGroups, int... groupSizes)
             throws Exception {
         JobVertex v1 = new JobVertex("v1");
         JobVertex v2 = new JobVertex("v2");
@@ -97,14 +91,14 @@ class ForwardGroupComputeUtilTest {
         v2.connectNewDataSetAsInput(
                 v1, DistributionPattern.ALL_TO_ALL, ResultPartitionType.BLOCKING);
         if (isForward1) {
-            v1.getProducedDataSets().get(0).getConsumers().get(0).setForward(true);
+            v1.getProducedDataSets().get(0).getConsumer().setForward(true);
         }
 
         v3.connectNewDataSetAsInput(
                 v2, DistributionPattern.POINTWISE, ResultPartitionType.BLOCKING);
 
         if (isForward2) {
-            v2.getProducedDataSets().get(0).getConsumers().get(0).setForward(true);
+            v2.getProducedDataSets().get(0).getConsumer().setForward(true);
         }
 
         Set<ForwardGroup> groups = computeForwardGroups(v1, v2, v3);
@@ -127,7 +121,7 @@ class ForwardGroupComputeUtilTest {
      * </pre>
      */
     @Test
-    void testTwoInputsMergesIntoOne() throws Exception {
+    public void testTwoInputsMergesIntoOne() throws Exception {
         JobVertex v1 = new JobVertex("v1");
         JobVertex v2 = new JobVertex("v2");
         JobVertex v3 = new JobVertex("v3");
@@ -135,10 +129,10 @@ class ForwardGroupComputeUtilTest {
 
         v3.connectNewDataSetAsInput(
                 v1, DistributionPattern.ALL_TO_ALL, ResultPartitionType.BLOCKING);
-        v1.getProducedDataSets().get(0).getConsumers().get(0).setForward(true);
+        v1.getProducedDataSets().get(0).getConsumer().setForward(true);
         v3.connectNewDataSetAsInput(
                 v2, DistributionPattern.POINTWISE, ResultPartitionType.BLOCKING);
-        v2.getProducedDataSets().get(0).getConsumers().get(0).setForward(true);
+        v2.getProducedDataSets().get(0).getConsumer().setForward(true);
         v4.connectNewDataSetAsInput(
                 v3, DistributionPattern.ALL_TO_ALL, ResultPartitionType.BLOCKING);
 
@@ -162,7 +156,7 @@ class ForwardGroupComputeUtilTest {
      * </pre>
      */
     @Test
-    void testOneInputSplitsIntoTwo() throws Exception {
+    public void testOneInputSplitsIntoTwo() throws Exception {
         JobVertex v1 = new JobVertex("v1");
         JobVertex v2 = new JobVertex("v2");
         JobVertex v3 = new JobVertex("v3");
@@ -174,8 +168,8 @@ class ForwardGroupComputeUtilTest {
                 v2, DistributionPattern.POINTWISE, ResultPartitionType.BLOCKING);
         v4.connectNewDataSetAsInput(
                 v2, DistributionPattern.POINTWISE, ResultPartitionType.BLOCKING);
-        v2.getProducedDataSets().get(0).getConsumers().get(0).setForward(true);
-        v2.getProducedDataSets().get(1).getConsumers().get(0).setForward(true);
+        v2.getProducedDataSets().get(0).getConsumer().setForward(true);
+        v2.getProducedDataSets().get(1).getConsumer().setForward(true);
 
         Set<ForwardGroup> groups = computeForwardGroups(v1, v2, v3, v4);
 
@@ -191,11 +185,10 @@ class ForwardGroupComputeUtilTest {
                         .values());
     }
 
-    private static void checkGroupSize(
-            Set<ForwardGroup> groups, int numOfGroups, Integer... sizes) {
-        assertThat(groups.size()).isEqualTo(numOfGroups);
-        assertThat(groups.stream().map(ForwardGroup::size).collect(Collectors.toList()))
-                .contains(sizes);
+    private static void checkGroupSize(Set<ForwardGroup> groups, int numOfGroups, int... sizes) {
+        assertEquals(numOfGroups, groups.size());
+        containsInAnyOrder(
+                groups.stream().map(ForwardGroup::size).collect(Collectors.toList()), sizes);
     }
 
     private static DefaultExecutionGraph createDynamicGraph(JobVertex... vertices)
@@ -207,6 +200,6 @@ class ForwardGroupComputeUtilTest {
                         .setVertexParallelismStore(
                                 AdaptiveBatchScheduler.computeVertexParallelismStoreForDynamicGraph(
                                         Arrays.asList(vertices), 10));
-        return builder.buildDynamicGraph(EXECUTOR_RESOURCE.getExecutor());
+        return builder.buildDynamicGraph();
     }
 }

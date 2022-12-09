@@ -20,13 +20,14 @@ package org.apache.flink.tests.util.kafka;
 
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.tests.util.TestUtils;
 import org.apache.flink.tests.util.cache.DownloadCache;
 import org.apache.flink.tests.util.flink.ClusterController;
 import org.apache.flink.tests.util.flink.FlinkResource;
 import org.apache.flink.tests.util.flink.FlinkResourceSetup;
 import org.apache.flink.tests.util.flink.LocalStandaloneFlinkResourceFactory;
+import org.apache.flink.tests.util.flink.SQLJobSubmission;
+import org.apache.flink.testutils.junit.FailsOnJava11;
 import org.apache.flink.util.TestLogger;
 
 import org.apache.commons.lang3.StringUtils;
@@ -36,6 +37,7 @@ import org.junit.ClassRule;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -57,12 +59,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.apache.flink.tests.util.TestUtils.readCsvResultFiles;
 import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
 import static org.junit.Assert.assertThat;
 
 /** End-to-end test for the kafka SQL connectors. */
 @RunWith(Parameterized.class)
+@Category(value = {FailsOnJava11.class})
 @Ignore("FLINK-21796")
 public class SQLClientKafkaITCase extends TestLogger {
 
@@ -72,7 +74,7 @@ public class SQLClientKafkaITCase extends TestLogger {
 
     @Parameterized.Parameters(name = "{index}: kafka-version:{0} kafka-sql-version:{1}")
     public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {{"3.2.1", "universal", "kafka", ".*kafka.jar"}});
+        return Arrays.asList(new Object[][] {{"2.8.1", "universal", "kafka", ".*kafka.jar"}});
     }
 
     private static Configuration getConfiguration() {
@@ -172,7 +174,7 @@ public class SQLClientKafkaITCase extends TestLogger {
     }
 
     private void executeSqlStatements(ClusterController clusterController, List<String> sqlLines)
-            throws Exception {
+            throws IOException {
         LOG.info("Executing Kafka {} end-to-end SQL statements.", kafkaSQLVersion);
         clusterController.submitSQLJob(
                 new SQLJobSubmission.SQLJobSubmissionBuilder(sqlLines)
@@ -231,5 +233,18 @@ public class SQLClientKafkaITCase extends TestLogger {
             Thread.sleep(500);
         }
         Assert.assertTrue("Did not get expected results before timeout.", success);
+    }
+
+    private static List<String> readCsvResultFiles(Path path) throws IOException {
+        File filePath = path.toFile();
+        // list all the non-hidden files
+        File[] csvFiles = filePath.listFiles((dir, name) -> !name.startsWith("."));
+        List<String> result = new ArrayList<>();
+        if (csvFiles != null) {
+            for (File file : csvFiles) {
+                result.addAll(Files.readAllLines(file.toPath()));
+            }
+        }
+        return result;
     }
 }

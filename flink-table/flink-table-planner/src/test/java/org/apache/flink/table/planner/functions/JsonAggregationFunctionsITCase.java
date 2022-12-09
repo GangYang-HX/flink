@@ -22,10 +22,16 @@ import org.apache.flink.table.api.JsonOnNull;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.types.Row;
 
+import org.junit.runners.Parameterized;
+
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.flink.runtime.state.StateBackendLoader.HASHMAP_STATE_BACKEND_NAME;
+import static org.apache.flink.runtime.state.StateBackendLoader.ROCKSDB_STATE_BACKEND_NAME;
 import static org.apache.flink.table.api.DataTypes.INT;
 import static org.apache.flink.table.api.DataTypes.ROW;
 import static org.apache.flink.table.api.DataTypes.STRING;
@@ -37,132 +43,158 @@ import static org.apache.flink.types.RowKind.DELETE;
 import static org.apache.flink.types.RowKind.INSERT;
 
 /** Tests for built-in JSON aggregation functions. */
-class JsonAggregationFunctionsITCase extends BuiltInAggregateFunctionTestBase {
+public class JsonAggregationFunctionsITCase extends BuiltInAggregateFunctionTestBase {
 
-    @Override
-    public Stream<TestSpec> getTestCaseSpecs() {
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() throws Exception {
         return Stream.of(
-                // JSON_OBJECTAGG
-                TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_OBJECTAGG_NULL_ON_NULL)
-                        .withDescription("Basic Aggregation")
-                        .withSource(
-                                ROW(STRING(), INT()),
-                                Arrays.asList(
-                                        Row.ofKind(INSERT, "A", 1),
-                                        Row.ofKind(INSERT, "B", null),
-                                        Row.ofKind(INSERT, "C", 3)))
-                        .testResult(
-                                source -> "SELECT JSON_OBJECTAGG(f0 VALUE f1) FROM " + source,
-                                source ->
-                                        source.select(
-                                                jsonObjectAgg(JsonOnNull.NULL, $("f0"), $("f1"))),
-                                ROW(VARCHAR(2000).notNull()),
-                                ROW(STRING().notNull()),
-                                Collections.singletonList(Row.of("{\"A\":1,\"B\":null,\"C\":3}"))),
-                TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_OBJECTAGG_ABSENT_ON_NULL)
-                        .withDescription("Omits NULLs")
-                        .withSource(
-                                ROW(STRING(), INT()),
-                                Arrays.asList(
-                                        Row.ofKind(INSERT, "A", 1),
-                                        Row.ofKind(INSERT, "B", null),
-                                        Row.ofKind(INSERT, "C", 3)))
-                        .testResult(
-                                source ->
-                                        "SELECT JSON_OBJECTAGG(f0 VALUE f1 ABSENT ON NULL) FROM "
-                                                + source,
-                                source ->
-                                        source.select(
-                                                jsonObjectAgg(JsonOnNull.ABSENT, $("f0"), $("f1"))),
-                                ROW(VARCHAR(2000).notNull()),
-                                ROW(STRING().notNull()),
-                                Collections.singletonList(Row.of("{\"A\":1,\"C\":3}"))),
-                TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_OBJECTAGG_NULL_ON_NULL)
-                        .withDescription("Retractions")
-                        .withSource(
-                                ROW(STRING(), INT()),
-                                Arrays.asList(
-                                        Row.ofKind(INSERT, "A", 1),
-                                        Row.ofKind(INSERT, "B", 2),
-                                        Row.ofKind(INSERT, "C", 3),
-                                        Row.ofKind(DELETE, "B", 2)))
-                        .testResult(
-                                source -> "SELECT JSON_OBJECTAGG(f0 VALUE f1) FROM " + source,
-                                source ->
-                                        source.select(
-                                                jsonObjectAgg(JsonOnNull.NULL, $("f0"), $("f1"))),
-                                ROW(VARCHAR(2000).notNull()),
-                                ROW(STRING().notNull()),
-                                Collections.singletonList(Row.of("{\"A\":1,\"C\":3}"))),
-                TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_OBJECTAGG_NULL_ON_NULL)
-                        .withDescription("Group Aggregation")
-                        .withSource(
-                                ROW(INT(), STRING(), INT()),
-                                Arrays.asList(
-                                        Row.ofKind(INSERT, 1, "A", 0),
-                                        Row.ofKind(INSERT, 1, "B", 0),
-                                        Row.ofKind(INSERT, 2, "A", 0),
-                                        Row.ofKind(INSERT, 2, "C", 0)))
-                        .testResult(
-                                source ->
-                                        "SELECT f0, JSON_OBJECTAGG(f1 VALUE f2) FROM "
-                                                + source
-                                                + " GROUP BY f0",
-                                source ->
-                                        source.groupBy($("f0"))
-                                                .select(
-                                                        $("f0"),
+                        // JSON_OBJECTAGG
+                        TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_OBJECTAGG_NULL_ON_NULL)
+                                .withDescription("Basic Aggregation")
+                                .withSource(
+                                        ROW(STRING(), INT()),
+                                        Arrays.asList(
+                                                Row.ofKind(INSERT, "A", 1),
+                                                Row.ofKind(INSERT, "B", null),
+                                                Row.ofKind(INSERT, "C", 3)))
+                                .testResult(
+                                        source ->
+                                                "SELECT JSON_OBJECTAGG(f0 VALUE f1) FROM " + source,
+                                        source ->
+                                                source.select(
                                                         jsonObjectAgg(
-                                                                JsonOnNull.NULL, $("f1"), $("f2"))),
-                                ROW(INT(), VARCHAR(2000).notNull()),
-                                ROW(INT(), STRING().notNull()),
-                                Arrays.asList(
-                                        Row.of(1, "{\"A\":0,\"B\":0}"),
-                                        Row.of(2, "{\"A\":0,\"C\":0}"))),
+                                                                JsonOnNull.NULL, $("f0"), $("f1"))),
+                                        ROW(VARCHAR(2000).notNull()),
+                                        ROW(STRING().notNull()),
+                                        Collections.singletonList(
+                                                Row.of("{\"A\":1,\"B\":null,\"C\":3}"))),
+                        TestSpec.forFunction(
+                                        BuiltInFunctionDefinitions.JSON_OBJECTAGG_ABSENT_ON_NULL)
+                                .withDescription("Omits NULLs")
+                                .withSource(
+                                        ROW(STRING(), INT()),
+                                        Arrays.asList(
+                                                Row.ofKind(INSERT, "A", 1),
+                                                Row.ofKind(INSERT, "B", null),
+                                                Row.ofKind(INSERT, "C", 3)))
+                                .testResult(
+                                        source ->
+                                                "SELECT JSON_OBJECTAGG(f0 VALUE f1 ABSENT ON NULL) FROM "
+                                                        + source,
+                                        source ->
+                                                source.select(
+                                                        jsonObjectAgg(
+                                                                JsonOnNull.ABSENT,
+                                                                $("f0"),
+                                                                $("f1"))),
+                                        ROW(VARCHAR(2000).notNull()),
+                                        ROW(STRING().notNull()),
+                                        Collections.singletonList(Row.of("{\"A\":1,\"C\":3}"))),
+                        TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_OBJECTAGG_NULL_ON_NULL)
+                                .withDescription("Retractions")
+                                .withSource(
+                                        ROW(STRING(), INT()),
+                                        Arrays.asList(
+                                                Row.ofKind(INSERT, "A", 1),
+                                                Row.ofKind(INSERT, "B", 2),
+                                                Row.ofKind(INSERT, "C", 3),
+                                                Row.ofKind(DELETE, "B", 2)))
+                                .testResult(
+                                        source ->
+                                                "SELECT JSON_OBJECTAGG(f0 VALUE f1) FROM " + source,
+                                        source ->
+                                                source.select(
+                                                        jsonObjectAgg(
+                                                                JsonOnNull.NULL, $("f0"), $("f1"))),
+                                        ROW(VARCHAR(2000).notNull()),
+                                        ROW(STRING().notNull()),
+                                        Collections.singletonList(Row.of("{\"A\":1,\"C\":3}"))),
+                        TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_OBJECTAGG_NULL_ON_NULL)
+                                .withDescription("Group Aggregation")
+                                .withSource(
+                                        ROW(INT(), STRING(), INT()),
+                                        Arrays.asList(
+                                                Row.ofKind(INSERT, 1, "A", 0),
+                                                Row.ofKind(INSERT, 1, "B", 0),
+                                                Row.ofKind(INSERT, 2, "A", 0),
+                                                Row.ofKind(INSERT, 2, "C", 0)))
+                                .testResult(
+                                        source ->
+                                                "SELECT f0, JSON_OBJECTAGG(f1 VALUE f2) FROM "
+                                                        + source
+                                                        + " GROUP BY f0",
+                                        source ->
+                                                source.groupBy($("f0"))
+                                                        .select(
+                                                                $("f0"),
+                                                                jsonObjectAgg(
+                                                                        JsonOnNull.NULL,
+                                                                        $("f1"),
+                                                                        $("f2"))),
+                                        ROW(INT(), VARCHAR(2000).notNull()),
+                                        ROW(INT(), STRING().notNull()),
+                                        Arrays.asList(
+                                                Row.of(1, "{\"A\":0,\"B\":0}"),
+                                                Row.of(2, "{\"A\":0,\"C\":0}"))),
 
-                // JSON_ARRAYAGG
-                TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_ARRAYAGG_ABSENT_ON_NULL)
-                        .withDescription("Basic Aggregation")
-                        .withSource(
-                                ROW(STRING()),
-                                Arrays.asList(
-                                        Row.ofKind(INSERT, "A"),
-                                        Row.ofKind(INSERT, (String) null),
-                                        Row.ofKind(INSERT, "C")))
-                        .testResult(
-                                source -> "SELECT JSON_ARRAYAGG(f0) FROM " + source,
-                                source -> source.select(jsonArrayAgg(JsonOnNull.ABSENT, $("f0"))),
-                                ROW(VARCHAR(2000).notNull()),
-                                ROW(STRING().notNull()),
-                                Collections.singletonList(Row.of("[\"A\",\"C\"]"))),
-                TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_ARRAYAGG_NULL_ON_NULL)
-                        .withDescription("Keeps NULLs")
-                        .withSource(
-                                ROW(STRING()),
-                                Arrays.asList(
-                                        Row.ofKind(INSERT, "A"),
-                                        Row.ofKind(INSERT, (String) null),
-                                        Row.ofKind(INSERT, "C")))
-                        .testResult(
-                                source -> "SELECT JSON_ARRAYAGG(f0 NULL ON NULL) FROM " + source,
-                                source -> source.select(jsonArrayAgg(JsonOnNull.NULL, $("f0"))),
-                                ROW(VARCHAR(2000).notNull()),
-                                ROW(STRING().notNull()),
-                                Collections.singletonList(Row.of("[\"A\",null,\"C\"]"))),
-                TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_ARRAYAGG_ABSENT_ON_NULL)
-                        .withDescription("Retractions")
-                        .withSource(
-                                ROW(INT()),
-                                Arrays.asList(
-                                        Row.ofKind(INSERT, 1),
-                                        Row.ofKind(INSERT, 2),
-                                        Row.ofKind(INSERT, 3),
-                                        Row.ofKind(DELETE, 2)))
-                        .testResult(
-                                source -> "SELECT JSON_ARRAYAGG(f0) FROM " + source,
-                                source -> source.select(jsonArrayAgg(JsonOnNull.ABSENT, $("f0"))),
-                                ROW(VARCHAR(2000).notNull()),
-                                ROW(STRING().notNull()),
-                                Collections.singletonList(Row.of("[1,3]"))));
+                        // JSON_ARRAYAGG
+                        TestSpec.forFunction(
+                                        BuiltInFunctionDefinitions.JSON_ARRAYAGG_ABSENT_ON_NULL)
+                                .withDescription("Basic Aggregation")
+                                .withSource(
+                                        ROW(STRING()),
+                                        Arrays.asList(
+                                                Row.ofKind(INSERT, "A"),
+                                                Row.ofKind(INSERT, (String) null),
+                                                Row.ofKind(INSERT, "C")))
+                                .testResult(
+                                        source -> "SELECT JSON_ARRAYAGG(f0) FROM " + source,
+                                        source ->
+                                                source.select(
+                                                        jsonArrayAgg(JsonOnNull.ABSENT, $("f0"))),
+                                        ROW(VARCHAR(2000).notNull()),
+                                        ROW(STRING().notNull()),
+                                        Collections.singletonList(Row.of("[\"A\",\"C\"]"))),
+                        TestSpec.forFunction(BuiltInFunctionDefinitions.JSON_ARRAYAGG_NULL_ON_NULL)
+                                .withDescription("Keeps NULLs")
+                                .withSource(
+                                        ROW(STRING()),
+                                        Arrays.asList(
+                                                Row.ofKind(INSERT, "A"),
+                                                Row.ofKind(INSERT, (String) null),
+                                                Row.ofKind(INSERT, "C")))
+                                .testResult(
+                                        source ->
+                                                "SELECT JSON_ARRAYAGG(f0 NULL ON NULL) FROM "
+                                                        + source,
+                                        source ->
+                                                source.select(
+                                                        jsonArrayAgg(JsonOnNull.NULL, $("f0"))),
+                                        ROW(VARCHAR(2000).notNull()),
+                                        ROW(STRING().notNull()),
+                                        Collections.singletonList(Row.of("[\"A\",null,\"C\"]"))),
+                        TestSpec.forFunction(
+                                        BuiltInFunctionDefinitions.JSON_ARRAYAGG_ABSENT_ON_NULL)
+                                .withDescription("Retractions")
+                                .withSource(
+                                        ROW(INT()),
+                                        Arrays.asList(
+                                                Row.ofKind(INSERT, 1),
+                                                Row.ofKind(INSERT, 2),
+                                                Row.ofKind(INSERT, 3),
+                                                Row.ofKind(DELETE, 2)))
+                                .testResult(
+                                        source -> "SELECT JSON_ARRAYAGG(f0) FROM " + source,
+                                        source ->
+                                                source.select(
+                                                        jsonArrayAgg(JsonOnNull.ABSENT, $("f0"))),
+                                        ROW(VARCHAR(2000).notNull()),
+                                        ROW(STRING().notNull()),
+                                        Collections.singletonList(Row.of("[1,3]"))))
+                .flatMap(
+                        spec ->
+                                Stream.of(HASHMAP_STATE_BACKEND_NAME, ROCKSDB_STATE_BACKEND_NAME)
+                                        .map(backend -> spec.copy().withStateBackend(backend)))
+                .collect(Collectors.toList());
     }
 }

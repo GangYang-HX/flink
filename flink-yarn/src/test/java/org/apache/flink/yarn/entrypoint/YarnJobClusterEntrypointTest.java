@@ -21,27 +21,32 @@ package org.apache.flink.yarn.entrypoint;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.yarn.configuration.YarnConfigOptions;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.io.IOException;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Tests for {@link YarnJobClusterEntrypoint}. */
-class YarnJobClusterEntrypointTest {
+public class YarnJobClusterEntrypointTest {
 
     @Test
-    void testCreateDispatcherResourceManagerComponentFactoryFailIfUsrLibDirDoesNotExist() {
+    public void testCreateDispatcherResourceManagerComponentFactoryFailIfUsrLibDirDoesNotExist()
+            throws IOException {
         final Configuration configuration = new Configuration();
         configuration.set(
                 YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR,
                 YarnConfigOptions.UserJarInclusion.DISABLED);
         final YarnJobClusterEntrypoint yarnJobClusterEntrypoint =
                 new YarnJobClusterEntrypoint(configuration);
-        assertThatThrownBy(
-                        () ->
-                                yarnJobClusterEntrypoint
-                                        .createDispatcherResourceManagerComponentFactory(
-                                                configuration))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("the usrlib directory does not exist.");
+        try {
+            yarnJobClusterEntrypoint.createDispatcherResourceManagerComponentFactory(configuration);
+            fail();
+        } catch (IllegalStateException exception) {
+            assertThat(
+                    exception.getMessage(), containsString("the usrlib directory does not exist."));
+        }
     }
 }

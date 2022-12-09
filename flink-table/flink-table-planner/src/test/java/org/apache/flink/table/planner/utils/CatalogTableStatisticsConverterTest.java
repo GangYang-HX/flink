@@ -27,7 +27,10 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link CatalogTableStatisticsConverter}. */
 public class CatalogTableStatisticsConverterTest {
@@ -41,9 +44,9 @@ public class CatalogTableStatisticsConverterTest {
         Map<String, ColumnStats> columnStatsMap =
                 CatalogTableStatisticsConverter.convertToColumnStatsMap(
                         columnStatisticsDataBaseMap);
-        assertThat(columnStatsMap).isNotNull();
-        assertThat(columnStatsMap).hasSize(columnStatisticsDataBaseMap.size() - 1);
-        assertThat(columnStatsMap).containsKey("first");
-        assertThat(columnStatsMap).doesNotContainKey("second");
+        assertNotNull(columnStatsMap);
+        assertEquals(columnStatisticsDataBaseMap.size() - 1, columnStatsMap.size());
+        assertTrue(columnStatsMap.containsKey("first"));
+        assertFalse(columnStatsMap.containsKey("second"));
     }
 }

@@ -681,7 +681,7 @@ public class DefaultDeclarativeSlotPoolTest extends TestLogger {
     }
 
     @Nonnull
-    static ResourceCounter createResourceRequirements() {
+    private static ResourceCounter createResourceRequirements() {
         final Map<ResourceProfile, Integer> requirements = new HashMap<>();
         requirements.put(RESOURCE_PROFILE_1, 2);
         requirements.put(RESOURCE_PROFILE_2, 1);
@@ -754,7 +754,7 @@ public class DefaultDeclarativeSlotPoolTest extends TestLogger {
     }
 
     @Nonnull
-    static Collection<SlotOffer> increaseRequirementsAndOfferSlotsToSlotPool(
+    private static Collection<SlotOffer> increaseRequirementsAndOfferSlotsToSlotPool(
             DefaultDeclarativeSlotPool slotPool,
             ResourceCounter resourceRequirements,
             @Nullable LocalTaskManagerLocation taskManagerLocation,
@@ -772,7 +772,7 @@ public class DefaultDeclarativeSlotPoolTest extends TestLogger {
     }
 
     @Nonnull
-    static Collection<PhysicalSlot> drainNewSlotService(NewSlotsService notifyNewSlots)
+    private static Collection<PhysicalSlot> drainNewSlotService(NewSlotsService notifyNewSlots)
             throws InterruptedException {
         final Collection<PhysicalSlot> newSlots = new ArrayList<>();
 
@@ -807,7 +807,7 @@ public class DefaultDeclarativeSlotPoolTest extends TestLogger {
         }
     }
 
-    static final class NewSlotsService implements DeclarativeSlotPool.NewSlotsListener {
+    private static final class NewSlotsService implements DeclarativeSlotPool.NewSlotsListener {
 
         private final BlockingQueue<Collection<? extends PhysicalSlot>> physicalSlotsQueue =
                 new ArrayBlockingQueue<>(2);
@@ -854,7 +854,7 @@ public class DefaultDeclarativeSlotPoolTest extends TestLogger {
         }
     }
 
-    static class FreeSlotConsumer
+    private static class FreeSlotConsumer
             implements BiFunction<AllocationID, Throwable, CompletableFuture<Acknowledge>> {
 
         final BlockingQueue<AllocationID> freedSlots = new ArrayBlockingQueue<>(10);
@@ -866,7 +866,7 @@ public class DefaultDeclarativeSlotPoolTest extends TestLogger {
             return CompletableFuture.completedFuture(Acknowledge.get());
         }
 
-        Collection<AllocationID> drainFreedSlots() {
+        private Collection<AllocationID> drainFreedSlots() {
             final Collection<AllocationID> result = new ArrayList<>();
 
             freedSlots.drainTo(result);

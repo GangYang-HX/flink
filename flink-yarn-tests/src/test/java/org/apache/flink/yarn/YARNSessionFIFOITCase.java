@@ -22,7 +22,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.GlobalConfiguration;
 import org.apache.flink.runtime.testutils.CommonTestUtils;
 import org.apache.flink.test.testdata.WordCountData;
-import org.apache.flink.testutils.logging.LoggerAuditingExtension;
+import org.apache.flink.testutils.logging.TestLoggerResource;
 import org.apache.flink.yarn.cli.FlinkYarnSessionCli;
 import org.apache.flink.yarn.configuration.YarnConfigOptions;
 
@@ -34,39 +34,38 @@ import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.ResourceScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.fifo.FifoScheduler;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
 import java.io.File;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.apache.flink.yarn.util.TestUtils.getTestJarPath;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * This test starts a MiniYARNCluster with a FIFO scheduler. There are no queues for that scheduler.
  */
-class YARNSessionFIFOITCase extends YarnTestBase {
-    private static final Logger log = LoggerFactory.getLogger(YARNSessionFIFOITCase.class);
+public class YARNSessionFIFOITCase extends YarnTestBase {
+    private static final Logger LOG = LoggerFactory.getLogger(YARNSessionFIFOITCase.class);
 
-    @RegisterExtension
-    protected final LoggerAuditingExtension yarLoggerAuditingExtension =
-            new LoggerAuditingExtension(YarnClusterDescriptor.class, Level.WARN);
+    @Rule
+    public final TestLoggerResource yarTestLoggerResource =
+            new TestLoggerResource(YarnClusterDescriptor.class, Level.WARN);
 
-    /** Override init with FIFO scheduler. */
-    @BeforeAll
+    /*
+    Override init with FIFO scheduler.
+     */
+    @BeforeClass
     public static void setup() {
         YARN_CONFIGURATION.setClass(
                 YarnConfiguration.RM_SCHEDULER, FifoScheduler.class, ResourceScheduler.class);
@@ -76,26 +75,24 @@ class YARNSessionFIFOITCase extends YarnTestBase {
         startYARNWithConfig(YARN_CONFIGURATION);
     }
 
-    @AfterEach
-    void checkForProhibitedLogContents() {
+    @After
+    public void checkForProhibitedLogContents() {
         ensureNoProhibitedStringInLogFiles(PROHIBITED_STRINGS, WHITELISTED_STRINGS);
     }
 
-    @Timeout(value = 60)
-    @Test
-    void testDetachedMode() throws Exception {
+    @Test(timeout = 60000)
+    public void testDetachedMode() throws Exception {
         runTest(() -> runDetachedModeTest(Collections.emptyMap()));
     }
 
     /** Test regular operation, including command line parameter parsing. */
     ApplicationId runDetachedModeTest(Map<String, String> securityProperties) throws Exception {
-        log.info("Starting testDetachedMode()");
+        LOG.info("Starting testDetachedMode()");
 
         File exampleJarLocation = getTestJarPath("StreamingWordCount.jar");
         // get temporary file for reading input data for wordcount example
-        File tmpInFile = tmp.toPath().resolve(UUID.randomUUID().toString()).toFile();
-        tmpInFile.createNewFile();
-        FileUtils.writeStringToFile(tmpInFile, WordCountData.TEXT, Charset.defaultCharset());
+        File tmpInFile = tmp.newFile();
+        FileUtils.writeStringToFile(tmpInFile, WordCountData.TEXT);
 
         ArrayList<String> args = new ArrayList<>();
         args.add("-j");
@@ -155,11 +152,11 @@ class YARNSessionFIFOITCase extends YarnTestBase {
         // in "new" mode we can only wait after the job is submitted, because TMs
         // are spun up lazily
         // wait until two containers are running
-        log.info("Waiting until two containers are running");
+        LOG.info("Waiting until two containers are running");
         CommonTestUtils.waitUntilCondition(
                 () -> getRunningContainers() >= 2, testConditionIntervalInMillis);
 
-        log.info("Waiting until the job reaches FINISHED state");
+        LOG.info("Waiting until the job reaches FINISHED state");
         final ApplicationId applicationId = getOnlyApplicationReport().getApplicationId();
         CommonTestUtils.waitUntilCondition(
                 () ->
@@ -177,11 +174,11 @@ class YARNSessionFIFOITCase extends YarnTestBase {
             List<ApplicationReport> apps =
                     getApplicationReportWithRetryOnNPE(
                             yc, EnumSet.of(YarnApplicationState.RUNNING));
-            assertThat(apps).hasSize(1); // Only one running
+            Assert.assertEquals(1, apps.size()); // Only one running
             ApplicationReport app = apps.get(0);
 
-            assertThat(app.getName()).isEqualTo("MyCustomName");
-            assertThat(app.getApplicationType()).isEqualTo("Apache Flink 1.x");
+            Assert.assertEquals("MyCustomName", app.getName());
+            Assert.assertEquals("Apache Flink 1.x", app.getApplicationType());
             ApplicationId id = app.getApplicationId();
             yc.killApplication(id);
 
@@ -195,18 +192,19 @@ class YARNSessionFIFOITCase extends YarnTestBase {
                                     .isEmpty(),
                     testConditionIntervalInMillis);
         } catch (Throwable t) {
-            log.warn("Killing failed", t);
+            LOG.warn("Killing failed", t);
+            Assert.fail();
         } finally {
 
             // cleanup the yarn-properties file
             String confDirPath = System.getenv("FLINK_CONF_DIR");
             File configDirectory = new File(confDirPath);
-            log.info(
+            LOG.info(
                     "testDetachedPerJobYarnClusterInternal: Using configuration directory "
                             + configDirectory.getAbsolutePath());
 
             // load the configuration
-            log.info("testDetachedPerJobYarnClusterInternal: Trying to load configuration file");
+            LOG.info("testDetachedPerJobYarnClusterInternal: Trying to load configuration file");
             Configuration configuration =
                     GlobalConfiguration.loadConfiguration(configDirectory.getAbsolutePath());
 
@@ -216,19 +214,19 @@ class YARNSessionFIFOITCase extends YarnTestBase {
                                 configuration.getString(
                                         YarnConfigOptions.PROPERTIES_FILE_LOCATION));
                 if (yarnPropertiesFile.exists()) {
-                    log.info(
+                    LOG.info(
                             "testDetachedPerJobYarnClusterInternal: Cleaning up temporary Yarn address reference: {}",
                             yarnPropertiesFile.getAbsolutePath());
                     yarnPropertiesFile.delete();
                 }
             } catch (Exception e) {
-                log.warn(
+                LOG.warn(
                         "testDetachedPerJobYarnClusterInternal: Exception while deleting the JobManager address file",
                         e);
             }
         }
 
-        log.info("Finished testDetachedMode()");
+        LOG.info("Finished testDetachedMode()");
         return applicationId;
     }
 
@@ -238,17 +236,17 @@ class YARNSessionFIFOITCase extends YarnTestBase {
      * <p>This test validates through 666*2 cores in the "cluster".
      */
     @Test
-    void testQueryCluster() throws Exception {
+    public void testQueryCluster() throws Exception {
         runTest(
                 () -> {
-                    log.info("Starting testQueryCluster()");
+                    LOG.info("Starting testQueryCluster()");
                     runWithArgs(
                             new String[] {"-q"},
                             "Summary: totalMemory 8192 totalCores 1332",
                             null,
                             RunTypes.YARN_SESSION,
                             0); // we have 666*2 cores.
-                    log.info("Finished testQueryCluster()");
+                    LOG.info("Finished testQueryCluster()");
                 });
     }
 }

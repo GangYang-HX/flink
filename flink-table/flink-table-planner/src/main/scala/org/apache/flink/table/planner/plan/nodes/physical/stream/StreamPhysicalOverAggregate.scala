@@ -36,7 +36,7 @@ class StreamPhysicalOverAggregate(
     traitSet: RelTraitSet,
     inputRel: RelNode,
     outputRowType: RelDataType,
-    logicWindow: Window)
+    val logicWindow: Window)
   extends StreamPhysicalOverAggregateBase(cluster, traitSet, inputRel, outputRowType, logicWindow) {
 
   override def copy(traitSet: RelTraitSet, inputs: util.List[RelNode]): RelNode = {

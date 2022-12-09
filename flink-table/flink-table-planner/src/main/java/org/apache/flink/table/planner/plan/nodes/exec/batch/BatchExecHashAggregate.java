@@ -96,12 +96,10 @@ public class BatchExecHashAggregate extends ExecNodeBase<RowData>
         final RowType inputRowType = (RowType) inputEdge.getOutputType();
         final RowType outputRowType = (RowType) getOutputType();
 
-        final CodeGeneratorContext ctx =
-                new CodeGeneratorContext(config, planner.getFlinkContext().getClassLoader());
+        final CodeGeneratorContext ctx = new CodeGeneratorContext(config.getTableConfig());
 
         final AggregateInfoList aggInfos =
                 AggregateUtil.transformToBatchAggregateInfoList(
-                        planner.getTypeFactory(),
                         aggInputRowType,
                         JavaScalaConversionUtil.toScala(Arrays.asList(aggCalls)),
                         null, // aggCallNeedRetractions
@@ -114,7 +112,7 @@ public class BatchExecHashAggregate extends ExecNodeBase<RowData>
             generatedOperator =
                     AggWithoutKeysCodeGenerator.genWithoutKeys(
                             ctx,
-                            planner.createRelBuilder(),
+                            planner.getRelBuilder(),
                             aggInfos,
                             inputRowType,
                             outputRowType,
@@ -128,7 +126,7 @@ public class BatchExecHashAggregate extends ExecNodeBase<RowData>
             generatedOperator =
                     new HashAggCodeGenerator(
                                     ctx,
-                                    planner.createRelBuilder(),
+                                    planner.getRelBuilder(),
                                     aggInfos,
                                     inputRowType,
                                     outputRowType,

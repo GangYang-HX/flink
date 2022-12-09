@@ -19,27 +19,30 @@
 package org.apache.flink.kubernetes;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 /** Tests for {@link KubernetesWorkerNode}. */
-class KubernetesWorkerNodeTest {
+public class KubernetesWorkerNodeTest extends TestLogger {
+
+    @Rule public final ExpectedException exception = ExpectedException.none();
+
     @Test
     public void testGetAttemptFromWorkerNode() throws Exception {
         final String correctPodName = "flink-on-kubernetes-taskmanager-11-5";
         final KubernetesWorkerNode workerNode =
                 new KubernetesWorkerNode(new ResourceID(correctPodName));
-        assertThat(workerNode.getAttempt()).isEqualTo(11L);
+        Assert.assertEquals(11L, workerNode.getAttempt());
 
         final String wrongPodName = "flink-on-kubernetes-xxxtaskmanager-11-5";
         final KubernetesWorkerNode workerNode1 =
                 new KubernetesWorkerNode(new ResourceID(wrongPodName));
-        assertThatThrownBy(() -> workerNode1.getAttempt())
-                .isInstanceOf(Exception.class)
-                .hasMessageContaining(
-                        "Error to parse KubernetesWorkerNode from " + wrongPodName + ".");
+        exception.expect(Exception.class);
+        exception.expectMessage("Error to parse KubernetesWorkerNode from " + wrongPodName + ".");
+        workerNode1.getAttempt();
     }
 }

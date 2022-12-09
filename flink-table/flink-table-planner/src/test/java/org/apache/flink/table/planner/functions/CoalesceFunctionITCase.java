@@ -20,7 +20,10 @@ package org.apache.flink.table.planner.functions;
 
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized;
+
+import java.util.Collections;
+import java.util.List;
 
 import static org.apache.flink.table.api.DataTypes.BIGINT;
 import static org.apache.flink.table.api.DataTypes.INT;
@@ -28,32 +31,37 @@ import static org.apache.flink.table.api.Expressions.$;
 import static org.apache.flink.table.api.Expressions.coalesce;
 
 /** Test {@link BuiltInFunctionDefinitions#COALESCE} and its return type. */
-class CoalesceFunctionITCase extends BuiltInFunctionTestBase {
+public class CoalesceFunctionITCase extends BuiltInFunctionTestBase {
 
-    @Override
-    Stream<TestSetSpec> getTestSetSpecs() {
-        return Stream.of(
-                TestSetSpec.forFunction(BuiltInFunctionDefinitions.COALESCE)
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return Collections.singletonList(
+                TestSpec.forFunction(BuiltInFunctionDefinitions.COALESCE)
                         .onFieldsWithData(null, null, 1)
                         .andDataTypes(BIGINT().nullable(), INT().nullable(), INT().notNull())
                         .testResult(
-                                coalesce($("f0"), $("f1")),
-                                "COALESCE(f0, f1)",
-                                null,
-                                BIGINT().nullable())
-                        .testResult(
-                                coalesce($("f0"), $("f2")),
-                                "COALESCE(f0, f2)",
-                                1L,
-                                BIGINT().notNull())
-                        .testResult(
-                                coalesce($("f1"), $("f2")), "COALESCE(f1, f2)", 1, INT().notNull())
-                        .testResult(
-                                coalesce($("f0"), 1),
-                                "COALESCE(f0, 1)",
-                                1L,
-                                // In this case, the return type is not null because we have a
-                                // constant in the function invocation
-                                BIGINT().notNull()));
+                                resultSpec(
+                                        coalesce($("f0"), $("f1")),
+                                        "COALESCE(f0, f1)",
+                                        null,
+                                        BIGINT().nullable()),
+                                resultSpec(
+                                        coalesce($("f0"), $("f2")),
+                                        "COALESCE(f0, f2)",
+                                        1L,
+                                        BIGINT().notNull()),
+                                resultSpec(
+                                        coalesce($("f1"), $("f2")),
+                                        "COALESCE(f1, f2)",
+                                        1,
+                                        INT().notNull()),
+                                resultSpec(
+                                        coalesce($("f0"), 1),
+                                        "COALESCE(f0, 1)",
+                                        1L,
+                                        // In this case, the return type is not null because we have
+                                        // a
+                                        // constant in the function invocation
+                                        BIGINT().notNull())));
     }
 }

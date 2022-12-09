@@ -26,6 +26,7 @@ import org.apache.flink.connector.file.table.PartitionFieldExtractor;
 import org.apache.flink.connectors.hive.HiveTablePartition;
 import org.apache.flink.connectors.hive.JobConfWrapper;
 import org.apache.flink.connectors.hive.util.HivePartitionUtils;
+import org.apache.flink.connectors.hive.util.HiveTypeUtil;
 import org.apache.flink.connectors.hive.util.JobConfUtils;
 import org.apache.flink.formats.parquet.ParquetColumnarRowInputFormat;
 import org.apache.flink.orc.OrcColumnarRowInputFormat;
@@ -33,7 +34,6 @@ import org.apache.flink.orc.nohive.OrcNoHiveColumnarRowInputFormat;
 import org.apache.flink.orc.shim.OrcShim;
 import org.apache.flink.table.catalog.hive.client.HiveShim;
 import org.apache.flink.table.catalog.hive.client.HiveShimLoader;
-import org.apache.flink.table.catalog.hive.util.HiveTypeUtil;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
@@ -135,7 +135,7 @@ public class HiveInputFormat implements BulkFormat<RowData, HiveSourceSplit> {
     private BulkFormat<RowData, ? super HiveSourceSplit> createBulkFormatForSplit(
             HiveSourceSplit split) {
         if (!useMapRedReader && useParquetVectorizedRead(split.getHiveTablePartition())) {
-            LOG.debug(String.format("Use native parquet reader for %s.", split));
+            LOG.debug(String.format("Use native parquet reader for %s.", split.toString()));
             return ParquetColumnarRowInputFormat.createPartitionedFormat(
                     jobConfWrapper.conf(),
                     producedRowType,
@@ -146,7 +146,7 @@ public class HiveInputFormat implements BulkFormat<RowData, HiveSourceSplit> {
                     hiveVersion.startsWith("3"),
                     false);
         } else if (!useMapRedReader && useOrcVectorizedRead(split.getHiveTablePartition())) {
-            LOG.debug(String.format("Use native orc reader for %s.", split));
+            LOG.debug(String.format("Use native orc reader for %s.", split.toString()));
             return createOrcFormat();
         } else {
             if (useMapRedReader) {
@@ -157,7 +157,7 @@ public class HiveInputFormat implements BulkFormat<RowData, HiveSourceSplit> {
                 LOG.debug(
                         String.format(
                                 "Use MapReduce RecordReader reader because the conditions of vectorized read are not met for %s.",
-                                split));
+                                split.toString()));
             }
             return new HiveMapRedBulkFormat();
         }
@@ -166,24 +166,24 @@ public class HiveInputFormat implements BulkFormat<RowData, HiveSourceSplit> {
     private OrcColumnarRowInputFormat<?, HiveSourceSplit> createOrcFormat() {
         return hiveVersion.startsWith("1.")
                 ? OrcNoHiveColumnarRowInputFormat.createPartitionedFormat(
-                        jobConfWrapper.conf(),
-                        tableRowType(),
-                        partitionKeys,
-                        partitionFieldExtractor,
-                        computeSelectedFields(),
-                        Collections.emptyList(),
-                        DEFAULT_SIZE,
-                        InternalTypeInfo::of)
+                jobConfWrapper.conf(),
+                tableRowType(),
+                partitionKeys,
+                partitionFieldExtractor,
+                computeSelectedFields(),
+                Collections.emptyList(),
+                DEFAULT_SIZE,
+                InternalTypeInfo::of)
                 : OrcColumnarRowInputFormat.createPartitionedFormat(
-                        OrcShim.createShim(hiveVersion),
-                        jobConfWrapper.conf(),
-                        tableRowType(),
-                        partitionKeys,
-                        partitionFieldExtractor,
-                        computeSelectedFields(),
-                        Collections.emptyList(),
-                        DEFAULT_SIZE,
-                        InternalTypeInfo::of);
+                OrcShim.createShim(hiveVersion),
+                jobConfWrapper.conf(),
+                tableRowType(),
+                partitionKeys,
+                partitionFieldExtractor,
+                computeSelectedFields(),
+                Collections.emptyList(),
+                DEFAULT_SIZE,
+                InternalTypeInfo::of);
     }
 
     private boolean useOrcVectorizedRead(HiveTablePartition partition) {
@@ -236,7 +236,45 @@ public class HiveInputFormat implements BulkFormat<RowData, HiveSourceSplit> {
         return true;
     }
 
+//    private static boolean isVectorizationUnsupported(LogicalType t) {
+//        LOG.info("isVectorizationUnsupported type : {}", t.getTypeRoot());
+//        switch (t.getTypeRoot()) {
+//            case CHAR:
+//            case VARCHAR:
+//            case BOOLEAN:
+//            case BINARY:
+//            case VARBINARY:
+//            case DECIMAL:
+//            case TINYINT:
+//            case SMALLINT:
+//            case INTEGER:
+//            case BIGINT:
+//            case FLOAT:
+//            case DOUBLE:
+//            case DATE:
+//            case TIME_WITHOUT_TIME_ZONE:
+//            case TIMESTAMP_WITHOUT_TIME_ZONE:
+//            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+//                return false;
+//            case TIMESTAMP_WITH_TIME_ZONE:
+//            case INTERVAL_YEAR_MONTH:
+//            case INTERVAL_DAY_TIME:
+//            case ARRAY:
+//            case MULTISET:
+//            case MAP:
+//            case ROW:
+//            case DISTINCT_TYPE:
+//            case STRUCTURED_TYPE:
+//            case NULL:
+//            case RAW:
+//            case SYMBOL:
+//            default:
+//                return true;
+//        }
+//    }
+
     private static boolean isVectorizationUnsupported(LogicalType t) {
+        LOG.info("isVectorizationUnsupported type : {}", t.getTypeRoot());
         switch (t.getTypeRoot()) {
             case CHAR:
             case VARCHAR:

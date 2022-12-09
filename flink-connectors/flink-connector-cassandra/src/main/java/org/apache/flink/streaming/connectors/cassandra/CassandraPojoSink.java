@@ -32,8 +32,7 @@ import javax.annotation.Nullable;
  * href="http://docs.datastax.com/en/drivers/java/2.1/com/datastax/driver/mapping/Mapper.html">Mapper</a>,
  * which it uses annotations from <a
  * href="http://docs.datastax.com/en/drivers/java/2.1/com/datastax/driver/mapping/annotations/package-summary.html">
- * com.datastax.driver.mapping.annotations</a>. Please read the recommendations in {@linkplain
- * CassandraSinkBase}.
+ * com.datastax.driver.mapping.annotations</a>.
  *
  * @param <IN> Type of the elements emitted by this sink
  */

@@ -29,7 +29,6 @@ import org.apache.flink.runtime.leaderretrieval.TestingLeaderRetrievalEventHandl
 import org.apache.flink.runtime.leaderretrieval.ZooKeeperLeaderRetrievalDriver;
 import org.apache.flink.runtime.rest.util.NoOpFatalErrorHandler;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
-import org.apache.flink.runtime.testutils.ZooKeeperTestUtils;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.runtime.util.TestingFatalErrorHandlerResource;
 import org.apache.flink.runtime.util.ZooKeeperUtils;
@@ -50,6 +49,7 @@ import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.KeeperException;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.data.ACL;
 
 import org.apache.curator.test.TestingServer;
+import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -70,6 +70,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -114,7 +116,7 @@ public class ZooKeeperLeaderElectionTest extends TestLogger {
     @Before
     public void before() {
         try {
-            testingServer = ZooKeeperTestUtils.createAndStartZookeeperTestingServer();
+            testingServer = new TestingServer();
         } catch (Exception e) {
             throw new RuntimeException("Could not start ZooKeeper testing cluster.", e);
         }
@@ -138,7 +140,7 @@ public class ZooKeeperLeaderElectionTest extends TestLogger {
         }
 
         if (testingServer != null) {
-            testingServer.close();
+            testingServer.stop();
             testingServer = null;
         }
     }
@@ -359,6 +361,42 @@ public class ZooKeeperLeaderElectionTest extends TestLogger {
                 if (electionService != null) {
                     electionService.stop();
                 }
+            }
+        }
+    }
+
+    /** Tests that the leader update information will not be notified repeatedly. */
+    @Test
+    public void testLeaderChangeWriteLeaderInformationOnlyOnce() throws Exception {
+        final LeaderInformationConsumer leaderInformationConsumer = new LeaderInformationConsumer();
+        final TestingLeaderElectionEventHandler electionEventHandler =
+                new TestingLeaderElectionEventHandler(LEADER_ADDRESS, leaderInformationConsumer);
+
+        @SuppressWarnings("deprecation")
+        ZooKeeperLeaderElectionDriver leaderElectionDriver = null;
+        try {
+            leaderElectionDriver =
+                    createAndInitLeaderElectionDriver(
+                            curatorFrameworkWrapper.asCuratorFramework(), electionEventHandler);
+
+            electionEventHandler.waitForLeader();
+            final LeaderInformation confirmedLeaderInformation =
+                    electionEventHandler.getConfirmedLeaderInformation();
+            Assertions.assertThat(confirmedLeaderInformation.getLeaderAddress())
+                    .isEqualTo(LEADER_ADDRESS);
+
+            // First update will successfully complete.
+            Assertions.assertThat(leaderInformationConsumer.getFirstUpdateFuture())
+                    .succeedsWithin(5, TimeUnit.SECONDS);
+            // Wait for a while to make sure other updates don't appear.
+            Assertions.assertThat(leaderInformationConsumer.getAnotherUpdateFuture())
+                    .withFailMessage("Another leader information update is not expected.")
+                    .failsWithin(5, TimeUnit.MILLISECONDS)
+                    .withThrowableOfType(TimeoutException.class);
+        } finally {
+            electionEventHandler.close();
+            if (leaderElectionDriver != null) {
+                leaderElectionDriver.close();
             }
         }
     }
@@ -757,5 +795,29 @@ public class ZooKeeperLeaderElectionTest extends TestLogger {
                                 LEADER_ADDRESS);
         electionEventHandler.init(leaderElectionDriver);
         return leaderElectionDriver;
+    }
+
+    private static class LeaderInformationConsumer implements Consumer<LeaderInformation> {
+
+        final CompletableFuture<Void> firstUpdateFuture = new CompletableFuture<>();
+
+        final CompletableFuture<Void> anotherUpdateFuture = new CompletableFuture<>();
+
+        @Override
+        public void accept(LeaderInformation leaderInformation) {
+            if (!firstUpdateFuture.isDone()) {
+                firstUpdateFuture.complete(null);
+            } else {
+                anotherUpdateFuture.complete(null);
+            }
+        }
+
+        public CompletableFuture<Void> getFirstUpdateFuture() {
+            return firstUpdateFuture;
+        }
+
+        public CompletableFuture<Void> getAnotherUpdateFuture() {
+            return anotherUpdateFuture;
+        }
     }
 }

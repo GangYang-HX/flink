@@ -26,7 +26,7 @@ import io.fabric8.kubernetes.api.model.Pod;
 import java.util.UUID;
 
 /** General tests for the {@link KubernetesTaskManagerFactory} with pod template. */
-class KubernetesTaskManagerFactoryWithPodTemplateTest
+public class KubernetesTaskManagerFactoryWithPodTemplateTest
         extends KubernetesFactoryWithPodTemplateTestBase {
 
     @Override

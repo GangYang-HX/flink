@@ -17,7 +17,7 @@
  */
 package org.apache.flink.table.planner.codegen.over
 
-import org.apache.flink.configuration.ReadableConfig
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 import org.apache.flink.table.planner.codegen.{CodeGeneratorContext, CodeGenUtils, ExprCodeGenerator, GenerateUtils}
 import org.apache.flink.table.planner.codegen.CodeGenUtils.{newName, ROW_DATA}
@@ -51,8 +51,7 @@ import java.math.BigDecimal
  */
 class RangeBoundComparatorCodeGenerator(
     relBuilder: RelBuilder,
-    tableConfig: ReadableConfig,
-    classLoader: ClassLoader,
+    tableConfig: TableConfig,
     inputType: RowType,
     bound: Any,
     key: Int = -1,
@@ -65,7 +64,7 @@ class RangeBoundComparatorCodeGenerator(
     val input = CodeGenUtils.DEFAULT_INPUT1_TERM
     val current = CodeGenUtils.DEFAULT_INPUT2_TERM
 
-    val ctx = new CodeGeneratorContext(tableConfig, classLoader)
+    val ctx = CodeGeneratorContext(tableConfig)
 
     val inputExpr = GenerateUtils.generateFieldAccess(ctx, inputType, inputTerm = input, key)
     val currentExpr = GenerateUtils.generateFieldAccess(ctx, inputType, inputTerm = current, key)
@@ -128,7 +127,11 @@ class RangeBoundComparatorCodeGenerator(
       }
       """.stripMargin
 
-    new GeneratedRecordComparator(className, code, ctx.references.toArray, ctx.tableConfig)
+    new GeneratedRecordComparator(
+      className,
+      code,
+      ctx.references.toArray,
+      ctx.tableConfig.getConfiguration)
   }
 
   private def getComparatorCode(inputValue: String, currentValue: String): String = {
@@ -147,7 +150,7 @@ class RangeBoundComparatorCodeGenerator(
     val relKeyType = typeFactory.createFieldTypeFromLogicalType(realKeyType)
 
     // minus between inputValue and currentValue
-    val ctx = new CodeGeneratorContext(tableConfig, classLoader)
+    val ctx = CodeGeneratorContext(tableConfig)
     val exprCodeGenerator = new ExprCodeGenerator(ctx, false)
     val minusCall = if (keyOrder) {
       relBuilder.call(MINUS, new RexInputRef(0, relKeyType), new RexInputRef(1, relKeyType))

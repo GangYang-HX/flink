@@ -162,8 +162,7 @@ public class HiveLookupTableSource extends HiveTableSource implements LookupTabl
         // avoid lambda capture
         final ObjectPath tableFullPath = tablePath;
         if (catalogTable.getPartitionKeys().isEmpty()) {
-            // non-partitioned table, the fetcher fetches the partition which represents the given
-            // table.
+            // non-partitioned table, the fetcher fetches the partition which represents the given table.
             partitionFetcher =
                     context -> {
                         List<HiveTablePartition> partValueList = new ArrayList<>();
@@ -185,7 +184,7 @@ public class HiveLookupTableSource extends HiveTableSource implements LookupTabl
                         List<HiveTablePartition> partValueList = new ArrayList<>();
                         List<PartitionFetcher.Context.ComparablePartitionValue>
                                 comparablePartitionValues =
-                                        context.getComparablePartitionValueList();
+                                context.getComparablePartitionValueList();
                         // fetch latest partitions for partitioned table
                         if (comparablePartitionValues.size() > 0) {
                             // sort in desc order
@@ -195,7 +194,7 @@ public class HiveLookupTableSource extends HiveTableSource implements LookupTabl
                                     comparablePartitionValues.get(0);
                             partValueList.add(
                                     context.getPartition(
-                                                    (List<String>) maxPartition.getPartitionValue())
+                                            (List<String>) maxPartition.getPartitionValue())
                                             .orElseThrow(
                                                     () ->
                                                             new IllegalArgumentException(
@@ -211,24 +210,23 @@ public class HiveLookupTableSource extends HiveTableSource implements LookupTabl
                                             comparablePartitionValues.size(),
                                             tableFullPath));
                         }
-                        return partValueList;
+                        return  KeepReadPartitionFetcher.getRecentReadyPartition(tableFullPath, context, partValueList);
                     };
         } else {
-            // bounded-read partitioned table, the fetcher fetches all partitions of the given
-            // filesystem table.
+            // bounded-read partitioned table, the fetcher fetches all partitions of the given filesystem table.
             partitionFetcher =
                     context -> {
                         List<HiveTablePartition> partValueList = new ArrayList<>();
                         List<PartitionFetcher.Context.ComparablePartitionValue>
                                 comparablePartitionValues =
-                                        context.getComparablePartitionValueList();
+                                context.getComparablePartitionValueList();
                         for (PartitionFetcher.Context.ComparablePartitionValue
                                 comparablePartitionValue : comparablePartitionValues) {
                             partValueList.add(
                                     context.getPartition(
-                                                    (List<String>)
-                                                            comparablePartitionValue
-                                                                    .getPartitionValue())
+                                            (List<String>)
+                                                    comparablePartitionValue
+                                                            .getPartitionValue())
                                             .orElseThrow(
                                                     () ->
                                                             new IllegalArgumentException(
@@ -252,7 +250,7 @@ public class HiveLookupTableSource extends HiveTableSource implements LookupTabl
                         projectedFields,
                         flinkConf.get(HiveOptions.TABLE_EXEC_HIVE_FALLBACK_MAPRED_READER));
 
-        return new FileSystemLookupFunction<>(
+        return new FileSystemAsyncLookupFunction<>( //FileSystemLookupFunction
                 partitionFetcher,
                 fetcherContext,
                 partitionReader,

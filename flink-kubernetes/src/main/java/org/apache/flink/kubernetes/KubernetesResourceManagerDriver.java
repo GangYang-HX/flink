@@ -27,11 +27,10 @@ import org.apache.flink.kubernetes.configuration.KubernetesConfigOptions;
 import org.apache.flink.kubernetes.configuration.KubernetesResourceManagerDriverConfiguration;
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClient;
 import org.apache.flink.kubernetes.kubeclient.FlinkPod;
-import org.apache.flink.kubernetes.kubeclient.decorators.ExternalServiceDecorator;
-import org.apache.flink.kubernetes.kubeclient.decorators.InternalServiceDecorator;
 import org.apache.flink.kubernetes.kubeclient.factory.KubernetesTaskManagerFactory;
 import org.apache.flink.kubernetes.kubeclient.parameters.KubernetesTaskManagerParameters;
 import org.apache.flink.kubernetes.kubeclient.resources.KubernetesPod;
+import org.apache.flink.kubernetes.kubeclient.resources.KubernetesService;
 import org.apache.flink.kubernetes.kubeclient.resources.KubernetesTooOldResourceVersionException;
 import org.apache.flink.kubernetes.kubeclient.resources.KubernetesWatch;
 import org.apache.flink.kubernetes.utils.Constants;
@@ -61,7 +60,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /** Implementation of {@link ResourceManagerDriver} for Kubernetes deployment. */
@@ -165,8 +163,7 @@ public class KubernetesResourceManagerDriver
     public CompletableFuture<KubernetesWorkerNode> requestResource(
             TaskExecutorProcessSpec taskExecutorProcessSpec) {
         final KubernetesTaskManagerParameters parameters =
-                createKubernetesTaskManagerParameters(
-                        taskExecutorProcessSpec, getBlockedNodeRetriever().getAllBlockedNodeIds());
+                createKubernetesTaskManagerParameters(taskExecutorProcessSpec);
         final KubernetesPod taskManagerPod =
                 KubernetesTaskManagerFactory.buildTaskManagerKubernetesPod(
                         taskManagerPodTemplate, parameters);
@@ -247,6 +244,8 @@ public class KubernetesResourceManagerDriver
                 recoveredWorkers.size(),
                 ++currentMaxAttemptId);
 
+        // Should not invoke resource event handler on the main thread executor.
+        // We are in the initializing thread. The main thread executor is not yet ready.
         getResourceEventHandler().onPreviousAttemptWorkersRecovered(recoveredWorkers);
     }
 
@@ -258,22 +257,25 @@ public class KubernetesResourceManagerDriver
                 ResourceManagerUtils.parseRestBindPortFromWebInterfaceUrl(webInterfaceUrl);
         Preconditions.checkArgument(
                 restPort > 0, "Failed to parse rest port from " + webInterfaceUrl);
-        final String restServiceName = ExternalServiceDecorator.getExternalServiceName(clusterId);
         flinkKubeClient
-                .updateServiceTargetPort(restServiceName, Constants.REST_PORT_NAME, restPort)
+                .updateServiceTargetPort(
+                        KubernetesService.ServiceType.REST_SERVICE,
+                        clusterId,
+                        Constants.REST_PORT_NAME,
+                        restPort)
                 .get();
         if (!HighAvailabilityMode.isHighAvailabilityModeActivated(flinkConfig)) {
-            final String internalServiceName =
-                    InternalServiceDecorator.getInternalServiceName(clusterId);
             flinkKubeClient
                     .updateServiceTargetPort(
-                            internalServiceName,
+                            KubernetesService.ServiceType.INTERNAL_SERVICE,
+                            clusterId,
                             Constants.BLOB_SERVER_PORT_NAME,
                             Integer.parseInt(flinkConfig.getString(BlobServerOptions.PORT)))
                     .get();
             flinkKubeClient
                     .updateServiceTargetPort(
-                            internalServiceName,
+                            KubernetesService.ServiceType.INTERNAL_SERVICE,
+                            clusterId,
                             Constants.JOB_MANAGER_RPC_PORT_NAME,
                             flinkConfig.getInteger(JobManagerOptions.PORT))
                     .get();
@@ -281,7 +283,7 @@ public class KubernetesResourceManagerDriver
     }
 
     private KubernetesTaskManagerParameters createKubernetesTaskManagerParameters(
-            TaskExecutorProcessSpec taskExecutorProcessSpec, Set<String> blockedNodes) {
+            TaskExecutorProcessSpec taskExecutorProcessSpec) {
         final String podName =
                 String.format(
                         TASK_MANAGER_POD_FORMAT, clusterId, currentMaxAttemptId, ++currentMaxPodId);
@@ -304,8 +306,7 @@ public class KubernetesResourceManagerDriver
                 taskManagerParameters,
                 ExternalResourceUtils.getExternalResourceConfigurationKeys(
                         flinkConfig,
-                        KubernetesConfigOptions.EXTERNAL_RESOURCE_KUBERNETES_CONFIG_KEY_SUFFIX),
-                blockedNodes);
+                        KubernetesConfigOptions.EXTERNAL_RESOURCE_KUBERNETES_CONFIG_KEY_SUFFIX));
     }
 
     private void handlePodEventsInMainThread(List<KubernetesPod> pods) {

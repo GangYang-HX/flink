@@ -23,6 +23,7 @@ import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.testutils.CheckedThread;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -111,6 +112,28 @@ public class FileUtilsTest extends TestLogger {
     }
 
     @Test
+    public void testDeletePathIfEmpty() throws IOException {
+        final FileSystem localFs = FileSystem.getLocalFileSystem();
+
+        final File dir = tmp.newFolder();
+        assertTrue(dir.exists());
+
+        final Path dirPath = new Path(dir.toURI());
+
+        // deleting an empty directory should work
+        assertTrue(FileUtils.deletePathIfEmpty(localFs, dirPath));
+
+        // deleting a non existing directory should work
+        assertTrue(FileUtils.deletePathIfEmpty(localFs, dirPath));
+
+        // create a non-empty dir
+        final File nonEmptyDir = tmp.newFolder();
+        final Path nonEmptyDirPath = new Path(nonEmptyDir.toURI());
+        new FileOutputStream(new File(nonEmptyDir, "filename")).close();
+        assertFalse(FileUtils.deletePathIfEmpty(localFs, nonEmptyDirPath));
+    }
+
+    @Test
     public void testDeleteQuietly() throws Exception {
         // should ignore the call
         FileUtils.deleteDirectoryQuietly(null);
@@ -135,6 +158,7 @@ public class FileUtilsTest extends TestLogger {
         }
     }
 
+    @Ignore
     @Test
     public void testDeleteDirectory() throws Exception {
 

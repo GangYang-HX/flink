@@ -27,11 +27,8 @@ import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.FlinkRuntimeException;
 
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -39,7 +36,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static java.util.Collections.singletonList;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -49,10 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** This tests verifies the checking logic of {@link VertexFinishedStateChecker}. */
 public class VertexFinishedStateCheckerTest {
-
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
 
     @Test
     public void testRestoringPartiallyFinishedChainsFailsWithoutUidHash() throws Exception {
@@ -80,7 +72,7 @@ public class VertexFinishedStateCheckerTest {
                 new CheckpointCoordinatorTestingUtils.CheckpointExecutionGraphBuilder()
                         .addJobVertex(jobVertexID2, 1, 1, singletonList(op3), true)
                         .addJobVertex(jobVertexID1, 1, 1, Arrays.asList(op1, op2), true)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
 
         Map<OperatorID, OperatorState> operatorStates = new HashMap<>();
         operatorStates.put(
@@ -269,7 +261,7 @@ public class VertexFinishedStateCheckerTest {
                         .addJobVertex(vertex1, true)
                         .addJobVertex(vertex2, false)
                         .setDistributionPattern(distributionPatterns[0])
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
 
         // Adds the additional edges
         for (int i = 1; i < distributionPatterns.length; ++i) {

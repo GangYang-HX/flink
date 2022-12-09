@@ -19,7 +19,7 @@
 package org.apache.flink.runtime.scheduler;
 
 import org.apache.flink.runtime.executiongraph.Execution;
-import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
+import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 
 import java.util.List;
 
@@ -29,16 +29,15 @@ public interface ExecutionSlotAllocator {
     /**
      * Allocate slots for the given executions.
      *
-     * @param executionAttemptIds executions to allocate slots for
-     * @return List of slot assignments to the executions
+     * @param executionVertexIds Execution vertices to allocate slots for
      */
-    List<ExecutionSlotAssignment> allocateSlotsFor(List<ExecutionAttemptID> executionAttemptIds);
+    List<SlotExecutionVertexAssignment> allocateSlotsFor(
+            List<ExecutionVertexID> executionVertexIds);
 
     /**
-     * Cancel the ongoing slot request of the given {@link Execution}.
+     * Cancel an ongoing slot request.
      *
-     * @param executionAttemptId identifying the {@link Execution} of which the slot request should
-     *     be canceled.
+     * @param executionVertexId identifying which slot request should be canceled.
      */
-    void cancel(ExecutionAttemptID executionAttemptId);
+    void cancel(ExecutionVertexID executionVertexId);
 }

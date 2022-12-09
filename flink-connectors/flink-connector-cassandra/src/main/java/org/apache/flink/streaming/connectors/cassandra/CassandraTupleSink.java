@@ -20,8 +20,7 @@ package org.apache.flink.streaming.connectors.cassandra;
 import org.apache.flink.api.java.tuple.Tuple;
 
 /**
- * Sink to write Flink {@link Tuple}s into a Cassandra cluster. Please read the recommendations in
- * {@linkplain CassandraSinkBase}.
+ * Sink to write Flink {@link Tuple}s into a Cassandra cluster.
  *
  * @param <IN> Type of the elements emitted by this sink, it must extend {@link Tuple}
  */

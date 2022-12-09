@@ -21,7 +21,6 @@ import org.apache.flink.api.scala._
 import org.apache.flink.table.annotation.{DataTypeHint, InputGroup}
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.bridge.scala._
-import org.apache.flink.table.catalog.CatalogDatabaseImpl
 import org.apache.flink.table.functions.ScalarFunction
 import org.apache.flink.table.planner.expressions.utils._
 import org.apache.flink.table.planner.runtime.utils.{StreamingWithStateTestBase, TestingAppendSink, TestingRetractSink, UserDefinedFunctionTestUtils}
@@ -519,23 +518,23 @@ class CalcITCase(mode: StateBackendMode) extends StreamingWithStateTestBase(mode
 
     val result = t
       // Adds simple column
-      .addColumns(concat($"c", "sunny").as("kid"))
+      .addColumns("concat(c, 'sunny') as kid")
       // Adds columns by flattening
       .addColumns(row(1, "str").flatten())
       // If the added fields have duplicate field name, then the last one is used.
       .addOrReplaceColumns(concat('c, "_kid").as('kid), concat('c, "kid").as('kid))
       // Existing fields will be replaced.
-      .addOrReplaceColumns(concat($"c", " is a kid").as("kid"))
+      .addOrReplaceColumns("concat(c, ' is a kid') as kid")
       // Adds value literal column
-      .addColumns("last")
+      .addColumns("'last'")
       // Adds column without alias
       .addColumns('a + 2)
       // Renames columns
       .renameColumns('a.as('a2), 'b.as('b2))
-      .renameColumns($"c".as("c2"))
+      .renameColumns("c as c2")
       // Drops columns
       .dropColumns('b2)
-      .dropColumns($"c2")
+      .dropColumns("c2")
 
     val sink = new TestingAppendSink
     result.toAppendStream[Row].addSink(sink)
@@ -657,39 +656,6 @@ class CalcITCase(mode: StateBackendMode) extends StreamingWithStateTestBase(mode
 
     val expected = List("0,0,0", "1,1,1", "2,2,2")
     assertEquals(expected.sorted, sink.getAppendResults.sorted)
-  }
-
-  @Test
-  def testCurrentDatabase(): Unit = {
-    val result1 =
-      env
-        .fromCollection(tupleData3)
-        .toTable(tEnv)
-        .limit(1)
-        .select(currentDatabase())
-    val sink1 = new TestingAppendSink
-    result1.toAppendStream[Row].addSink(sink1)
-    env.execute()
-    assertEquals(List(tEnv.getCurrentDatabase), sink1.getAppendResults.sorted)
-
-    // switch to another database
-    tEnv
-      .getCatalog(tEnv.getCurrentCatalog)
-      .get()
-      .createDatabase(
-        "db1",
-        new CatalogDatabaseImpl(new util.HashMap[String, String](), "db1"),
-        false)
-    tEnv.useDatabase("db1")
-    val result2 = env
-      .fromCollection(tupleData3)
-      .toTable(tEnv)
-      .limit(1)
-      .select(currentDatabase())
-    val sink2 = new TestingAppendSink
-    result2.toAppendStream[Row].addSink(sink2)
-    env.execute()
-    assertEquals(List(tEnv.getCurrentDatabase), sink2.getAppendResults.sorted)
   }
 }
 

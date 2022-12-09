@@ -50,11 +50,6 @@ WatermarkStrategy.forMonotonousTimestamps();
 WatermarkStrategy.forMonotonousTimestamps()
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-WatermarkStrategy.for_monotonous_timestamps()
-```
-{{< /tab >}}
 {{< /tabs >}}
 
 <a name="fixed-amount-of-lateness"></a>
@@ -73,11 +68,6 @@ WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(10));
 ```scala
 WatermarkStrategy
   .forBoundedOutOfOrderness(Duration.ofSeconds(10))
-```
-{{< /tab >}}
-{{< tab "Python" >}}
-```python
-WatermarkStrategy.for_bounded_out_of_orderness(Duration.of_seconds(10))
 ```
 {{< /tab >}}
 {{< /tabs >}}

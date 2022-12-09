@@ -40,7 +40,6 @@ import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.GREATE
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.IF;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.IS_NULL;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.LESS_THAN;
-import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.MINUS;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.MOD;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.NOT;
@@ -142,10 +141,6 @@ public class ExpressionBuilder {
 
     public static UnresolvedCallExpression equalTo(Expression input1, Expression input2) {
         return call(EQUALS, input1, input2);
-    }
-
-    public static UnresolvedCallExpression lessThanOrEqual(Expression input1, Expression input2) {
-        return call(LESS_THAN_OR_EQUAL, input1, input2);
     }
 
     public static UnresolvedCallExpression lessThan(Expression input1, Expression input2) {

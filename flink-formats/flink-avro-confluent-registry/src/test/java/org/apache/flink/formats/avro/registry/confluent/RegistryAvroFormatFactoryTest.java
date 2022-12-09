@@ -37,20 +37,23 @@ import org.apache.flink.table.runtime.connector.source.ScanRuntimeProviderContex
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
+import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSource;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 /** Tests for the {@link RegistryAvroFormatFactory}. */
-class RegistryAvroFormatFactoryTest {
+public class RegistryAvroFormatFactoryTest {
 
     private static final ResolvedSchema SCHEMA =
             ResolvedSchema.of(
@@ -78,8 +81,10 @@ class RegistryAvroFormatFactoryTest {
         EXPECTED_OPTIONAL_PROPERTIES.put("bearer.auth.token", "CUSTOM");
     }
 
+    @Rule public ExpectedException thrown = ExpectedException.none();
+
     @Test
-    void testDeserializationSchema() {
+    public void testDeserializationSchema() {
         final AvroRowDataDeserializationSchema expectedDeser =
                 new AvroRowDataDeserializationSchema(
                         ConfluentRegistryAvroDeserializationSchema.forGeneric(
@@ -88,7 +93,7 @@ class RegistryAvroFormatFactoryTest {
                         InternalTypeInfo.of(ROW_TYPE));
 
         final DynamicTableSource actualSource = createTableSource(SCHEMA, getDefaultOptions());
-        assertThat(actualSource).isInstanceOf(TestDynamicTableFactory.DynamicTableSourceMock.class);
+        assertThat(actualSource, instanceOf(TestDynamicTableFactory.DynamicTableSourceMock.class));
         TestDynamicTableFactory.DynamicTableSourceMock scanSourceMock =
                 (TestDynamicTableFactory.DynamicTableSourceMock) actualSource;
 
@@ -96,11 +101,11 @@ class RegistryAvroFormatFactoryTest {
                 scanSourceMock.valueFormat.createRuntimeDecoder(
                         ScanRuntimeProviderContext.INSTANCE, SCHEMA.toPhysicalRowDataType());
 
-        assertThat(actualDeser).isEqualTo(expectedDeser);
+        assertEquals(expectedDeser, actualDeser);
     }
 
     @Test
-    void testSerializationSchema() {
+    public void testSerializationSchema() {
         final AvroRowDataSerializationSchema expectedSer =
                 new AvroRowDataSerializationSchema(
                         ROW_TYPE,
@@ -111,31 +116,32 @@ class RegistryAvroFormatFactoryTest {
                         RowDataToAvroConverters.createConverter(ROW_TYPE));
 
         final DynamicTableSink actualSink = createTableSink(SCHEMA, getDefaultOptions());
-        assertThat(actualSink).isInstanceOf(TestDynamicTableFactory.DynamicTableSinkMock.class);
+        assertThat(actualSink, instanceOf(TestDynamicTableFactory.DynamicTableSinkMock.class));
         TestDynamicTableFactory.DynamicTableSinkMock sinkMock =
                 (TestDynamicTableFactory.DynamicTableSinkMock) actualSink;
 
         SerializationSchema<RowData> actualSer =
                 sinkMock.valueFormat.createRuntimeEncoder(null, SCHEMA.toPhysicalRowDataType());
 
-        assertThat(actualSer).isEqualTo(expectedSer);
+        assertEquals(expectedSer, actualSer);
     }
 
     @Test
-    void testMissingSubjectForSink() {
+    public void testMissingSubjectForSink() {
+        thrown.expect(ValidationException.class);
+        thrown.expect(
+                containsCause(
+                        new ValidationException(
+                                "Option avro-confluent.subject is required for serialization")));
+
         final Map<String, String> options =
                 getModifiedOptions(opts -> opts.remove("avro-confluent.subject"));
 
-        assertThatThrownBy(() -> createTableSink(SCHEMA, options))
-                .isInstanceOf(ValidationException.class)
-                .satisfies(
-                        anyCauseMatches(
-                                ValidationException.class,
-                                "Option avro-confluent.subject is required for serialization"));
+        createTableSink(SCHEMA, options);
     }
 
     @Test
-    void testDeserializationSchemaWithOptionalProperties() {
+    public void testDeserializationSchemaWithOptionalProperties() {
         final AvroRowDataDeserializationSchema expectedDeser =
                 new AvroRowDataDeserializationSchema(
                         ConfluentRegistryAvroDeserializationSchema.forGeneric(
@@ -146,7 +152,7 @@ class RegistryAvroFormatFactoryTest {
                         InternalTypeInfo.of(ROW_TYPE));
 
         final DynamicTableSource actualSource = createTableSource(SCHEMA, getOptionalProperties());
-        assertThat(actualSource).isInstanceOf(TestDynamicTableFactory.DynamicTableSourceMock.class);
+        assertThat(actualSource, instanceOf(TestDynamicTableFactory.DynamicTableSourceMock.class));
         TestDynamicTableFactory.DynamicTableSourceMock scanSourceMock =
                 (TestDynamicTableFactory.DynamicTableSourceMock) actualSource;
 
@@ -154,11 +160,11 @@ class RegistryAvroFormatFactoryTest {
                 scanSourceMock.valueFormat.createRuntimeDecoder(
                         ScanRuntimeProviderContext.INSTANCE, SCHEMA.toPhysicalRowDataType());
 
-        assertThat(actualDeser).isEqualTo(expectedDeser);
+        assertEquals(expectedDeser, actualDeser);
     }
 
     @Test
-    void testSerializationSchemaWithOptionalProperties() {
+    public void testSerializationSchemaWithOptionalProperties() {
         final AvroRowDataSerializationSchema expectedSer =
                 new AvroRowDataSerializationSchema(
                         ROW_TYPE,
@@ -170,14 +176,14 @@ class RegistryAvroFormatFactoryTest {
                         RowDataToAvroConverters.createConverter(ROW_TYPE));
 
         final DynamicTableSink actualSink = createTableSink(SCHEMA, getOptionalProperties());
-        assertThat(actualSink).isInstanceOf(TestDynamicTableFactory.DynamicTableSinkMock.class);
+        assertThat(actualSink, instanceOf(TestDynamicTableFactory.DynamicTableSinkMock.class));
         TestDynamicTableFactory.DynamicTableSinkMock sinkMock =
                 (TestDynamicTableFactory.DynamicTableSinkMock) actualSink;
 
         SerializationSchema<RowData> actualSer =
                 sinkMock.valueFormat.createRuntimeEncoder(null, SCHEMA.toPhysicalRowDataType());
 
-        assertThat(actualSer).isEqualTo(expectedSer);
+        assertEquals(expectedSer, actualSer);
     }
 
     // ------------------------------------------------------------------------

@@ -34,9 +34,7 @@ Table 和 SQL API 的默认配置能够确保结果准确，同时也提供可�
 
 ### 概览
 
-当实例化一个 `TableEnvironment` 时，可以使用 `EnvironmentSettings` 来传递用于当前会话的所期望的配置项 —— 传递一个 `Configuration` 对象到 `EnvironmentSettings`。
-
-此外，在每个 TableEnvironment 中，`TableConfig` 提供用于当前会话的配置项。
+在每个 TableEnvironment 中，`TableConfig` 提供用于当前会话的配置项。
 
 对于常见或者重要的配置项，`TableConfig` 提供带有详细注释的 `getters` 和 `setters` 方法。
 
@@ -48,63 +46,40 @@ Table 和 SQL API 的默认配置能够确保结果准确，同时也提供可�
 {{< tab "Java" >}}
 ```java
 // instantiate table environment
-Configuration configuration = new Configuration();
-// set low-level key-value options
-configuration.setString("table.exec.mini-batch.enabled", "true");
-configuration.setString("table.exec.mini-batch.allow-latency", "5 s");
-configuration.setString("table.exec.mini-batch.size", "5000");
-EnvironmentSettings settings = EnvironmentSettings.newInstance()
-        .inStreamingMode().withConfiguration(configuration).build();
-TableEnvironment tEnv = TableEnvironment.create(settings);
+TableEnvironment tEnv = ...;
 
-// access flink configuration after table environment instantiation
-TableConfig tableConfig = tEnv.getConfig();
+// access flink configuration
+TableConfig configuration = tEnv.getConfig();
 // set low-level key-value options
-tableConfig.set("table.exec.mini-batch.enabled", "true");
-tableConfig.set("table.exec.mini-batch.allow-latency", "5 s");
-tableConfig.set("table.exec.mini-batch.size", "5000");
+configuration.set("table.exec.mini-batch.enabled", "true");
+configuration.set("table.exec.mini-batch.allow-latency", "5 s");
+configuration.set("table.exec.mini-batch.size", "5000");
 ```
 {{< /tab >}}
 {{< tab "Scala" >}}
 ```scala
 // instantiate table environment
-val configuration = new Configuration;
-// set low-level key-value options
-configuration.setString("table.exec.mini-batch.enabled", "true")
-configuration.setString("table.exec.mini-batch.allow-latency", "5 s")
-configuration.setString("table.exec.mini-batch.size", "5000")
-val settings = EnvironmentSettings.newInstance
-  .inStreamingMode.withConfiguration(configuration).build
-val tEnv: TableEnvironment = TableEnvironment.create(settings)
+val tEnv: TableEnvironment = ...
 
-// access flink configuration after table environment instantiation
-val tableConfig = tEnv.getConfig()
+// access flink configuration
+val configuration = tEnv.getConfig()
 // set low-level key-value options
-tableConfig.set("table.exec.mini-batch.enabled", "true")
-tableConfig.set("table.exec.mini-batch.allow-latency", "5 s")
-tableConfig.set("table.exec.mini-batch.size", "5000")
+configuration.set("table.exec.mini-batch.enabled", "true")
+configuration.set("table.exec.mini-batch.allow-latency", "5 s")
+configuration.set("table.exec.mini-batch.size", "5000")
 ```
 {{< /tab >}}
 {{< tab "Python" >}}
 ```python
 # instantiate table environment
-configuration = Configuration()
+t_env = ...
+
+# access flink configuration
+configuration = t_env.get_config()
+# set low-level key-value options
 configuration.set("table.exec.mini-batch.enabled", "true")
 configuration.set("table.exec.mini-batch.allow-latency", "5 s")
 configuration.set("table.exec.mini-batch.size", "5000")
-settings = EnvironmentSettings.new_instance() \
-...     .in_streaming_mode() \
-...     .with_configuration(configuration) \
-...     .build()
-
-t_env = TableEnvironment.create(settings)
-
-# access flink configuration after table environment instantiation
-table_config = t_env.get_config()
-# set low-level key-value options
-table_config.set("table.exec.mini-batch.enabled", "true")
-table_config.set("table.exec.mini-batch.allow-latency", "5 s")
-table_config.set("table.exec.mini-batch.size", "5000")
 ```
 {{< /tab >}}
 {{< tab "SQL CLI" >}}

@@ -25,7 +25,6 @@ import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
 import org.apache.flink.connector.base.sink.writer.AsyncSinkWriter;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
-import org.apache.flink.connector.base.sink.writer.config.AsyncSinkWriterConfiguration;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 
@@ -160,14 +159,12 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
         super(
                 elementConverter,
                 context,
-                AsyncSinkWriterConfiguration.builder()
-                        .setMaxBatchSize(maxBatchSize)
-                        .setMaxBatchSizeInBytes(maxBatchSizeInBytes)
-                        .setMaxInFlightRequests(maxInFlightRequests)
-                        .setMaxBufferedRequests(maxBufferedRequests)
-                        .setMaxTimeInBufferMS(maxTimeInBufferMS)
-                        .setMaxRecordSizeInBytes(maxRecordSizeInBytes)
-                        .build(),
+                maxBatchSize,
+                maxInFlightRequests,
+                maxBufferedRequests,
+                maxBatchSizeInBytes,
+                maxTimeInBufferMS,
+                maxRecordSizeInBytes,
                 initialStates);
         this.failOnError = failOnError;
         this.deliveryStreamName = deliveryStreamName;

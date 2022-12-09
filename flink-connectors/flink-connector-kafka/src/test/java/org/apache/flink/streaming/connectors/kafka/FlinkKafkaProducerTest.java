@@ -33,7 +33,8 @@ import javax.annotation.Nullable;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
 
 /** Tests for {@link FlinkKafkaProducer}. */
 public class FlinkKafkaProducerTest {
@@ -54,7 +55,7 @@ public class FlinkKafkaProducerTest {
 
         testHarness.open();
 
-        assertThat(schema.openCalled).isTrue();
+        assertThat(schema.openCalled, equalTo(true));
     }
 
     @Test
@@ -80,7 +81,7 @@ public class FlinkKafkaProducerTest {
 
         testHarness.open();
 
-        assertThat(schema.openCalled).isTrue();
+        assertThat(schema.openCalled, equalTo(true));
     }
 
     @Test
@@ -106,7 +107,7 @@ public class FlinkKafkaProducerTest {
 
         testHarness.open();
 
-        assertThat(partitioner.openCalled).isTrue();
+        assertThat(partitioner.openCalled, equalTo(true));
     }
 
     @Test(expected = NullPointerException.class)

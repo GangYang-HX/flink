@@ -22,18 +22,21 @@ import org.apache.flink.connector.file.src.FileSourceSplit;
 import org.apache.flink.connector.file.src.testutils.TestingFileSystem;
 import org.apache.flink.core.fs.Path;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 /** Unit tests for the {@link NonSplittingRecursiveEnumerator}. */
-class NonSplittingRecursiveEnumeratorTest {
+public class NonSplittingRecursiveEnumeratorTest {
 
     /**
      * Testing file system reference, to be cleaned up in an @After method. That way it also gets
@@ -41,8 +44,8 @@ class NonSplittingRecursiveEnumeratorTest {
      */
     protected TestingFileSystem testFs;
 
-    @AfterEach
-    void unregisterTestFs() throws Exception {
+    @After
+    public void unregisterTestFs() throws Exception {
         if (testFs != null) {
             testFs.unregister();
         }
@@ -51,7 +54,7 @@ class NonSplittingRecursiveEnumeratorTest {
     // ------------------------------------------------------------------------
 
     @Test
-    void testIncludeFilesFromNestedDirectories() throws Exception {
+    public void testIncludeFilesFromNestedDirectories() throws Exception {
         final Path[] testPaths =
                 new Path[] {
                     new Path("testfs:///dir/file1"),
@@ -65,11 +68,11 @@ class NonSplittingRecursiveEnumeratorTest {
         final Collection<FileSourceSplit> splits =
                 enumerator.enumerateSplits(new Path[] {new Path("testfs:///dir")}, 1);
 
-        assertThat(toPaths(splits)).containsExactlyInAnyOrder(testPaths);
+        assertThat(toPaths(splits), containsInAnyOrder(testPaths));
     }
 
     @Test
-    void testDefaultHiddenFilesFilter() throws Exception {
+    public void testDefaultHiddenFilesFilter() throws Exception {
         final Path[] testPaths =
                 new Path[] {
                     new Path("testfs:///visiblefile"),
@@ -83,12 +86,11 @@ class NonSplittingRecursiveEnumeratorTest {
         final Collection<FileSourceSplit> splits =
                 enumerator.enumerateSplits(new Path[] {new Path("testfs:///")}, 1);
 
-        assertThat(toPaths(splits))
-                .isEqualTo(Collections.singletonList(new Path("testfs:///visiblefile")));
+        assertEquals(Collections.singletonList(new Path("testfs:///visiblefile")), toPaths(splits));
     }
 
     @Test
-    void testHiddenDirectories() throws Exception {
+    public void testHiddenDirectories() throws Exception {
         final Path[] testPaths =
                 new Path[] {
                     new Path("testfs:///dir/visiblefile"),
@@ -102,12 +104,12 @@ class NonSplittingRecursiveEnumeratorTest {
         final Collection<FileSourceSplit> splits =
                 enumerator.enumerateSplits(new Path[] {new Path("testfs:///")}, 1);
 
-        assertThat(toPaths(splits))
-                .isEqualTo(Collections.singletonList(new Path("testfs:///dir/visiblefile")));
+        assertEquals(
+                Collections.singletonList(new Path("testfs:///dir/visiblefile")), toPaths(splits));
     }
 
     @Test
-    void testFilesWithNoBlockInfo() throws Exception {
+    public void testFilesWithNoBlockInfo() throws Exception {
         final Path testPath = new Path("testfs:///dir/file1");
         testFs =
                 TestingFileSystem.createForFileStatus(
@@ -119,14 +121,14 @@ class NonSplittingRecursiveEnumeratorTest {
         final Collection<FileSourceSplit> splits =
                 enumerator.enumerateSplits(new Path[] {new Path("testfs:///dir")}, 0);
 
-        assertThat(splits).hasSize(1);
+        assertEquals(1, splits.size());
         assertSplitsEqual(
                 new FileSourceSplit("ignoredId", testPath, 0L, 12345L, 0, 12345L),
                 splits.iterator().next());
     }
 
     @Test
-    void testFileWithIncorrectBlocks() throws Exception {
+    public void testFileWithIncorrectBlocks() throws Exception {
         final Path testPath = new Path("testfs:///testdir/testfile");
 
         testFs =
@@ -143,14 +145,14 @@ class NonSplittingRecursiveEnumeratorTest {
         final Collection<FileSourceSplit> splits =
                 enumerator.enumerateSplits(new Path[] {new Path("testfs:///testdir")}, 0);
 
-        assertThat(splits).hasSize(1);
+        assertEquals(1, splits.size());
         assertSplitsEqual(
                 new FileSourceSplit("ignoredId", testPath, 0L, 10000L, 0, 12345L),
                 splits.iterator().next());
     }
 
     @Test
-    void testFileWithMultipleBlocks() throws Exception {
+    public void testFileWithMultipleBlocks() throws Exception {
         final Path testPath = new Path("testfs:///dir/file");
         testFs =
                 TestingFileSystem.createForFileStatus(
@@ -198,16 +200,16 @@ class NonSplittingRecursiveEnumeratorTest {
 
     protected static void assertSplitsEqual(
             final FileSourceSplit expected, final FileSourceSplit actual) {
-        assertThat(actual.path()).isEqualTo(expected.path());
-        assertThat(actual.offset()).isEqualTo(expected.offset());
-        assertThat(actual.length()).isEqualTo(expected.length());
-        assertThat(actual.hostnames()).isEqualTo(expected.hostnames());
+        assertEquals(expected.path(), actual.path());
+        assertEquals(expected.offset(), actual.offset());
+        assertEquals(expected.length(), actual.length());
+        assertArrayEquals(expected.hostnames(), actual.hostnames());
     }
 
     protected static void assertSplitsEqual(
             final Collection<FileSourceSplit> expected, final Collection<FileSourceSplit> actual) {
 
-        assertThat(actual).hasSize(expected.size());
+        assertEquals(expected.size(), actual.size());
 
         final ArrayList<FileSourceSplit> expectedCopy = new ArrayList<>(expected);
         final ArrayList<FileSourceSplit> actualCopy = new ArrayList<>(expected);

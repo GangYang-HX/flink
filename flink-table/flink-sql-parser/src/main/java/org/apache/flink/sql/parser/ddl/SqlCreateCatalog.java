@@ -18,8 +18,6 @@
 
 package org.apache.flink.sql.parser.ddl;
 
-import org.apache.flink.sql.parser.SqlUnparseUtils;
-
 import org.apache.calcite.sql.SqlCreate;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
@@ -79,12 +77,18 @@ public class SqlCreateCatalog extends SqlCreate {
             writer.keyword("WITH");
             SqlWriter.Frame withFrame = writer.startList("(", ")");
             for (SqlNode property : propertyList) {
-                SqlUnparseUtils.printIndent(writer);
+                printIndent(writer);
                 property.unparse(writer, leftPrec, rightPrec);
             }
             writer.newlineAndIndent();
             writer.endList(withFrame);
         }
+    }
+
+    private void printIndent(SqlWriter writer) {
+        writer.sep(",", false);
+        writer.newlineAndIndent();
+        writer.print("  ");
     }
 
     public String catalogName() {

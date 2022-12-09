@@ -35,6 +35,14 @@ import static org.apache.flink.contrib.streaming.state.PredefinedOptions.SPINNIN
 /** Configuration options for the RocksDB backend. */
 public class RocksDBOptions {
 
+    /** how the rocksdb is distributed over all the disk. */
+    public static final ConfigOption<String> DISTRIBUTE_MODE =
+            ConfigOptions.key("state.backend.rocksdb.distribute")
+                    .defaultValue("yarn")
+                    .withDescription(
+                            "three mode: config(use configurate), yarn(can spread over all yarn)"
+                                    + ", yarn_zero(if storage00 presented, use storage00)");
+
     /** The local directory (on the TaskManager) where RocksDB puts its files. */
     @Documentation.Section(Documentation.Sections.EXPERT_ROCKSDB)
     public static final ConfigOption<String> LOCAL_DIRECTORIES =

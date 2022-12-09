@@ -106,7 +106,7 @@ class StateSnapshotTransformerTest {
 
         private TestValueState() throws Exception {
             this.state =
-                    backend.createOrUpdateInternalState(
+                    backend.createInternalState(
                             VoidNamespaceSerializer.INSTANCE,
                             new ValueStateDescriptor<>("TestValueState", StringSerializer.INSTANCE),
                             snapshotTransformFactory);
@@ -124,7 +124,7 @@ class StateSnapshotTransformerTest {
 
         private TestListState() throws Exception {
             this.state =
-                    backend.createOrUpdateInternalState(
+                    backend.createInternalState(
                             VoidNamespaceSerializer.INSTANCE,
                             new ListStateDescriptor<>(
                                     "TestListState",
@@ -148,7 +148,7 @@ class StateSnapshotTransformerTest {
 
         private TestMapState() throws Exception {
             this.state =
-                    backend.createOrUpdateInternalState(
+                    backend.createInternalState(
                             VoidNamespaceSerializer.INSTANCE,
                             new MapStateDescriptor<>(
                                     "TestMapState",

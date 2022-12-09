@@ -1180,13 +1180,11 @@ val right = tableEnv.from("orders2")
 left.union(right)
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-left = t_env.from_path("orders1")
-right = t_env.from_path("orders2")
+{{< tab >}}
+left = tableEnv.from_path("orders1")
+right = tableEnv.from_path("orders2")
 
 left.union(right)
-```
 {{< /tab >}}
 {{< /tabs >}}
 
@@ -1215,13 +1213,11 @@ val right = tableEnv.from("orders2")
 left.unionAll(right)
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-left = t_env.from_path("orders1")
-right = t_env.from_path("orders2")
+{{< tab >}}
+left = tableEnv.from_path("orders1")
+right = tableEnv.from_path("orders2")
 
-left.union_all(right)
-```
+left.unionAll(right)
 {{< /tab >}}
 {{< /tabs >}}
 
@@ -1248,13 +1244,11 @@ val right = tableEnv.from("orders2")
 left.intersect(right)
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-left = t_env.from_path("orders1")
-right = t_env.from_path("orders2")
+{{< tab >}}
+left = tableEnv.from_path("orders1")
+right = tableEnv.from_path("orders2")
 
 left.intersect(right)
-```
 {{< /tab >}}
 {{< /tabs >}}
 
@@ -1281,13 +1275,11 @@ val right = tableEnv.from("orders2")
 left.intersectAll(right)
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-left = t_env.from_path("orders1")
-right = t_env.from_path("orders2")
+{{< tab >}}
+left = tableEnv.from_path("orders1")
+right = tableEnv.from_path("orders2")
 
-left.intersect_all(right)
-```
+left.intersectAll(right)
 {{< /tab >}}
 {{< /tabs >}}
 
@@ -1314,13 +1306,11 @@ val right = tableEnv.from("orders2")
 left.minus(right)
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-left = t_env.from_path("orders1")
-right = t_env.from_path("orders2")
+{{< tab >}}
+left = tableEnv.from_path("orders1")
+right = tableEnv.from_path("orders2")
 
 left.minus(right)
-```
 {{< /tab >}}
 {{< /tabs >}}
 
@@ -1346,13 +1336,11 @@ val right = tableEnv.from("orders2")
 left.minusAll(right)
 ```
 {{< /tab >}}
-{{< tab "Python" >}}
-```python
-left = t_env.from_path("orders1")
-right = t_env.from_path("orders2")
+{{< tab >}}
+left = tableEnv.from_path("orders1")
+right = tableEnv.from_path("orders2")
 
-left.minus_all(right)
-```
+left.minusAll(right)
 {{< /tab >}}
 {{< /tabs >}}
 

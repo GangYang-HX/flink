@@ -134,8 +134,7 @@ public class StreamExecChangelogNormalize extends ExecNodeBase<RowData>
                 config.get(ExecutionConfigOptions.TABLE_EXEC_MINIBATCH_ENABLED);
 
         GeneratedRecordEqualiser generatedEqualiser =
-                new EqualiserCodeGenerator(
-                                rowTypeInfo.toRowType(), planner.getFlinkContext().getClassLoader())
+                new EqualiserCodeGenerator(rowTypeInfo.toRowType())
                         .generateRecordEqualiser("DeduplicateRowEqualiser");
 
         if (isMiniBatchEnabled) {
@@ -173,8 +172,7 @@ public class StreamExecChangelogNormalize extends ExecNodeBase<RowData>
                         inputTransform.getParallelism());
 
         final RowDataKeySelector selector =
-                KeySelectorUtil.getRowDataSelector(
-                        planner.getFlinkContext().getClassLoader(), uniqueKeys, rowTypeInfo);
+                KeySelectorUtil.getRowDataSelector(uniqueKeys, rowTypeInfo);
         transform.setStateKeySelector(selector);
         transform.setStateKeyType(selector.getProducedType());
 

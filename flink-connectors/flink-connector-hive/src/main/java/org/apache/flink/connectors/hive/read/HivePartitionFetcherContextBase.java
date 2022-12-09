@@ -22,6 +22,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.file.table.PartitionTimeExtractor;
 import org.apache.flink.connectors.hive.HiveOptions.PartitionOrder;
 import org.apache.flink.connectors.hive.HiveTablePartition;
+import org.apache.flink.connectors.hive.HiveTableSource;
 import org.apache.flink.connectors.hive.JobConfWrapper;
 import org.apache.flink.connectors.hive.util.HiveConfUtils;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -32,6 +33,7 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.utils.PartitionPathUtils;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -42,10 +44,13 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import java.io.IOException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.connector.file.table.DefaultPartTimeExtractor.toMills;
 import static org.apache.flink.connector.file.table.FileSystemConnectorOptions.PARTITION_TIME_EXTRACTOR_CLASS;
@@ -74,6 +79,8 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
     protected transient Path tableLocation;
     private transient PartitionTimeExtractor extractor;
     private transient Table table;
+    // remember the map from partition to its create time
+    private transient Map<List<String>, Long> partValuesToCreateTime;
 
     public HivePartitionFetcherContextBase(
             ObjectPath tablePath,
@@ -116,11 +123,58 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
                         extractorPattern,
                         formatterPattern);
         tableLocation = new Path(table.getSd().getLocation());
+        partValuesToCreateTime = new HashMap<>();
+    }
+
+    /**
+     * 校验用户指定的分区信息是否有效
+     * 1.检查用户配置的分区名称是否存在
+     * 2.只允许指定时间属性的分区信息，否则就报错（这有个前提：公司统一使用 log_date和log_hour 作为时间分区）
+     */
+    private void checkSpecifiedPartValid() {
+        switch (partitionOrder) {
+            case PARTITION_NAME:
+                if (!(this instanceof HiveTableSource.HiveContinuousPartitionFetcherContext)) {
+                    return;
+                }
+                String consumerOffset = ((HiveTableSource.HiveContinuousPartitionFetcherContext) this)
+                        .getConsumeStartOffset()
+                        .toString();
+                Set<String> specialPartitionNames = PartitionPathUtils
+                        .extractPartitionSpecFromPath(new org.apache.flink.core.fs.Path(
+                                consumerOffset))
+                        .keySet();
+                for (String sName : specialPartitionNames) {
+                    if (!this.partitionKeys.contains(sName)) {
+                        throw new RuntimeException(String.format(
+                                "The specified partition [%s] does not exist",
+                                sName));
+                    }
+                }
+                final List<String> timePartNames = Arrays.asList("log_date", "log_hour");
+                List<String> notTimePartNames = specialPartitionNames
+                        .stream()
+                        .filter(item -> !timePartNames.contains(item))
+                        .collect(Collectors.toList());//获取非时间分区
+                if (CollectionUtils.isNotEmpty(notTimePartNames)) {
+                    throw new RuntimeException(String.format(
+                            "[streaming-source.partition-order] of property does not support non time partition : %s",
+                            notTimePartNames));
+                }
+                break;
+            case PARTITION_TIME: //TODO 应该校验 timestamp-pattern 中指定的分区信息是否有效，但这个格式的分区信息比较难抽取，后面考虑优化
+            case CREATE_TIME:
+                break;
+            default:
+                throw new UnsupportedOperationException(
+                        "Unsupported partition order: " + partitionOrder);
+        }
     }
 
     @Override
     public List<ComparablePartitionValue> getComparablePartitionValueList() throws Exception {
         List<ComparablePartitionValue> partitionValueList = new ArrayList<>();
+//        checkSpecifiedPartValid();
         switch (partitionOrder) {
             case PARTITION_NAME:
                 List<String> partitionNames =
@@ -133,18 +187,22 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
                 }
                 break;
             case CREATE_TIME:
-                Map<List<String>, Long> partValuesToCreateTime = new HashMap<>();
                 partitionNames =
                         metaStoreClient.listPartitionNames(
                                 tablePath.getDatabaseName(),
                                 tablePath.getObjectName(),
                                 Short.MAX_VALUE);
-                List<Partition> partitions =
+                List<String> newNames =
+                        partitionNames.stream()
+                                .filter(
+                                        n ->
+                                                !partValuesToCreateTime.containsKey(
+                                                        extractPartitionValues(n)))
+                                .collect(Collectors.toList());
+                List<Partition> newPartitions =
                         metaStoreClient.getPartitionsByNames(
-                                tablePath.getDatabaseName(),
-                                tablePath.getObjectName(),
-                                partitionNames);
-                for (Partition partition : partitions) {
+                                tablePath.getDatabaseName(), tablePath.getObjectName(), newNames);
+                for (Partition partition : newPartitions) {
                     partValuesToCreateTime.put(
                             partition.getValues(), getPartitionCreateTime(partition));
                 }
@@ -225,6 +283,9 @@ public abstract class HivePartitionFetcherContextBase<P> implements HivePartitio
 
     @Override
     public void close() throws Exception {
+        if (partValuesToCreateTime != null) {
+            partValuesToCreateTime.clear();
+        }
         if (this.metaStoreClient != null) {
             this.metaStoreClient.close();
         }

@@ -25,15 +25,15 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.kubernetes.executors.KubernetesSessionClusterExecutor;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Test for the {@link KubernetesClusterClientFactory} discovery. */
-class KubernetesClusterClientFactoryTest {
+public class KubernetesClusterClientFactoryTest {
 
     @Test
-    void testKubernetesClusterClientFactoryDiscoveryWithSessionExecutor() {
+    public void testKubernetesClusterClientFactoryDiscoveryWithSessionExecutor() {
         testKubernetesClusterClientFactoryDiscoveryHelper(KubernetesSessionClusterExecutor.NAME);
     }
 
@@ -45,6 +45,6 @@ class KubernetesClusterClientFactoryTest {
         final ClusterClientFactory<String> factory =
                 serviceLoader.getClusterClientFactory(configuration);
 
-        assertThat(factory).isInstanceOf(KubernetesClusterClientFactory.class);
+        assertTrue(factory instanceof KubernetesClusterClientFactory);
     }
 }

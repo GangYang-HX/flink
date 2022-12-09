@@ -36,7 +36,7 @@ import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.jobmaster.TestingLogicalSlotBuilder;
 import org.apache.flink.runtime.scheduler.DefaultScheduler;
-import org.apache.flink.runtime.scheduler.DefaultSchedulerBuilder;
+import org.apache.flink.runtime.scheduler.SchedulerTestingUtils;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
@@ -104,7 +104,7 @@ public class SchedulerBenchmarkUtils {
                 ComponentMainThreadExecutorServiceAdapter.forMainThread();
 
         final DefaultScheduler scheduler =
-                new DefaultSchedulerBuilder(jobGraph, mainThreadExecutor, scheduledExecutorService)
+                SchedulerTestingUtils.createSchedulerBuilder(jobGraph, mainThreadExecutor)
                         .setIoExecutor(scheduledExecutorService)
                         .setFutureExecutor(scheduledExecutorService)
                         .setDelayExecutor(
@@ -117,14 +117,18 @@ public class SchedulerBenchmarkUtils {
     public static void deployTasks(
             ExecutionGraph executionGraph,
             JobVertexID jobVertexID,
-            TestingLogicalSlotBuilder slotBuilder)
+            TestingLogicalSlotBuilder slotBuilder,
+            boolean sendScheduleOrUpdateConsumersMessage)
             throws JobException, ExecutionException, InterruptedException {
 
         for (ExecutionVertex vertex : executionGraph.getJobVertex(jobVertexID).getTaskVertices()) {
             LogicalSlot slot = slotBuilder.createTestingLogicalSlot();
             Execution execution = vertex.getCurrentExecutionAttempt();
             execution.transitionState(ExecutionState.SCHEDULED);
-            execution.registerProducedPartitions(slot.getTaskManagerLocation()).get();
+            execution
+                    .registerProducedPartitions(
+                            slot.getTaskManagerLocation(), sendScheduleOrUpdateConsumersMessage)
+                    .get();
             assignResourceAndDeploy(vertex, slot);
         }
     }
@@ -137,7 +141,7 @@ public class SchedulerBenchmarkUtils {
             LogicalSlot slot = slotBuilder.createTestingLogicalSlot();
             Execution execution = vertex.getCurrentExecutionAttempt();
             execution.transitionState(ExecutionState.SCHEDULED);
-            execution.registerProducedPartitions(slot.getTaskManagerLocation()).get();
+            execution.registerProducedPartitions(slot.getTaskManagerLocation(), true).get();
             assignResourceAndDeploy(vertex, slot);
         }
     }

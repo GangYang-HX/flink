@@ -66,13 +66,6 @@ public class MetadataV2Serializer extends MetadataV2V3SerializerBase implements 
         return deserializeMetadata(dis, externalPointer);
     }
 
-    @Override
-    public void serialize(CheckpointMetadata checkpointMetadata, DataOutputStream dos)
-            throws IOException {
-        throw new UnsupportedOperationException(
-                "Serialization in v" + getVersion() + " is no longer supported");
-    }
-
     // ------------------------------------------------------------------------
     //  version-specific serialization
     // ------------------------------------------------------------------------

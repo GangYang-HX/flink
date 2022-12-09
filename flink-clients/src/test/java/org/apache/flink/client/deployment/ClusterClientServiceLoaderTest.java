@@ -22,13 +22,19 @@ import org.apache.flink.client.deployment.executors.RemoteExecutor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DeploymentOptions;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import javax.annotation.Nullable;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for the {@link DefaultClusterClientServiceLoader}. */
 public class ClusterClientServiceLoaderTest {
@@ -41,7 +47,7 @@ public class ClusterClientServiceLoaderTest {
 
     private ClusterClientServiceLoader serviceLoaderUnderTest;
 
-    @BeforeEach
+    @Before
     public void init() {
         serviceLoaderUnderTest = new DefaultClusterClientServiceLoader();
     }
@@ -53,7 +59,7 @@ public class ClusterClientServiceLoaderTest {
 
         ClusterClientFactory<StandaloneClusterId> factory =
                 serviceLoaderUnderTest.getClusterClientFactory(config);
-        assertThat(factory).isInstanceOf(StandaloneClientFactory.class);
+        assertTrue(factory instanceof StandaloneClientFactory);
     }
 
     @Test
@@ -63,35 +69,28 @@ public class ClusterClientServiceLoaderTest {
 
         final ClusterClientFactory<Integer> factory =
                 serviceLoaderUnderTest.getClusterClientFactory(config);
-        assertThat(factory).isNotNull();
+        assertNotNull(factory);
 
         final Integer id = factory.getClusterId(config);
-        assertThat(id).isEqualTo(VALID_ID);
+        assertThat(id, allOf(is(notNullValue()), equalTo(VALID_ID)));
     }
 
-    @Test
+    @Test(expected = IllegalStateException.class)
     public void testMoreThanOneCompatibleFactoriesException() {
-        assertThatThrownBy(
-                        () -> {
-                            final Configuration config = new Configuration();
-                            config.setString(DeploymentOptions.TARGET, AMBIGUOUS_TARGET);
+        final Configuration config = new Configuration();
+        config.setString(DeploymentOptions.TARGET, AMBIGUOUS_TARGET);
 
-                            serviceLoaderUnderTest.getClusterClientFactory(config);
-                        })
-                .isInstanceOf(IllegalStateException.class);
+        serviceLoaderUnderTest.getClusterClientFactory(config);
+        fail();
     }
 
-    @Test
+    @Test(expected = IllegalStateException.class)
     public void testNoFactoriesFound() {
-        assertThatThrownBy(
-                        () -> {
-                            final Configuration config = new Configuration();
-                            config.setString(DeploymentOptions.TARGET, NON_EXISTING_TARGET);
+        final Configuration config = new Configuration();
+        config.setString(DeploymentOptions.TARGET, NON_EXISTING_TARGET);
 
-                            final ClusterClientFactory<Integer> factory =
-                                    serviceLoaderUnderTest.getClusterClientFactory(config);
-                        })
-                .isInstanceOf(IllegalStateException.class);
+        final ClusterClientFactory<Integer> factory =
+                serviceLoaderUnderTest.getClusterClientFactory(config);
     }
 
     /** Test {@link ClusterClientFactory} that is successfully discovered. */

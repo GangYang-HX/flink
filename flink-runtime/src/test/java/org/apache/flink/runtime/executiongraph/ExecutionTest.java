@@ -26,14 +26,11 @@ import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
-import org.apache.flink.runtime.scheduler.DefaultSchedulerBuilder;
 import org.apache.flink.runtime.scheduler.SchedulerBase;
 import org.apache.flink.runtime.scheduler.SchedulerTestingUtils;
 import org.apache.flink.runtime.scheduler.TestingPhysicalSlot;
 import org.apache.flink.runtime.scheduler.TestingPhysicalSlotProvider;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.TestLogger;
 
@@ -43,7 +40,6 @@ import org.junit.Test;
 import javax.annotation.Nonnull;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -55,15 +51,11 @@ import static org.junit.Assert.assertTrue;
 public class ExecutionTest extends TestLogger {
 
     @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
-
-    @ClassRule
-    public static final TestingComponentMainThreadExecutor.Resource MAIN_EXECUTOR_RESOURCE =
+    public static final TestingComponentMainThreadExecutor.Resource EXECUTOR_RESOURCE =
             new TestingComponentMainThreadExecutor.Resource();
 
     private final TestingComponentMainThreadExecutor testMainThreadUtil =
-            MAIN_EXECUTOR_RESOURCE.getComponentMainThreadTestExecutor();
+            EXECUTOR_RESOURCE.getComponentMainThreadTestExecutor();
 
     /**
      * Checks that the {@link Execution} termination future is only completed after the assigned
@@ -80,10 +72,9 @@ public class ExecutionTest extends TestLogger {
         final TestingPhysicalSlotProvider physicalSlotProvider =
                 TestingPhysicalSlotProvider.createWithLimitedAmountOfPhysicalSlots(1);
         final SchedulerBase scheduler =
-                new DefaultSchedulerBuilder(
+                SchedulerTestingUtils.newSchedulerBuilder(
                                 JobGraphTestUtils.streamingJobGraph(jobVertex),
-                                ComponentMainThreadExecutorServiceAdapter.forMainThread(),
-                                EXECUTOR_RESOURCE.getExecutor())
+                                ComponentMainThreadExecutorServiceAdapter.forMainThread())
                         .setExecutionSlotAllocatorFactory(
                                 SchedulerTestingUtils.newSlotSharingExecutionSlotAllocatorFactory(
                                         physicalSlotProvider))
@@ -124,10 +115,9 @@ public class ExecutionTest extends TestLogger {
         final JobVertexID jobVertexId = jobVertex.getID();
 
         final SchedulerBase scheduler =
-                new DefaultSchedulerBuilder(
+                SchedulerTestingUtils.newSchedulerBuilder(
                                 JobGraphTestUtils.streamingJobGraph(jobVertex),
-                                ComponentMainThreadExecutorServiceAdapter.forMainThread(),
-                                EXECUTOR_RESOURCE.getExecutor())
+                                ComponentMainThreadExecutorServiceAdapter.forMainThread())
                         .setExecutionSlotAllocatorFactory(
                                 SchedulerTestingUtils.newSlotSharingExecutionSlotAllocatorFactory(
                                         TestingPhysicalSlotProvider
@@ -169,10 +159,9 @@ public class ExecutionTest extends TestLogger {
                                                 .withTaskManagerGateway(taskManagerGateway)
                                                 .build()));
         final SchedulerBase scheduler =
-                new DefaultSchedulerBuilder(
+                SchedulerTestingUtils.newSchedulerBuilder(
                                 JobGraphTestUtils.streamingJobGraph(jobVertex),
-                                testMainThreadUtil.getMainThreadExecutor(),
-                                EXECUTOR_RESOURCE.getExecutor())
+                                testMainThreadUtil.getMainThreadExecutor())
                         .setExecutionSlotAllocatorFactory(
                                 SchedulerTestingUtils.newSlotSharingExecutionSlotAllocatorFactory(
                                         physicalSlotProvider))
@@ -209,10 +198,9 @@ public class ExecutionTest extends TestLogger {
         final TestingPhysicalSlotProvider physicalSlotProvider =
                 TestingPhysicalSlotProvider.createWithLimitedAmountOfPhysicalSlots(1);
         final SchedulerBase scheduler =
-                new DefaultSchedulerBuilder(
+                SchedulerTestingUtils.newSchedulerBuilder(
                                 JobGraphTestUtils.streamingJobGraph(jobVertex),
-                                testMainThreadUtil.getMainThreadExecutor(),
-                                EXECUTOR_RESOURCE.getExecutor())
+                                testMainThreadUtil.getMainThreadExecutor())
                         .setExecutionSlotAllocatorFactory(
                                 SchedulerTestingUtils.newSlotSharingExecutionSlotAllocatorFactory(
                                         physicalSlotProvider))

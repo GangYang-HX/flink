@@ -17,7 +17,7 @@
  */
 package org.apache.flink.table.planner.codegen.sort
 
-import org.apache.flink.configuration.ReadableConfig
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.planner.codegen.{CodeGeneratorContext, GenerateUtils}
 import org.apache.flink.table.planner.codegen.CodeGenUtils.{newName, ROW_DATA}
 import org.apache.flink.table.planner.codegen.Indenter.toISC
@@ -33,8 +33,6 @@ object ComparatorCodeGenerator {
    *
    * @param tableConfig
    *   Table config.
-   * @param classLoader
-   *   user ClassLoader.
    * @param name
    *   Class name of the function. Does not need to be unique but has to be a valid Java class
    *   identifier.
@@ -46,15 +44,14 @@ object ComparatorCodeGenerator {
    *   A GeneratedRecordComparator
    */
   def gen(
-      tableConfig: ReadableConfig,
-      classLoader: ClassLoader,
+      tableConfig: TableConfig,
       name: String,
       inputType: RowType,
       sortSpec: SortSpec): GeneratedRecordComparator = {
     val className = newName(name)
     val baseClass = classOf[RecordComparator]
 
-    val ctx = new CodeGeneratorContext(tableConfig, classLoader)
+    val ctx = new CodeGeneratorContext(tableConfig)
     val compareCode = GenerateUtils.generateRowCompare(ctx, inputType, sortSpec, "o1", "o2")
 
     val code =
@@ -79,7 +76,11 @@ object ComparatorCodeGenerator {
       }
       """.stripMargin
 
-    new GeneratedRecordComparator(className, code, ctx.references.toArray, ctx.tableConfig)
+    new GeneratedRecordComparator(
+      className,
+      code,
+      ctx.references.toArray,
+      ctx.tableConfig.getConfiguration)
   }
 
 }

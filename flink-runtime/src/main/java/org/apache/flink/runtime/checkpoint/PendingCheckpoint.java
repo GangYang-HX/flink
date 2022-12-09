@@ -112,8 +112,6 @@ public class PendingCheckpoint implements Checkpoint {
 
     @Nullable private final PendingCheckpointStats pendingCheckpointStats;
 
-    private final CompletableFuture<Void> masterTriggerCompletionPromise;
-
     /** Target storage location to persist the checkpoint metadata to. */
     @Nullable private CheckpointStorageLocation targetLocation;
 
@@ -138,8 +136,7 @@ public class PendingCheckpoint implements Checkpoint {
             Collection<String> masterStateIdentifiers,
             CheckpointProperties props,
             CompletableFuture<CompletedCheckpoint> onCompletionPromise,
-            @Nullable PendingCheckpointStats pendingCheckpointStats,
-            CompletableFuture<Void> masterTriggerCompletionPromise) {
+            @Nullable PendingCheckpointStats pendingCheckpointStats) {
         checkArgument(
                 checkpointPlan.getTasksToWaitFor().size() > 0,
                 "Checkpoint needs at least one vertex that commits the checkpoint");
@@ -169,7 +166,6 @@ public class PendingCheckpoint implements Checkpoint {
         this.acknowledgedTasks = new HashSet<>(checkpointPlan.getTasksToWaitFor().size());
         this.onCompletionPromise = checkNotNull(onCompletionPromise);
         this.pendingCheckpointStats = pendingCheckpointStats;
-        this.masterTriggerCompletionPromise = checkNotNull(masterTriggerCompletionPromise);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -309,7 +305,10 @@ public class PendingCheckpoint implements Checkpoint {
     }
 
     public CompletedCheckpoint finalizeCheckpoint(
-            CheckpointsCleaner checkpointsCleaner, Runnable postCleanup, Executor executor)
+            CheckpointsCleaner checkpointsCleaner,
+            Runnable postCleanup,
+            Executor executor,
+            Map<OperatorID, String> operatorDescriptions)
             throws IOException {
 
         synchronized (lock) {
@@ -325,7 +324,10 @@ public class PendingCheckpoint implements Checkpoint {
                 // write out the metadata
                 final CheckpointMetadata savepoint =
                         new CheckpointMetadata(
-                                checkpointId, operatorStates.values(), masterStates, props);
+                                checkpointId,
+                                operatorStates.values(),
+                                masterStates,
+                                operatorDescriptions);
                 final CompletedCheckpointStorageLocation finalizedLocation;
 
                 try (CheckpointMetadataOutputStream out =
@@ -549,7 +551,6 @@ public class PendingCheckpoint implements Checkpoint {
         try {
             failureCause = new CheckpointException(reason, cause);
             onCompletionPromise.completeExceptionally(failureCause);
-            masterTriggerCompletionPromise.completeExceptionally(failureCause);
             assertAbortSubsumedForced(reason);
         } finally {
             dispose(true, checkpointsCleaner, postCleanup, executor);

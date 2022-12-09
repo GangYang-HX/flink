@@ -44,10 +44,10 @@ import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 /** Tests for {@link TableEnvironment}. */
-class TableEnvironmentTest {
+public class TableEnvironmentTest {
 
     @Test
-    void testCreateTemporaryTableFromDescriptor() {
+    public void testCreateTemporaryTableFromDescriptor() {
         final TableEnvironmentMock tEnv = TableEnvironmentMock.getStreamingInstance();
         final String catalog = tEnv.getCurrentCatalog();
         final String database = tEnv.getCurrentDatabase();
@@ -75,7 +75,7 @@ class TableEnvironmentTest {
     }
 
     @Test
-    void testCreateTableFromDescriptor() throws Exception {
+    public void testCreateTableFromDescriptor() throws Exception {
         final TableEnvironmentMock tEnv = TableEnvironmentMock.getStreamingInstance();
         final String catalog = tEnv.getCurrentCatalog();
         final String database = tEnv.getCurrentDatabase();
@@ -101,7 +101,7 @@ class TableEnvironmentTest {
     }
 
     @Test
-    void testTableFromDescriptor() {
+    public void testTableFromDescriptor() {
         final TableEnvironmentMock tEnv = TableEnvironmentMock.getStreamingInstance();
 
         final Schema schema = Schema.newBuilder().column("f0", DataTypes.INT()).build();
@@ -128,22 +128,22 @@ class TableEnvironmentTest {
     }
 
     @Test
-    void testManagedTable() {
+    public void testManagedTable() {
         innerTestManagedTableFromDescriptor(false, false);
     }
 
     @Test
-    void testManagedTableWithIgnoreExists() {
+    public void testManagedTableWithIgnoreExists() {
         innerTestManagedTableFromDescriptor(true, false);
     }
 
     @Test
-    void testTemporaryManagedTableWithIgnoreExists() {
+    public void testTemporaryManagedTableWithIgnoreExists() {
         innerTestManagedTableFromDescriptor(true, true);
     }
 
     @Test
-    void testTemporaryManagedTable() {
+    public void testTemporaryManagedTable() {
         innerTestManagedTableFromDescriptor(true, true);
     }
 

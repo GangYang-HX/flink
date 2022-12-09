@@ -35,12 +35,11 @@ public final class ArrowReader {
     private final ColumnVector[] columnVectors;
 
     /** Reusable row used to hold the deserialized result. */
-    private final ColumnarRowData reuseRow;
+    private ColumnarRowData reuseRow;
 
     public ArrowReader(ColumnVector[] columnVectors) {
         this.columnVectors = Preconditions.checkNotNull(columnVectors);
         this.reuseRow = new ColumnarRowData();
-        this.reuseRow.setVectorizedColumnBatch(new VectorizedColumnBatch(columnVectors));
     }
 
     /** Gets the column vectors. */
@@ -50,6 +49,7 @@ public final class ArrowReader {
 
     /** Read the specified row from underlying Arrow format data. */
     public RowData read(int rowId) {
+        reuseRow.setVectorizedColumnBatch(new VectorizedColumnBatch(columnVectors));
         reuseRow.setRowId(rowId);
         return reuseRow;
     }

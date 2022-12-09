@@ -31,28 +31,53 @@ class LiteralTest extends ExpressionTestBase {
   @Test
   def testFieldWithBooleanPrefix(): Unit = {
 
-    testAllApis('trUeX, "trUeX", "trUeX_value")
+    testAllApis(
+      'trUeX,
+      "trUeX",
+      "trUeX",
+      "trUeX_value"
+    )
 
-    testAllApis('FALSE_A, "FALSE_A", "FALSE_A_value")
+    testAllApis(
+      'FALSE_A,
+      "FALSE_A",
+      "FALSE_A",
+      "FALSE_A_value"
+    )
 
-    testAllApis('FALSE_AB, "FALSE_AB", "FALSE_AB_value")
+    testAllApis(
+      'FALSE_AB,
+      "FALSE_AB",
+      "FALSE_AB",
+      "FALSE_AB_value"
+    )
 
-    testAllApis(true, "trUe", "TRUE")
+    testAllApis(
+      true,
+      "trUe",
+      "trUe",
+      "TRUE"
+    )
 
-    testAllApis(false, "FALSE", "FALSE")
+    testAllApis(
+      false,
+      "FALSE",
+      "FALSE",
+      "FALSE"
+    )
   }
 
   @Test
   def testNonAsciiLiteral(): Unit = {
-    testAllApis('f4.like("%测试%"), "f4 LIKE '%测试%'", "TRUE")
+    testAllApis('f4.like("%测试%"), "f4.like('%测试%')", "f4 LIKE '%测试%'", "TRUE")
 
-    testAllApis("Абвгде" + "谢谢", "'Абвгде' || '谢谢'", "Абвгде谢谢")
+    testAllApis("Абвгде" + "谢谢", "'Абвгде' + '谢谢'", "'Абвгде' || '谢谢'", "Абвгде谢谢")
   }
 
   @Test
   def testDoubleQuote(): Unit = {
     val hello = "\"<hello>\""
-    testAllApis(Func3(42, hello), s"Func3(42, '$hello')", s"42 and $hello")
+    testAllApis(Func3(42, hello), s"Func3(42, '$hello')", s"Func3(42, '$hello')", s"42 and $hello")
   }
 
   @Test
@@ -60,23 +85,23 @@ class LiteralTest extends ExpressionTestBase {
 
     // these tests use Java/Scala escaping for non-quoting unicode characters
 
-    testAllApis(">\n<", "'>\n<'", ">\n<")
+    testAllApis(">\n<", "'>\n<'", "'>\n<'", ">\n<")
 
-    testAllApis(">\u263A<", "'>\u263A<'", ">\u263A<")
+    testAllApis(">\u263A<", "'>\u263A<'", "'>\u263A<'", ">\u263A<")
 
-    testAllApis(">\\<", "'>\\<'", ">\\<")
+    testAllApis(">\\<", "'>\\<'", "'>\\<'", ">\\<")
 
-    testAllApis(">'<", "'>''<'", ">'<")
+    testAllApis(">'<", "'>''<'", "'>''<'", ">'<")
 
-    testAllApis(" ", "' '", " ")
+    testAllApis(" ", "' '", "' '", " ")
 
-    testAllApis("", "''", "")
+    testAllApis("", "''", "''", "")
 
-    testAllApis(">foo([\\w]+)<", "'>foo([\\w]+)<'", ">foo([\\w]+)<")
+    testAllApis(">foo([\\w]+)<", "'>foo([\\w]+)<'", "'>foo([\\w]+)<'", ">foo([\\w]+)<")
 
-    testAllApis(">\\'\n<", "'>\\''\n<'", ">\\'\n<")
+    testAllApis(">\\'\n<", "\">\\'\n<\"", "'>\\''\n<'", ">\\'\n<")
 
-    testAllApis("It's me.", "'It''s me.'", "It's me.")
+    testAllApis("It's me.", "'It''s me.'", "'It''s me.'", "It's me.")
 
     // these test use SQL for describing unicode characters
 

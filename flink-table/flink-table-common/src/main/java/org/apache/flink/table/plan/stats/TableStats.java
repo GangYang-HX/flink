@@ -20,12 +20,11 @@ package org.apache.flink.table.plan.stats;
 
 import org.apache.flink.annotation.PublicEvolving;
 
-import javax.annotation.Nullable;
+import javax.annotation.Nonnull;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /** Table statistics. */
 @PublicEvolving
@@ -80,33 +79,22 @@ public final class TableStats {
      * @param other The other table stats to merge.
      * @return The merged table stats.
      */
-    public TableStats merge(TableStats other, @Nullable Set<String> partitionKeys) {
-        if (this.rowCount < 0 || other.rowCount < 0) {
-            return TableStats.UNKNOWN;
-        }
-        long rowCount =
-                this.rowCount >= 0 && other.rowCount >= 0
-                        ? this.rowCount + other.rowCount
-                        : UNKNOWN.rowCount;
-        return new TableStats(rowCount, mergeColumnStates(other, partitionKeys));
-    }
-
-    private Map<String, ColumnStats> mergeColumnStates(
-            TableStats other, @Nullable Set<String> partitionKeys) {
+    @Nonnull
+    public TableStats merge(TableStats other) {
         Map<String, ColumnStats> colStats = new HashMap<>();
         for (Map.Entry<String, ColumnStats> entry : this.colStats.entrySet()) {
             String col = entry.getKey();
             ColumnStats stats = entry.getValue();
             ColumnStats otherStats = other.colStats.get(col);
             if (otherStats != null) {
-                if (partitionKeys != null) {
-                    colStats.put(col, stats.merge(otherStats, partitionKeys.contains(col)));
-                } else {
-                    colStats.put(col, stats.merge(otherStats, false));
-                }
+                colStats.put(col, stats.merge(otherStats));
             }
         }
-        return colStats;
+        return new TableStats(
+                this.rowCount >= 0 && other.rowCount >= 0
+                        ? this.rowCount + other.rowCount
+                        : UNKNOWN.rowCount,
+                colStats);
     }
 
     @Override

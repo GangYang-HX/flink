@@ -24,9 +24,6 @@ import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.functions.sink.filesystem.OutputFileConfig;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,7 +43,6 @@ import static org.apache.flink.table.utils.PartitionPathUtils.searchPartSpecAndP
  */
 @Internal
 public class PartitionTempFileManager {
-    private static final Logger LOG = LoggerFactory.getLogger(PartitionTempFileManager.class);
 
     private static final String TASK_DIR_PREFIX = "task-";
 
@@ -105,16 +101,10 @@ public class PartitionTempFileManager {
     public static List<Path> listTaskTemporaryPaths(FileSystem fs, Path basePath) throws Exception {
         List<Path> taskTmpPaths = new ArrayList<>();
 
-        if (fs.exists(basePath)) {
-            for (FileStatus taskStatus : fs.listStatus(basePath)) {
-                if (isTaskDir(taskStatus.getPath().getName())) {
-                    taskTmpPaths.add(taskStatus.getPath());
-                }
+        for (FileStatus taskStatus : fs.listStatus(basePath)) {
+            if (isTaskDir(taskStatus.getPath().getName())) {
+                taskTmpPaths.add(taskStatus.getPath());
             }
-        } else {
-            LOG.warn(
-                    "The path {} doesn't exist. Maybe no data is generated in the path and the path is not created.",
-                    basePath);
         }
         return taskTmpPaths;
     }

@@ -22,8 +22,8 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.types.logical.DateType;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.TimestampType;
 
 import org.slf4j.Logger;
@@ -1107,37 +1107,32 @@ public class DateTimeUtils {
             case ISODOW:
             case ISOYEAR:
             case WEEK:
-                if (type.is(LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE)) {
+                if (type instanceof TimestampType) {
                     long d = divide(utcTs, TimeUnit.DAY.multiplier);
                     return extractFromDate(range, d);
-                } else if (type.is(LogicalTypeRoot.DATE)) {
+                } else if (type instanceof DateType) {
                     return divide(utcTs, TimeUnit.DAY.multiplier);
                 } else {
                     // TODO support it
-                    throw new TableException(startUnit + " for " + type + " is unsupported now.");
+                    throw new TableException(type + " is unsupported now.");
                 }
             case EPOCH:
-                if (type.isAnyOf(
-                        LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE, LogicalTypeRoot.DATE)) {
-                    return utcTs / 1000;
-                } else {
-                    // TODO support it
-                    throw new TableException(startUnit + " for " + type + " is unsupported now.");
-                }
+                // TODO support it
+                throw new TableException("EPOCH is unsupported now.");
             case MICROSECOND:
-                if (type.is(LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE)) {
+                if (type instanceof TimestampType) {
                     long millis = divide(mod(utcTs, getFactor(startUnit)), startUnit.multiplier);
                     int micros = nanoOfMillisecond / 1000;
                     return millis + micros;
                 } else {
-                    throw new TableException(startUnit + " for " + type + " is unsupported now.");
+                    throw new TableException(type + " is unsupported now.");
                 }
             case NANOSECOND:
-                if (type.is(LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE)) {
+                if (type instanceof TimestampType) {
                     long millis = divide(mod(utcTs, getFactor(startUnit)), startUnit.multiplier);
                     return millis + nanoOfMillisecond;
                 } else {
-                    throw new TableException(startUnit + " for " + type + " is unsupported now.");
+                    throw new TableException(type + " is unsupported now.");
                 }
             default:
                 // fall through
@@ -1328,9 +1323,6 @@ public class DateTimeUtils {
                     offset -= 7;
                 }
                 return ymdToUnixDate(year, month, day) - offset;
-            case DAY:
-                int res = ymdToUnixDate(year, month, day);
-                return floor ? res : res + 1;
             default:
                 throw new AssertionError(range);
         }

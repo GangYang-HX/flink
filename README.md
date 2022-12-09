@@ -75,7 +75,7 @@ Prerequisites for building Flink:
 ```
 git clone https://github.com/apache/flink.git
 cd flink
-./mvnw clean package -DskipTests # this will take up to 10 minutes
+mvn clean package -DskipTests # this will take up to 10 minutes
 ```
 
 Flink is now installed in `build-target`.

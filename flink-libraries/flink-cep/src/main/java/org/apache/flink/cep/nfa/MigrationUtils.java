@@ -131,7 +131,7 @@ class MigrationUtils {
 
             computationStates.add(
                     ComputationState.createState(
-                            state, nodeId, version, startTimestamp, -1L, startEventId));
+                            state, nodeId, version, startTimestamp, startEventId));
         }
         return computationStates;
     }

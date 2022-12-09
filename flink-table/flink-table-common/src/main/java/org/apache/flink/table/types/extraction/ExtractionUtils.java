@@ -336,8 +336,11 @@ public final class ExtractionUtils {
     public static Optional<Class<?>> extractSimpleGeneric(
             Class<?> baseClass, Class<?> clazz, int pos) {
         try {
-            if (clazz.getSuperclass() != baseClass) {
-                return Optional.empty();
+            while (clazz.getSuperclass() != baseClass) {
+                clazz = clazz.getSuperclass();
+                if (clazz == Object.class){
+                    return Optional.empty();
+                }
             }
             final Type t =
                     ((ParameterizedType) clazz.getGenericSuperclass())

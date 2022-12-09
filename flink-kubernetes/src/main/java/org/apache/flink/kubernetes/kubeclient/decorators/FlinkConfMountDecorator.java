@@ -49,6 +49,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -58,6 +59,7 @@ import java.util.stream.Collectors;
 import static org.apache.flink.configuration.GlobalConfiguration.FLINK_CONF_FILENAME;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOG4J_NAME;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOGBACK_NAME;
+import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOG_AGENT;
 import static org.apache.flink.kubernetes.utils.Constants.CONFIG_MAP_PREFIX;
 import static org.apache.flink.kubernetes.utils.Constants.FLINK_CONF_VOLUME;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -182,7 +184,7 @@ public class FlinkConfMountDecorator extends AbstractKubernetesStepDecorator {
     }
 
     private List<File> getLocalLogConfFiles() {
-        final String confDir = kubernetesComponentConf.getConfigDirectory();
+        final File confDir = new File(kubernetesComponentConf.getConfigDirectory());
         final File logbackFile = new File(confDir, CONFIG_FILE_LOGBACK_NAME);
         final File log4jFile = new File(confDir, CONFIG_FILE_LOG4J_NAME);
 
@@ -192,6 +194,12 @@ public class FlinkConfMountDecorator extends AbstractKubernetesStepDecorator {
         }
         if (log4jFile.exists()) {
             localLogConfFiles.add(log4jFile);
+        }
+        // add log-agent conf
+        if (confDir.exists() && confDir.isDirectory()) {
+            Arrays.stream(confDir.listFiles())
+                    .filter(file -> file.isFile() && file.getName().contains(CONFIG_FILE_LOG_AGENT))
+                    .forEach(file -> localLogConfFiles.add(file));
         }
 
         return localLogConfFiles;

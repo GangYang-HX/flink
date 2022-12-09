@@ -27,10 +27,10 @@ import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.runtime.util.ResourceCounter;
+import org.apache.flink.util.function.QuadConsumer;
 import org.apache.flink.util.function.QuadFunction;
 import org.apache.flink.util.function.TriFunction;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.function.BiFunction;
@@ -70,14 +70,9 @@ public class TestingDeclarativeSlotPoolBuilder {
     private LongConsumer returnIdleSlotsConsumer = ignored -> {};
     private Consumer<ResourceCounter> setResourceRequirementsConsumer = ignored -> {};
     private Function<AllocationID, Boolean> containsFreeSlotFunction = ignored -> false;
-    private QuadFunction<
-                    Collection<? extends SlotOffer>,
-                    TaskManagerLocation,
-                    TaskManagerGateway,
-                    Long,
-                    Collection<SlotOffer>>
-            registerSlotsFunction =
-                    (slotOffers, ignoredB, ignoredC, ignoredD) -> new ArrayList<>(slotOffers);
+    private QuadConsumer<
+                    Collection<? extends SlotOffer>, TaskManagerLocation, TaskManagerGateway, Long>
+            registerSlotsFunction = (ignoredA, ignoredB, ignoredC, ignoredD) -> {};
 
     public TestingDeclarativeSlotPoolBuilder setIncreaseResourceRequirementsByConsumer(
             Consumer<ResourceCounter> increaseResourceRequirementsByConsumer) {
@@ -116,12 +111,11 @@ public class TestingDeclarativeSlotPoolBuilder {
     }
 
     public TestingDeclarativeSlotPoolBuilder setRegisterSlotsFunction(
-            QuadFunction<
+            QuadConsumer<
                             Collection<? extends SlotOffer>,
                             TaskManagerLocation,
                             TaskManagerGateway,
-                            Long,
-                            Collection<SlotOffer>>
+                            Long>
                     registerSlotsFunction) {
         this.registerSlotsFunction = registerSlotsFunction;
         return this;

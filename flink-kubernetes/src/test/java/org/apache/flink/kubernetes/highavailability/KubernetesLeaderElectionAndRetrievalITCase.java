@@ -19,7 +19,7 @@
 package org.apache.flink.kubernetes.highavailability;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.kubernetes.KubernetesExtension;
+import org.apache.flink.kubernetes.KubernetesResource;
 import org.apache.flink.kubernetes.configuration.KubernetesConfigOptions;
 import org.apache.flink.kubernetes.configuration.KubernetesLeaderElectionConfiguration;
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClient;
@@ -29,9 +29,10 @@ import org.apache.flink.runtime.leaderelection.LeaderInformation;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionEventHandler;
 import org.apache.flink.runtime.leaderretrieval.TestingLeaderRetrievalEventHandler;
 import org.apache.flink.util.ExecutorUtils;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.ClassRule;
+import org.junit.Test;
 
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -39,7 +40,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.flink.kubernetes.utils.Constants.LABEL_CONFIGMAP_TYPE_HIGH_AVAILABILITY;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 
 /**
  * IT Tests for the {@link KubernetesLeaderElectionDriver} and {@link
@@ -47,23 +49,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  * become the leader and {@link KubernetesLeaderRetrievalDriver} could retrieve the leader address
  * from Kubernetes.
  */
-class KubernetesLeaderElectionAndRetrievalITCase {
+public class KubernetesLeaderElectionAndRetrievalITCase extends TestLogger {
 
     private static final String LEADER_CONFIGMAP_NAME = "leader-test-cluster";
     private static final String LEADER_ADDRESS =
             "akka.tcp://flink@172.20.1.21:6123/user/rpc/dispatcher";
-
-    @RegisterExtension
-    private static final KubernetesExtension kubernetesExtension = new KubernetesExtension();
+    @ClassRule public static KubernetesResource kubernetesResource = new KubernetesResource();
 
     @Test
-    void testLeaderElectionAndRetrieval() throws Exception {
+    public void testLeaderElectionAndRetrieval() throws Exception {
         final String configMapName = LEADER_CONFIGMAP_NAME + System.currentTimeMillis();
         KubernetesLeaderElectionDriver leaderElectionDriver = null;
         KubernetesLeaderRetrievalDriver leaderRetrievalDriver = null;
 
-        final FlinkKubeClient flinkKubeClient = kubernetesExtension.getFlinkKubeClient();
-        final Configuration configuration = kubernetesExtension.getConfiguration();
+        final FlinkKubeClient flinkKubeClient = kubernetesResource.getFlinkKubeClient();
+        final Configuration configuration = kubernetesResource.getConfiguration();
 
         final String clusterId = configuration.getString(KubernetesConfigOptions.CLUSTER_ID);
         final KubernetesConfigMapSharedWatcher configMapSharedWatcher =
@@ -103,14 +103,16 @@ class KubernetesLeaderElectionAndRetrievalITCase {
             // Check the new leader is confirmed
             final LeaderInformation confirmedLeaderInformation =
                     electionEventHandler.getConfirmedLeaderInformation();
-            assertThat(confirmedLeaderInformation.getLeaderAddress()).isEqualTo(LEADER_ADDRESS);
+            assertThat(confirmedLeaderInformation.getLeaderAddress(), is(LEADER_ADDRESS));
 
             // Check the leader retrieval driver should be notified the leader address
             retrievalEventHandler.waitForNewLeader();
-            assertThat(retrievalEventHandler.getLeaderSessionID())
-                    .isEqualByComparingTo(confirmedLeaderInformation.getLeaderSessionID());
-            assertThat(retrievalEventHandler.getAddress())
-                    .isEqualTo(confirmedLeaderInformation.getLeaderAddress());
+            assertThat(
+                    retrievalEventHandler.getLeaderSessionID(),
+                    is(confirmedLeaderInformation.getLeaderSessionID()));
+            assertThat(
+                    retrievalEventHandler.getAddress(),
+                    is(confirmedLeaderInformation.getLeaderAddress()));
         } finally {
             electionEventHandler.close();
             if (leaderElectionDriver != null) {

@@ -22,10 +22,10 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.testutils.junit.RetryOnFailure;
-import org.apache.flink.testutils.junit.extensions.retry.RetryExtension;
+import org.apache.flink.testutils.junit.RetryRule;
 
-import org.junit.jupiter.api.TestTemplate;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.Rule;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,19 +39,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for the WikipediaEditsSource. */
-@ExtendWith(RetryExtension.class)
-class WikipediaEditsSourceTest {
+public class WikipediaEditsSourceTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(WikipediaEditsSourceTest.class);
 
+    @Rule public RetryRule retryRule = new RetryRule();
+
     /** We first check the connection to the IRC server. If it fails, this test is ignored. */
-    @TestTemplate
+    @Test
     @RetryOnFailure(times = 1)
-    void testWikipediaEditsSource() throws Exception {
+    public void testWikipediaEditsSource() throws Exception {
         if (canConnect(1, TimeUnit.SECONDS)) {
             final Time testTimeout = Time.seconds(60);
             final WikipediaEditsSource wikipediaEditsSource = new WikipediaEditsSource();
@@ -97,12 +99,10 @@ class WikipediaEditsSourceTest {
                     fail("Failure in WikipediaEditsSource: " + error.getMessage());
                 }
 
-                assertThat(event)
-                        .as("Did not receive a WikipediaEditEvent within the desired timeout")
-                        .isNotNull();
-                assertThat(event)
-                        .as("Received unexpected event " + event)
-                        .isInstanceOf(WikipediaEditEvent.class);
+                assertNotNull(
+                        "Did not receive a WikipediaEditEvent within the desired timeout", event);
+                assertTrue(
+                        "Received unexpected event " + event, event instanceof WikipediaEditEvent);
             } finally {
                 wikipediaEditsSource.cancel();
 

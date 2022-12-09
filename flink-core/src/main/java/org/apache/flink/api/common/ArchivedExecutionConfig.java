@@ -39,7 +39,6 @@ public class ArchivedExecutionConfig implements Serializable {
     private final int parallelism;
     private final int maxParallelism;
     private final boolean objectReuseEnabled;
-    private final long periodicMaterializeIntervalMillis;
     private final Map<String, String> globalJobParameters;
 
     public ArchivedExecutionConfig(ExecutionConfig ec) {
@@ -52,7 +51,6 @@ public class ArchivedExecutionConfig implements Serializable {
         maxParallelism = ec.getMaxParallelism();
         parallelism = ec.getParallelism();
         objectReuseEnabled = ec.isObjectReuseEnabled();
-        periodicMaterializeIntervalMillis = ec.getPeriodicMaterializeIntervalMillis();
         if (ec.getGlobalJobParameters() != null && ec.getGlobalJobParameters().toMap() != null) {
             globalJobParameters = ec.getGlobalJobParameters().toMap();
         } else {
@@ -66,14 +64,12 @@ public class ArchivedExecutionConfig implements Serializable {
             int maxParallelism,
             int parallelism,
             boolean objectReuseEnabled,
-            long periodicMaterializeIntervalMillis,
             Map<String, String> globalJobParameters) {
         this.executionMode = executionMode;
         this.restartStrategyDescription = restartStrategyDescription;
         this.maxParallelism = maxParallelism;
         this.parallelism = parallelism;
         this.objectReuseEnabled = objectReuseEnabled;
-        this.periodicMaterializeIntervalMillis = periodicMaterializeIntervalMillis;
         this.globalJobParameters = globalJobParameters;
     }
 
@@ -95,10 +91,6 @@ public class ArchivedExecutionConfig implements Serializable {
 
     public boolean getObjectReuseEnabled() {
         return objectReuseEnabled;
-    }
-
-    public long getPeriodicMaterializeIntervalMillis() {
-        return periodicMaterializeIntervalMillis;
     }
 
     public Map<String, String> getGlobalJobParameters() {

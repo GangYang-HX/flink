@@ -87,14 +87,6 @@ public final class FunctionIdentifier implements Serializable {
         return Optional.ofNullable(functionName);
     }
 
-    public String getFunctionName() {
-        if (objectIdentifier != null) {
-            return objectIdentifier.getObjectName();
-        } else {
-            return functionName;
-        }
-    }
-
     /** List of the component names of this function identifier. */
     public List<String> toList() {
         if (objectIdentifier != null) {

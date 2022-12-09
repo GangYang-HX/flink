@@ -22,13 +22,9 @@ import org.apache.flink.metrics.Metric;
 import org.apache.flink.metrics.MetricConfig;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.reporter.AbstractReporter;
-import org.apache.flink.metrics.reporter.MetricReporter;
-import org.apache.flink.metrics.reporter.MetricReporterFactory;
-
-import java.util.Properties;
 
 /** No-op reporter implementation. */
-public class TestReporter extends AbstractReporter implements MetricReporterFactory {
+public class TestReporter extends AbstractReporter {
 
     @Override
     public void open(MetricConfig config) {}
@@ -45,10 +41,5 @@ public class TestReporter extends AbstractReporter implements MetricReporterFact
     @Override
     public String filterCharacters(String input) {
         return input;
-    }
-
-    @Override
-    public MetricReporter createMetricReporter(Properties properties) {
-        return this;
     }
 }

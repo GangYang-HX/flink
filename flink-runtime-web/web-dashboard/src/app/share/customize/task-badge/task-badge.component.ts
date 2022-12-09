@@ -18,8 +18,8 @@
 
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 
-import { JobStatusCounts, TaskStatus } from '@flink-runtime-web/interfaces';
-import { ConfigService } from '@flink-runtime-web/services';
+import { COLOR_MAP } from 'config';
+import { TaskStatus } from 'interfaces';
 
 @Component({
   selector: 'flink-task-badge',
@@ -28,13 +28,11 @@ import { ConfigService } from '@flink-runtime-web/services';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TaskBadgeComponent {
-  @Input() tasks: TaskStatus | JobStatusCounts;
-  statusList = Object.keys(this.configService.COLOR_MAP);
-
-  constructor(private readonly configService: ConfigService) {}
+  @Input() tasks: TaskStatus;
+  statusList = Object.keys(COLOR_MAP);
 
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   get colorMap() {
-    return this.configService.COLOR_MAP;
+    return COLOR_MAP;
   }
 }

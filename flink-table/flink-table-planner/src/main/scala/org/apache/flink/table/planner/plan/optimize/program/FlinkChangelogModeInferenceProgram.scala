@@ -22,6 +22,7 @@ import org.apache.flink.table.api.config.ExecutionConfigOptions
 import org.apache.flink.table.api.config.ExecutionConfigOptions.UpsertMaterialize
 import org.apache.flink.table.catalog.{ManagedTableListener, ResolvedCatalogBaseTable}
 import org.apache.flink.table.connector.ChangelogMode
+import org.apache.flink.table.planner.calcite.FlinkContext
 import org.apache.flink.table.planner.plan.`trait`._
 import org.apache.flink.table.planner.plan.`trait`.UpdateKindTrait.{beforeAfterOrNone, onlyAfterOrNone, BEFORE_AND_AFTER, ONLY_UPDATE_AFTER}
 import org.apache.flink.table.planner.plan.metadata.FlinkRelMetadataQuery
@@ -29,7 +30,7 @@ import org.apache.flink.table.planner.plan.nodes.physical.stream._
 import org.apache.flink.table.planner.plan.utils._
 import org.apache.flink.table.planner.plan.utils.RankProcessStrategy.{AppendFastStrategy, RetractStrategy, UpdateFastStrategy}
 import org.apache.flink.table.planner.sinks.DataStreamTableSink
-import org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTableConfig
+import org.apache.flink.table.planner.utils.JavaScalaConversionUtil.toScala
 import org.apache.flink.table.runtime.operators.join.FlinkJoinType
 import org.apache.flink.table.sinks.{AppendStreamTableSink, RetractStreamTableSink, StreamTableSink, UpsertStreamTableSink}
 import org.apache.flink.types.RowKind
@@ -853,7 +854,8 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
      *      contain upsertKeys of the input update stream.
      */
     private def analyzeUpsertMaterializeStrategy(sink: StreamPhysicalSink): Boolean = {
-      val tableConfig = unwrapTableConfig(sink)
+      val tableConfig =
+        sink.getCluster.getPlanner.getContext.unwrap(classOf[FlinkContext]).getTableConfig
       val inputChangelogMode =
         ChangelogPlanUtils.getChangelogMode(sink.getInput.asInstanceOf[StreamPhysicalRel]).get
       val primaryKeys = sink.contextResolvedTable.getResolvedSchema.getPrimaryKeyIndexes

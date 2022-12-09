@@ -29,9 +29,10 @@ import org.apache.flink.connector.file.src.util.RecordAndPosition;
 import org.apache.flink.core.fs.FSDataInputStream;
 import org.apache.flink.core.fs.Path;
 
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.DataOutputStream;
 import java.io.File;
@@ -43,25 +44,27 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Fail.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Base class for adapters, as used by {@link StreamFormatAdapterTest} and {@link
  * FileRecordFormatAdapterTest}.
  */
-abstract class AdapterTestBase<FormatT> {
+public abstract class AdapterTestBase<FormatT> {
 
-    @TempDir public static java.nio.file.Path tmpDir;
+    @ClassRule public static final TemporaryFolder TMP_DIR = new TemporaryFolder();
 
     protected static final int NUM_NUMBERS = 100;
     protected static final long FILE_LEN = 4 * NUM_NUMBERS;
 
     protected static Path testPath;
 
-    @BeforeAll
-    static void writeTestFile() throws IOException {
-        final File testFile = new File(tmpDir.toFile(), "testFile");
+    @BeforeClass
+    public static void writeTestFile() throws IOException {
+        final File testFile = new File(TMP_DIR.getRoot(), "testFile");
         testPath = Path.fromLocalFile(testFile);
 
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(testFile))) {
@@ -88,17 +91,17 @@ abstract class AdapterTestBase<FormatT> {
     // ------------------------------------------------------------------------
 
     @Test
-    void testRecoverCheckpointedFormatOneSplit() throws IOException {
+    public void testRecoverCheckpointedFormatOneSplit() throws IOException {
         testReading(createCheckpointedFormat(), 1, 5, 44);
     }
 
     @Test
-    void testRecoverCheckpointedFormatMultipleSplits() throws IOException {
+    public void testRecoverCheckpointedFormatMultipleSplits() throws IOException {
         testReading(createCheckpointedFormat(), 3, 11, 33, 56);
     }
 
     @Test
-    void testRecoverNonCheckpointedFormatOneSplit() throws IOException {
+    public void testRecoverNonCheckpointedFormatOneSplit() throws IOException {
         testReading(createNonCheckpointedFormat(), 1, 5, 44);
     }
 
@@ -141,7 +144,7 @@ abstract class AdapterTestBase<FormatT> {
     // ------------------------------------------------------------------------
 
     @Test
-    void testClosesStreamIfReaderCreationFails() throws Exception {
+    public void testClosesStreamIfReaderCreationFails() throws Exception {
         // setup
         final Path testPath = new Path("testFs:///testpath-1");
         final CloseTestingInputStream in = new CloseTestingInputStream();
@@ -161,14 +164,14 @@ abstract class AdapterTestBase<FormatT> {
         }
 
         // assertions
-        assertThat(in.closed).isTrue();
+        assertTrue(in.closed);
 
         // cleanup
         testFs.unregister();
     }
 
     @Test
-    void testClosesStreamIfReaderRestoreFails() throws Exception {
+    public void testClosesStreamIfReaderRestoreFails() throws Exception {
         // setup
         final Path testPath = new Path("testFs:///testpath-1");
         final CloseTestingInputStream in = new CloseTestingInputStream();
@@ -198,7 +201,7 @@ abstract class AdapterTestBase<FormatT> {
         }
 
         // assertions
-        assertThat(in.closed).isTrue();
+        assertTrue(in.closed);
 
         // cleanup
         testFs.unregister();
@@ -209,7 +212,7 @@ abstract class AdapterTestBase<FormatT> {
     // ------------------------------------------------------------------------
 
     protected static void verifyIntListResult(List<Integer> result) {
-        assertThat(result).as("wrong result size").hasSize(NUM_NUMBERS);
+        assertEquals("wrong result size", NUM_NUMBERS, result.size());
         int nextExpected = 0;
         for (int next : result) {
             if (next != nextExpected++) {
@@ -240,7 +243,7 @@ abstract class AdapterTestBase<FormatT> {
         while (num > 0) {
             if (currentReader == null) {
                 currentSplit = moreSplits.poll();
-                assertThat(currentSplit).isNotNull();
+                assertNotNull(currentSplit);
                 currentReader = format.createReader(config, currentSplit);
             }
 

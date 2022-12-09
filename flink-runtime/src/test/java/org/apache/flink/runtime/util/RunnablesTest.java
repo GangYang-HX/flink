@@ -50,17 +50,13 @@ public class RunnablesTest extends TestLogger {
                         .setUncaughtExceptionHandler((t, e) -> handlerCalled.countDown())
                         .build();
         final ExecutorService executorService = Executors.newSingleThreadExecutor(threadFactory);
-        try {
-            executorService.execute(
-                    () -> {
-                        throw new RuntimeException("foo");
-                    });
+        executorService.execute(
+                () -> {
+                    throw new RuntimeException("foo");
+                });
 
-            // expect handler to be called
-            handlerCalled.await();
-        } finally {
-            executorService.shutdown();
-        }
+        // expect handler to be called
+        handlerCalled.await();
     }
 
     @Test

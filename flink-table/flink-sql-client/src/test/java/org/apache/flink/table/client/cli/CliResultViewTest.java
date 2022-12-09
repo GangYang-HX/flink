@@ -35,7 +35,6 @@ import org.apache.flink.table.operations.ModifyOperation;
 import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.operations.QueryOperation;
 import org.apache.flink.table.planner.functions.casting.RowDataToStringConverterImpl;
-import org.apache.flink.table.utils.DateTimeUtils;
 
 import org.jline.reader.MaskingCallback;
 import org.jline.terminal.Terminal;
@@ -54,7 +53,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.flink.configuration.ExecutionOptions.RUNTIME_MODE;
 import static org.apache.flink.table.client.config.SqlClientOptions.EXECUTION_RESULT_MODE;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Contains basic tests for the {@link CliResultView}. */
 public class CliResultViewTest {
@@ -108,11 +107,7 @@ public class CliResultViewTest {
                         schema,
                         false,
                         testConfig,
-                        new RowDataToStringConverterImpl(
-                                schema.toPhysicalRowDataType(),
-                                DateTimeUtils.UTC_ZONE.toZoneId(),
-                                Thread.currentThread().getContextClassLoader(),
-                                false));
+                        new RowDataToStringConverterImpl(schema.toPhysicalRowDataType()));
 
         try (CliClient cli =
                 new TestingCliClient(
@@ -134,9 +129,9 @@ public class CliResultViewTest {
             }
         }
 
-        assertThat(cancellationCounterLatch.await(10, TimeUnit.SECONDS))
-                .as("Invalid number of cancellations.")
-                .isTrue();
+        assertTrue(
+                "Invalid number of cancellations.",
+                cancellationCounterLatch.await(10, TimeUnit.SECONDS));
     }
 
     private static final class MockExecutor implements Executor {
@@ -242,7 +237,17 @@ public class CliResultViewTest {
         }
 
         @Override
+        public void addJar(String sessionId, String jarUrl) {
+            throw new UnsupportedOperationException("Not implemented.");
+        }
+
+        @Override
         public void removeJar(String sessionId, String jarUrl) {
+            throw new UnsupportedOperationException("Not implemented.");
+        }
+
+        @Override
+        public List<String> listJars(String sessionId) {
             throw new UnsupportedOperationException("Not implemented.");
         }
     }

@@ -34,7 +34,6 @@ import java.util.Set;
 
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 import static org.apache.flink.connector.pulsar.source.enumerator.PulsarSourceEnumStateSerializer.INSTANCE;
-import static org.apache.flink.connector.pulsar.source.enumerator.cursor.MessageIdUtils.newMessageId;
 import static org.apache.flink.connector.pulsar.source.enumerator.topic.TopicRange.createFullRange;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -52,9 +51,7 @@ class PulsarSourceEnumStateSerializerTest {
                 Collections.singleton(
                         new PulsarPartitionSplit(
                                 new TopicPartition(randomAlphabetic(10), 10, createFullRange()),
-                                StopCursor.defaultStopCursor(),
-                                newMessageId(100L, 23L, 44),
-                                null));
+                                StopCursor.defaultStopCursor()));
         Map<Integer, Set<PulsarPartitionSplit>> shared = Collections.singletonMap(5, splits);
         Map<Integer, Set<String>> mapping =
                 ImmutableMap.of(

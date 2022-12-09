@@ -17,20 +17,20 @@
  */
 package org.apache.flink.table.planner.codegen
 
-import org.apache.flink.configuration.{Configuration, ReadableConfig}
+import org.apache.flink.configuration.Configuration
 import org.apache.flink.metrics.Gauge
+import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.data.{RowData, TimestampData}
 import org.apache.flink.table.data.utils.JoinedRowData
 import org.apache.flink.table.planner.codegen.CodeGenUtils._
 import org.apache.flink.table.planner.codegen.OperatorCodeGenerator.{generateCollect, INPUT_SELECTION}
 import org.apache.flink.table.runtime.generated.{GeneratedJoinCondition, GeneratedProjection}
-import org.apache.flink.table.runtime.hashtable.{LongHashPartition, LongHybridHashTable, ProbeIterator}
+import org.apache.flink.table.runtime.hashtable.{LongHashPartition, LongHybridHashTable}
 import org.apache.flink.table.runtime.operators.CodeGenOperatorFactory
-import org.apache.flink.table.runtime.operators.join.{HashJoinType, SortMergeJoinFunction}
+import org.apache.flink.table.runtime.operators.join.HashJoinType
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer
-import org.apache.flink.table.runtime.util.{RowIterator, StreamRecordCollector}
 import org.apache.flink.table.types.logical._
-import org.apache.flink.table.types.logical.LogicalTypeRoot._
+import org.apache.flink.table.types.logical.LogicalTypeRoot.{TIMESTAMP_WITHOUT_TIME_ZONE, _}
 
 /** Generate a long key hash join operator using [[LongHybridHashTable]]. */
 object LongHashJoinGenerator {
@@ -84,13 +84,10 @@ object LongHashJoinGenerator {
       anyNullTerm)
   }
 
-  def genProjection(
-      tableConfig: ReadableConfig,
-      classLoader: ClassLoader,
-      types: Array[LogicalType]): GeneratedProjection = {
+  def genProjection(tableConfig: TableConfig, types: Array[LogicalType]): GeneratedProjection = {
     val rowType = RowType.of(types: _*)
     ProjectionCodeGenerator.generateProjection(
-      new CodeGeneratorContext(tableConfig, classLoader),
+      CodeGeneratorContext.apply(tableConfig),
       "Projection",
       rowType,
       rowType,
@@ -98,8 +95,7 @@ object LongHashJoinGenerator {
   }
 
   def gen(
-      tableConfig: ReadableConfig,
-      classLoader: ClassLoader,
+      tableConfig: TableConfig,
       hashJoinType: HashJoinType,
       keyType: RowType,
       buildType: RowType,
@@ -109,23 +105,19 @@ object LongHashJoinGenerator {
       buildRowSize: Int,
       buildRowCount: Long,
       reverseJoinFunction: Boolean,
-      condFunc: GeneratedJoinCondition,
-      leftIsBuild: Boolean,
-      sortMergeJoinFunction: SortMergeJoinFunction): CodeGenOperatorFactory[RowData] = {
+      condFunc: GeneratedJoinCondition): CodeGenOperatorFactory[RowData] = {
 
     val buildSer = new BinaryRowDataSerializer(buildType.getFieldCount)
     val probeSer = new BinaryRowDataSerializer(probeType.getFieldCount)
 
     val tableTerm = newName("LongHashTable")
-    val ctx = new CodeGeneratorContext(tableConfig, classLoader)
+    val ctx = CodeGeneratorContext(tableConfig)
     val buildSerTerm = ctx.addReusableObject(buildSer, "buildSer")
     val probeSerTerm = ctx.addReusableObject(probeSer, "probeSer")
 
-    val bGenProj =
-      genProjection(tableConfig, classLoader, buildType.getChildren.toArray(Array[LogicalType]()))
+    val bGenProj = genProjection(tableConfig, buildType.getChildren.toArray(Array[LogicalType]()))
     ctx.addReusableInnerClass(bGenProj.getClassName, bGenProj.getCode)
-    val pGenProj =
-      genProjection(tableConfig, classLoader, probeType.getChildren.toArray(Array[LogicalType]()))
+    val pGenProj = genProjection(tableConfig, probeType.getChildren.toArray(Array[LogicalType]()))
     ctx.addReusableInnerClass(pGenProj.getClassName, pGenProj.getCode)
     ctx.addReusableInnerClass(condFunc.getClassName, condFunc.getCode)
 
@@ -145,17 +137,6 @@ object LongHashJoinGenerator {
     ctx.addReusableOpenStatement(s"condFunc.setRuntimeContext(getRuntimeContext());")
     ctx.addReusableOpenStatement(s"condFunc.open(new ${className[Configuration]}());")
     ctx.addReusableCloseStatement(s"condFunc.close();")
-
-    val leftIsBuildTerm = newName("leftIsBuild")
-    ctx.addReusableMember(s"private final boolean $leftIsBuildTerm = $leftIsBuild;")
-
-    val smjFunctionTerm = className[SortMergeJoinFunction]
-    ctx.addReusableMember(s"private final $smjFunctionTerm sortMergeJoinFunction;")
-    val smjFunctionRefs = ctx.addReusableObject(Array(sortMergeJoinFunction), "smjFunctionRefs")
-    ctx.addReusableInitStatement(s"sortMergeJoinFunction = $smjFunctionRefs[0];")
-
-    val fallbackSMJ = newName("fallbackSMJ")
-    ctx.addReusableMember(s"private transient boolean $fallbackSMJ = false;")
 
     val gauge = classOf[Gauge[_]].getCanonicalName
     ctx.addReusableOpenStatement(
@@ -314,93 +295,11 @@ object LongHashJoinGenerator {
          |}
        """.stripMargin)
 
-    // fallback to sort merge join in probe phase
-    val rowIter = classOf[RowIterator[_]].getCanonicalName
-    ctx.addReusableMember(s"""
-                             |private void fallbackSMJProcessPartition() throws Exception {
-                             |  if(!table.getPartitionsPendingForSMJ().isEmpty()) {
-                             |    table.releaseMemoryCacheForSMJ();
-                             |    LOG.info(
-                             |    "Fallback to sort merge join to process spilled partitions.");
-                             |    initialSortMergeJoinFunction();
-                             |    $fallbackSMJ = true;
-                             |
-                             |    for(${classOf[LongHashPartition].getCanonicalName} p : 
-                             |      table.getPartitionsPendingForSMJ()) {
-                             |      $rowIter<$BINARY_ROW> buildSideIter = 
-                             |      table.getSpilledPartitionBuildSideIter(p);
-                             |      while (buildSideIter.advanceNext()) {
-                             |        processSortMergeJoinElement1(buildSideIter.getRow());
-                             |      }
-                             |
-                             |      ${classOf[ProbeIterator].getCanonicalName} probeIter =
-                             |      table.getSpilledPartitionProbeSideIter(p);
-                             |      $BINARY_ROW probeNext;
-                             |      while ((probeNext = probeIter.next()) != null) {
-                             |        processSortMergeJoinElement2(probeNext);
-                             |      }
-                             |    }
-                             |
-                             |    closeHashTable();
-                             |
-                             |    sortMergeJoinFunction.endInput(1);
-                             |    sortMergeJoinFunction.endInput(2);
-                             |    LOG.info("Finish sort merge join for spilled partitions.");
-                             |  }
-                             |}
-       """.stripMargin)
-
-    val collector = classOf[StreamRecordCollector[_]].getCanonicalName
-    ctx.addReusableMember(s"""
-                             |private void initialSortMergeJoinFunction() throws Exception {
-                             |  sortMergeJoinFunction.open(
-                             |    true,
-                             |    this.getContainingTask(),
-                             |    this.getOperatorConfig(),
-                             |    new $collector<$ROW_DATA>(output),
-                             |    this.computeMemorySize(),
-                             |    this.getRuntimeContext(),
-                             |    this.getMetricGroup());
-                             |}
-       """.stripMargin)
-
-    ctx.addReusableMember(
-      s"""
-         |private void processSortMergeJoinElement1($ROW_DATA rowData) throws Exception {
-         |  if($leftIsBuild) {
-         |    sortMergeJoinFunction.processElement1(rowData);
-         |  } else {
-         |    sortMergeJoinFunction.processElement2(rowData);
-         |  }
-         |}
-       """.stripMargin)
-
-    ctx.addReusableMember(
-      s"""
-         |private void processSortMergeJoinElement2($ROW_DATA rowData) throws Exception {
-         |  if($leftIsBuild) {
-         |    sortMergeJoinFunction.processElement2(rowData);
-         |  } else {
-         |    sortMergeJoinFunction.processElement1(rowData);
-         |  }
-         |}
-       """.stripMargin)
-
-    ctx.addReusableMember(s"""
-                             |private void closeHashTable() {
-                             |  if (this.table != null) {
-                             |    this.table.close();
-                             |    this.table.free();
-                             |    this.table = null;
-                             |  }
-                             |}
-       """.stripMargin)
-
     ctx.addReusableCloseStatement(s"""
-                                     |closeHashTable();
-                                     |
-                                     |if ($fallbackSMJ) {
-                                     |  sortMergeJoinFunction.close();
+                                     |if (this.table != null) {
+                                     |  this.table.close();
+                                     |  this.table.free();
+                                     |  this.table = null;
                                      |}
        """.stripMargin)
 
@@ -448,8 +347,6 @@ object LongHashJoinGenerator {
                               |  joinWithNextKey();
                               |}
                               |LOG.info("Finish rebuild phase.");
-                              |
-                              |fallbackSMJProcessPartition();
          """.stripMargin)
     )
 

@@ -23,10 +23,8 @@ import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
-import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerSchemaCompatibility;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
@@ -64,7 +62,6 @@ import java.util.concurrent.RunnableFuture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
 
 /**
  * Tests for the {@link KeyedStateBackend} and {@link OperatorStateBackend} as produced by various
@@ -74,7 +71,8 @@ import static org.junit.Assume.assumeTrue;
  * are either compatible or requiring state migration after restoring the state backends.
  */
 @SuppressWarnings("serial")
-public abstract class StateBackendMigrationTestBase<B extends StateBackend> extends TestLogger {
+public abstract class StateBackendMigrationTestBase<B extends AbstractStateBackend>
+        extends TestLogger {
 
     protected abstract B getStateBackend() throws Exception;
 
@@ -88,14 +86,6 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
                 "The state backend under test does not implement CheckpointStorage."
                         + "Please override 'createCheckpointStorage' and provide an appropriate"
                         + "checkpoint storage instance");
-    }
-
-    /**
-     * @return true if key serializer supports checking. If not, expected exceptions will likely not
-     *     be thrown.
-     */
-    protected boolean supportsKeySerializerCheck() {
-        return true;
     }
 
     @Rule public final TemporaryFolder tempFolder = new TemporaryFolder();
@@ -170,8 +160,7 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
         CheckpointStreamFactory streamFactory = createStreamFactory();
         SharedStateRegistry sharedStateRegistry = new SharedStateRegistryImpl();
 
-        CheckpointableKeyedStateBackend<Integer> backend =
-                createKeyedBackend(IntSerializer.INSTANCE);
+        AbstractKeyedStateBackend<Integer> backend = createKeyedBackend(IntSerializer.INSTANCE);
 
         try {
             ValueState<TestType> valueState =
@@ -288,8 +277,7 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
         CheckpointStreamFactory streamFactory = createStreamFactory();
         SharedStateRegistry sharedStateRegistry = new SharedStateRegistryImpl();
 
-        CheckpointableKeyedStateBackend<Integer> backend =
-                createKeyedBackend(IntSerializer.INSTANCE);
+        AbstractKeyedStateBackend<Integer> backend = createKeyedBackend(IntSerializer.INSTANCE);
 
         try {
             ListState<TestType> listState =
@@ -437,8 +425,7 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
         CheckpointStreamFactory streamFactory = createStreamFactory();
         SharedStateRegistry sharedStateRegistry = new SharedStateRegistryImpl();
 
-        CheckpointableKeyedStateBackend<Integer> backend =
-                createKeyedBackend(IntSerializer.INSTANCE);
+        AbstractKeyedStateBackend<Integer> backend = createKeyedBackend(IntSerializer.INSTANCE);
 
         try {
             MapState<Integer, TestType> mapState =
@@ -546,8 +533,7 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
         CheckpointStreamFactory streamFactory = createStreamFactory();
         SharedStateRegistry sharedStateRegistry = new SharedStateRegistryImpl();
 
-        CheckpointableKeyedStateBackend<Integer> backend =
-                createKeyedBackend(IntSerializer.INSTANCE);
+        AbstractKeyedStateBackend<Integer> backend = createKeyedBackend(IntSerializer.INSTANCE);
 
         try {
             InternalPriorityQueue<TestType> internalPriorityQueue =
@@ -585,7 +571,6 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
 
     @Test
     public void testStateBackendRestoreFailsIfNewKeySerializerRequiresMigration() throws Exception {
-        assumeTrue(supportsKeySerializerCheck());
         try {
             testKeySerializerUpgrade(
                     new TestType.V1TestTypeSerializer(), new TestType.V2TestTypeSerializer());
@@ -602,7 +587,6 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
     @Test
     public void testStateBackendRestoreSucceedsIfNewKeySerializerRequiresReconfiguration()
             throws Exception {
-        assumeTrue(supportsKeySerializerCheck());
         testKeySerializerUpgrade(
                 new TestType.V1TestTypeSerializer(),
                 new TestType.ReconfigurationRequiringTestTypeSerializer());
@@ -610,7 +594,6 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
 
     @Test
     public void testStateBackendRestoreFailsIfNewKeySerializerIsIncompatible() throws Exception {
-        assumeTrue(supportsKeySerializerCheck());
         try {
             testKeySerializerUpgrade(
                     new TestType.V1TestTypeSerializer(),
@@ -633,8 +616,7 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
         CheckpointStreamFactory streamFactory = createStreamFactory();
         SharedStateRegistry sharedStateRegistry = new SharedStateRegistryImpl();
 
-        CheckpointableKeyedStateBackend<TestType> backend =
-                createKeyedBackend(initialKeySerializer);
+        AbstractKeyedStateBackend<TestType> backend = createKeyedBackend(initialKeySerializer);
 
         final String stateName = "test-name";
         try {
@@ -739,8 +721,7 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
         CheckpointStreamFactory streamFactory = createStreamFactory();
         SharedStateRegistry sharedStateRegistry = new SharedStateRegistryImpl();
 
-        CheckpointableKeyedStateBackend<Integer> backend =
-                createKeyedBackend(IntSerializer.INSTANCE);
+        AbstractKeyedStateBackend<Integer> backend = createKeyedBackend(IntSerializer.INSTANCE);
 
         final String stateName = "test-name";
         try {
@@ -1200,65 +1181,6 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
                 internalCopySerializer.getClass());
     }
 
-    @Test
-    public void testStateMigrationAfterChangingTTL() throws Exception {
-        final String stateName = "test-ttl";
-
-        ValueStateDescriptor<TestType> initialAccessDescriptor =
-                new ValueStateDescriptor<>(stateName, new TestType.V1TestTypeSerializer());
-        initialAccessDescriptor.enableTimeToLive(StateTtlConfig.newBuilder(Time.days(1)).build());
-
-        ValueStateDescriptor<TestType> newAccessDescriptorAfterRestore =
-                new ValueStateDescriptor<>(stateName, new TestType.V2TestTypeSerializer());
-        newAccessDescriptorAfterRestore.enableTimeToLive(
-                StateTtlConfig.newBuilder(Time.days(2)).build());
-
-        testKeyedValueStateUpgrade(initialAccessDescriptor, newAccessDescriptorAfterRestore);
-    }
-
-    @Test
-    public void testStateMigrationAfterChangingTTLFromEnablingToDisabling() {
-        final String stateName = "test-ttl";
-
-        ValueStateDescriptor<TestType> initialAccessDescriptor =
-                new ValueStateDescriptor<>(stateName, new TestType.V1TestTypeSerializer());
-        initialAccessDescriptor.enableTimeToLive(StateTtlConfig.newBuilder(Time.days(1)).build());
-
-        ValueStateDescriptor<TestType> newAccessDescriptorAfterRestore =
-                new ValueStateDescriptor<>(stateName, new TestType.V2TestTypeSerializer());
-
-        try {
-            testKeyedValueStateUpgrade(initialAccessDescriptor, newAccessDescriptorAfterRestore);
-            fail("should have failed");
-        } catch (Exception expected) {
-            Assert.assertTrue(
-                    ExceptionUtils.findThrowable(expected, StateMigrationException.class)
-                            .isPresent());
-        }
-    }
-
-    @Test
-    public void testStateMigrationAfterChangingTTLFromDisablingToEnabling() {
-        final String stateName = "test-ttl";
-
-        ValueStateDescriptor<TestType> initialAccessDescriptor =
-                new ValueStateDescriptor<>(stateName, new TestType.V1TestTypeSerializer());
-
-        ValueStateDescriptor<TestType> newAccessDescriptorAfterRestore =
-                new ValueStateDescriptor<>(stateName, new TestType.V2TestTypeSerializer());
-        newAccessDescriptorAfterRestore.enableTimeToLive(
-                StateTtlConfig.newBuilder(Time.days(1)).build());
-
-        try {
-            testKeyedValueStateUpgrade(initialAccessDescriptor, newAccessDescriptorAfterRestore);
-            fail("should have failed");
-        } catch (Exception expected) {
-            Assert.assertTrue(
-                    ExceptionUtils.findThrowable(expected, IllegalStateException.class)
-                            .isPresent());
-        }
-    }
-
     // -------------------------------------------------------------------------------
     //  Test types, serializers, and serializer snapshots
     // -------------------------------------------------------------------------------
@@ -1386,7 +1308,6 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
             CheckpointStorageAccess checkpointStorageAccess =
                     getCheckpointStorage().createCheckpointStorage(new JobID());
             checkpointStorageAccess.initializeBaseLocationsForCheckpoint();
-            env.setCheckpointStorageAccess(checkpointStorageAccess);
             checkpointStorageLocation = checkpointStorageAccess.initializeLocationForCheckpoint(1L);
         }
         return checkpointStorageLocation;
@@ -1396,23 +1317,23 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
     //  Keyed state backend utilities
     // -------------------------------------------------------------------------------
 
-    private <K> CheckpointableKeyedStateBackend<K> createKeyedBackend(
-            TypeSerializer<K> keySerializer) throws Exception {
+    private <K> AbstractKeyedStateBackend<K> createKeyedBackend(TypeSerializer<K> keySerializer)
+            throws Exception {
         return createKeyedBackend(keySerializer, env);
     }
 
-    private <K> CheckpointableKeyedStateBackend<K> createKeyedBackend(
+    private <K> AbstractKeyedStateBackend<K> createKeyedBackend(
             TypeSerializer<K> keySerializer, Environment env) throws Exception {
         return createKeyedBackend(keySerializer, 10, new KeyGroupRange(0, 9), env);
     }
 
-    private <K> CheckpointableKeyedStateBackend<K> createKeyedBackend(
+    private <K> AbstractKeyedStateBackend<K> createKeyedBackend(
             TypeSerializer<K> keySerializer,
             int numberOfKeyGroups,
             KeyGroupRange keyGroupRange,
             Environment env)
             throws Exception {
-        CheckpointableKeyedStateBackend<K> backend =
+        AbstractKeyedStateBackend<K> backend =
                 getStateBackend()
                         .createKeyedStateBackend(
                                 env,
@@ -1429,26 +1350,26 @@ public abstract class StateBackendMigrationTestBase<B extends StateBackend> exte
         return backend;
     }
 
-    private <K> CheckpointableKeyedStateBackend<K> restoreKeyedBackend(
+    private <K> AbstractKeyedStateBackend<K> restoreKeyedBackend(
             TypeSerializer<K> keySerializer, KeyedStateHandle state) throws Exception {
         return restoreKeyedBackend(keySerializer, state, env);
     }
 
-    private <K> CheckpointableKeyedStateBackend<K> restoreKeyedBackend(
+    private <K> AbstractKeyedStateBackend<K> restoreKeyedBackend(
             TypeSerializer<K> keySerializer, KeyedStateHandle state, Environment env)
             throws Exception {
         return restoreKeyedBackend(
                 keySerializer, 10, new KeyGroupRange(0, 9), Collections.singletonList(state), env);
     }
 
-    private <K> CheckpointableKeyedStateBackend<K> restoreKeyedBackend(
+    private <K> AbstractKeyedStateBackend<K> restoreKeyedBackend(
             TypeSerializer<K> keySerializer,
             int numberOfKeyGroups,
             KeyGroupRange keyGroupRange,
             List<KeyedStateHandle> state,
             Environment env)
             throws Exception {
-        CheckpointableKeyedStateBackend<K> backend =
+        AbstractKeyedStateBackend<K> backend =
                 getStateBackend()
                         .createKeyedStateBackend(
                                 env,

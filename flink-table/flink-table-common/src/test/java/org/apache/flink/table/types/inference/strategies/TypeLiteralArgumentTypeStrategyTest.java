@@ -21,17 +21,20 @@ package org.apache.flink.table.types.inference.strategies;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.inference.InputTypeStrategiesTestBase;
 
-import java.util.stream.Stream;
+import org.junit.runners.Parameterized;
 
+import java.util.List;
+
+import static java.util.Arrays.asList;
 import static org.apache.flink.table.types.inference.InputTypeStrategies.TYPE_LITERAL;
 import static org.apache.flink.table.types.inference.InputTypeStrategies.sequence;
 
 /** Tests for {@link TypeLiteralArgumentTypeStrategy}. */
-class TypeLiteralArgumentTypeStrategyTest extends InputTypeStrategiesTestBase {
+public class TypeLiteralArgumentTypeStrategyTest extends InputTypeStrategiesTestBase {
 
-    @Override
-    protected Stream<TestSpec> testData() {
-        return Stream.of(
+    @Parameterized.Parameters(name = "{index}: {0}")
+    public static List<TestSpec> testData() {
+        return asList(
                 TestSpec.forStrategy("Type literal", sequence(TYPE_LITERAL))
                         .calledWithArgumentTypes(DataTypes.STRING())
                         .calledWithLiteralAt(0, DataTypes.STRING())

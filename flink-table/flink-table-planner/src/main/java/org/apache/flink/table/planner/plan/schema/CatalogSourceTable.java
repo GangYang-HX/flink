@@ -177,7 +177,7 @@ public final class CatalogSourceTable extends FlinkPreparingTableBase {
                 schemaTable.getContextResolvedTable().getIdentifier(),
                 catalogTable,
                 context.getTableConfig(),
-                context.getClassLoader(),
+                Thread.currentThread().getContextClassLoader(),
                 schemaTable.isTemporary());
     }
 

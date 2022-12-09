@@ -41,6 +41,9 @@ import org.apache.flink.table.runtime.typeutils.MapDataSerializer;
 import org.apache.flink.table.runtime.typeutils.RawValueDataSerializer;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -57,6 +60,8 @@ import java.util.Arrays;
  */
 @Internal
 abstract class AbstractBinaryWriter implements BinaryWriter {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractBinaryWriter.class);
 
     protected MemorySegment segment;
 
@@ -139,6 +144,7 @@ abstract class AbstractBinaryWriter implements BinaryWriter {
 
     @Override
     public void writeRow(int pos, RowData input, RowDataSerializer serializer) {
+        LOG.info("writeRow params,input={},serializer={}", input, serializer);
         if (input instanceof BinaryFormat) {
             BinaryFormat row = (BinaryFormat) input;
             writeSegmentsToVarLenPart(

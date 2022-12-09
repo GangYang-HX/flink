@@ -25,7 +25,7 @@ import org.apache.flink.table.utils.RawValueDataAsserter;
 import org.apache.flink.testutils.DeeplyEqualsChecker;
 
 /** A test for the {@link RawValueDataSerializer}. */
-class RawValueDataSerializerTest extends SerializerTestBase<RawValueData<String>> {
+public class RawValueDataSerializerTest extends SerializerTestBase<RawValueData<String>> {
     public RawValueDataSerializerTest() {
         super(
                 new DeeplyEqualsChecker()

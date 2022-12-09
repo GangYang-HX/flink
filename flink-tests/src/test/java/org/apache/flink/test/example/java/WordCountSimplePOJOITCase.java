@@ -29,8 +29,6 @@ import org.apache.flink.util.Collector;
 
 import java.io.Serializable;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultsByLinesInMemory;
-
 /** WordCount with simple POJO example. */
 public class WordCountSimplePOJOITCase extends JavaProgramTestBase implements Serializable {
     private static final long serialVersionUID = 1L;

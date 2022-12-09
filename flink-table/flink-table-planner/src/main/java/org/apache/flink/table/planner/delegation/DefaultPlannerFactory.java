@@ -61,16 +61,14 @@ public final class DefaultPlannerFactory implements PlannerFactory {
                         context.getTableConfig(),
                         context.getModuleManager(),
                         context.getFunctionCatalog(),
-                        context.getCatalogManager(),
-                        context.getClassLoader());
+                        context.getCatalogManager());
             case BATCH:
                 return new BatchPlanner(
                         context.getExecutor(),
                         context.getTableConfig(),
                         context.getModuleManager(),
                         context.getFunctionCatalog(),
-                        context.getCatalogManager(),
-                        context.getClassLoader());
+                        context.getCatalogManager());
             default:
                 throw new TableException(
                         String.format(

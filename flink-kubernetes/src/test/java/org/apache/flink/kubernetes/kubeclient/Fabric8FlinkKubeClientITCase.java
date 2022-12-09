@@ -18,16 +18,17 @@
 
 package org.apache.flink.kubernetes.kubeclient;
 
-import org.apache.flink.kubernetes.KubernetesExtension;
+import org.apache.flink.kubernetes.KubernetesResource;
 import org.apache.flink.kubernetes.kubeclient.resources.KubernetesConfigMap;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
 import org.apache.flink.util.concurrent.FutureUtils;
 
 import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,16 +40,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 
 /**
  * IT Tests for {@link org.apache.flink.kubernetes.kubeclient.Fabric8FlinkKubeClient} with real K8s
  * server and client.
  */
-class Fabric8FlinkKubeClientITCase {
+public class Fabric8FlinkKubeClientITCase extends TestLogger {
 
-    @RegisterExtension
-    private static final KubernetesExtension kubernetesExtension = new KubernetesExtension();
+    @ClassRule public static KubernetesResource kubernetesResource = new KubernetesResource();
 
     private static final String TEST_CONFIG_MAP_NAME = "test-config-map";
 
@@ -67,9 +69,9 @@ class Fabric8FlinkKubeClientITCase {
 
     private ExecutorService executorService;
 
-    @BeforeEach
-    void setup() throws Exception {
-        flinkKubeClient = kubernetesExtension.getFlinkKubeClient();
+    @Before
+    public void setup() throws Exception {
+        flinkKubeClient = kubernetesResource.getFlinkKubeClient();
         flinkKubeClient
                 .createConfigMap(
                         new KubernetesConfigMap(
@@ -85,8 +87,8 @@ class Fabric8FlinkKubeClientITCase {
                         data.size(), new ExecutorThreadFactory("test-leader-io"));
     }
 
-    @AfterEach
-    void teardown() throws Exception {
+    @After
+    public void teardown() throws Exception {
         executorService.shutdownNow();
         flinkKubeClient.deleteConfigMap(TEST_CONFIG_MAP_NAME).get();
     }
@@ -97,7 +99,7 @@ class Fabric8FlinkKubeClientITCase {
      * could work.
      */
     @Test
-    void testCheckAndUpdateConfigMapConcurrently() throws Exception {
+    public void testCheckAndUpdateConfigMapConcurrently() throws Exception {
         // Start multiple instances to update ConfigMap concurrently
         final List<CompletableFuture<Void>> futures = new ArrayList<>();
         final int target = 10;
@@ -128,7 +130,7 @@ class Fabric8FlinkKubeClientITCase {
                                                                 return Optional.of(configMap);
                                                             })
                                                     .join();
-                                    assertThat(updated).isTrue();
+                                    assertThat(updated, is(true));
                                     try {
                                         // Simulate the update interval
                                         Thread.sleep((long) (updateIntervalMs * Math.random()));
@@ -143,7 +145,7 @@ class Fabric8FlinkKubeClientITCase {
         // All the value should be increased exactly to the target
         final Optional<KubernetesConfigMap> configMapOpt =
                 flinkKubeClient.getConfigMap(TEST_CONFIG_MAP_NAME);
-        assertThat(configMapOpt).isPresent();
-        assertThat(configMapOpt.get().getData().values()).containsOnly(String.valueOf(target));
+        assertThat(configMapOpt.isPresent(), is(true));
+        assertThat(configMapOpt.get().getData().values(), everyItem(is(String.valueOf(target))));
     }
 }

@@ -128,8 +128,7 @@ public class BatchExecPythonGroupWindowAggregate extends ExecNodeBase<RowData>
                         windowSizeAndSlideSize.f0,
                         windowSizeAndSlideSize.f1,
                         pythonConfig,
-                        config,
-                        planner.getFlinkContext().getClassLoader());
+                        config);
         if (CommonPythonUtil.isPythonWorkerUsingManagedMemory(pythonConfig)) {
             transform.declareManagedMemoryUseCaseAtSlotScope(ManagedMemoryUseCase.PYTHON);
         }
@@ -144,8 +143,7 @@ public class BatchExecPythonGroupWindowAggregate extends ExecNodeBase<RowData>
             long windowSize,
             long slideSize,
             Configuration pythonConfig,
-            ExecNodeConfig config,
-            ClassLoader classLoader) {
+            ExecNodeConfig config) {
         int[] namePropertyTypeArray =
                 Arrays.stream(namedWindowProperties)
                         .mapToInt(
@@ -170,7 +168,6 @@ public class BatchExecPythonGroupWindowAggregate extends ExecNodeBase<RowData>
         OneInputStreamOperator<RowData, RowData> pythonOperator =
                 getPythonGroupWindowAggregateFunctionOperator(
                         config,
-                        classLoader,
                         pythonConfig,
                         inputRowType,
                         outputRowType,
@@ -192,7 +189,6 @@ public class BatchExecPythonGroupWindowAggregate extends ExecNodeBase<RowData>
     @SuppressWarnings("unchecked")
     private OneInputStreamOperator<RowData, RowData> getPythonGroupWindowAggregateFunctionOperator(
             ExecNodeConfig config,
-            ClassLoader classLoader,
             Configuration pythonConfig,
             RowType inputRowType,
             RowType outputRowType,
@@ -244,19 +240,19 @@ public class BatchExecPythonGroupWindowAggregate extends ExecNodeBase<RowData>
                             slideSize,
                             namePropertyTypeArray,
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "UdafInputProjection",
                                     inputRowType,
                                     udfInputType,
                                     udafInputOffsets),
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "GroupKey",
                                     inputRowType,
                                     (RowType) Projection.of(grouping).project(inputRowType),
                                     grouping),
                             ProjectionCodeGenerator.generateProjection(
-                                    new CodeGeneratorContext(config, classLoader),
+                                    CodeGeneratorContext.apply(config.getTableConfig()),
                                     "GroupSet",
                                     inputRowType,
                                     (RowType) Projection.of(auxGrouping).project(inputRowType),

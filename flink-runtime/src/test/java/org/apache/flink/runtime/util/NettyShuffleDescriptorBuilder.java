@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.util;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
@@ -29,8 +30,6 @@ import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 
 /** Builder to mock {@link NettyShuffleDescriptor} in tests. */
 public class NettyShuffleDescriptorBuilder {
@@ -91,7 +90,7 @@ public class NettyShuffleDescriptorBuilder {
     public static NettyShuffleDescriptor createRemoteWithIdAndLocation(
             IntermediateResultPartitionID partitionId, ResourceID producerLocation) {
         return newBuilder()
-                .setId(new ResultPartitionID(partitionId, createExecutionAttemptId()))
+                .setId(new ResultPartitionID(partitionId, new ExecutionAttemptID()))
                 .setProducerLocation(producerLocation)
                 .buildRemote();
     }

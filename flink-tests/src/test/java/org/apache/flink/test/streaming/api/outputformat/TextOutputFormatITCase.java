@@ -26,8 +26,6 @@ import org.apache.flink.test.util.AbstractTestBase;
 
 import org.junit.Test;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultsByLinesInMemory;
-
 /** Integration tests for {@link org.apache.flink.api.java.io.TextOutputFormat}. */
 public class TextOutputFormatITCase extends AbstractTestBase {
 

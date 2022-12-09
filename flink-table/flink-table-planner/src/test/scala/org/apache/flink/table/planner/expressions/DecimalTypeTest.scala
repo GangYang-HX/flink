@@ -38,10 +38,16 @@ class DecimalTypeTest extends ExpressionTestBase {
     testAllApis(BigDecimal("1234567891234567891"), "1234567891234567891", "1234567891234567891")
 
     // explicit decimal (high precision, not SQL compliant)
-    testTableApi(BigDecimal("123456789123456789123456789"), "123456789123456789123456789")
+    testTableApi(
+      BigDecimal("123456789123456789123456789"),
+      "123456789123456789123456789p",
+      "123456789123456789123456789")
 
     // explicit decimal (high precision, not SQL compliant)
-    testTableApi(BigDecimal("12.3456789123456789123456789"), "12.3456789123456789123456789")
+    testTableApi(
+      BigDecimal("12.3456789123456789123456789"),
+      "12.3456789123456789123456789p",
+      "12.3456789123456789123456789")
   }
 
   @Test
@@ -117,7 +123,7 @@ class DecimalTypeTest extends ExpressionTestBase {
 
     testAllApis(12.toExpr < 'f1, "12 < f1", "TRUE")
 
-    testAllApis(12.toExpr > 'f1, "12 > f1", "FALSE")
+    testAllApis(12.toExpr > 'f1, "12 > f1", "12 > f1", "FALSE")
 
     testAllApis(12.toExpr - 'f37, "12 - f37", "10")
 
@@ -162,7 +168,7 @@ class DecimalTypeTest extends ExpressionTestBase {
 
     testAllApis(+'f6, "+f6", "123")
 
-    testAllApis(-'f7, "-f7", "-123.45")
+    testAllApis(-'f7, "-f7", "-f7", "-123.45")
 
     testAllApis(-((+'f6) - (-'f7)), "- (( + f6) - ( - f7))", "-246.45")
   }
@@ -270,7 +276,7 @@ class DecimalTypeTest extends ExpressionTestBase {
 
     testAllApis('f31 / 'f33, "f31 / f33", "0.3333333")
 
-    testAllApis('f31 / 'f34, "f31 / f34", "0.3333333333")
+    testAllApis('f31 / 'f34, "f31 / f34", "f31 / f34", "0.3333333333")
 
     testAllApis('f31 / 'f35, "f31 / f35", "0.333333")
 
@@ -367,7 +373,7 @@ class DecimalTypeTest extends ExpressionTestBase {
 
     testAllApis('f50.round(1), "round(f50,1)", "646.6")
 
-    testAllApis('f50.round(2), "round(f50,2)", "646.65")
+    testAllApis('f50.round(2), "f50.round(2)", "round(f50,2)", "646.65")
 
     testAllApis('f50.round(3), "round(f50,3)", "646.646")
 

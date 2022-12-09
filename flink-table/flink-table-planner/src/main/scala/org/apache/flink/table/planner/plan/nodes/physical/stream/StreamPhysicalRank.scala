@@ -46,7 +46,7 @@ class StreamPhysicalRank(
     rankRange: RankRange,
     rankNumberType: RelDataTypeField,
     outputRankNumber: Boolean,
-    val rankStrategy: RankProcessStrategy)
+    rankStrategy: RankProcessStrategy)
   extends Rank(
     cluster,
     traitSet,

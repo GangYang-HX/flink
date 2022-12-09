@@ -18,87 +18,89 @@
 
 package org.apache.flink.runtime.concurrent;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.apache.flink.util.TestLogger;
+
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 
 import javax.annotation.Nonnull;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /** Unit tests for {@link ScheduledFutureAdapter}. */
-class ScheduledFutureAdapterTest {
+public class ScheduledFutureAdapterTest extends TestLogger {
 
     private ScheduledFutureAdapter<Integer> objectUnderTest;
     private TestFuture innerDelegate;
 
-    @BeforeEach
-    void before() {
+    @Before
+    public void before() {
         this.innerDelegate = new TestFuture();
         this.objectUnderTest =
                 new ScheduledFutureAdapter<>(innerDelegate, 4200000321L, TimeUnit.NANOSECONDS);
     }
 
     @Test
-    void testForwardedMethods() throws Exception {
-        assertThat(objectUnderTest.get()).isEqualTo(4711);
-        assertThat(innerDelegate.getGetInvocationCount()).isEqualTo(1);
+    public void testForwardedMethods() throws Exception {
 
-        assertThat(objectUnderTest.get(42L, TimeUnit.SECONDS)).isEqualTo(4711);
-        assertThat(innerDelegate.getGetTimeoutInvocationCount()).isEqualTo(1);
+        Assert.assertEquals((Integer) 4711, objectUnderTest.get());
+        Assert.assertEquals(1, innerDelegate.getGetInvocationCount());
 
-        assertThat(objectUnderTest.cancel(true)).isEqualTo(innerDelegate.isCancelExpected());
-        assertThat(innerDelegate.getCancelInvocationCount()).isEqualTo(1);
+        Assert.assertEquals((Integer) 4711, objectUnderTest.get(42L, TimeUnit.SECONDS));
+        Assert.assertEquals(1, innerDelegate.getGetTimeoutInvocationCount());
+
+        Assert.assertEquals(innerDelegate.isCancelExpected(), objectUnderTest.cancel(true));
+        Assert.assertEquals(1, innerDelegate.getCancelInvocationCount());
 
         innerDelegate.setCancelResult(!innerDelegate.isCancelExpected());
-        assertThat(objectUnderTest.cancel(true)).isEqualTo(innerDelegate.isCancelExpected());
-        assertThat(innerDelegate.getCancelInvocationCount()).isEqualTo(2);
+        Assert.assertEquals(innerDelegate.isCancelExpected(), objectUnderTest.cancel(true));
+        Assert.assertEquals(2, innerDelegate.getCancelInvocationCount());
 
-        assertThat(objectUnderTest.isCancelled()).isEqualTo(innerDelegate.isCancelledExpected());
-        assertThat(innerDelegate.getIsCancelledInvocationCount()).isEqualTo(1);
+        Assert.assertEquals(innerDelegate.isCancelledExpected(), objectUnderTest.isCancelled());
+        Assert.assertEquals(1, innerDelegate.getIsCancelledInvocationCount());
 
         innerDelegate.setIsCancelledResult(!innerDelegate.isCancelledExpected());
-        assertThat(objectUnderTest.isCancelled()).isEqualTo(innerDelegate.isCancelledExpected());
-        assertThat(innerDelegate.getIsCancelledInvocationCount()).isEqualTo(2);
+        Assert.assertEquals(innerDelegate.isCancelledExpected(), objectUnderTest.isCancelled());
+        Assert.assertEquals(2, innerDelegate.getIsCancelledInvocationCount());
 
-        assertThat(objectUnderTest.isDone()).isEqualTo(innerDelegate.isDoneExpected());
-        assertThat(innerDelegate.getIsDoneInvocationCount()).isEqualTo(1);
+        Assert.assertEquals(innerDelegate.isDoneExpected(), objectUnderTest.isDone());
+        Assert.assertEquals(1, innerDelegate.getIsDoneInvocationCount());
 
         innerDelegate.setIsDoneExpected(!innerDelegate.isDoneExpected());
-        assertThat(objectUnderTest.isDone()).isEqualTo(innerDelegate.isDoneExpected());
-        assertThat(innerDelegate.getIsDoneInvocationCount()).isEqualTo(2);
+        Assert.assertEquals(innerDelegate.isDoneExpected(), objectUnderTest.isDone());
+        Assert.assertEquals(2, innerDelegate.getIsDoneInvocationCount());
     }
 
     @Test
-    void testCompareToEqualsHashCode() {
+    public void testCompareToEqualsHashCode() {
 
-        assertThat(objectUnderTest.compareTo(objectUnderTest)).isEqualTo(0);
-        assertThat((Object) objectUnderTest).isEqualTo(objectUnderTest);
+        Assert.assertEquals(0, objectUnderTest.compareTo(objectUnderTest));
+        Assert.assertEquals(objectUnderTest, objectUnderTest);
 
         ScheduledFutureAdapter<?> other =
                 getDeepCopyWithAdjustedTime(0L, objectUnderTest.getTieBreakerUid());
 
-        assertThat(objectUnderTest.compareTo(other)).isEqualTo(0);
-        assertThat(other.compareTo(objectUnderTest)).isEqualTo(0);
-        assertThat((Object) other).isEqualTo(objectUnderTest);
-        assertThat(other.hashCode()).isEqualTo(objectUnderTest.hashCode());
+        Assert.assertEquals(0, objectUnderTest.compareTo(other));
+        Assert.assertEquals(0, other.compareTo(objectUnderTest));
+        Assert.assertEquals(objectUnderTest, other);
+        Assert.assertEquals(objectUnderTest.hashCode(), other.hashCode());
 
         other = getDeepCopyWithAdjustedTime(0L, objectUnderTest.getTieBreakerUid() + 1L);
-        assertThat(Integer.signum(objectUnderTest.compareTo(other))).isEqualTo(-1);
-        assertThat(Integer.signum(other.compareTo(objectUnderTest))).isEqualTo(+1);
-        assertThat((Object) objectUnderTest).isNotEqualTo(other);
+        Assert.assertEquals(-1, Integer.signum(objectUnderTest.compareTo(other)));
+        Assert.assertEquals(+1, Integer.signum(other.compareTo(objectUnderTest)));
+        Assert.assertNotEquals(objectUnderTest, other);
 
         other = getDeepCopyWithAdjustedTime(+1L, objectUnderTest.getTieBreakerUid());
-        assertThat(Integer.signum(objectUnderTest.compareTo(other))).isEqualTo(-1);
-        assertThat(Integer.signum(other.compareTo(objectUnderTest))).isEqualTo(+1);
-        assertThat((Object) objectUnderTest).isNotEqualTo(other);
+        Assert.assertEquals(-1, Integer.signum(objectUnderTest.compareTo(other)));
+        Assert.assertEquals(+1, Integer.signum(other.compareTo(objectUnderTest)));
+        Assert.assertNotEquals(objectUnderTest, other);
 
         other = getDeepCopyWithAdjustedTime(-1L, objectUnderTest.getTieBreakerUid());
-        assertThat(Integer.signum(objectUnderTest.compareTo(other))).isEqualTo(+1);
-        assertThat(Integer.signum(other.compareTo(objectUnderTest))).isEqualTo(-1);
-        assertThat((Object) objectUnderTest).isNotEqualTo(other);
+        Assert.assertEquals(+1, Integer.signum(objectUnderTest.compareTo(other)));
+        Assert.assertEquals(-1, Integer.signum(other.compareTo(objectUnderTest)));
+        Assert.assertNotEquals(objectUnderTest, other);
     }
 
     private ScheduledFutureAdapter<Integer> getDeepCopyWithAdjustedTime(long nanoAdjust, long uid) {

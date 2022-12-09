@@ -69,7 +69,10 @@ import java.util.Optional;
 
 import static org.apache.flink.connector.elasticsearch.sink.TestClientBase.DOCUMENT_TYPE;
 import static org.apache.flink.connector.elasticsearch.sink.TestClientBase.buildMessage;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests for {@link ElasticsearchWriter}. */
 @Testcontainers
@@ -192,20 +195,20 @@ class ElasticsearchWriterITCase {
         try (final ElasticsearchWriter<Tuple2<Integer, String>> writer =
                 createWriter(index, false, bulkProcessorConfig, metricGroup)) {
             final Counter numBytesOut = operatorIOMetricGroup.getNumBytesOutCounter();
-            assertThat(numBytesOut.getCount()).isEqualTo(0);
+            assertEquals(numBytesOut.getCount(), 0);
             writer.write(Tuple2.of(1, buildMessage(1)), null);
             writer.write(Tuple2.of(2, buildMessage(2)), null);
 
             writer.blockingFlushAllActions();
             long first = numBytesOut.getCount();
 
-            assertThat(first).isGreaterThan(0);
+            assertTrue(first > 0);
 
             writer.write(Tuple2.of(1, buildMessage(1)), null);
             writer.write(Tuple2.of(2, buildMessage(2)), null);
 
             writer.blockingFlushAllActions();
-            assertThat(numBytesOut.getCount()).isGreaterThan(first);
+            assertTrue(numBytesOut.getCount() > first);
         }
     }
 
@@ -228,8 +231,8 @@ class ElasticsearchWriterITCase {
 
             writer.blockingFlushAllActions();
 
-            assertThat(recordsSend).isPresent();
-            assertThat(recordsSend.get().getCount()).isEqualTo(3L);
+            assertTrue(recordsSend.isPresent());
+            assertEquals(recordsSend.get().getCount(), 3L);
         }
     }
 
@@ -249,8 +252,8 @@ class ElasticsearchWriterITCase {
 
             writer.blockingFlushAllActions();
 
-            assertThat(currentSendTime).isPresent();
-            assertThat(currentSendTime.get().getValue()).isGreaterThan(0L);
+            assertTrue(currentSendTime.isPresent());
+            assertThat(currentSendTime.get().getValue(), greaterThan(0L));
         }
     }
 

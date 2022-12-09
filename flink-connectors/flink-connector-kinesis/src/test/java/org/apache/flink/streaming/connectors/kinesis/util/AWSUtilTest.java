@@ -44,7 +44,10 @@ import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfi
 import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber.SENTINEL_AT_TIMESTAMP_SEQUENCE_NUM;
 import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber.SENTINEL_LATEST_SEQUENCE_NUM;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for AWSUtil. */
 @RunWith(PowerMockRunner.class)
@@ -59,7 +62,7 @@ public class AWSUtilTest {
 
         AWSCredentialsProvider credentialsProvider = AWSUtil.getCredentialsProvider(testConfig);
 
-        assertThat(credentialsProvider).isInstanceOf(DefaultAWSCredentialsProviderChain.class);
+        assertTrue(credentialsProvider instanceof DefaultAWSCredentialsProviderChain);
     }
 
     @Test
@@ -68,7 +71,7 @@ public class AWSUtilTest {
         testConfig.setProperty(AWS_CREDENTIALS_PROVIDER, "WEB_IDENTITY_TOKEN");
 
         AWSCredentialsProvider credentialsProvider = AWSUtil.getCredentialsProvider(testConfig);
-        assertThat(credentialsProvider).isInstanceOf(WebIdentityTokenCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof WebIdentityTokenCredentialsProvider);
     }
 
     @Test
@@ -78,7 +81,7 @@ public class AWSUtilTest {
 
         AWSCredentialsProvider credentialsProvider = AWSUtil.getCredentialsProvider(testConfig);
 
-        assertThat(credentialsProvider).isInstanceOf(EnvironmentVariableCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof EnvironmentVariableCredentialsProvider);
     }
 
     @Test
@@ -88,7 +91,7 @@ public class AWSUtilTest {
 
         AWSCredentialsProvider credentialsProvider = AWSUtil.getCredentialsProvider(testConfig);
 
-        assertThat(credentialsProvider).isInstanceOf(SystemPropertiesCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof SystemPropertiesCredentialsProvider);
     }
 
     @Test
@@ -101,8 +104,8 @@ public class AWSUtilTest {
 
         AWSCredentials credentials = AWSUtil.getCredentialsProvider(testConfig).getCredentials();
 
-        assertThat(credentials.getAWSAccessKeyId()).isEqualTo("ak");
-        assertThat(credentials.getAWSSecretKey()).isEqualTo("sk");
+        assertEquals("ak", credentials.getAWSAccessKeyId());
+        assertEquals("sk", credentials.getAWSSecretKey());
     }
 
     @Test
@@ -112,7 +115,7 @@ public class AWSUtilTest {
 
         AWSCredentialsProvider credentialsProvider = AWSUtil.getCredentialsProvider(testConfig);
 
-        assertThat(credentialsProvider).isInstanceOf(DefaultAWSCredentialsProviderChain.class);
+        assertTrue(credentialsProvider instanceof DefaultAWSCredentialsProviderChain);
     }
 
     @Test
@@ -136,12 +139,11 @@ public class AWSUtilTest {
 
         AWSCredentialsProvider credentialsProvider = AWSUtil.getCredentialsProvider(testConfig);
 
-        assertThat(credentialsProvider).isInstanceOf(ProfileCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof ProfileCredentialsProvider);
 
         AWSCredentials credentials = credentialsProvider.getCredentials();
-        assertThat(credentials.getAWSAccessKeyId()).isEqualTo("11111111111111111111");
-        assertThat(credentials.getAWSSecretKey())
-                .isEqualTo("wJalrXUtnFEMI/K7MDENG/bPxRfiCY1111111111");
+        assertEquals("11111111111111111111", credentials.getAWSAccessKeyId());
+        assertEquals("wJalrXUtnFEMI/K7MDENG/bPxRfiCY1111111111", credentials.getAWSSecretKey());
     }
 
     @Test
@@ -155,27 +157,21 @@ public class AWSUtilTest {
 
         AWSCredentialsProvider credentialsProvider = AWSUtil.getCredentialsProvider(testConfig);
 
-        assertThat(credentialsProvider).isInstanceOf(ProfileCredentialsProvider.class);
+        assertTrue(credentialsProvider instanceof ProfileCredentialsProvider);
 
         AWSCredentials credentials = credentialsProvider.getCredentials();
-        assertThat(credentials.getAWSAccessKeyId()).isEqualTo("22222222222222222222");
-        assertThat(credentials.getAWSSecretKey())
-                .isEqualTo("wJalrXUtnFEMI/K7MDENG/bPxRfiCY2222222222");
+        assertEquals("22222222222222222222", credentials.getAWSAccessKeyId());
+        assertEquals("wJalrXUtnFEMI/K7MDENG/bPxRfiCY2222222222", credentials.getAWSSecretKey());
     }
 
     @Test
     public void testValidRegion() {
-        assertThat(AWSUtil.isValidRegion("us-east-1")).isTrue();
-        assertThat(AWSUtil.isValidRegion("us-gov-west-1")).isTrue();
-        assertThat(AWSUtil.isValidRegion("us-isob-east-1")).isTrue();
-        assertThat(AWSUtil.isValidRegion("aws-global")).isTrue();
-        assertThat(AWSUtil.isValidRegion("aws-iso-global")).isTrue();
-        assertThat(AWSUtil.isValidRegion("aws-iso-b-global")).isTrue();
+        assertTrue(AWSUtil.isValidRegion("us-east-1"));
     }
 
     @Test
     public void testInvalidRegion() {
-        assertThat(AWSUtil.isValidRegion("invalid-region")).isFalse();
+        assertFalse(AWSUtil.isValidRegion("ur-east-1"));
     }
 
     @Test
@@ -183,8 +179,8 @@ public class AWSUtilTest {
         StartingPosition position =
                 AWSUtil.getStartingPosition(SENTINEL_LATEST_SEQUENCE_NUM.get(), new Properties());
 
-        assertThat(position.getShardIteratorType()).isEqualTo(AT_TIMESTAMP);
-        assertThat(position.getStartingMarker()).isNotNull();
+        assertEquals(AT_TIMESTAMP, position.getShardIteratorType());
+        assertNotNull(position.getStartingMarker());
     }
 
     @Test
@@ -200,7 +196,7 @@ public class AWSUtilTest {
                 AWSUtil.getStartingPosition(
                         SENTINEL_AT_TIMESTAMP_SEQUENCE_NUM.get(), consumerProperties);
 
-        assertThat(position.getShardIteratorType()).isEqualTo(AT_TIMESTAMP);
-        assertThat(position.getStartingMarker()).isEqualTo(expectedTimestamp);
+        assertEquals(AT_TIMESTAMP, position.getShardIteratorType());
+        assertEquals(expectedTimestamp, position.getStartingMarker());
     }
 }

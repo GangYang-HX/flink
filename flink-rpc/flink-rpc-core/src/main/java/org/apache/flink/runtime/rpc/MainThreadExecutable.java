@@ -18,7 +18,8 @@
 
 package org.apache.flink.runtime.rpc;
 
-import java.time.Duration;
+import org.apache.flink.api.common.time.Time;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
@@ -50,7 +51,7 @@ public interface MainThreadExecutable {
      * @param <V> Return value of the callable
      * @return Future of the callable result
      */
-    <V> CompletableFuture<V> callAsync(Callable<V> callable, Duration callTimeout);
+    <V> CompletableFuture<V> callAsync(Callable<V> callable, Time callTimeout);
 
     /**
      * Execute the runnable in the main thread of the underlying RPC endpoint, with a delay of the

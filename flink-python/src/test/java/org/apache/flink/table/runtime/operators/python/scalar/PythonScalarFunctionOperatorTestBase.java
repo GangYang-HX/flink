@@ -43,7 +43,8 @@ import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -52,7 +53,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.apache.flink.table.api.Expressions.$;
 import static org.apache.flink.table.api.Expressions.call;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Base class for Python scalar function operator test. These test that:
@@ -70,7 +70,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public abstract class PythonScalarFunctionOperatorTestBase<IN, OUT, UDFIN> {
 
     @Test
-    void testRetractionFieldKept() throws Exception {
+    public void testRetractionFieldKept() throws Exception {
         OneInputStreamOperatorTestHarness<IN, OUT> testHarness =
                 getTestHarness(new Configuration());
         long initialTime = 0L;
@@ -227,7 +227,7 @@ public abstract class PythonScalarFunctionOperatorTestBase<IN, OUT, UDFIN> {
         tEnv.toAppendStream(t, BasicTypeInfo.INT_TYPE_INFO);
         JobGraph jobGraph = env.getStreamGraph().getJobGraph();
         List<JobVertex> vertices = jobGraph.getVerticesSortedTopologicallyFromSources();
-        assertThat(vertices).hasSize(1);
+        Assert.assertEquals(1, vertices.size());
     }
 
     private OneInputStreamOperatorTestHarness<IN, OUT> getTestHarness(Configuration config)

@@ -33,6 +33,8 @@ import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.execution.librarycache.TestingClassLoaderLease;
 import org.apache.flink.runtime.io.network.NettyShuffleEnvironmentBuilder;
+import org.apache.flink.runtime.io.network.partition.NoOpResultPartitionConsumableNotifier;
+import org.apache.flink.runtime.io.network.partition.ResultPartitionConsumableNotifier;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteChannelStateChecker;
@@ -47,8 +49,6 @@ import org.apache.flink.runtime.shuffle.ShuffleEnvironment;
 import org.apache.flink.runtime.state.CheckpointStorageLocationReference;
 import org.apache.flink.runtime.taskexecutor.PartitionProducerStateChecker;
 import org.apache.flink.runtime.util.NettyShuffleDescriptorBuilder;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorResource;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.WrappingRuntimeException;
@@ -73,7 +73,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -106,10 +105,6 @@ public class TaskTest extends TestLogger {
 
     private ShuffleEnvironment<?, ?> shuffleEnvironment;
 
-    @ClassRule
-    public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
-            TestingUtils.defaultExecutorResource();
-
     @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
 
     private static boolean wasCleanedUp = false;
@@ -137,28 +132,19 @@ public class TaskTest extends TestLogger {
 
     @Test
     public void testCleanupWhenRestoreFails() throws Exception {
-        createTaskBuilder()
-                .setInvokable(InvokableWithExceptionInRestore.class)
-                .build(Executors.directExecutor())
-                .run();
+        createTaskBuilder().setInvokable(InvokableWithExceptionInRestore.class).build().run();
         assertTrue(wasCleanedUp);
     }
 
     @Test
     public void testCleanupWhenInvokeFails() throws Exception {
-        createTaskBuilder()
-                .setInvokable(InvokableWithExceptionInInvoke.class)
-                .build(Executors.directExecutor())
-                .run();
+        createTaskBuilder().setInvokable(InvokableWithExceptionInInvoke.class).build().run();
         assertTrue(wasCleanedUp);
     }
 
     @Test
     public void testCleanupWhenCancelledAfterRestore() throws Exception {
-        Task task =
-                createTaskBuilder()
-                        .setInvokable(InvokableBlockingInRestore.class)
-                        .build(Executors.directExecutor());
+        Task task = createTaskBuilder().setInvokable(InvokableBlockingInRestore.class).build();
         task.startTaskThread();
         awaitLatch.await();
         task.cancelExecution();
@@ -168,10 +154,7 @@ public class TaskTest extends TestLogger {
 
     @Test
     public void testCleanupWhenAfterInvokeSucceeded() throws Exception {
-        createTaskBuilder()
-                .setInvokable(TestInvokableCorrect.class)
-                .build(Executors.directExecutor())
-                .run();
+        createTaskBuilder().setInvokable(TestInvokableCorrect.class).build().run();
         assertTrue(wasCleanedUp);
     }
 
@@ -190,7 +173,7 @@ public class TaskTest extends TestLogger {
                                 }
                             }
                         })
-                .build(Executors.directExecutor())
+                .build()
                 .run();
         assertTrue(wasCleanedUp);
     }
@@ -202,7 +185,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(TestInvokableCorrect.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // task should be new and perfect
         assertEquals(ExecutionState.CREATED, task.getExecutionState());
@@ -226,7 +209,7 @@ public class TaskTest extends TestLogger {
 
     @Test
     public void testCancelRightAway() throws Exception {
-        final Task task = createTaskBuilder().build(Executors.directExecutor());
+        final Task task = createTaskBuilder().build();
         task.cancelExecution();
 
         assertEquals(ExecutionState.CANCELING, task.getExecutionState());
@@ -241,7 +224,7 @@ public class TaskTest extends TestLogger {
 
     @Test
     public void testFailExternallyRightAway() throws Exception {
-        final Task task = createTaskBuilder().build(Executors.directExecutor());
+        final Task task = createTaskBuilder().build();
         task.failExternally(new Exception("fail externally"));
 
         assertEquals(ExecutionState.FAILED, task.getExecutionState());
@@ -266,7 +249,7 @@ public class TaskTest extends TestLogger {
                                                     throw testException;
                                                 })
                                         .build())
-                        .build(Executors.directExecutor());
+                        .build();
 
         // task should be new and perfect
         assertEquals(ExecutionState.CREATED, task.getExecutionState());
@@ -293,7 +276,8 @@ public class TaskTest extends TestLogger {
         final ShuffleDescriptor shuffleDescriptor =
                 NettyShuffleDescriptorBuilder.newBuilder().buildLocal();
         final ResultPartitionDeploymentDescriptor dummyPartition =
-                new ResultPartitionDeploymentDescriptor(partitionDescriptor, shuffleDescriptor, 1);
+                new ResultPartitionDeploymentDescriptor(
+                        partitionDescriptor, shuffleDescriptor, 1, false);
         testExecutionFailsInNetworkRegistration(
                 Collections.singletonList(dummyPartition), Collections.emptyList());
     }
@@ -318,6 +302,8 @@ public class TaskTest extends TestLogger {
             throws Exception {
         final String errorMessage = "Network buffer pool has already been destroyed.";
 
+        final ResultPartitionConsumableNotifier consumableNotifier =
+                new NoOpResultPartitionConsumableNotifier();
         final PartitionProducerStateChecker partitionProducerStateChecker =
                 mock(PartitionProducerStateChecker.class);
 
@@ -325,10 +311,11 @@ public class TaskTest extends TestLogger {
         final Task task =
                 new TestTaskBuilder(shuffleEnvironment)
                         .setTaskManagerActions(taskManagerActions)
+                        .setConsumableNotifier(consumableNotifier)
                         .setPartitionProducerStateChecker(partitionProducerStateChecker)
                         .setResultPartitions(resultPartitions)
                         .setInputGates(inputGates)
-                        .build(EXECUTOR_RESOURCE.getExecutor());
+                        .build();
 
         // shut down the network to make the following task registration failure
         shuffleEnvironment.close();
@@ -352,7 +339,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setTaskManagerActions(taskManagerActions)
                         .setInvokable(InvokableNonInstantiable.class)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // should fail
         task.run();
@@ -375,7 +362,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableWithExceptionInRestore.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.run();
 
@@ -397,7 +384,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableWithExceptionInInvoke.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.run();
 
@@ -420,7 +407,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(FailingInvokableWithChainedException.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.run();
 
@@ -443,7 +430,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableBlockingInRestore.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -473,7 +460,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableBlockingInInvoke.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -504,7 +491,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableBlockingInRestore.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -532,7 +519,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableBlockingInInvoke.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -561,7 +548,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableWithExceptionInInvoke.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.run();
 
@@ -585,7 +572,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableWithExceptionOnTrigger.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -618,7 +605,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableWithExceptionOnTrigger.class)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -649,7 +636,7 @@ public class TaskTest extends TestLogger {
         final Task task =
                 createTaskBuilder()
                         .setInvokable(InvokableWithCancelTaskExceptionInInvoke.class)
-                        .build(Executors.directExecutor());
+                        .build();
 
         // Cause CancelTaskException.
         triggerLatch.trigger();
@@ -664,7 +651,7 @@ public class TaskTest extends TestLogger {
         final Task task =
                 createTaskBuilder()
                         .setInvokable(InvokableWithCancelTaskExceptionInInvoke.class)
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.startTaskThread();
 
@@ -704,10 +691,7 @@ public class TaskTest extends TestLogger {
     public void testOnPartitionStateUpdate(ExecutionState initialTaskState) throws Exception {
         final ResultPartitionID partitionId = new ResultPartitionID();
 
-        final Task task =
-                createTaskBuilder()
-                        .setInvokable(InvokableBlockingInInvoke.class)
-                        .build(Executors.directExecutor());
+        final Task task = createTaskBuilder().setInvokable(InvokableBlockingInInvoke.class).build();
 
         RemoteChannelStateChecker checker = new RemoteChannelStateChecker(partitionId, "test task");
 
@@ -756,6 +740,9 @@ public class TaskTest extends TestLogger {
         final PartitionProducerStateChecker partitionChecker =
                 mock(PartitionProducerStateChecker.class);
 
+        final ResultPartitionConsumableNotifier consumableNotifier =
+                new NoOpResultPartitionConsumableNotifier();
+
         AtomicInteger callCount = new AtomicInteger(0);
 
         RemoteChannelStateChecker remoteChannelStateChecker =
@@ -770,8 +757,10 @@ public class TaskTest extends TestLogger {
             final Task task =
                     createTaskBuilder()
                             .setInvokable(InvokableBlockingInInvoke.class)
+                            .setConsumableNotifier(consumableNotifier)
                             .setPartitionProducerStateChecker(partitionChecker)
-                            .build(Executors.directExecutor());
+                            .setExecutor(Executors.directExecutor())
+                            .build();
             TestTaskBuilder.setTaskState(task, ExecutionState.RUNNING);
 
             final CompletableFuture<ExecutionState> promise = new CompletableFuture<>();
@@ -800,8 +789,10 @@ public class TaskTest extends TestLogger {
             final Task task =
                     createTaskBuilder()
                             .setInvokable(InvokableBlockingInInvoke.class)
+                            .setConsumableNotifier(consumableNotifier)
                             .setPartitionProducerStateChecker(partitionChecker)
-                            .build(Executors.directExecutor());
+                            .setExecutor(Executors.directExecutor())
+                            .build();
             TestTaskBuilder.setTaskState(task, ExecutionState.RUNNING);
 
             final CompletableFuture<ExecutionState> promise = new CompletableFuture<>();
@@ -834,8 +825,10 @@ public class TaskTest extends TestLogger {
             final Task task =
                     createTaskBuilder()
                             .setInvokable(InvokableBlockingInInvoke.class)
+                            .setConsumableNotifier(consumableNotifier)
                             .setPartitionProducerStateChecker(partitionChecker)
-                            .build(Executors.directExecutor());
+                            .setExecutor(Executors.directExecutor())
+                            .build();
 
             try {
                 task.startTaskThread();
@@ -877,8 +870,10 @@ public class TaskTest extends TestLogger {
             final Task task =
                     createTaskBuilder()
                             .setInvokable(InvokableBlockingInInvoke.class)
+                            .setConsumableNotifier(consumableNotifier)
                             .setPartitionProducerStateChecker(partitionChecker)
-                            .build(Executors.directExecutor());
+                            .setExecutor(Executors.directExecutor())
+                            .build();
 
             try {
                 task.startTaskThread();
@@ -928,7 +923,7 @@ public class TaskTest extends TestLogger {
                         .setInvokable(InvokableBlockingInCancel.class)
                         .setTaskManagerConfig(config)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.startTaskThread();
 
@@ -956,7 +951,7 @@ public class TaskTest extends TestLogger {
                         .setInvokable(InvokableInterruptibleSharedLockInInvokeAndCancel.class)
                         .setTaskManagerConfig(config)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.startTaskThread();
 
@@ -987,7 +982,7 @@ public class TaskTest extends TestLogger {
                         .setInvokable(InvokableUnInterruptibleBlockingInvoke.class)
                         .setTaskManagerConfig(config)
                         .setTaskManagerActions(taskManagerActions)
-                        .build(Executors.directExecutor());
+                        .build();
 
         try {
             task.startTaskThread();
@@ -1027,7 +1022,7 @@ public class TaskTest extends TestLogger {
                                 .setInvokable(InvokableBlockingWithTrigger.class)
                                 .setTaskManagerConfig(config)
                                 .setTaskManagerActions(taskManagerActions)
-                                .build(Executors.directExecutor()));
+                                .build());
 
         final Class<OutOfMemoryError> fatalErrorType = OutOfMemoryError.class;
         doThrow(fatalErrorType)
@@ -1068,7 +1063,7 @@ public class TaskTest extends TestLogger {
                         .setInvokable(InvokableBlockingInInvoke.class)
                         .setTaskManagerConfig(config)
                         .setExecutionConfig(executionConfig)
-                        .build(Executors.directExecutor());
+                        .build();
 
         assertEquals(interval, task.getTaskCancellationInterval());
         assertEquals(timeout, task.getTaskCancellationTimeout());
@@ -1092,7 +1087,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableBlockingWithTrigger.class)
                         .setTaskManagerActions(new NoOpTaskManagerActions())
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -1115,7 +1110,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableBlockingInInvoke.class)
                         .setTaskManagerActions(new NoOpTaskManagerActions())
-                        .build(Executors.directExecutor());
+                        .build();
 
         task.cancelExecution();
 
@@ -1135,7 +1130,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableWithExceptionInInvoke.class)
                         .setTaskManagerActions(new NoOpTaskManagerActions())
-                        .build(Executors.directExecutor());
+                        .build();
 
         // run the task asynchronous
         task.startTaskThread();
@@ -1147,7 +1142,7 @@ public class TaskTest extends TestLogger {
 
     @Test
     public void testNoBackPressureIfTaskNotStarted() throws Exception {
-        final Task task = createTaskBuilder().build(Executors.directExecutor());
+        final Task task = createTaskBuilder().build();
         assertFalse(task.isBackPressured());
     }
 
@@ -1158,7 +1153,7 @@ public class TaskTest extends TestLogger {
                 createTaskBuilder()
                         .setInvokable(InvokableDeclingingCheckpoints.class)
                         .setCheckpointResponder(testCheckpointResponder)
-                        .build(Executors.directExecutor());
+                        .build();
         assertCheckpointDeclined(
                 task,
                 testCheckpointResponder,

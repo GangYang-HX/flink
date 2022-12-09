@@ -23,6 +23,7 @@ import org.apache.flink.python.PythonFunctionRunner;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.connector.Projection;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.python.PythonFunctionInfo;
@@ -37,17 +38,17 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /** Test for {@link StreamArrowPythonProcTimeBoundedRangeOperator}. */
-class StreamArrowPythonProcTimeBoundedRangeOperatorTest
+public class StreamArrowPythonProcTimeBoundedRangeOperatorTest
         extends AbstractStreamArrowPythonAggregateFunctionOperatorTest {
 
     @Test
-    void testOverWindowAggregateFunction() throws Exception {
+    public void testOverWindowAggregateFunction() throws Exception {
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness =
                 getTestHarness(new Configuration());
 
@@ -127,9 +128,7 @@ class StreamArrowPythonProcTimeBoundedRangeOperatorTest
                 -1,
                 100L,
                 ProjectionCodeGenerator.generateProjection(
-                        new CodeGeneratorContext(
-                                new Configuration(),
-                                Thread.currentThread().getContextClassLoader()),
+                        CodeGeneratorContext.apply(new TableConfig()),
                         "UdafInputProjection",
                         inputType,
                         udfInputType,
@@ -167,7 +166,7 @@ class StreamArrowPythonProcTimeBoundedRangeOperatorTest
                     udfInputType,
                     udfOutputType,
                     getFunctionUrn(),
-                    createUserDefinedFunctionsProto(),
+                    getUserDefinedFunctionsProto(),
                     PythonTestUtils.createMockFlinkMetricContainer(),
                     false);
         }

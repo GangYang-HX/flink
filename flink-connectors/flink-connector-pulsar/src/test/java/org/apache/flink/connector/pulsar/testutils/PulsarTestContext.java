@@ -24,9 +24,6 @@ import org.apache.flink.connector.testframe.external.source.DataStreamSourceExte
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
-
-import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 
 /** Common test context for pulsar based test. */
 public abstract class PulsarTestContext<T> implements DataStreamSourceExternalContext<T> {
@@ -42,13 +39,10 @@ public abstract class PulsarTestContext<T> implements DataStreamSourceExternalCo
     // Helper methods for generating data.
 
     protected List<String> generateStringTestData(int splitIndex, long seed) {
-        Random random = new Random(seed);
-        int recordNum = 300 + random.nextInt(200);
+        int recordNum = 300;
         List<String> records = new ArrayList<>(recordNum);
-
         for (int i = 0; i < recordNum; i++) {
-            int length = random.nextInt(40) + 10;
-            records.add(splitIndex + "-" + i + "-" + randomAlphanumeric(length));
+            records.add(splitIndex + "-" + i);
         }
 
         return records;

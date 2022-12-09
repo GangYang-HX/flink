@@ -19,7 +19,6 @@
 package org.apache.flink.runtime.scheduler.strategy;
 
 import org.apache.flink.runtime.execution.ExecutionState;
-import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.util.IterableUtils;
@@ -92,10 +91,7 @@ public class TestingSchedulingExecutionVertex implements SchedulingExecutionVert
 
     void addConsumedPartition(TestingSchedulingResultPartition consumedPartition) {
         final ConsumedPartitionGroup consumedPartitionGroup =
-                ConsumedPartitionGroup.fromSinglePartition(
-                        consumedPartition.getNumConsumers(),
-                        consumedPartition.getId(),
-                        consumedPartition.getResultType());
+                ConsumedPartitionGroup.fromSinglePartition(consumedPartition.getId());
 
         consumedPartition.registerConsumedPartitionGroup(consumedPartitionGroup);
         if (consumedPartition.getState() == ResultPartitionState.CONSUMABLE) {
@@ -147,8 +143,6 @@ public class TestingSchedulingExecutionVertex implements SchedulingExecutionVert
                 Map<IntermediateResultPartitionID, TestingSchedulingResultPartition>
                         resultPartitionsById) {
             this.resultPartitionsById.putAll(resultPartitionsById);
-            final ResultPartitionType resultType =
-                    resultPartitionsById.values().iterator().next().getResultType();
 
             for (ConsumedPartitionGroup partitionGroup : consumedPartitionGroups) {
                 List<IntermediateResultPartitionID> partitionIds =
@@ -157,8 +151,7 @@ public class TestingSchedulingExecutionVertex implements SchedulingExecutionVert
                     partitionIds.add(partitionId);
                 }
                 this.consumedPartitionGroups.add(
-                        ConsumedPartitionGroup.fromMultiplePartitions(
-                                partitionGroup.getNumConsumers(), partitionIds, resultType));
+                        ConsumedPartitionGroup.fromMultiplePartitions(partitionIds));
             }
             return this;
         }

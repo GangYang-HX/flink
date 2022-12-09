@@ -40,8 +40,6 @@ import org.junit.Test;
 
 import java.util.List;
 
-import static org.apache.flink.test.util.TestBaseUtils.compareResultAsText;
-
 /** Integration tests for {@link org.apache.flink.api.common.typeinfo.TypeHint}. */
 public class TypeHintITCase extends AbstractTestBase {
 

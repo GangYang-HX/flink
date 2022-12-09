@@ -26,15 +26,17 @@ import org.apache.flink.kubernetes.kubeclient.parameters.KubernetesJobManagerPar
 import org.apache.flink.kubernetes.utils.Constants;
 
 import io.fabric8.kubernetes.api.model.ContainerPort;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 
 /** Tests for the {@link InitJobManagerDecorator} with pod template. */
-class InitJobManagerDecoratorWithPodTemplateTest extends DecoratorWithPodTemplateTestBase {
+public class InitJobManagerDecoratorWithPodTemplateTest extends DecoratorWithPodTemplateTestBase {
 
     @Override
     protected void setupFlinkConfig() {
@@ -62,7 +64,7 @@ class InitJobManagerDecoratorWithPodTemplateTest extends DecoratorWithPodTemplat
     }
 
     @Test
-    void testJobManagerManagerMainContainerPortsMerging() {
+    public void testJobManagerManagerMainContainerPortsMerging() {
         final List<String> expectedContainerPorts = new ArrayList<>();
         expectedContainerPorts.add(Constants.REST_PORT_NAME);
         expectedContainerPorts.add(Constants.JOB_MANAGER_RPC_PORT_NAME);
@@ -70,8 +72,9 @@ class InitJobManagerDecoratorWithPodTemplateTest extends DecoratorWithPodTemplat
         // Add port from pod template
         expectedContainerPorts.add("testing-port");
         assertThat(
-                        this.resultPod.getMainContainer().getPorts().stream()
-                                .map(ContainerPort::getName))
-                .containsExactlyInAnyOrderElementsOf(expectedContainerPorts);
+                this.resultPod.getMainContainer().getPorts().stream()
+                        .map(ContainerPort::getName)
+                        .collect(Collectors.toList()),
+                containsInAnyOrder(expectedContainerPorts.toArray()));
     }
 }

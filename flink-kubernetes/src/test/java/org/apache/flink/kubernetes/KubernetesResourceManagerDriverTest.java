@@ -37,7 +37,7 @@ import org.apache.flink.runtime.testutils.CommonTestUtils;
 import org.apache.flink.util.concurrent.FutureUtils;
 
 import io.fabric8.kubernetes.api.model.ResourceRequirements;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -47,12 +47,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.fail;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 /** Tests for {@link KubernetesResourceManagerDriver}. */
-class KubernetesResourceManagerDriverTest
+public class KubernetesResourceManagerDriverTest
         extends ResourceManagerDriverTestBase<KubernetesWorkerNode> {
 
     private static final String CLUSTER_ID = "testing-flink-cluster";
@@ -61,7 +63,7 @@ class KubernetesResourceManagerDriverTest
                     new KubernetesResourceManagerDriverConfiguration(CLUSTER_ID, "localhost:9000");
 
     @Test
-    void testOnPodAdded() throws Exception {
+    public void testOnPodAdded() throws Exception {
         new Context() {
             {
                 final CompletableFuture<KubernetesPod> createPodFuture = new CompletableFuture<>();
@@ -97,9 +99,9 @@ class KubernetesResourceManagerDriverTest
                                     requestResourceFuture.thenAccept(
                                             (workerNode) -> {
                                                 validateInMainThread();
-                                                assertThat(workerNode.getResourceID())
-                                                        .asString()
-                                                        .isEqualTo(pod.getName());
+                                                assertThat(
+                                                        workerNode.getResourceID().toString(),
+                                                        is(pod.getName()));
                                             });
 
                             // send onAdded event
@@ -113,7 +115,7 @@ class KubernetesResourceManagerDriverTest
     }
 
     @Test
-    void testOnPodModified() throws Exception {
+    public void testOnPodModified() throws Exception {
         new Context() {
             {
                 testOnPodTerminated((pod) -> getPodCallbackHandler().onModified(pod));
@@ -122,7 +124,7 @@ class KubernetesResourceManagerDriverTest
     }
 
     @Test
-    void testOnPodDeleted() throws Exception {
+    public void testOnPodDeleted() throws Exception {
         new Context() {
             {
                 testOnPodTerminated((pod) -> getPodCallbackHandler().onDeleted(pod));
@@ -131,7 +133,7 @@ class KubernetesResourceManagerDriverTest
     }
 
     @Test
-    void testOnError() throws Exception {
+    public void testOnError() throws Exception {
         new Context() {
             {
                 testOnPodTerminated((pod) -> getPodCallbackHandler().onError(pod));
@@ -140,7 +142,7 @@ class KubernetesResourceManagerDriverTest
     }
 
     @Test
-    void testFatalHandleError() throws Exception {
+    public void testFatalHandleError() throws Exception {
         new Context() {
             {
                 final CompletableFuture<Throwable> onErrorFuture = new CompletableFuture<>();
@@ -150,15 +152,16 @@ class KubernetesResourceManagerDriverTest
                         () -> {
                             final Throwable testingError = new Throwable("testing error");
                             getPodCallbackHandler().handleError(testingError);
-                            assertThat(onErrorFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS))
-                                    .isEqualTo(testingError);
+                            assertThat(
+                                    onErrorFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS),
+                                    is(testingError));
                         });
             }
         };
     }
 
     @Test
-    void testRecoverPreviousAttemptWorkersPodTerminated() throws Exception {
+    public void testRecoverPreviousAttemptWorkersPodTerminated() throws Exception {
         new Context() {
             {
                 final KubernetesPod previousAttemptPod =
@@ -183,17 +186,20 @@ class KubernetesResourceManagerDriverTest
                         () -> {
                             // validate the terminated pod from previous attempt is not recovered
                             // and is removed
-                            assertThat(recoveredWorkersFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS))
-                                    .isEmpty();
-                            assertThat(stopPodFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS))
-                                    .isEqualTo(previousAttemptPod.getName());
+                            assertThat(
+                                    recoveredWorkersFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS),
+                                    empty());
+                            assertThat(
+                                    stopPodFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS),
+                                    is(previousAttemptPod.getName()));
                         });
             }
         };
     }
 
     @Test
-    void testNewWatchCreationWhenKubernetesTooOldResourceVersionException() throws Exception {
+    public void testNewWatchCreationWhenKubernetesTooOldResourceVersionException()
+            throws Exception {
         new Context() {
             {
                 runTest(
@@ -204,32 +210,28 @@ class KubernetesResourceManagerDriverTest
                                                     new Exception("too old resource version")));
                             // Verify the old watch is closed and a new one is created
                             CommonTestUtils.waitUntilCondition(() -> getPodsWatches().size() == 2);
-                            assertThat(getPodsWatches().get(0).isClosed()).isTrue();
-                            assertThat(getPodsWatches().get(1).isClosed()).isFalse();
+                            assertThat(getPodsWatches().get(0).isClosed(), is(true));
+                            assertThat(getPodsWatches().get(1).isClosed(), is(false));
                         });
             }
         };
     }
 
-    @Test
+    @Test(expected = ExpectedTestException.class)
     public void testThrowExceptionWhenWatchPodsFailInInitializing() throws Exception {
         new Context() {
             {
-                assertThatThrownBy(
-                                () -> {
-                                    flinkKubeClientBuilder.setWatchPodsAndDoCallbackFunction(
-                                            (ignore1, ignore2) -> {
-                                                throw new ExpectedTestException();
-                                            });
-                                    runTest(() -> {});
-                                })
-                        .isInstanceOf(ExpectedTestException.class);
+                flinkKubeClientBuilder.setWatchPodsAndDoCallbackFunction(
+                        (ignore1, ignore2) -> {
+                            throw new ExpectedTestException();
+                        });
+                runTest(() -> {});
             }
         };
     }
 
     @Test
-    void testThrowExceptionWhenWatchPodsFailInHandlingError() throws Exception {
+    public void testThrowExceptionWhenWatchPodsFailInHandlingError() throws Exception {
         new Context() {
             {
                 final CompletableFuture<Throwable> onErrorFuture = new CompletableFuture<>();
@@ -249,8 +251,9 @@ class KubernetesResourceManagerDriverTest
                 runTest(
                         () -> {
                             getPodCallbackHandler().handleError(testingError);
-                            assertThat(onErrorFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS))
-                                    .isEqualTo(testingError);
+                            assertThat(
+                                    onErrorFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS),
+                                    is(testingError));
                         });
             }
         };
@@ -354,16 +357,16 @@ class KubernetesResourceManagerDriverTest
 
         @Override
         protected void validateInitialization() throws Exception {
-            assertThat(getPodCallbackHandler()).isNotNull();
+            assertNotNull(getPodCallbackHandler());
         }
 
         @Override
         protected void validateWorkersRecoveredFromPreviousAttempt(
                 Collection<KubernetesWorkerNode> workers) {
-            assertThat(workers).hasSize(1);
+            assertThat(workers.size(), is(1));
 
             final ResourceID resourceId = workers.iterator().next().getResourceID();
-            assertThat(resourceId).asString().isEqualTo(previousAttemptPod.getName());
+            assertThat(resourceId.toString(), is(previousAttemptPod.getName()));
         }
 
         @Override
@@ -373,14 +376,14 @@ class KubernetesResourceManagerDriverTest
 
         @Override
         protected void validateDeregisterApplication() throws Exception {
-            assertThat(stopAndCleanupClusterFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS))
-                    .isEqualTo(CLUSTER_ID);
+            assertThat(
+                    stopAndCleanupClusterFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS), is(CLUSTER_ID));
         }
 
         @Override
         protected void validateRequestedResources(
                 Collection<TaskExecutorProcessSpec> taskExecutorProcessSpecs) throws Exception {
-            assertThat(taskExecutorProcessSpecs).hasSize(1);
+            assertThat(taskExecutorProcessSpecs.size(), is(1));
 
             final TaskExecutorProcessSpec taskExecutorProcessSpec =
                     taskExecutorProcessSpecs.iterator().next();
@@ -389,58 +392,51 @@ class KubernetesResourceManagerDriverTest
                     pod.getInternalResource().getSpec().getContainers().get(0).getResources();
 
             assertThat(
-                            resourceRequirements
-                                    .getRequests()
-                                    .get(Constants.RESOURCE_NAME_MEMORY)
-                                    .getAmount())
-                    .isEqualTo(
+                    resourceRequirements
+                            .getRequests()
+                            .get(Constants.RESOURCE_NAME_MEMORY)
+                            .getAmount(),
+                    is(
                             String.valueOf(
                                     taskExecutorProcessSpec
                                             .getTotalProcessMemorySize()
-                                            .getMebiBytes()));
+                                            .getMebiBytes())));
             assertThat(
-                            resourceRequirements
-                                    .getRequests()
-                                    .get(Constants.RESOURCE_NAME_CPU)
-                                    .getAmount())
-                    .isEqualTo(
+                    resourceRequirements.getRequests().get(Constants.RESOURCE_NAME_CPU).getAmount(),
+                    is(
                             String.valueOf(
                                     taskExecutorProcessSpec
                                             .getCpuCores()
                                             .getValue()
-                                            .doubleValue()));
+                                            .doubleValue())));
 
             assertThat(
-                            resourceRequirements
-                                    .getLimits()
-                                    .get(Constants.RESOURCE_NAME_MEMORY)
-                                    .getAmount())
-                    .isEqualTo(
+                    resourceRequirements
+                            .getLimits()
+                            .get(Constants.RESOURCE_NAME_MEMORY)
+                            .getAmount(),
+                    is(
                             String.valueOf(
                                     taskExecutorProcessSpec
                                             .getTotalProcessMemorySize()
-                                            .getMebiBytes()));
+                                            .getMebiBytes())));
             assertThat(
-                            resourceRequirements
-                                    .getLimits()
-                                    .get(Constants.RESOURCE_NAME_CPU)
-                                    .getAmount())
-                    .isEqualTo(
+                    resourceRequirements.getLimits().get(Constants.RESOURCE_NAME_CPU).getAmount(),
+                    is(
                             String.valueOf(
                                     taskExecutorProcessSpec
                                             .getCpuCores()
                                             .getValue()
-                                            .doubleValue()));
+                                            .doubleValue())));
         }
 
         @Override
         protected void validateReleaseResources(Collection<KubernetesWorkerNode> workerNodes)
                 throws Exception {
-            assertThat(workerNodes).hasSize(1);
+            assertThat(workerNodes.size(), is(1));
 
             final ResourceID resourceId = workerNodes.iterator().next().getResourceID();
-            assertThat(stopPodFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS))
-                    .isEqualTo(resourceId.toString());
+            assertThat(stopPodFuture.get(TIMEOUT_SEC, TimeUnit.SECONDS), is(resourceId.toString()));
         }
 
         void testOnPodTerminated(Consumer<List<KubernetesPod>> sendPodTerminatedEvent)
@@ -471,14 +467,13 @@ class KubernetesResourceManagerDriverTest
                                 CompletableFuture.allOf(
                                         stopPodFuture.thenAccept(
                                                 (podname) ->
-                                                        assertThat(podname)
-                                                                .isEqualTo(pod.getName())),
+                                                        assertThat(podname, is(pod.getName()))),
                                         onWorkerTerminatedConsumer.thenAccept(
                                                 (resourceId) -> {
                                                     validateInMainThread();
-                                                    assertThat(resourceId)
-                                                            .asString()
-                                                            .isEqualTo(pod.getName());
+                                                    assertThat(
+                                                            resourceId.toString(),
+                                                            is(pod.getName()));
                                                 }));
 
                         sendPodTerminatedEvent.accept(

@@ -20,16 +20,16 @@ package org.apache.flink.table.module;
 
 import org.apache.flink.table.functions.BuiltInFunctionDefinition;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 /** Test for {@link CoreModule}. */
-class CoreModuleTest {
+public class CoreModuleTest {
 
     @Test
-    void testListFunctions() {
+    public void testListFunctions() {
         assertThat(CoreModule.INSTANCE.listFunctions(false))
                 .contains("IFNULL")
                 .doesNotContain("$REPLICATE_ROWS$1");
@@ -40,12 +40,12 @@ class CoreModuleTest {
     }
 
     @Test
-    void testGetNonExistFunction() {
+    public void testGetNonExistFunction() {
         assertThat(CoreModule.INSTANCE.getFunctionDefinition("nonexist")).isEmpty();
     }
 
     @Test
-    void testGetFunction() {
+    public void testGetFunction() {
         assertThat(CoreModule.INSTANCE.getFunctionDefinition("CAST"))
                 .hasValueSatisfying(
                         def ->
@@ -56,7 +56,7 @@ class CoreModuleTest {
     }
 
     @Test
-    void testGetInternalFunction() {
+    public void testGetInternalFunction() {
         assertThat(CoreModule.INSTANCE.getFunctionDefinition("$REPLICATE_ROWS$1"))
                 .hasValueSatisfying(
                         def ->

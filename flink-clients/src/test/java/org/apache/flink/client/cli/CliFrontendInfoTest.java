@@ -20,53 +20,42 @@ package org.apache.flink.client.cli;
 
 import org.apache.flink.configuration.Configuration;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.Collections;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Tests for the "info" command. */
-class CliFrontendInfoTest extends CliFrontendTestBase {
+public class CliFrontendInfoTest extends CliFrontendTestBase {
 
     private static PrintStream stdOut;
     private static PrintStream capture;
     private static ByteArrayOutputStream buffer;
 
-    @Test
-    void testMissingOption() {
-        assertThatThrownBy(
-                        () -> {
-                            String[] parameters = {};
-                            Configuration configuration = getConfiguration();
-                            CliFrontend testFrontend =
-                                    new CliFrontend(
-                                            configuration, Collections.singletonList(getCli()));
-                            testFrontend.info(parameters);
-                        })
-                .isInstanceOf(CliArgsException.class);
+    @Test(expected = CliArgsException.class)
+    public void testMissingOption() throws Exception {
+        String[] parameters = {};
+        Configuration configuration = getConfiguration();
+        CliFrontend testFrontend =
+                new CliFrontend(configuration, Collections.singletonList(getCli()));
+        testFrontend.cancel(parameters);
+    }
+
+    @Test(expected = CliArgsException.class)
+    public void testUnrecognizedOption() throws Exception {
+        String[] parameters = {"-v", "-l"};
+        Configuration configuration = getConfiguration();
+        CliFrontend testFrontend =
+                new CliFrontend(configuration, Collections.singletonList(getCli()));
+        testFrontend.cancel(parameters);
     }
 
     @Test
-    void testUnrecognizedOption() {
-        assertThatThrownBy(
-                        () -> {
-                            String[] parameters = {"-v", "-l"};
-                            Configuration configuration = getConfiguration();
-                            CliFrontend testFrontend =
-                                    new CliFrontend(
-                                            configuration, Collections.singletonList(getCli()));
-                            testFrontend.info(parameters);
-                        })
-                .isInstanceOf(CliArgsException.class);
-    }
-
-    @Test
-    void testShowExecutionPlan() throws Exception {
+    public void testShowExecutionPlan() throws Exception {
         replaceStdOut();
         try {
 
@@ -78,14 +67,14 @@ class CliFrontendInfoTest extends CliFrontendTestBase {
             CliFrontend testFrontend =
                     new CliFrontend(configuration, Collections.singletonList(getCli()));
             testFrontend.info(parameters);
-            assertThat(buffer.toString()).contains("\"parallelism\" : 4");
+            assertTrue(buffer.toString().contains("\"parallelism\" : 4"));
         } finally {
             restoreStdOut();
         }
     }
 
     @Test
-    void testShowExecutionPlanWithParallelism() {
+    public void testShowExecutionPlanWithParallelism() {
         replaceStdOut();
         try {
             String[] parameters = {
@@ -95,7 +84,7 @@ class CliFrontendInfoTest extends CliFrontendTestBase {
             CliFrontend testFrontend =
                     new CliFrontend(configuration, Collections.singletonList(getCli()));
             testFrontend.info(parameters);
-            assertThat(buffer.toString()).contains("\"parallelism\" : 17");
+            assertTrue(buffer.toString().contains("\"parallelism\" : 17"));
         } catch (Exception e) {
             e.printStackTrace();
             fail("Program caused an exception: " + e.getMessage());

@@ -42,8 +42,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /** Managed {@link Committer} for testing compaction. */
 public class TestManagedSinkCommitter
         implements GlobalCommitter<TestManagedCommittable, TestManagedCommittable> {
@@ -76,7 +74,7 @@ public class TestManagedSinkCommitter
         for (final TestManagedCommittable combinedCommittable : committables) {
             AtomicReference<Map<CatalogPartitionSpec, List<Path>>> reference =
                     TestManagedTableFactory.MANAGED_TABLE_FILE_ENTRIES.get(tableIdentifier);
-            assertThat(reference).isNotNull();
+            assert reference != null;
             Map<CatalogPartitionSpec, List<Path>> managedTableFileEntries = reference.get();
 
             // commit new files

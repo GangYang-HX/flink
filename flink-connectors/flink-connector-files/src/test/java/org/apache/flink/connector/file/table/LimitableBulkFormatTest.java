@@ -33,28 +33,29 @@ import org.apache.flink.core.fs.FSDataInputStream;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.util.FileUtils;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import javax.annotation.Nullable;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /** Test for {@link LimitableBulkFormat}. */
-class LimitableBulkFormatTest {
+public class LimitableBulkFormatTest {
 
-    @TempDir private java.nio.file.Path path;
+    @ClassRule public static final TemporaryFolder TEMP_FOLDER = new TemporaryFolder();
+
     private File file;
 
-    @BeforeEach
-    void prepare() throws IOException {
-        file = Files.createTempFile(path, "prefix", "suffix").toFile();
+    @Before
+    public void prepare() throws IOException {
+        file = TEMP_FOLDER.newFile();
+        file.createNewFile();
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < 10000; i++) {
             builder.append(i).append("\n");
@@ -63,7 +64,7 @@ class LimitableBulkFormatTest {
     }
 
     @Test
-    void test() throws IOException {
+    public void test() throws IOException {
         // read
         BulkFormat<String, FileSourceSplit> format =
                 LimitableBulkFormat.create(
@@ -82,11 +83,11 @@ class LimitableBulkFormatTest {
 
         AtomicInteger i = new AtomicInteger(0);
         Utils.forEachRemaining(reader, s -> i.incrementAndGet());
-        assertThat(i.get()).isEqualTo(22);
+        Assert.assertEquals(22, i.get());
     }
 
     @Test
-    void testLimitOverBatches() throws IOException {
+    public void testLimitOverBatches() throws IOException {
         // set limit
         Long limit = 2048L;
 
@@ -113,11 +114,11 @@ class LimitableBulkFormatTest {
         // check
         AtomicInteger i = new AtomicInteger(0);
         Utils.forEachRemaining(reader, s -> i.incrementAndGet());
-        assertThat(i.get()).isEqualTo(limit.intValue());
+        Assert.assertEquals(limit.intValue(), i.get());
     }
 
     @Test
-    void testSwallowExceptionWhenLimited() throws IOException {
+    public void testSwallowExceptionWhenLimited() throws IOException {
         long limit = 1000L;
         LimitableBulkFormat<String, FileSourceSplit> format =
                 (LimitableBulkFormat<String, FileSourceSplit>)

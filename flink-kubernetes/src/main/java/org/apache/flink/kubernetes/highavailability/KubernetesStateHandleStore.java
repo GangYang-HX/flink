@@ -648,12 +648,10 @@ public class KubernetesStateHandleStore<T extends Serializable>
     private Optional<KubernetesConfigMap> addEntry(
             KubernetesConfigMap configMap, String key, byte[] serializedStateHandle)
             throws Exception {
-        final String oldBase64Content = configMap.getData().get(key);
-        final String newBase64Content = toBase64(serializedStateHandle);
-        if (oldBase64Content != null) {
+        final String content = configMap.getData().get(key);
+        if (content != null) {
             try {
-                final StateHandleWithDeleteMarker<T> stateHandle =
-                        deserializeStateHandle(oldBase64Content);
+                final StateHandleWithDeleteMarker<T> stateHandle = deserializeStateHandle(content);
                 if (stateHandle.isMarkedForDeletion()) {
                     // This might be a left-over after the fail-over. As the remove operation is
                     // idempotent let's try to finish it.
@@ -662,12 +660,6 @@ public class KubernetesStateHandleStore<T extends Serializable>
                                 "Unable to remove the marked as deleting entry.");
                     }
                 } else {
-                    // It could happen that the kubernetes client retries a transaction that has
-                    // already succeeded due to network issues. So we simply ignore when the
-                    // new content is same as the existing one.
-                    if (oldBase64Content.equals(newBase64Content)) {
-                        return Optional.of(configMap);
-                    }
                     throw getKeyAlreadyExistException(key);
                 }
             } catch (IOException e) {
@@ -676,7 +668,7 @@ public class KubernetesStateHandleStore<T extends Serializable>
                 logInvalidEntry(key, configMapName, e);
             }
         }
-        configMap.getData().put(key, newBase64Content);
+        configMap.getData().put(key, toBase64(serializedStateHandle));
         return Optional.of(configMap);
     }
 

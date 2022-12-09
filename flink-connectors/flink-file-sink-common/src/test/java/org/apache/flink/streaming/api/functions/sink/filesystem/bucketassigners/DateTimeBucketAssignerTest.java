@@ -20,34 +20,34 @@ package org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners
 
 import org.apache.flink.streaming.api.functions.sink.filesystem.BucketAssigner;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.annotation.Nullable;
 
 import java.time.ZoneId;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link DateTimeBucketAssigner}. */
-class DateTimeBucketAssignerTest {
+public class DateTimeBucketAssignerTest {
     private static final long TEST_TIME_IN_MILLIS = 1533363082011L;
 
     private static final MockedContext mockedContext = new MockedContext();
 
     @Test
-    void testGetBucketPathWithSpecifiedTimezone() {
+    public void testGetBucketPathWithSpecifiedTimezone() {
         DateTimeBucketAssigner bucketAssigner =
                 new DateTimeBucketAssigner(ZoneId.of("America/Los_Angeles"));
 
-        assertThat(bucketAssigner.getBucketId(null, mockedContext)).isEqualTo("2018-08-03--23");
+        assertEquals("2018-08-03--23", bucketAssigner.getBucketId(null, mockedContext));
     }
 
     @Test
-    void testGetBucketPathWithSpecifiedFormatString() {
+    public void testGetBucketPathWithSpecifiedFormatString() {
         DateTimeBucketAssigner bucketAssigner =
                 new DateTimeBucketAssigner("yyyy-MM-dd-HH", ZoneId.of("America/Los_Angeles"));
 
-        assertThat(bucketAssigner.getBucketId(null, mockedContext)).isEqualTo("2018-08-03-23");
+        assertEquals("2018-08-03-23", bucketAssigner.getBucketId(null, mockedContext));
     }
 
     private static class MockedContext implements BucketAssigner.Context {

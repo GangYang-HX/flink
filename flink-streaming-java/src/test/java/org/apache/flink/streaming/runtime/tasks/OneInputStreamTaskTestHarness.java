@@ -94,7 +94,6 @@ public class OneInputStreamTaskTestHarness<IN, OUT> extends StreamTaskTestHarnes
         this.numInputChannelsPerGate = numInputChannelsPerGate;
 
         streamConfig.setStateKeySerializer(inputSerializer);
-        streamConfig.serializeAllConfigs();
     }
 
     /**
@@ -146,7 +145,6 @@ public class OneInputStreamTaskTestHarness<IN, OUT> extends StreamTaskTestHarnes
         ClosureCleaner.clean(keySelector, ExecutionConfig.ClosureCleanerLevel.RECURSIVE, false);
         streamConfig.setStatePartitioner(0, keySelector);
         streamConfig.setStateKeySerializer(keyType.createSerializer(executionConfig));
-        streamConfig.serializeAllConfigs();
     }
 
     @Override

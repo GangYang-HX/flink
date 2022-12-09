@@ -42,7 +42,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.hamcrest.CoreMatchers;
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -65,15 +69,18 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.flink.connector.kafka.testutils.KafkaSourceTestEnv.NUM_RECORDS_PER_PARTITION;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Unit tests for {@link KafkaPartitionSplitReader}. */
 public class KafkaPartitionSplitReaderTest {
     private static final int NUM_SUBTASKS = 3;
     private static final String TOPIC1 = "topic1";
     private static final String TOPIC2 = "topic2";
-    private static final String TOPIC3 = "topic3";
 
     private static Map<Integer, Map<String, KafkaPartitionSplit>> splitsByOwners;
     private static Map<TopicPartition, Long> earliestOffsets;
@@ -85,7 +92,6 @@ public class KafkaPartitionSplitReaderTest {
         KafkaSourceTestEnv.setup();
         KafkaSourceTestEnv.setupTopic(TOPIC1, true, true, KafkaSourceTestEnv::getRecordsForTopic);
         KafkaSourceTestEnv.setupTopic(TOPIC2, true, true, KafkaSourceTestEnv::getRecordsForTopic);
-        KafkaSourceTestEnv.createTestTopic(TOPIC3);
         splitsByOwners =
                 KafkaSourceTestEnv.getSplitsByOwners(Arrays.asList(TOPIC1, TOPIC2), NUM_SUBTASKS);
         earliestOffsets =
@@ -131,7 +137,7 @@ public class KafkaPartitionSplitReaderTest {
             reader.wakeUp();
             Thread.sleep(10);
         }
-        assertThat(error.get()).isNull();
+        assertNull(error.get());
     }
 
     @Test
@@ -171,7 +177,7 @@ public class KafkaPartitionSplitReaderTest {
         final long latestNumBytesIn = numBytesInCounter.getCount();
         // Since it's hard to know the exact number of bytes consumed, we just check if it is
         // greater than 0
-        assertThat(latestNumBytesIn).isGreaterThan(0L);
+        assertThat(latestNumBytesIn, Matchers.greaterThan(0L));
         // Add another split
         reader.handleSplitsChanges(
                 new SplitsAddition<>(
@@ -179,7 +185,7 @@ public class KafkaPartitionSplitReaderTest {
                                 new KafkaPartitionSplit(new TopicPartition(TOPIC2, 0), 0L))));
         reader.fetch();
         // We just check if numBytesIn is increasing
-        assertThat(numBytesInCounter.getCount()).isGreaterThan(latestNumBytesIn);
+        assertThat(numBytesInCounter.getCount(), Matchers.greaterThan(latestNumBytesIn));
     }
 
     @ParameterizedTest
@@ -207,19 +213,18 @@ public class KafkaPartitionSplitReaderTest {
                         Collections.singletonList(
                                 new KafkaPartitionSplit(new TopicPartition(topic1Name, 0), 0L))));
         // pendingRecords should have not been registered because of lazily registration
-        assertThat(metricListener.getGauge(MetricNames.PENDING_RECORDS)).isNotPresent();
+        assertFalse(metricListener.getGauge(MetricNames.PENDING_RECORDS).isPresent());
         // Trigger first fetch
         reader.fetch();
         final Optional<Gauge<Long>> pendingRecords =
                 metricListener.getGauge(MetricNames.PENDING_RECORDS);
-        assertThat(pendingRecords).isPresent();
+        assertTrue(pendingRecords.isPresent());
         // Validate pendingRecords
-        assertThat(pendingRecords).isNotNull();
-        assertThat((long) pendingRecords.get().getValue()).isEqualTo(NUM_RECORDS_PER_PARTITION - 1);
+        assertNotNull(pendingRecords);
+        assertEquals(NUM_RECORDS_PER_PARTITION - 1, (long) pendingRecords.get().getValue());
         for (int i = 1; i < NUM_RECORDS_PER_PARTITION; i++) {
             reader.fetch();
-            assertThat((long) pendingRecords.get().getValue())
-                    .isEqualTo(NUM_RECORDS_PER_PARTITION - i - 1);
+            assertEquals(NUM_RECORDS_PER_PARTITION - i - 1, (long) pendingRecords.get().getValue());
         }
         // Add another split
         reader.handleSplitsChanges(
@@ -229,8 +234,7 @@ public class KafkaPartitionSplitReaderTest {
         // Validate pendingRecords
         for (int i = 0; i < NUM_RECORDS_PER_PARTITION; i++) {
             reader.fetch();
-            assertThat((long) pendingRecords.get().getValue())
-                    .isEqualTo(NUM_RECORDS_PER_PARTITION - i - 1);
+            assertEquals(NUM_RECORDS_PER_PARTITION - i - 1, (long) pendingRecords.get().getValue());
         }
     }
 
@@ -247,18 +251,11 @@ public class KafkaPartitionSplitReaderTest {
                         new TopicPartition(TOPIC2, 0),
                         KafkaPartitionSplit.LATEST_OFFSET,
                         KafkaPartitionSplit.LATEST_OFFSET);
-        final KafkaPartitionSplit emptySplitWithZeroStoppingOffset =
-                new KafkaPartitionSplit(new TopicPartition(TOPIC3, 0), 0, 0);
-
-        reader.handleSplitsChanges(
-                new SplitsAddition<>(
-                        Arrays.asList(normalSplit, emptySplit, emptySplitWithZeroStoppingOffset)));
+        reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(normalSplit, emptySplit)));
 
         // Fetch and check empty splits is added to finished splits
         RecordsWithSplitIds<ConsumerRecord<byte[], byte[]>> recordsWithSplitIds = reader.fetch();
-        assertThat(recordsWithSplitIds.finishedSplits()).contains(emptySplit.splitId());
-        assertThat(recordsWithSplitIds.finishedSplits())
-                .contains(emptySplitWithZeroStoppingOffset.splitId());
+        assertTrue(recordsWithSplitIds.finishedSplits().contains(emptySplit.splitId()));
 
         // Assign another valid split to avoid consumer.poll() blocking
         final KafkaPartitionSplit anotherNormalSplit =
@@ -271,7 +268,7 @@ public class KafkaPartitionSplitReaderTest {
 
         // Fetch again and check empty split set is cleared
         recordsWithSplitIds = reader.fetch();
-        assertThat(recordsWithSplitIds.finishedSplits()).isEmpty();
+        assertTrue(recordsWithSplitIds.finishedSplits().isEmpty());
     }
 
     @Test
@@ -285,7 +282,9 @@ public class KafkaPartitionSplitReaderTest {
         // committed offset, and the offset reset strategy is none (Throw exception to the consumer
         // if no previous offset is found for the consumer's group);
         // So it is expected to throw an exception that missing the committed offset.
-        assertThatThrownBy(
+        final KafkaException undefinedOffsetException =
+                Assertions.assertThrows(
+                        KafkaException.class,
                         () ->
                                 reader.handleSplitsChanges(
                                         new SplitsAddition<>(
@@ -293,9 +292,10 @@ public class KafkaPartitionSplitReaderTest {
                                                         new KafkaPartitionSplit(
                                                                 new TopicPartition(TOPIC1, 0),
                                                                 KafkaPartitionSplit
-                                                                        .COMMITTED_OFFSET)))))
-                .isInstanceOf(KafkaException.class)
-                .hasMessageContaining("Undefined offset with no reset policy for partition");
+                                                                        .COMMITTED_OFFSET)))));
+        MatcherAssert.assertThat(
+                undefinedOffsetException.getMessage(),
+                CoreMatchers.containsString("Undefined offset with no reset policy for partition"));
     }
 
     @ParameterizedTest
@@ -316,7 +316,7 @@ public class KafkaPartitionSplitReaderTest {
                                         partition, KafkaPartitionSplit.COMMITTED_OFFSET))));
 
         // Verify that the current offset of the consumer is the expected offset
-        assertThat(reader.consumer().position(partition)).isEqualTo(expectedOffset);
+        assertEquals(expectedOffset, reader.consumer().position(partition));
     }
 
     // ------------------
@@ -365,12 +365,12 @@ public class KafkaPartitionSplitReaderTest {
                     TopicPartition tp = splits.get(splitId).getTopicPartition();
                     long earliestOffset = earliestOffsets.get(tp);
                     long expectedRecordCount = NUM_RECORDS_PER_PARTITION - earliestOffset;
-                    assertThat((long) recordCount)
-                            .as(
-                                    String.format(
-                                            "%s should have %d records.",
-                                            splits.get(splitId), expectedRecordCount))
-                            .isEqualTo(expectedRecordCount);
+                    assertEquals(
+                            expectedRecordCount,
+                            (long) recordCount,
+                            String.format(
+                                    "%s should have %d records.",
+                                    splits.get(splitId), expectedRecordCount));
                 });
     }
 
@@ -415,10 +415,9 @@ public class KafkaPartitionSplitReaderTest {
             int expectedValue = (int) expectedOffset;
             long expectedTimestamp = expectedOffset * 1000L;
 
-            assertThat(deserializer.deserialize(record.topic(), record.value()))
-                    .isEqualTo(expectedValue);
-            assertThat(record.offset()).isEqualTo(expectedOffset);
-            assertThat(record.timestamp()).isEqualTo(expectedTimestamp);
+            assertEquals(expectedValue, deserializer.deserialize(record.topic(), record.value()));
+            assertEquals(expectedOffset, record.offset());
+            assertEquals(expectedTimestamp, record.timestamp());
 
             expectedOffset++;
         }

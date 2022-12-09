@@ -23,7 +23,7 @@ import org.apache.flink.connector.jdbc.JdbcTestFixture;
 import org.junit.Test;
 
 import static org.apache.flink.connector.jdbc.JdbcTestFixture.TEST_DATA;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Tests that data is not inserted ahead of time. */
 public class JdbcXaSinkNoInsertionTest extends JdbcXaSinkTestBase {
@@ -31,24 +31,26 @@ public class JdbcXaSinkNoInsertionTest extends JdbcXaSinkTestBase {
     @Test
     public void testNoInsertAfterInvoke() throws Exception {
         sinkHelper.emit(TEST_DATA[0]);
-        assertThat(xaHelper.countInDb())
-                .as("no records should be inserted for incomplete checkpoints.")
-                .isEqualTo(0);
+        assertEquals(
+                "no records should be inserted for incomplete checkpoints.",
+                0,
+                xaHelper.countInDb());
     }
 
     @Test
     public void testNoInsertAfterSnapshot() throws Exception {
         sinkHelper.emitAndSnapshot(JdbcTestFixture.CP0);
-        assertThat(xaHelper.countInDb())
-                .as("no records should be inserted for incomplete checkpoints.")
-                .isEqualTo(0);
+        assertEquals(
+                "no records should be inserted for incomplete checkpoints.",
+                0,
+                xaHelper.countInDb());
     }
 
     @Test
     public void testNoInsertAfterSinkClose() throws Exception {
         sinkHelper.emitAndSnapshot(JdbcTestFixture.CP0);
         sinkHelper.close();
-        assertThat(xaHelper.countInDb()).isEqualTo(0);
+        assertEquals(0, xaHelper.countInDb());
     }
 
     @Test
@@ -59,7 +61,7 @@ public class JdbcXaSinkNoInsertionTest extends JdbcXaSinkTestBase {
                             buildAndInit(0, xaFacade), new TestXaSinkStateHandler());
             sinkHelper.emitAndSnapshot(JdbcTestFixture.CP0);
         }
-        assertThat(xaHelper.countInDb()).isEqualTo(0);
+        assertEquals(0, xaHelper.countInDb());
     }
 
     @Override

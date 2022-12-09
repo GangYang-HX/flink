@@ -18,28 +18,20 @@
 
 package org.apache.flink.runtime.io.compression;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
-import java.util.stream.Stream;
 
-import static org.apache.flink.runtime.io.compression.CompressorUtils.HEADER_LENGTH;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.apache.flink.runtime.io.compression.Lz4BlockCompressionFactory.HEADER_LENGTH;
+import static org.junit.Assert.assertEquals;
 
 /** Tests for block compression. */
-class BlockCompressionTest {
-    private static Stream<BlockCompressionFactory> compressCodecGenerator() {
-        return Stream.of(
-                BlockCompressionFactory.createBlockCompressionFactory("LZ4"),
-                BlockCompressionFactory.createBlockCompressionFactory("LZO"),
-                BlockCompressionFactory.createBlockCompressionFactory("ZSTD"));
-    }
+public class BlockCompressionTest {
 
-    @ParameterizedTest
-    @MethodSource("compressCodecGenerator")
-    void testBlockCompression(BlockCompressionFactory factory) {
+    @Test
+    public void testLz4() {
+        BlockCompressionFactory factory = new Lz4BlockCompressionFactory();
         runArrayTest(factory, 32768);
         runArrayTest(factory, 16);
 
@@ -62,16 +54,12 @@ class BlockCompressionTest {
         int compressedOff = 32;
 
         // 1. test compress with insufficient target
-        byte[] insufficientCompressArray = new byte[compressedOff + HEADER_LENGTH + 1];
-        assertThatThrownBy(
-                        () ->
-                                compressor.compress(
-                                        data,
-                                        originalOff,
-                                        originalLen,
-                                        insufficientCompressArray,
-                                        compressedOff))
-                .isInstanceOf(BufferCompressionException.class);
+        byte[] insufficientArray = new byte[compressedOff + HEADER_LENGTH + 1];
+        try {
+            compressor.compress(data, originalOff, originalLen, insufficientArray, compressedOff);
+            Assert.fail("expect exception here");
+        } catch (InsufficientBufferException ex) {
+        }
 
         // 2. test normal compress
         byte[] compressedData =
@@ -82,16 +70,17 @@ class BlockCompressionTest {
         int decompressedOff = 16;
 
         // 3. test decompress with insufficient target
-        byte[] insufficientDecompressArray = new byte[decompressedOff + originalLen - 1];
-        assertThatThrownBy(
-                        () ->
-                                decompressor.decompress(
-                                        compressedData,
-                                        compressedOff,
-                                        compressedLen,
-                                        insufficientDecompressArray,
-                                        decompressedOff))
-                .isInstanceOf(BufferDecompressionException.class);
+        insufficientArray = new byte[decompressedOff + originalLen - 1];
+        try {
+            decompressor.decompress(
+                    compressedData,
+                    compressedOff,
+                    compressedLen,
+                    insufficientArray,
+                    decompressedOff);
+            Assert.fail("expect exception here");
+        } catch (InsufficientBufferException ex) {
+        }
 
         // 4. test normal decompress
         byte[] decompressedData = new byte[decompressedOff + originalLen];
@@ -102,10 +91,10 @@ class BlockCompressionTest {
                         compressedLen,
                         decompressedData,
                         decompressedOff);
-        assertThat(decompressedLen).isEqualTo(originalLen);
+        assertEquals(originalLen, decompressedLen);
 
         for (int i = 0; i < originalLen; i++) {
-            assertThat(decompressedData[decompressedOff + i]).isEqualTo(data[originalOff + i]);
+            assertEquals(data[originalOff + i], decompressedData[decompressedOff + i]);
         }
     }
 
@@ -140,7 +129,7 @@ class BlockCompressionTest {
             compressedData = ByteBuffer.allocate(maxCompressedLen);
         }
         int compressedLen = compressor.compress(data, originalOff, originalLen, compressedData, 0);
-        assertThat(compressedData.position()).isEqualTo(compressedLen);
+        assertEquals(compressedLen, compressedData.position());
         compressedData.flip();
 
         int compressedOff = 32;
@@ -170,11 +159,11 @@ class BlockCompressionTest {
         int decompressedLen =
                 decompressor.decompress(
                         copiedCompressedData, compressedOff, compressedLen, decompressedData, 0);
-        assertThat(decompressedData.position()).isEqualTo(decompressedLen);
+        assertEquals(decompressedLen, decompressedData.position());
         decompressedData.flip();
 
         for (int i = 0; i < decompressedLen; i++) {
-            assertThat(decompressedData.get()).isEqualTo((byte) i);
+            assertEquals((byte) i, decompressedData.get());
         }
     }
 }

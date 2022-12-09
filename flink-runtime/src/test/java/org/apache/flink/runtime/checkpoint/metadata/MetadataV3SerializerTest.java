@@ -27,6 +27,7 @@ import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 import org.apache.flink.runtime.checkpoint.MasterState;
 import org.apache.flink.runtime.checkpoint.OperatorState;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.ChangelogTestUtils;
 import org.apache.flink.runtime.state.KeyGroupRangeOffsets;
 import org.apache.flink.runtime.state.KeyGroupsStateHandle;
@@ -49,6 +50,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -70,8 +72,10 @@ public class MetadataV3SerializerTest {
             final long checkpointId = rnd.nextLong() & 0x7fffffffffffffffL;
             final Collection<OperatorState> taskStates = Collections.emptyList();
             final Collection<MasterState> masterStates = Collections.emptyList();
+            final Map<OperatorID, String> operatorDescriptions = Collections.emptyMap();
 
-            testCheckpointSerialization(checkpointId, taskStates, masterStates, null);
+            testCheckpointSerialization(
+                    checkpointId, taskStates, masterStates, operatorDescriptions, null);
         }
     }
 
@@ -89,7 +93,29 @@ public class MetadataV3SerializerTest {
             final Collection<MasterState> masterStates =
                     CheckpointTestUtils.createRandomMasterStates(rnd, numMasterStates);
 
-            testCheckpointSerialization(checkpointId, operatorStates, masterStates, null);
+            final Map<OperatorID, String> operatorDescriptions = Collections.emptyMap();
+
+            testCheckpointSerialization(
+                    checkpointId, operatorStates, masterStates, operatorDescriptions, null);
+        }
+    }
+
+    @Test
+    public void testCheckpointWithOnlyOperatorDescription() throws Exception {
+        final Random rnd = new Random();
+        final int maxNumOperatorDescriptions = 20;
+
+        for (int i = 0; i < 100; ++i) {
+            final long checkpointId = rnd.nextLong() & 0x7fffffffffffffffL;
+
+            final Collection<OperatorState> operatorStates = Collections.emptyList();
+            final Collection<MasterState> masterStates = Collections.emptyList();
+
+            final Map<OperatorID, String> operatorDescriptions =
+                    CheckpointTestUtils.createOperatorDescriptions(rnd, maxNumOperatorDescriptions);
+
+            testCheckpointSerialization(
+                    checkpointId, operatorStates, masterStates, operatorDescriptions, null);
         }
     }
 
@@ -119,7 +145,10 @@ public class MetadataV3SerializerTest {
 
             final Collection<MasterState> masterStates = Collections.emptyList();
 
-            testCheckpointSerialization(checkpointId, taskStates, masterStates, basePath);
+            final Map<OperatorID, String> operatorDescriptions = Collections.emptyMap();
+
+            testCheckpointSerialization(
+                    checkpointId, taskStates, masterStates, operatorDescriptions, basePath);
         }
     }
 
@@ -139,6 +168,7 @@ public class MetadataV3SerializerTest {
         final int maxNumMasterStates = 5;
         final int maxTaskStates = 20;
         final int maxNumSubtasks = 20;
+        final int maxNumOperatorDescriptions = 20;
 
         for (int i = 0; i < 100; ++i) {
             final long checkpointId = rnd.nextLong() & 0x7fffffffffffffffL;
@@ -153,7 +183,12 @@ public class MetadataV3SerializerTest {
             final Collection<MasterState> masterStates =
                     CheckpointTestUtils.createRandomMasterStates(rnd, numMasterStates);
 
-            testCheckpointSerialization(checkpointId, taskStates, masterStates, basePath);
+            final int numOperatorDescriptions = rnd.nextInt(maxNumOperatorDescriptions) + 1;
+            final Map<OperatorID, String> operatorDescriptions =
+                    CheckpointTestUtils.createOperatorDescriptions(rnd, numOperatorDescriptions);
+
+            testCheckpointSerialization(
+                    checkpointId, taskStates, masterStates, operatorDescriptions, basePath);
         }
     }
 
@@ -172,6 +207,7 @@ public class MetadataV3SerializerTest {
 
         final int maxNumMasterStates = 5;
         final int maxNumSubtasks = 20;
+        final int maxNumOperatorDescriptions = 20;
 
         final int maxAllRunningTaskStates = 20;
         final int maxPartlyFinishedStates = 10;
@@ -196,7 +232,12 @@ public class MetadataV3SerializerTest {
         final Collection<MasterState> masterStates =
                 CheckpointTestUtils.createRandomMasterStates(rnd, numMasterStates);
 
-        testCheckpointSerialization(checkpointId, taskStates, masterStates, basePath);
+        final int numOperatorDescriptions = rnd.nextInt(maxNumOperatorDescriptions) + 1;
+        Map<OperatorID, String> operatorDescriptions =
+                CheckpointTestUtils.createOperatorDescriptions(rnd, numOperatorDescriptions);
+
+        testCheckpointSerialization(
+                checkpointId, taskStates, masterStates, operatorDescriptions, basePath);
     }
 
     /**
@@ -205,11 +246,13 @@ public class MetadataV3SerializerTest {
      * @param checkpointId The given checkpointId will write into the metadata.
      * @param operatorStates the given states for all the operators.
      * @param masterStates the masterStates of the given checkpoint/savepoint.
+     * @param operatorDescriptions the given descriptions of all the operators.
      */
     private void testCheckpointSerialization(
             long checkpointId,
             Collection<OperatorState> operatorStates,
             Collection<MasterState> masterStates,
+            Map<OperatorID, String> operatorDescriptions,
             @Nullable String basePath)
             throws IOException {
 
@@ -219,8 +262,9 @@ public class MetadataV3SerializerTest {
         DataOutputStream out = new DataOutputViewStreamWrapper(baos);
 
         CheckpointMetadata metadata =
-                new CheckpointMetadata(checkpointId, operatorStates, masterStates);
-        MetadataV3Serializer.INSTANCE.serialize(metadata, out);
+                new CheckpointMetadata(
+                        checkpointId, operatorStates, masterStates, operatorDescriptions);
+        MetadataV3Serializer.serialize(metadata, out);
         out.close();
 
         // The relative pointer resolution in MetadataV2V3SerializerBase currently runs the same
@@ -261,6 +305,16 @@ public class MetadataV3SerializerTest {
                         b = deserialized.getMasterStates().iterator();
                 a.hasNext(); ) {
             CheckpointTestUtils.assertMasterStateEquality(a.next(), b.next());
+        }
+
+        Map<OperatorID, String> deserializedOperatorDescriptions =
+                deserialized.getOperatorDescriptions();
+        assertEquals(operatorDescriptions.size(), deserializedOperatorDescriptions.size());
+        for (Map.Entry<OperatorID, String> entry : operatorDescriptions.entrySet()) {
+            OperatorID operatorID = entry.getKey();
+            String operatorDescription = entry.getValue();
+            assertTrue(deserializedOperatorDescriptions.containsKey(operatorID));
+            assertEquals(operatorDescription, deserializedOperatorDescriptions.get(operatorID));
         }
     }
 

@@ -38,7 +38,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
@@ -50,13 +49,11 @@ public class ResultPartitionDeploymentDescriptorTest extends TestLogger {
 
     private static final IntermediateResultPartitionID partitionId =
             new IntermediateResultPartitionID();
-    private static final ExecutionAttemptID producerExecutionId = createExecutionAttemptId();
+    private static final ExecutionAttemptID producerExecutionId = new ExecutionAttemptID();
 
     private static final ResultPartitionType partitionType = ResultPartitionType.PIPELINED;
     private static final int numberOfSubpartitions = 24;
     private static final int connectionIndex = 10;
-    private static final boolean isBroadcast = false;
-    private static final boolean isAllToAllDistribution = true;
 
     private static final PartitionDescriptor partitionDescriptor =
             new PartitionDescriptor(
@@ -65,9 +62,7 @@ public class ResultPartitionDeploymentDescriptorTest extends TestLogger {
                     partitionId,
                     partitionType,
                     numberOfSubpartitions,
-                    connectionIndex,
-                    isBroadcast,
-                    isAllToAllDistribution);
+                    connectionIndex);
 
     private static final ResultPartitionID resultPartitionID =
             new ResultPartitionID(partitionId, producerExecutionId);
@@ -113,7 +108,7 @@ public class ResultPartitionDeploymentDescriptorTest extends TestLogger {
                     ShuffleDescriptor shuffleDescriptor) throws IOException {
         ResultPartitionDeploymentDescriptor orig =
                 new ResultPartitionDeploymentDescriptor(
-                        partitionDescriptor, shuffleDescriptor, numberOfSubpartitions);
+                        partitionDescriptor, shuffleDescriptor, numberOfSubpartitions, true);
         ResultPartitionDeploymentDescriptor copy = CommonTestUtils.createCopySerializable(orig);
         verifyResultPartitionDeploymentDescriptorCopy(copy);
         return copy;
@@ -126,5 +121,6 @@ public class ResultPartitionDeploymentDescriptorTest extends TestLogger {
         assertThat(copy.getPartitionId(), is(partitionId));
         assertThat(copy.getPartitionType(), is(partitionType));
         assertThat(copy.getNumberOfSubpartitions(), is(numberOfSubpartitions));
+        assertThat(copy.notifyPartitionDataAvailable(), is(true));
     }
 }

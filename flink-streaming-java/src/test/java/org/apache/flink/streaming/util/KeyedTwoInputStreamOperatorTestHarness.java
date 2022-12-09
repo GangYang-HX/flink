@@ -50,7 +50,6 @@ public class KeyedTwoInputStreamOperatorTestHarness<K, IN1, IN2, OUT>
         config.setStatePartitioner(0, keySelector1);
         config.setStatePartitioner(1, keySelector2);
         config.setStateKeySerializer(keyType.createSerializer(executionConfig));
-        config.serializeAllConfigs();
     }
 
     public KeyedTwoInputStreamOperatorTestHarness(

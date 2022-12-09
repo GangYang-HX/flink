@@ -139,11 +139,11 @@ public class NetworkBufferPool
 
             throw new OutOfMemoryError(
                     "Could not allocate enough memory segments for NetworkBufferPool "
-                            + "(required (MB): "
+                            + "(required (Mb): "
                             + requiredMb
-                            + ", allocated (MB): "
+                            + ", allocated (Mb): "
                             + allocatedMb
-                            + ", missing (MB): "
+                            + ", missing (Mb): "
                             + missingMb
                             + "). Cause: "
                             + err.getMessage());
@@ -381,11 +381,8 @@ public class NetworkBufferPool
     }
 
     public int getRequestedSegmentsUsage() {
-        int totalNumberOfMemorySegments = getTotalNumberOfMemorySegments();
-        return totalNumberOfMemorySegments == 0
-                ? 0
-                : Math.toIntExact(
-                        100L * getNumberOfRequestedMemorySegments() / totalNumberOfMemorySegments);
+        return Math.toIntExact(
+                100L * getNumberOfRequestedMemorySegments() / getTotalNumberOfMemorySegments());
     }
 
     @VisibleForTesting
@@ -451,8 +448,7 @@ public class NetworkBufferPool
     @Override
     public BufferPool createBufferPool(int numRequiredBuffers, int maxUsedBuffers)
             throws IOException {
-        return internalCreateBufferPool(
-                numRequiredBuffers, maxUsedBuffers, 0, Integer.MAX_VALUE, 0);
+        return internalCreateBufferPool(numRequiredBuffers, maxUsedBuffers, 0, Integer.MAX_VALUE);
     }
 
     @Override
@@ -460,23 +456,17 @@ public class NetworkBufferPool
             int numRequiredBuffers,
             int maxUsedBuffers,
             int numSubpartitions,
-            int maxBuffersPerChannel,
-            int maxOverdraftBuffersPerGate)
+            int maxBuffersPerChannel)
             throws IOException {
         return internalCreateBufferPool(
-                numRequiredBuffers,
-                maxUsedBuffers,
-                numSubpartitions,
-                maxBuffersPerChannel,
-                maxOverdraftBuffersPerGate);
+                numRequiredBuffers, maxUsedBuffers, numSubpartitions, maxBuffersPerChannel);
     }
 
     private BufferPool internalCreateBufferPool(
             int numRequiredBuffers,
             int maxUsedBuffers,
             int numSubpartitions,
-            int maxBuffersPerChannel,
-            int maxOverdraftBuffersPerGate)
+            int maxBuffersPerChannel)
             throws IOException {
 
         // It is necessary to use a separate lock from the one used for buffer
@@ -508,8 +498,7 @@ public class NetworkBufferPool
                             numRequiredBuffers,
                             maxUsedBuffers,
                             numSubpartitions,
-                            maxBuffersPerChannel,
-                            maxOverdraftBuffersPerGate);
+                            maxBuffersPerChannel);
 
             allBufferPools.add(localBufferPool);
 

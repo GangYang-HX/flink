@@ -84,6 +84,12 @@ public class PipelineOptions {
                                                     + " without discarding state.")
                                     .build());
 
+    public static final ConfigOption<Boolean> USE_STREAM_GRAPH_HASHER_V3 =
+            key("pipeline.use-stream-graph-hasher-v3")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription("Whether use StreamGraphHasherV3 as the stream graph hasher");
+
     public static final ConfigOption<Boolean> AUTO_TYPE_REGISTRATION =
             key("pipeline.auto-type-registration")
                     .booleanType()

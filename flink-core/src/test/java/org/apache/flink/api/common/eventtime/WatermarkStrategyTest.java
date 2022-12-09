@@ -26,6 +26,7 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 
 import org.junit.Test;
 
@@ -242,7 +243,17 @@ public class WatermarkStrategyTest {
         }
 
         @Override
+        public MetricGroup addGroup(String name, QueryServiceMode mode) {
+            return null;
+        }
+
+        @Override
         public MetricGroup addGroup(String key, String value) {
+            return null;
+        }
+
+        @Override
+        public MetricGroup addGroup(String key, String value, QueryServiceMode mode) {
             return null;
         }
 

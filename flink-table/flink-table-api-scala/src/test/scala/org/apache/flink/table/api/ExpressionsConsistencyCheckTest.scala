@@ -18,11 +18,13 @@
 package org.apache.flink.table.api
 
 import org.apache.flink.table.expressions.ApiExpressionUtils._
+import org.apache.flink.table.expressions.Expression
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions.{EQUALS, PLUS, TRIM}
 
-import org.assertj.core.api.AssertionsForClassTypes.assertThat
+import org.hamcrest.CoreMatchers
 import org.hamcrest.collection.IsEmptyIterable
-import org.junit.jupiter.api.Test
+import org.junit.Assert._
+import org.junit.Test
 
 import java.lang.reflect.Modifier
 
@@ -246,23 +248,26 @@ class ExpressionsConsistencyCheckTest {
     // It should be discouraged though as it might have unforeseen side effects
     val expr = lit("ABC") === $"f0".plus(Expressions.$("f1")).plus($("f2")).trim()
 
-    assertThat(expr).isEqualTo(
-      unresolvedCall(
-        EQUALS,
-        valueLiteral("ABC"),
+    assertThat(
+      expr,
+      CoreMatchers.equalTo[Expression](
         unresolvedCall(
-          TRIM,
-          valueLiteral(true),
-          valueLiteral(true),
-          valueLiteral(" "),
+          EQUALS,
+          valueLiteral("ABC"),
           unresolvedCall(
-            PLUS,
+            TRIM,
+            valueLiteral(true),
+            valueLiteral(true),
+            valueLiteral(" "),
             unresolvedCall(
               PLUS,
-              unresolvedRef("f0"),
-              unresolvedRef("f1")
-            ),
-            unresolvedRef("f2")
+              unresolvedCall(
+                PLUS,
+                unresolvedRef("f0"),
+                unresolvedRef("f1")
+              ),
+              unresolvedRef("f2")
+            )
           )
         )
       )

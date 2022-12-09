@@ -21,9 +21,8 @@ import org.apache.flink.client.program.ProgramInvocationException;
 import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
-import org.apache.flink.configuration.MetricOptions;
 import org.apache.flink.configuration.TaskManagerOptions;
-import org.apache.flink.metrics.jmx.JMXReporterFactory;
+import org.apache.flink.metrics.jmx.JMXReporter;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.util.TestStreamEnvironment;
@@ -58,7 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import scala.concurrent.duration.FiniteDuration;
 
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.fail;
 
 /**
  * The base for the Kafka tests. It brings up:
@@ -134,8 +133,8 @@ public abstract class KafkaTestBase extends TestLogger {
         flinkConfig.setString(
                 ConfigConstants.METRICS_REPORTER_PREFIX
                         + "my_reporter."
-                        + MetricOptions.REPORTER_FACTORY_CLASS.key(),
-                JMXReporterFactory.class.getName());
+                        + ConfigConstants.METRICS_REPORTER_CLASS_SUFFIX,
+                JMXReporter.class.getName());
         return flinkConfig;
     }
 

@@ -70,16 +70,13 @@ public class ExecutionOptions {
                                                     + "Such an exchange reduces the resources required to execute the "
                                                     + "job as it does not need to run upstream and downstream "
                                                     + "tasks simultaneously.")
-                                    .linebreak()
-                                    .text(
-                                            "With hybrid exchanges (experimental), downstream tasks can run anytime as "
-                                                    + "long as upstream tasks start running. When given sufficient "
-                                                    + "resources, it can reduce the overall job execution time by running "
-                                                    + "tasks simultaneously. Otherwise, it also allows jobs to be executed "
-                                                    + "with very little resources. It adapts to custom preferences between "
-                                                    + "persisting less data and restarting less tasks on failures, by "
-                                                    + "providing different spilling strategies.")
                                     .build());
+
+    public static final ConfigOption<String> CALLER_CONTEXT_APP_ID =
+            ConfigOptions.key("execution.caller-context-app-id")
+                    .stringType()
+                    .defaultValue("")
+                    .withDescription("A text means the caller context app id.");
 
     /**
      * Should be moved to {@code ExecutionCheckpointingOptions} along with {@code
@@ -149,4 +146,10 @@ public class ExecutionOptions {
                                     + " operators. NOTE: It takes effect only in the BATCH runtime mode and requires sorted inputs"
                                     + SORT_INPUTS.key()
                                     + " to be enabled.");
+
+    public static final ConfigOption<String> CUSTOM_CALLER_CONTEXT_JOB_ID =
+            ConfigOptions.key("execution.custom.caller-context-job-id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("user custom job id.");
 }

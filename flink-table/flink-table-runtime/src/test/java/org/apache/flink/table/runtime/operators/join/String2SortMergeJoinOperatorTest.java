@@ -185,60 +185,58 @@ public class String2SortMergeJoinOperatorTest {
     }
 
     static StreamOperator newOperator(FlinkJoinType type, boolean leftIsSmaller) {
-        SortMergeJoinFunction sortMergeJoinFunction =
-                new SortMergeJoinFunction(
-                        0,
-                        type,
-                        leftIsSmaller,
-                        new GeneratedJoinCondition("", "", new Object[0]) {
-                            @Override
-                            public JoinCondition newInstance(ClassLoader classLoader) {
-                                return new Int2HashJoinOperatorTest.TrueCondition();
-                            }
-                        },
-                        new GeneratedProjection("", "", new Object[0]) {
-                            @Override
-                            public Projection newInstance(ClassLoader classLoader) {
-                                return new MyProjection();
-                            }
-                        },
-                        new GeneratedProjection("", "", new Object[0]) {
-                            @Override
-                            public Projection newInstance(ClassLoader classLoader) {
-                                return new MyProjection();
-                            }
-                        },
-                        new GeneratedNormalizedKeyComputer("", "") {
-                            @Override
-                            public NormalizedKeyComputer newInstance(ClassLoader classLoader) {
-                                return new StringNormalizedKeyComputer();
-                            }
-                        },
-                        new GeneratedRecordComparator("", "", new Object[0]) {
-                            @Override
-                            public RecordComparator newInstance(ClassLoader classLoader) {
-                                return new StringRecordComparator();
-                            }
-                        },
-                        new GeneratedNormalizedKeyComputer("", "") {
-                            @Override
-                            public NormalizedKeyComputer newInstance(ClassLoader classLoader) {
-                                return new StringNormalizedKeyComputer();
-                            }
-                        },
-                        new GeneratedRecordComparator("", "", new Object[0]) {
-                            @Override
-                            public RecordComparator newInstance(ClassLoader classLoader) {
-                                return new StringRecordComparator();
-                            }
-                        },
-                        new GeneratedRecordComparator("", "", new Object[0]) {
-                            @Override
-                            public RecordComparator newInstance(ClassLoader classLoader) {
-                                return new StringRecordComparator();
-                            }
-                        },
-                        new boolean[] {true});
-        return new SortMergeJoinOperator(sortMergeJoinFunction);
+        return new SortMergeJoinOperator(
+                0,
+                type,
+                leftIsSmaller,
+                new GeneratedJoinCondition("", "", new Object[0]) {
+                    @Override
+                    public JoinCondition newInstance(ClassLoader classLoader) {
+                        return new Int2HashJoinOperatorTest.TrueCondition();
+                    }
+                },
+                new GeneratedProjection("", "", new Object[0]) {
+                    @Override
+                    public Projection newInstance(ClassLoader classLoader) {
+                        return new MyProjection();
+                    }
+                },
+                new GeneratedProjection("", "", new Object[0]) {
+                    @Override
+                    public Projection newInstance(ClassLoader classLoader) {
+                        return new MyProjection();
+                    }
+                },
+                new GeneratedNormalizedKeyComputer("", "") {
+                    @Override
+                    public NormalizedKeyComputer newInstance(ClassLoader classLoader) {
+                        return new StringNormalizedKeyComputer();
+                    }
+                },
+                new GeneratedRecordComparator("", "", new Object[0]) {
+                    @Override
+                    public RecordComparator newInstance(ClassLoader classLoader) {
+                        return new StringRecordComparator();
+                    }
+                },
+                new GeneratedNormalizedKeyComputer("", "") {
+                    @Override
+                    public NormalizedKeyComputer newInstance(ClassLoader classLoader) {
+                        return new StringNormalizedKeyComputer();
+                    }
+                },
+                new GeneratedRecordComparator("", "", new Object[0]) {
+                    @Override
+                    public RecordComparator newInstance(ClassLoader classLoader) {
+                        return new StringRecordComparator();
+                    }
+                },
+                new GeneratedRecordComparator("", "", new Object[0]) {
+                    @Override
+                    public RecordComparator newInstance(ClassLoader classLoader) {
+                        return new StringRecordComparator();
+                    }
+                },
+                new boolean[] {true});
     }
 }

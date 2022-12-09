@@ -849,7 +849,7 @@ public class LongHashPartition extends AbstractPagedInputView implements Seekabl
             }
         }
 
-        long getPointer() {
+        final long getPointer() {
             return this.currentPointer;
         }
 
@@ -879,7 +879,7 @@ public class LongHashPartition extends AbstractPagedInputView implements Seekabl
         return available < 8 + serializer.getFixedLengthPartSize();
     }
 
-    public static void deserializeFromPages(
+    static void deserializeFromPages(
             BinaryRowData reuse,
             ChannelReaderInputView inView,
             BinaryRowDataSerializer buildSideSerializer)

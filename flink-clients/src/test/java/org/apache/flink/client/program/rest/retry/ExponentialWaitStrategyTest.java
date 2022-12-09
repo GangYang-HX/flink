@@ -18,62 +18,78 @@
 
 package org.apache.flink.client.program.rest.retry;
 
-import org.junit.jupiter.api.Test;
+import org.apache.flink.util.TestLogger;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.Test;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Tests for {@link ExponentialWaitStrategy}. */
-class ExponentialWaitStrategyTest {
+public class ExponentialWaitStrategyTest extends TestLogger {
 
     @Test
-    void testNegativeInitialWait() {
-        assertThatThrownBy(() -> new ExponentialWaitStrategy(0, 1))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("initialWait must be positive");
+    public void testNegativeInitialWait() {
+        try {
+            new ExponentialWaitStrategy(0, 1);
+            fail("Expected exception not thrown.");
+        } catch (final IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("initialWait must be positive"));
+        }
     }
 
     @Test
-    void testNegativeMaxWait() {
-        assertThatThrownBy(() -> new ExponentialWaitStrategy(1, -1))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("maxWait must be positive");
+    public void testNegativeMaxWait() {
+        try {
+            new ExponentialWaitStrategy(1, -1);
+            fail("Expected exception not thrown.");
+        } catch (final IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("maxWait must be positive"));
+        }
     }
 
     @Test
-    void testInitialWaitGreaterThanMaxWait() {
-        assertThatThrownBy(() -> new ExponentialWaitStrategy(2, 1))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("initialWait must be lower than or equal to maxWait");
+    public void testInitialWaitGreaterThanMaxWait() {
+        try {
+            new ExponentialWaitStrategy(2, 1);
+            fail("Expected exception not thrown.");
+        } catch (final IllegalArgumentException e) {
+            assertThat(
+                    e.getMessage(),
+                    containsString("initialWait must be lower than or equal to maxWait"));
+        }
     }
 
     @Test
-    void testMaxSleepTime() {
+    public void testMaxSleepTime() {
         final long sleepTime = new ExponentialWaitStrategy(1, 1).sleepTime(100);
-        assertThat(sleepTime).isEqualTo(1L);
+        assertThat(sleepTime, equalTo(1L));
     }
 
     @Test
-    void testExponentialGrowth() {
+    public void testExponentialGrowth() {
         final ExponentialWaitStrategy exponentialWaitStrategy =
                 new ExponentialWaitStrategy(1, 1000);
-        assertThat(exponentialWaitStrategy.sleepTime(3) / exponentialWaitStrategy.sleepTime(2))
-                .isEqualTo(2L);
+        assertThat(
+                exponentialWaitStrategy.sleepTime(3) / exponentialWaitStrategy.sleepTime(2),
+                equalTo(2L));
     }
 
     @Test
-    void testMaxAttempts() {
+    public void testMaxAttempts() {
         final long maxWait = 1000;
         final ExponentialWaitStrategy exponentialWaitStrategy =
                 new ExponentialWaitStrategy(1, maxWait);
-        assertThat(exponentialWaitStrategy.sleepTime(Long.MAX_VALUE)).isEqualTo(maxWait);
+        assertThat(exponentialWaitStrategy.sleepTime(Long.MAX_VALUE), equalTo(maxWait));
     }
 
     @Test
-    void test64Attempts() {
+    public void test64Attempts() {
         final long maxWait = 1000;
         final ExponentialWaitStrategy exponentialWaitStrategy =
                 new ExponentialWaitStrategy(1, maxWait);
-        assertThat(exponentialWaitStrategy.sleepTime(64)).isEqualTo(maxWait);
+        assertThat(exponentialWaitStrategy.sleepTime(64), equalTo(maxWait));
     }
 }

@@ -143,6 +143,7 @@ public class TypeSerializerSnapshotMigrationITCase extends SnapshotMigrationTest
             default:
                 throw new UnsupportedOperationException();
         }
+        env.enableChangelogStateBackend(false);
 
         env.enableCheckpointing(500);
         env.setParallelism(parallelism);

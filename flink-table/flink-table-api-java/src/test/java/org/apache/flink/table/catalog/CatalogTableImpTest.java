@@ -23,7 +23,7 @@ import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.descriptors.DescriptorProperties;
 import org.apache.flink.table.descriptors.Schema;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,14 +31,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /** Test for {@link CatalogTableImpl}. */
-class CatalogTableImpTest {
+public class CatalogTableImpTest {
     private static final String TEST = "test";
 
     @Test
-    void testToProperties() {
+    public void testToProperties() {
         TableSchema schema = createTableSchema();
         Map<String, String> prop = createProperties();
         CatalogTable table = new CatalogTableImpl(schema, createPartitionKeys(), prop, TEST);
@@ -46,11 +46,11 @@ class CatalogTableImpTest {
         DescriptorProperties descriptorProperties = new DescriptorProperties(false);
         descriptorProperties.putProperties(table.toProperties());
 
-        assertThat(descriptorProperties.getTableSchema(Schema.SCHEMA)).isEqualTo(schema);
+        assertEquals(schema, descriptorProperties.getTableSchema(Schema.SCHEMA));
     }
 
     @Test
-    void testFromProperties() {
+    public void testFromProperties() {
         TableSchema schema = createTableSchema();
         Map<String, String> prop = createProperties();
         CatalogTable table = new CatalogTableImpl(schema, createPartitionKeys(), prop, TEST);
@@ -58,19 +58,19 @@ class CatalogTableImpTest {
         CatalogTableImpl tableFromProperties =
                 CatalogTableImpl.fromProperties(table.toProperties());
 
-        assertThat(table.getOptions()).isEqualTo(tableFromProperties.getOptions());
-        assertThat(table.getPartitionKeys()).isEqualTo(tableFromProperties.getPartitionKeys());
-        assertThat(table.getSchema()).isEqualTo(tableFromProperties.getSchema());
+        assertEquals(tableFromProperties.getOptions(), table.getOptions());
+        assertEquals(tableFromProperties.getPartitionKeys(), table.getPartitionKeys());
+        assertEquals(tableFromProperties.getSchema(), table.getSchema());
     }
 
     @Test
-    void testNullComment() {
+    public void testNullComment() {
         TableSchema schema = createTableSchema();
         Map<String, String> prop = createProperties();
         CatalogTable table = new CatalogTableImpl(schema, createPartitionKeys(), prop, null);
 
-        assertThat(table.getComment()).isEmpty();
-        assertThat(table.getDescription()).isEqualTo(Optional.of(""));
+        assertEquals("", table.getComment());
+        assertEquals(Optional.of(""), table.getDescription());
     }
 
     private static Map<String, String> createProperties() {

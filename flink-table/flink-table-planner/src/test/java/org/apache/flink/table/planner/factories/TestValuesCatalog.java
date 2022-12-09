@@ -29,10 +29,8 @@ import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotPartitionedException;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.ResolvedExpression;
-import org.apache.flink.table.factories.FunctionDefinitionFactory;
 import org.apache.flink.table.planner.utils.FilterUtils;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.BooleanType;
 import org.apache.flink.table.types.logical.CharType;
 import org.apache.flink.table.types.logical.DoubleType;
@@ -46,7 +44,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Use TestValuesCatalog to test partition push down and create function definition. */
+/** Use TestValuesCatalog to test partition push down. */
 public class TestValuesCatalog extends GenericInMemoryCatalog {
     private final boolean supportListPartitionByFilter;
 
@@ -97,11 +95,6 @@ public class TestValuesCatalog extends GenericInMemoryCatalog {
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public Optional<FunctionDefinitionFactory> getFunctionDefinitionFactory() {
-        return Optional.of(new TestFunctionDefinitionFactory());
-    }
-
     private Function<String, Comparable<?>> getValueGetter(
             Map<String, String> spec, TableSchema schema) {
         return field -> {
@@ -124,8 +117,6 @@ public class TestValuesCatalog extends GenericInMemoryCatalog {
             return Double.valueOf(value);
         } else if (type instanceof IntType) {
             return Integer.valueOf(value);
-        } else if (type instanceof BigIntType) {
-            return Long.valueOf(value);
         } else if (type instanceof VarCharType) {
             return value;
         } else {

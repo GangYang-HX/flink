@@ -24,15 +24,18 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.minicluster.MiniClusterConfiguration;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runners.Parameterized;
 
-import java.util.stream.Stream;
+import java.util.Arrays;
+import java.util.Collection;
 
 /** The base class for the File Sink IT Case in different execution mode. */
-abstract class FileSinkITBase {
+public abstract class FileSinkITBase extends TestLogger {
 
     protected static final int NUM_SOURCES = 4;
 
@@ -44,17 +47,20 @@ abstract class FileSinkITBase {
 
     protected static final double FAILOVER_RATIO = 0.4;
 
-    private static Stream<Boolean> params() {
-        return Stream.of(false, true);
+    @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
+
+    @Parameterized.Parameter public boolean triggerFailover;
+
+    @Parameterized.Parameters(name = "triggerFailover = {0}")
+    public static Collection<Object[]> params() {
+        return Arrays.asList(new Object[] {false}, new Object[] {true});
     }
 
-    @ParameterizedTest(name = "triggerFailover = {0}")
-    @MethodSource("params")
-    void testFileSink(boolean triggerFailover, @TempDir java.nio.file.Path tmpDir)
-            throws Exception {
-        String path = tmpDir.toString();
+    @Test
+    public void testFileSink() throws Exception {
+        String path = TEMPORARY_FOLDER.newFolder().getAbsolutePath();
 
-        JobGraph jobGraph = createJobGraph(triggerFailover, path);
+        JobGraph jobGraph = createJobGraph(path);
 
         final MiniClusterConfiguration cfg =
                 new MiniClusterConfiguration.Builder()
@@ -72,7 +78,7 @@ abstract class FileSinkITBase {
                 path, NUM_RECORDS, NUM_BUCKETS, NUM_SOURCES);
     }
 
-    protected abstract JobGraph createJobGraph(boolean triggerFailover, String path);
+    protected abstract JobGraph createJobGraph(String path);
 
     protected FileSink<Integer> createFileSink(String path) {
         return FileSink.forRowFormat(new Path(path), new IntegerFileSinkTestDataUtils.IntEncoder())

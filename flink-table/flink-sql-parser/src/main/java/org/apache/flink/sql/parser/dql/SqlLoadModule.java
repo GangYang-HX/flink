@@ -18,8 +18,6 @@
 
 package org.apache.flink.sql.parser.dql;
 
-import org.apache.flink.sql.parser.SqlUnparseUtils;
-
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
@@ -69,12 +67,18 @@ public class SqlLoadModule extends SqlCall {
             writer.keyword("WITH");
             SqlWriter.Frame withFrame = writer.startList("(", ")");
             for (SqlNode property : propertyList) {
-                SqlUnparseUtils.printIndent(writer);
+                printIndent(writer);
                 property.unparse(writer, leftPrec, rightPrec);
             }
             writer.newlineAndIndent();
             writer.endList(withFrame);
         }
+    }
+
+    private void printIndent(SqlWriter writer) {
+        writer.sep(",", false);
+        writer.newlineAndIndent();
+        writer.print("  ");
     }
 
     public SqlIdentifier getModuleName() {

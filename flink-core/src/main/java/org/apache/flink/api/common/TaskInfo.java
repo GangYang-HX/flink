@@ -29,6 +29,8 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 @Internal
 public class TaskInfo {
 
+    private static final int MAX_NAME_LENGTH = 1500;
+
     private final String taskName;
     private final String taskNameWithSubtasks;
     private final String allocationIDAsString;
@@ -140,6 +142,34 @@ public class TaskInfo {
      * @return The name of the task, with subtask indicator.
      */
     public String getTaskNameWithSubtasks() {
+        return getTaskNameWithSubtasks(false);
+    }
+
+    /**
+     * Returns the name of the task, appended with the subtask indicator, such as "MyTask (3/6)",
+     * where 3 would be ({@link #getIndexOfThisSubtask()} + 1), and 6 would be {@link
+     * #getNumberOfParallelSubtasks()}.
+     *
+     * @param truncate Whether task name need to be truncated if it exceeds the maximum length of
+     *     {@link #MAX_NAME_LENGTH}
+     * @return The name of the task, with subtask indicator.
+     */
+    public String getTaskNameWithSubtasks(boolean truncate) {
+        return truncate ? getTruncatedTaskNameWithSubtasks() : this.taskNameWithSubtasks;
+    }
+
+    private String getTruncatedTaskNameWithSubtasks() {
+        if (this.taskNameWithSubtasks.length() >= MAX_NAME_LENGTH) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(this.taskNameWithSubtasks, 0, MAX_NAME_LENGTH)
+                    .append("...[truncated by flink] ")
+                    .append("(")
+                    .append(indexOfSubtask + 1)
+                    .append('/')
+                    .append(numberOfParallelSubtasks)
+                    .append(')');
+            return sb.toString();
+        }
         return this.taskNameWithSubtasks;
     }
 

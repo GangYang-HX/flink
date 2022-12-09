@@ -20,6 +20,7 @@ package org.apache.flink.runtime.taskexecutor;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
+import org.apache.flink.runtime.metrics.groups.TaskManagerMetricGroup;
 import org.apache.flink.runtime.rpc.RpcService;
 
 /**
@@ -46,6 +47,29 @@ public interface JobLeaderService {
             RpcService initialRpcService,
             HighAvailabilityServices initialHighAvailabilityServices,
             JobLeaderListener initialJobLeaderListener);
+
+    /**
+     * Start the job leader service with the given services.
+     *
+     * @param initialOwnerAddress to be used for establishing connections (source address)
+     * @param initialRpcService to be used to create rpc connections
+     * @param initialHighAvailabilityServices to create leader retrieval services for the different
+     *     jobs
+     * @param initialJobLeaderListener listening for job leader changes
+     * @param initialMetricGroup task metric group from parent component
+     */
+    default void start(
+            String initialOwnerAddress,
+            RpcService initialRpcService,
+            HighAvailabilityServices initialHighAvailabilityServices,
+            JobLeaderListener initialJobLeaderListener,
+            TaskManagerMetricGroup initialMetricGroup) {
+        start(
+                initialOwnerAddress,
+                initialRpcService,
+                initialHighAvailabilityServices,
+                initialJobLeaderListener);
+    }
 
     /**
      * Stop the job leader services. This implies stopping all leader retrieval services for the

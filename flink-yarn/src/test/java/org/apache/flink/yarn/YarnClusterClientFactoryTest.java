@@ -27,20 +27,20 @@ import org.apache.flink.yarn.executors.YarnJobClusterExecutor;
 import org.apache.flink.yarn.executors.YarnSessionClusterExecutor;
 
 import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Test for the {@link YarnClusterClientFactory} discovery. */
-class YarnClusterClientFactoryTest {
+public class YarnClusterClientFactoryTest {
 
     @Test
-    void testYarnClusterClientFactoryDiscoveryWithPerJobExecutor() {
+    public void testYarnClusterClientFactoryDiscoveryWithPerJobExecutor() {
         testYarnClusterClientFactoryDiscoveryHelper(YarnJobClusterExecutor.NAME);
     }
 
     @Test
-    void testYarnClusterClientFactoryDiscoveryWithSessionExecutor() {
+    public void testYarnClusterClientFactoryDiscoveryWithSessionExecutor() {
         testYarnClusterClientFactoryDiscoveryHelper(YarnSessionClusterExecutor.NAME);
     }
 
@@ -52,6 +52,6 @@ class YarnClusterClientFactoryTest {
         final ClusterClientFactory<ApplicationId> factory =
                 serviceLoader.getClusterClientFactory(configuration);
 
-        assertThat(factory).isInstanceOf(YarnClusterClientFactory.class);
+        assertTrue(factory instanceof YarnClusterClientFactory);
     }
 }

@@ -56,7 +56,7 @@ public class DefaultSlotPoolServiceSchedulerFactoryTest {
         assertThat(defaultSlotPoolServiceSchedulerFactory.getSchedulerNGFactory())
                 .isInstanceOf(DefaultSchedulerFactory.class);
         assertThat(defaultSlotPoolServiceSchedulerFactory.getSchedulerType())
-                .isEqualTo(JobManagerOptions.SchedulerType.Default);
+                .isEqualTo(JobManagerOptions.SchedulerType.Ng);
     }
 
     @Test

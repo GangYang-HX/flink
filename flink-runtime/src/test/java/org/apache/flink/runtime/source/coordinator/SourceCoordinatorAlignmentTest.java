@@ -24,18 +24,19 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.source.event.ReportedWatermarkEvent;
 import org.apache.flink.runtime.source.event.WatermarkAlignmentEvent;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 /** Unit tests for watermark alignment of the {@link SourceCoordinator}. */
 @SuppressWarnings("serial")
-class SourceCoordinatorAlignmentTest extends SourceCoordinatorTestBase {
+public class SourceCoordinatorAlignmentTest extends SourceCoordinatorTestBase {
 
     @Test
-    void testWatermarkAlignment() throws Exception {
+    public void testWatermarkAlignment() throws Exception {
         try (AutoCloseableRegistry closeableRegistry = new AutoCloseableRegistry()) {
             SourceCoordinator<?, ?> sourceCoordinator1 =
                     getAndStartNewSourceCoordinator(
@@ -58,7 +59,7 @@ class SourceCoordinatorAlignmentTest extends SourceCoordinatorTestBase {
     }
 
     @Test
-    void testWatermarkAlignmentWithIdleness() throws Exception {
+    public void testWatermarkAlignmentWithIdleness() throws Exception {
         try (AutoCloseableRegistry closeableRegistry = new AutoCloseableRegistry()) {
             SourceCoordinator<?, ?> sourceCoordinator1 =
                     getAndStartNewSourceCoordinator(
@@ -87,7 +88,7 @@ class SourceCoordinatorAlignmentTest extends SourceCoordinatorTestBase {
     }
 
     @Test
-    void testWatermarkAlignmentWithTwoGroups() throws Exception {
+    public void testWatermarkAlignmentWithTwoGroups() throws Exception {
         try (AutoCloseableRegistry closeableRegistry = new AutoCloseableRegistry()) {
             long maxDrift = 1000L;
             SourceCoordinator<?, ?> sourceCoordinator1 =
@@ -115,7 +116,7 @@ class SourceCoordinatorAlignmentTest extends SourceCoordinatorTestBase {
         }
     }
 
-    private SourceCoordinator<?, ?> getAndStartNewSourceCoordinator(
+    protected SourceCoordinator<?, ?> getAndStartNewSourceCoordinator(
             WatermarkAlignmentParams watermarkAlignmentParams,
             AutoCloseableRegistry closeableRegistry)
             throws Exception {
@@ -130,16 +131,14 @@ class SourceCoordinatorAlignmentTest extends SourceCoordinatorTestBase {
 
     private void reportWatermarkEvent(
             SourceCoordinator<?, ?> sourceCoordinator1, int subtask, long watermark) {
-        sourceCoordinator1.handleEventFromOperator(
-                subtask, 0, new ReportedWatermarkEvent(watermark));
+        sourceCoordinator1.handleEventFromOperator(subtask, new ReportedWatermarkEvent(watermark));
         waitForCoordinatorToProcessActions();
         sourceCoordinator1.announceCombinedWatermark();
     }
 
     private void assertLatestWatermarkAlignmentEvent(int subtask, long expectedWatermark) {
         List<OperatorEvent> events = receivingTasks.getSentEventsForSubtask(subtask);
-        assertThat(events).isNotEmpty();
-        assertThat(events.get(events.size() - 1))
-                .isEqualTo(new WatermarkAlignmentEvent(expectedWatermark));
+        assertFalse(events.isEmpty());
+        assertEquals(new WatermarkAlignmentEvent(expectedWatermark), events.get(events.size() - 1));
     }
 }

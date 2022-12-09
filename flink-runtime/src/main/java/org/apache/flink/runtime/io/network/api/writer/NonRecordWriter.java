@@ -38,9 +38,6 @@ public class NonRecordWriter<T extends IOReadableWritable> implements RecordWrit
     }
 
     @Override
-    public void setMaxOverdraftBuffersPerGate(int maxOverdraftBuffersPerGate) {}
-
-    @Override
     public CompletableFuture<?> getAvailableFuture() {
         throw new UnsupportedOperationException("No record writer instance.");
     }

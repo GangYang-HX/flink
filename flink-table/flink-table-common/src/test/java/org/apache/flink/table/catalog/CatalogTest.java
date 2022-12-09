@@ -34,12 +34,12 @@ import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotPartitionedException;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
-import org.apache.flink.util.TestLoggerExtension;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -49,11 +49,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /** Class for unit tests to run on catalogs. */
-@ExtendWith(TestLoggerExtension.class)
 public abstract class CatalogTest {
     protected static final String IS_STREAMING = "is_streaming";
 
@@ -76,8 +78,10 @@ public abstract class CatalogTest {
 
     protected static Catalog catalog;
 
-    @AfterEach
-    void cleanup() throws Exception {
+    @Rule public ExpectedException exception = ExpectedException.none();
+
+    @After
+    public void cleanup() throws Exception {
         if (catalog.tableExists(path1)) {
             catalog.dropTable(path1, true);
         }
@@ -101,8 +105,8 @@ public abstract class CatalogTest {
         }
     }
 
-    @AfterAll
-    static void closeup() {
+    @AfterClass
+    public static void closeup() {
         if (catalog != null) {
             catalog.close();
         }
@@ -112,12 +116,12 @@ public abstract class CatalogTest {
 
     @Test
     public void testCreateDb() throws Exception {
-        assertThat(catalog.databaseExists(db1)).isFalse();
+        assertFalse(catalog.databaseExists(db1));
 
         CatalogDatabase cd = createDb();
         catalog.createDatabase(db1, cd, false);
 
-        assertThat(catalog.databaseExists(db1)).isTrue();
+        assertTrue(catalog.databaseExists(db1));
         CatalogTestUtil.checkEquals(cd, catalog.getDatabase(db1));
     }
 
@@ -125,9 +129,9 @@ public abstract class CatalogTest {
     public void testCreateDb_DatabaseAlreadyExistException() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThatThrownBy(() -> catalog.createDatabase(db1, createDb(), false))
-                .isInstanceOf(DatabaseAlreadyExistException.class)
-                .hasMessage("Database db1 already exists in Catalog " + TEST_CATALOG_NAME + ".");
+        exception.expect(DatabaseAlreadyExistException.class);
+        exception.expectMessage("Database db1 already exists in Catalog");
+        catalog.createDatabase(db1, createDb(), false);
     }
 
     @Test
@@ -137,42 +141,43 @@ public abstract class CatalogTest {
         List<String> dbs = catalog.listDatabases();
 
         CatalogTestUtil.checkEquals(cd1, catalog.getDatabase(db1));
-        assertThat(dbs).hasSize(2);
-        assertThat(new HashSet<>(dbs))
-                .isEqualTo(new HashSet<>(Arrays.asList(db1, catalog.getDefaultDatabase())));
+        assertEquals(2, dbs.size());
+        assertEquals(
+                new HashSet<>(Arrays.asList(db1, catalog.getDefaultDatabase())),
+                new HashSet<>(dbs));
 
         catalog.createDatabase(db1, createAnotherDb(), true);
 
         CatalogTestUtil.checkEquals(cd1, catalog.getDatabase(db1));
-        assertThat(dbs).containsExactlyInAnyOrder(db1, catalog.getDefaultDatabase());
+        assertEquals(2, dbs.size());
+        assertEquals(
+                new HashSet<>(Arrays.asList(db1, catalog.getDefaultDatabase())),
+                new HashSet<>(dbs));
     }
 
     @Test
-    public void testGetDb_DatabaseNotExistException() {
-        assertThatThrownBy(() -> catalog.getDatabase("nonexistent"))
-                .isInstanceOf(DatabaseNotExistException.class)
-                .hasMessage(
-                        "Database nonexistent does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testGetDb_DatabaseNotExistException() throws Exception {
+        exception.expect(DatabaseNotExistException.class);
+        exception.expectMessage("Database nonexistent does not exist in Catalog");
+        catalog.getDatabase("nonexistent");
     }
 
     @Test
     public void testDropDb() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThat(catalog.databaseExists(db1)).isTrue();
+        assertTrue(catalog.databaseExists(db1));
 
         catalog.dropDatabase(db1, false, true);
 
-        assertThat(catalog.databaseExists(db1)).isFalse();
+        assertFalse(catalog.databaseExists(db1));
     }
 
     @Test
-    public void testDropDb_DatabaseNotExistException() {
-        assertThatThrownBy(() -> catalog.dropDatabase(db1, false, false))
-                .isInstanceOf(DatabaseNotExistException.class)
-                .hasMessage("Database db1 does not exist in Catalog " + TEST_CATALOG_NAME + ".");
+    public void testDropDb_DatabaseNotExistException() throws Exception {
+        exception.expect(DatabaseNotExistException.class);
+        exception.expectMessage("Database db1 does not exist in Catalog");
+        catalog.dropDatabase(db1, false, false);
     }
 
     @Test
@@ -185,9 +190,9 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createTable(), false);
 
-        assertThatThrownBy(() -> catalog.dropDatabase(db1, true, false))
-                .isInstanceOf(DatabaseNotEmptyException.class)
-                .hasMessage("Database db1 in catalog test-catalog is not empty.");
+        exception.expect(DatabaseNotEmptyException.class);
+        exception.expectMessage("Database db1 in catalog test-catalog is not empty");
+        catalog.dropDatabase(db1, true, false);
     }
 
     @Test
@@ -198,39 +203,35 @@ public abstract class CatalogTest {
         CatalogDatabase newDb = createAnotherDb();
         catalog.alterDatabase(db1, newDb, false);
 
-        assertThat(
-                        catalog.getDatabase(db1)
-                                .getProperties()
-                                .entrySet()
-                                .containsAll(db.getProperties().entrySet()))
-                .isFalse();
+        assertFalse(
+                catalog.getDatabase(db1)
+                        .getProperties()
+                        .entrySet()
+                        .containsAll(db.getProperties().entrySet()));
         CatalogTestUtil.checkEquals(newDb, catalog.getDatabase(db1));
     }
 
     @Test
-    public void testAlterDb_DatabaseNotExistException() {
-        assertThatThrownBy(() -> catalog.alterDatabase("nonexistent", createDb(), false))
-                .isInstanceOf(DatabaseNotExistException.class)
-                .hasMessage(
-                        "Database nonexistent does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testAlterDb_DatabaseNotExistException() throws Exception {
+        exception.expect(DatabaseNotExistException.class);
+        exception.expectMessage("Database nonexistent does not exist in Catalog");
+        catalog.alterDatabase("nonexistent", createDb(), false);
     }
 
     @Test
     public void testAlterDb_DatabaseNotExist_ignored() throws Exception {
         catalog.alterDatabase("nonexistent", createDb(), true);
 
-        assertThat(catalog.databaseExists("nonexistent")).isFalse();
+        assertFalse(catalog.databaseExists("nonexistent"));
     }
 
     @Test
     public void testDbExists() throws Exception {
-        assertThat(catalog.databaseExists("nonexistent")).isFalse();
+        assertFalse(catalog.databaseExists("nonexistent"));
 
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThat(catalog.databaseExists(db1)).isTrue();
+        assertTrue(catalog.databaseExists(db1));
     }
 
     // ------ tables ------
@@ -255,13 +256,12 @@ public abstract class CatalogTest {
         CatalogBaseTable tableCreated = catalog.getTable(path1);
 
         CatalogTestUtil.checkEquals(table, (CatalogTable) tableCreated);
-        assertThat(tableCreated.getDescription().isPresent()).isTrue();
-        assertThat(tableCreated.getDescription().get()).isEqualTo(TEST_COMMENT);
+        assertEquals(TEST_COMMENT, tableCreated.getDescription().get());
 
         List<String> tables = catalog.listTables(db1);
 
-        assertThat(tables).hasSize(1);
-        assertThat(tables.get(0)).isEqualTo(path1.getObjectName());
+        assertEquals(1, tables.size());
+        assertEquals(path1.getObjectName(), tables.get(0));
 
         catalog.dropTable(path1, false);
     }
@@ -278,17 +278,17 @@ public abstract class CatalogTest {
 
         List<String> tables = catalog.listTables(db1);
 
-        assertThat(tables).hasSize(1);
-        assertThat(tables.get(0)).isEqualTo(path1.getObjectName());
+        assertEquals(1, tables.size());
+        assertEquals(path1.getObjectName(), tables.get(0));
     }
 
     @Test
-    public void testCreateTable_DatabaseNotExistException() {
-        assertThat(catalog.databaseExists(db1)).isFalse();
+    public void testCreateTable_DatabaseNotExistException() throws Exception {
+        assertFalse(catalog.databaseExists(db1));
 
-        assertThatThrownBy(() -> catalog.createTable(nonExistObjectPath, createTable(), false))
-                .isInstanceOf(DatabaseNotExistException.class)
-                .hasMessage("Database db1 does not exist in Catalog " + TEST_CATALOG_NAME + ".");
+        exception.expect(DatabaseNotExistException.class);
+        exception.expectMessage("Database db1 does not exist in Catalog");
+        catalog.createTable(nonExistObjectPath, createTable(), false);
     }
 
     @Test
@@ -296,12 +296,9 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createTable(), false);
 
-        assertThatThrownBy(() -> catalog.createTable(path1, createTable(), false))
-                .isInstanceOf(TableAlreadyExistException.class)
-                .hasMessage(
-                        "Table (or view) db1.t1 already exists in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(TableAlreadyExistException.class);
+        exception.expectMessage("Table (or view) db1.t1 already exists in Catalog");
+        catalog.createTable(path1, createTable(), false);
     }
 
     @Test
@@ -322,22 +319,16 @@ public abstract class CatalogTest {
     public void testGetTable_TableNotExistException() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThatThrownBy(() -> catalog.getTable(nonExistObjectPath))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) db1.nonexist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(TableNotExistException.class);
+        exception.expectMessage("Table (or view) db1.nonexist does not exist in Catalog");
+        catalog.getTable(nonExistObjectPath);
     }
 
     @Test
-    public void testGetTable_TableNotExistException_NoDb() {
-        assertThatThrownBy(() -> catalog.getTable(nonExistObjectPath))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) db1.nonexist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testGetTable_TableNotExistException_NoDb() throws Exception {
+        exception.expect(TableNotExistException.class);
+        exception.expectMessage("Table (or view) db1.nonexist does not exist in Catalog");
+        catalog.getTable(nonExistObjectPath);
     }
 
     @Test
@@ -345,21 +336,18 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createTable(), false);
 
-        assertThat(catalog.tableExists(path1)).isTrue();
+        assertTrue(catalog.tableExists(path1));
 
         catalog.dropTable(path1, false);
 
-        assertThat(catalog.tableExists(path1)).isFalse();
+        assertFalse(catalog.tableExists(path1));
     }
 
     @Test
-    public void testDropTable_TableNotExistException() {
-        assertThatThrownBy(() -> catalog.dropTable(nonExistDbPath, false))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) non.exist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testDropTable_TableNotExistException() throws Exception {
+        exception.expect(TableNotExistException.class);
+        exception.expectMessage("Table (or view) non.exist does not exist in Catalog");
+        catalog.dropTable(nonExistDbPath, false);
     }
 
     @Test
@@ -381,7 +369,7 @@ public abstract class CatalogTest {
         CatalogTable newTable = createAnotherTable();
         catalog.alterTable(path1, newTable, false);
 
-        assertThat(catalog.getTable(path1)).isNotEqualTo(table);
+        assertNotEquals(table, catalog.getTable(path1));
         CatalogTestUtil.checkEquals(newTable, (CatalogTable) catalog.getTable(path1));
 
         catalog.dropTable(path1, false);
@@ -395,7 +383,7 @@ public abstract class CatalogTest {
         CatalogView newView = createAnotherView();
         catalog.alterTable(path3, newView, false);
 
-        assertThat(catalog.getTable(path3)).isNotEqualTo(view);
+        assertNotEquals(view, catalog.getTable(path3));
         CatalogTestUtil.checkEquals(newView, (CatalogView) catalog.getTable(path3));
     }
 
@@ -422,20 +410,17 @@ public abstract class CatalogTest {
         CatalogTable table = createTable();
         catalog.createTable(path1, table, false);
 
-        assertThatThrownBy(() -> catalog.alterTable(path1, new TestTable(), false))
-                .isInstanceOf(CatalogException.class)
-                .hasMessage(
-                        "Table types don't match. Existing table is 'TABLE' and new table is 'VIEW'.");
+        exception.expect(CatalogException.class);
+        exception.expectMessage(
+                "Table types don't match. Existing table is 'TABLE' and new table is 'VIEW'.");
+        catalog.alterTable(path1, new TestTable(), false);
     }
 
     @Test
-    public void testAlterTable_TableNotExistException() {
-        assertThatThrownBy(() -> catalog.alterTable(nonExistDbPath, createTable(), false))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) non.exist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testAlterTable_TableNotExistException() throws Exception {
+        exception.expect(TableNotExistException.class);
+        exception.expectMessage("Table (or view) non.exist does not exist in Catalog");
+        catalog.alterTable(nonExistDbPath, createTable(), false);
     }
 
     @Test
@@ -443,7 +428,7 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.alterTable(nonExistObjectPath, createTable(), true);
 
-        assertThat(catalog.tableExists(nonExistObjectPath)).isFalse();
+        assertFalse(catalog.tableExists(nonExistObjectPath));
     }
 
     @Test
@@ -457,19 +442,16 @@ public abstract class CatalogTest {
         catalog.renameTable(path1, t2, false);
 
         CatalogTestUtil.checkEquals(table, (CatalogTable) catalog.getTable(path3));
-        assertThat(catalog.tableExists(path1)).isFalse();
+        assertFalse(catalog.tableExists(path1));
     }
 
     @Test
     public void testRenameTable_TableNotExistException() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThatThrownBy(() -> catalog.renameTable(path1, t2, false))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) db1.t1 does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(TableNotExistException.class);
+        exception.expectMessage("Table (or view) db1.t1 does not exist in Catalog");
+        catalog.renameTable(path1, t2, false);
     }
 
     @Test
@@ -485,12 +467,9 @@ public abstract class CatalogTest {
         catalog.createTable(path1, table, false);
         catalog.createTable(path3, createAnotherTable(), false);
 
-        assertThatThrownBy(() -> catalog.renameTable(path1, t2, false))
-                .isInstanceOf(TableAlreadyExistException.class)
-                .hasMessage(
-                        "Table (or view) db1.t2 already exists in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(TableAlreadyExistException.class);
+        exception.expectMessage("Table (or view) db1.t2 already exists in Catalog");
+        catalog.renameTable(path1, t2, false);
     }
 
     @Test
@@ -501,19 +480,19 @@ public abstract class CatalogTest {
         catalog.createTable(path3, createTable(), false);
         catalog.createTable(path4, createView(), false);
 
-        assertThat(catalog.listTables(db1)).hasSize(3);
-        assertThat(catalog.listViews(db1)).hasSize(1);
+        assertEquals(3, catalog.listTables(db1).size());
+        assertEquals(1, catalog.listViews(db1).size());
     }
 
     @Test
     public void testTableExists() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThat(catalog.tableExists(path1)).isFalse();
+        assertFalse(catalog.tableExists(path1));
 
         catalog.createTable(path1, createTable(), false);
 
-        assertThat(catalog.tableExists(path1)).isTrue();
+        assertTrue(catalog.tableExists(path1));
     }
 
     // ------ views ------
@@ -522,22 +501,22 @@ public abstract class CatalogTest {
     public void testCreateView() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThat(catalog.tableExists(path1)).isFalse();
+        assertFalse(catalog.tableExists(path1));
 
         CatalogView view = createView();
         catalog.createTable(path1, view, false);
 
-        assertThat(catalog.getTable(path1)).isInstanceOf(CatalogView.class);
+        assertTrue(catalog.getTable(path1) instanceof CatalogView);
         CatalogTestUtil.checkEquals(view, (CatalogView) catalog.getTable(path1));
     }
 
     @Test
-    public void testCreateView_DatabaseNotExistException() {
-        assertThat(catalog.databaseExists(db1)).isFalse();
+    public void testCreateView_DatabaseNotExistException() throws Exception {
+        assertFalse(catalog.databaseExists(db1));
 
-        assertThatThrownBy(() -> catalog.createTable(nonExistObjectPath, createView(), false))
-                .isInstanceOf(DatabaseNotExistException.class)
-                .hasMessage("Database db1 does not exist in Catalog " + TEST_CATALOG_NAME + ".");
+        exception.expect(DatabaseNotExistException.class);
+        exception.expectMessage("Database db1 does not exist in Catalog");
+        catalog.createTable(nonExistObjectPath, createView(), false);
     }
 
     @Test
@@ -545,12 +524,9 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createView(), false);
 
-        assertThatThrownBy(() -> catalog.createTable(path1, createView(), false))
-                .isInstanceOf(TableAlreadyExistException.class)
-                .hasMessage(
-                        "Table (or view) db1.t1 already exists in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(TableAlreadyExistException.class);
+        exception.expectMessage("Table (or view) db1.t1 already exists in Catalog");
+        catalog.createTable(path1, createView(), false);
     }
 
     @Test
@@ -560,12 +536,12 @@ public abstract class CatalogTest {
         CatalogView view = createView();
         catalog.createTable(path1, view, false);
 
-        assertThat(catalog.getTable(path1)).isInstanceOf(CatalogView.class);
+        assertTrue(catalog.getTable(path1) instanceof CatalogView);
         CatalogTestUtil.checkEquals(view, (CatalogView) catalog.getTable(path1));
 
         catalog.createTable(path1, createAnotherView(), true);
 
-        assertThat(catalog.getTable(path1)).isInstanceOf(CatalogView.class);
+        assertTrue(catalog.getTable(path1) instanceof CatalogView);
         CatalogTestUtil.checkEquals(view, (CatalogView) catalog.getTable(path1));
     }
 
@@ -574,11 +550,11 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createView(), false);
 
-        assertThat(catalog.tableExists(path1)).isTrue();
+        assertTrue(catalog.tableExists(path1));
 
         catalog.dropTable(path1, false);
 
-        assertThat(catalog.tableExists(path1)).isFalse();
+        assertFalse(catalog.tableExists(path1));
     }
 
     @Test
@@ -593,18 +569,15 @@ public abstract class CatalogTest {
         CatalogView newView = createAnotherView();
         catalog.alterTable(path1, newView, false);
 
-        assertThat(catalog.getTable(path1)).isInstanceOf(CatalogView.class);
+        assertTrue(catalog.getTable(path1) instanceof CatalogView);
         CatalogTestUtil.checkEquals(newView, (CatalogView) catalog.getTable(path1));
     }
 
     @Test
     public void testAlterView_TableNotExistException() throws Exception {
-        assertThatThrownBy(() -> catalog.alterTable(nonExistDbPath, createTable(), false))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) non.exist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(TableNotExistException.class);
+        exception.expectMessage("Table (or view) non.exist does not exist in Catalog");
+        catalog.alterTable(nonExistDbPath, createTable(), false);
     }
 
     @Test
@@ -612,24 +585,23 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.alterTable(nonExistObjectPath, createView(), true);
 
-        assertThat(catalog.tableExists(nonExistObjectPath)).isFalse();
+        assertFalse(catalog.tableExists(nonExistObjectPath));
     }
 
     @Test
     public void testListView() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThat(catalog.listTables(db1)).isEmpty();
+        assertTrue(catalog.listTables(db1).isEmpty());
 
         catalog.createTable(path1, createView(), false);
         catalog.createTable(path3, createTable(), false);
 
-        assertThat(catalog.listTables(db1)).hasSize(2);
-        assertThat(new HashSet<>(catalog.listTables(db1)))
-                .isEqualTo(
-                        new HashSet<>(Arrays.asList(path1.getObjectName(), path3.getObjectName())));
-        assertThat(catalog.listViews(db1))
-                .isEqualTo(Collections.singletonList(path1.getObjectName()));
+        assertEquals(2, catalog.listTables(db1).size());
+        assertEquals(
+                new HashSet<>(Arrays.asList(path1.getObjectName(), path3.getObjectName())),
+                new HashSet<>(catalog.listTables(db1)));
+        assertEquals(Arrays.asList(path1.getObjectName()), catalog.listViews(db1));
     }
 
     @Test
@@ -637,12 +609,12 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createView(), false);
 
-        assertThat(catalog.tableExists(path1)).isTrue();
+        assertTrue(catalog.tableExists(path1));
 
         catalog.renameTable(path1, t2, false);
 
-        assertThat(catalog.tableExists(path1)).isFalse();
-        assertThat(catalog.tableExists(path3)).isTrue();
+        assertFalse(catalog.tableExists(path1));
+        assertTrue(catalog.tableExists(path3));
     }
 
     // ------ functions ------
@@ -651,11 +623,11 @@ public abstract class CatalogTest {
     public void testCreateFunction() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThat(catalog.functionExists(path1)).isFalse();
+        assertFalse(catalog.functionExists(path1));
 
         catalog.createFunction(path1, createFunction(), false);
 
-        assertThat(catalog.functionExists(path1)).isTrue();
+        assertTrue(catalog.functionExists(path1));
     }
 
     @Test
@@ -669,12 +641,12 @@ public abstract class CatalogTest {
     }
 
     @Test
-    public void testCreateFunction_DatabaseNotExistException() {
-        assertThat(catalog.databaseExists(db1)).isFalse();
+    public void testCreateFunction_DatabaseNotExistException() throws Exception {
+        assertFalse(catalog.databaseExists(db1));
 
-        assertThatThrownBy(() -> catalog.createFunction(path1, createFunction(), false))
-                .isInstanceOf(DatabaseNotExistException.class)
-                .hasMessage("Database db1 does not exist in Catalog " + TEST_CATALOG_NAME + ".");
+        exception.expect(DatabaseNotExistException.class);
+        exception.expectMessage("Database db1 does not exist in Catalog");
+        catalog.createFunction(path1, createFunction(), false);
     }
 
     @Test
@@ -682,14 +654,14 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createFunction(path1, createFunction(), false);
 
-        assertThat(catalog.functionExists(path1)).isTrue();
+        assertTrue(catalog.functionExists(path1));
 
         // test 'ignoreIfExist' flag
         catalog.createFunction(path1, createAnotherFunction(), true);
 
-        assertThatThrownBy(() -> catalog.createFunction(path1, createFunction(), false))
-                .isInstanceOf(FunctionAlreadyExistException.class)
-                .hasMessage("Function db1.t1 already exists in Catalog " + TEST_CATALOG_NAME + ".");
+        exception.expect(FunctionAlreadyExistException.class);
+        exception.expectMessage("Function db1.t1 already exists in Catalog");
+        catalog.createFunction(path1, createFunction(), false);
     }
 
     @Test
@@ -705,7 +677,7 @@ public abstract class CatalogTest {
         catalog.alterFunction(path1, newFunc, false);
         CatalogFunction actual = catalog.getFunction(path1);
 
-        assertThat(func.getClassName().equals(actual.getClassName())).isFalse();
+        assertFalse(func.getClassName().equals(actual.getClassName()));
         checkEquals(newFunc, actual);
     }
 
@@ -722,18 +694,15 @@ public abstract class CatalogTest {
         catalog.alterFunction(path1, newFunc, false);
         CatalogFunction actual = catalog.getFunction(path1);
 
-        assertThat(func.getClassName().equals(actual.getClassName())).isFalse();
+        assertFalse(func.getClassName().equals(actual.getClassName()));
         checkEquals(newFunc, actual);
     }
 
     @Test
-    public void testAlterFunction_FunctionNotExistException() {
-        assertThatThrownBy(() -> catalog.alterFunction(nonExistObjectPath, createFunction(), false))
-                .isInstanceOf(FunctionNotExistException.class)
-                .hasMessage(
-                        "Function db1.nonexist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testAlterFunction_FunctionNotExistException() throws Exception {
+        exception.expect(FunctionNotExistException.class);
+        exception.expectMessage("Function db1.nonexist does not exist in Catalog");
+        catalog.alterFunction(nonExistObjectPath, createFunction(), false);
     }
 
     @Test
@@ -741,7 +710,7 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.alterFunction(nonExistObjectPath, createFunction(), true);
 
-        assertThat(catalog.functionExists(nonExistObjectPath)).isFalse();
+        assertFalse(catalog.functionExists(nonExistObjectPath));
     }
 
     @Test
@@ -751,36 +720,30 @@ public abstract class CatalogTest {
         CatalogFunction func = createFunction();
         catalog.createFunction(path1, func, false);
 
-        assertThat(catalog.listFunctions(db1).get(0)).isEqualTo(path1.getObjectName());
+        assertEquals(path1.getObjectName(), catalog.listFunctions(db1).get(0));
     }
 
     @Test
-    public void testListFunctions_DatabaseNotExistException() {
-        assertThatThrownBy(() -> catalog.listFunctions(db1))
-                .isInstanceOf(DatabaseNotExistException.class)
-                .hasMessage("Database db1 does not exist in Catalog " + TEST_CATALOG_NAME + ".");
+    public void testListFunctions_DatabaseNotExistException() throws Exception {
+        exception.expect(DatabaseNotExistException.class);
+        exception.expectMessage("Database db1 does not exist in Catalog");
+        catalog.listFunctions(db1);
     }
 
     @Test
     public void testGetFunction_FunctionNotExistException() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThatThrownBy(() -> catalog.getFunction(nonExistObjectPath))
-                .isInstanceOf(FunctionNotExistException.class)
-                .hasMessage(
-                        "Function db1.nonexist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(FunctionNotExistException.class);
+        exception.expectMessage("Function db1.nonexist does not exist in Catalog");
+        catalog.getFunction(nonExistObjectPath);
     }
 
     @Test
-    public void testGetFunction_FunctionNotExistException_NoDb() {
-        assertThatThrownBy(() -> catalog.getFunction(nonExistObjectPath))
-                .isInstanceOf(FunctionNotExistException.class)
-                .hasMessage(
-                        "Function db1.nonexist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testGetFunction_FunctionNotExistException_NoDb() throws Exception {
+        exception.expect(FunctionNotExistException.class);
+        exception.expectMessage("Function db1.nonexist does not exist in Catalog");
+        catalog.getFunction(nonExistObjectPath);
     }
 
     @Test
@@ -788,19 +751,18 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createFunction(path1, createFunction(), false);
 
-        assertThat(catalog.functionExists(path1)).isTrue();
+        assertTrue(catalog.functionExists(path1));
 
         catalog.dropFunction(path1, false);
 
-        assertThat(catalog.functionExists(path1)).isFalse();
+        assertFalse(catalog.functionExists(path1));
     }
 
     @Test
-    public void testDropFunction_FunctionNotExistException() {
-        assertThatThrownBy(() -> catalog.dropFunction(nonExistDbPath, false))
-                .isInstanceOf(FunctionNotExistException.class)
-                .hasMessage(
-                        "Function non.exist does not exist in Catalog " + TEST_CATALOG_NAME + ".");
+    public void testDropFunction_FunctionNotExistException() throws Exception {
+        exception.expect(FunctionNotExistException.class);
+        exception.expectMessage("Function non.exist does not exist in Catalog");
+        catalog.dropFunction(nonExistDbPath, false);
     }
 
     @Test
@@ -817,22 +779,26 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createPartitionedTable(), false);
 
-        assertThat(catalog.listPartitions(path1)).isEmpty();
+        assertTrue(catalog.listPartitions(path1).isEmpty());
 
         catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
 
-        assertThat(catalog.listPartitions(path1)).containsExactly(createPartitionSpec());
-        assertThat(catalog.listPartitions(path1, createPartitionSpecSubset()))
-                .containsExactly(createPartitionSpec());
+        assertEquals(
+                Collections.singletonList(createPartitionSpec()), catalog.listPartitions(path1));
+        assertEquals(
+                Collections.singletonList(createPartitionSpec()),
+                catalog.listPartitions(path1, createPartitionSpecSubset()));
         CatalogTestUtil.checkEquals(
                 createPartition(), catalog.getPartition(path1, createPartitionSpec()));
 
         catalog.createPartition(path1, createAnotherPartitionSpec(), createPartition(), false);
 
-        assertThat(catalog.listPartitions(path1))
-                .isEqualTo(Arrays.asList(createPartitionSpec(), createAnotherPartitionSpec()));
-        assertThat(catalog.listPartitions(path1, createPartitionSpecSubset()))
-                .isEqualTo(Arrays.asList(createPartitionSpec(), createAnotherPartitionSpec()));
+        assertEquals(
+                Arrays.asList(createPartitionSpec(), createAnotherPartitionSpec()),
+                catalog.listPartitions(path1));
+        assertEquals(
+                Arrays.asList(createPartitionSpec(), createAnotherPartitionSpec()),
+                catalog.listPartitions(path1, createPartitionSpecSubset()));
         CatalogTestUtil.checkEquals(
                 createPartition(), catalog.getPartition(path1, createAnotherPartitionSpec()));
     }
@@ -841,15 +807,12 @@ public abstract class CatalogTest {
     public void testCreatePartition_TableNotExistException() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
 
-        assertThatThrownBy(
-                        () ->
-                                catalog.createPartition(
-                                        path1, createPartitionSpec(), createPartition(), false))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Table (or view) %s does not exist in Catalog %s.",
-                                path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(TableNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Table (or view) %s does not exist in Catalog %s.",
+                        path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
     }
 
     @Test
@@ -857,15 +820,12 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
         catalog.createTable(path1, createTable(), false);
 
-        assertThatThrownBy(
-                        () ->
-                                catalog.createPartition(
-                                        path1, createPartitionSpec(), createPartition(), false))
-                .isInstanceOf(TableNotPartitionedException.class)
-                .hasMessage(
-                        String.format(
-                                "Table %s in catalog %s is not partitioned.",
-                                path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(TableNotPartitionedException.class);
+        exception.expectMessage(
+                String.format(
+                        "Table %s in catalog %s is not partitioned.",
+                        path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
     }
 
     @Test
@@ -875,18 +835,15 @@ public abstract class CatalogTest {
         catalog.createTable(path1, table, false);
 
         CatalogPartitionSpec partitionSpec = createInvalidPartitionSpecSubset();
-        assertThatThrownBy(
-                        () ->
-                                catalog.createPartition(
-                                        path1, partitionSpec, createPartition(), false))
-                .isInstanceOf(PartitionSpecInvalidException.class)
-                .hasMessage(
-                        String.format(
-                                "PartitionSpec %s does not match partition keys %s of table %s in catalog %s.",
-                                partitionSpec,
-                                table.getPartitionKeys(),
-                                path1.getFullName(),
-                                TEST_CATALOG_NAME));
+        exception.expect(PartitionSpecInvalidException.class);
+        exception.expectMessage(
+                String.format(
+                        "PartitionSpec %s does not match partition keys %s of table %s in catalog %s.",
+                        partitionSpec,
+                        table.getPartitionKeys(),
+                        path1.getFullName(),
+                        TEST_CATALOG_NAME));
+        catalog.createPartition(path1, partitionSpec, createPartition(), false);
     }
 
     @Test
@@ -898,15 +855,12 @@ public abstract class CatalogTest {
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
 
-        assertThatThrownBy(
-                        () ->
-                                catalog.createPartition(
-                                        path1, partitionSpec, createPartition(), false))
-                .isInstanceOf(PartitionAlreadyExistsException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s already exists.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionAlreadyExistsException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s already exists.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.createPartition(path1, partitionSpec, createPartition(), false);
     }
 
     @Test
@@ -925,11 +879,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createPartitionedTable(), false);
         catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
 
-        assertThat(catalog.listPartitions(path1)).containsExactly(createPartitionSpec());
+        assertEquals(
+                Collections.singletonList(createPartitionSpec()), catalog.listPartitions(path1));
 
         catalog.dropPartition(path1, createPartitionSpec(), false);
 
-        assertThat(catalog.listPartitions(path1)).isEmpty();
+        assertEquals(Collections.emptyList(), catalog.listPartitions(path1));
     }
 
     @Test
@@ -937,12 +892,12 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(() -> catalog.dropPartition(path1, partitionSpec, false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.dropPartition(path1, partitionSpec, false);
     }
 
     @Test
@@ -951,12 +906,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createTable(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(() -> catalog.dropPartition(path1, partitionSpec, false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.dropPartition(path1, partitionSpec, false);
     }
 
     @Test
@@ -966,12 +921,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, table, false);
 
         CatalogPartitionSpec partitionSpec = createInvalidPartitionSpecSubset();
-        assertThatThrownBy(() -> catalog.dropPartition(path1, partitionSpec, false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.dropPartition(path1, partitionSpec, false);
     }
 
     @Test
@@ -980,12 +935,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createPartitionedTable(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(() -> catalog.dropPartition(path1, partitionSpec, false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.dropPartition(path1, partitionSpec, false);
     }
 
     @Test
@@ -1001,22 +956,24 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createPartitionedTable(), false);
         catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
 
-        assertThat(catalog.listPartitions(path1)).containsExactly(createPartitionSpec());
+        assertEquals(
+                Collections.singletonList(createPartitionSpec()), catalog.listPartitions(path1));
         CatalogPartition cp = catalog.getPartition(path1, createPartitionSpec());
         CatalogTestUtil.checkEquals(createPartition(), cp);
-        assertThat(cp.getProperties().get("k")).isNull();
+        assertNull(cp.getProperties().get("k"));
 
         CatalogPartition another = createPartition();
         another.getProperties().put("k", "v");
 
         catalog.alterPartition(path1, createPartitionSpec(), another, false);
 
-        assertThat(catalog.listPartitions(path1)).containsExactly(createPartitionSpec());
+        assertEquals(
+                Collections.singletonList(createPartitionSpec()), catalog.listPartitions(path1));
 
         cp = catalog.getPartition(path1, createPartitionSpec());
 
         CatalogTestUtil.checkEquals(another, cp);
-        assertThat(cp.getProperties().get("k")).isEqualTo("v");
+        assertEquals("v", cp.getProperties().get("k"));
     }
 
     @Test
@@ -1024,15 +981,12 @@ public abstract class CatalogTest {
         catalog.createDatabase(db1, createDb(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(
-                        () ->
-                                catalog.alterPartition(
-                                        path1, partitionSpec, createPartition(), false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.alterPartition(path1, partitionSpec, createPartition(), false);
     }
 
     @Test
@@ -1041,15 +995,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createTable(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(
-                        () ->
-                                catalog.alterPartition(
-                                        path1, partitionSpec, createPartition(), false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.alterPartition(path1, partitionSpec, createPartition(), false);
     }
 
     @Test
@@ -1059,15 +1010,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, table, false);
 
         CatalogPartitionSpec partitionSpec = createInvalidPartitionSpecSubset();
-        assertThatThrownBy(
-                        () ->
-                                catalog.alterPartition(
-                                        path1, partitionSpec, createPartition(), false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.alterPartition(path1, partitionSpec, createPartition(), false);
     }
 
     @Test
@@ -1076,15 +1024,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createPartitionedTable(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(
-                        () ->
-                                catalog.alterPartition(
-                                        path1, partitionSpec, createPartition(), false))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.alterPartition(path1, partitionSpec, createPartition(), false);
     }
 
     @Test
@@ -1097,12 +1042,12 @@ public abstract class CatalogTest {
     @Test
     public void testGetPartition_TableNotExist() throws Exception {
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(() -> catalog.getPartition(path1, partitionSpec))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.getPartition(path1, partitionSpec);
     }
 
     @Test
@@ -1111,12 +1056,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createTable(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(() -> catalog.getPartition(path1, partitionSpec))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.getPartition(path1, partitionSpec);
     }
 
     @Test
@@ -1126,12 +1071,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, table, false);
 
         CatalogPartitionSpec partitionSpec = createInvalidPartitionSpecSubset();
-        assertThatThrownBy(() -> catalog.getPartition(path1, partitionSpec))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.getPartition(path1, partitionSpec);
     }
 
     @Test
@@ -1147,12 +1092,12 @@ public abstract class CatalogTest {
                                 put("second", "bob");
                             }
                         });
-        assertThatThrownBy(() -> catalog.getPartition(path1, partitionSpec))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.getPartition(path1, partitionSpec);
     }
 
     @Test
@@ -1161,12 +1106,12 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createPartitionedTable(), false);
 
         CatalogPartitionSpec partitionSpec = createPartitionSpec();
-        assertThatThrownBy(() -> catalog.getPartition(path1, partitionSpec))
-                .isInstanceOf(PartitionNotExistException.class)
-                .hasMessage(
-                        String.format(
-                                "Partition %s of table %s in catalog %s does not exist.",
-                                partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        exception.expect(PartitionNotExistException.class);
+        exception.expectMessage(
+                String.format(
+                        "Partition %s of table %s in catalog %s does not exist.",
+                        partitionSpec, path1.getFullName(), TEST_CATALOG_NAME));
+        catalog.getPartition(path1, partitionSpec);
     }
 
     @Test
@@ -1175,12 +1120,10 @@ public abstract class CatalogTest {
         catalog.createTable(path1, createPartitionedTable(), false);
         catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
 
-        assertThat(catalog.partitionExists(path1, createPartitionSpec())).isTrue();
-        assertThat(catalog.partitionExists(path2, createPartitionSpec())).isFalse();
-        assertThat(
-                        catalog.partitionExists(
-                                ObjectPath.fromString("non.exist"), createPartitionSpec()))
-                .isFalse();
+        assertTrue(catalog.partitionExists(path1, createPartitionSpec()));
+        assertFalse(catalog.partitionExists(path2, createPartitionSpec()));
+        assertFalse(
+                catalog.partitionExists(ObjectPath.fromString("non.exist"), createPartitionSpec()));
     }
 
     @Test
@@ -1190,8 +1133,8 @@ public abstract class CatalogTest {
         catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
         catalog.createPartition(path1, createAnotherPartitionSpec(), createPartition(), false);
 
-        assertThat(catalog.listPartitions(path1, createPartitionSpecSubset())).hasSize(2);
-        assertThat(catalog.listPartitions(path1, createAnotherPartitionSpecSubset())).hasSize(1);
+        assertEquals(2, catalog.listPartitions(path1, createPartitionSpecSubset()).size());
+        assertEquals(1, catalog.listPartitions(path1, createAnotherPartitionSpecSubset()).size());
     }
 
     // ------ table and column stats ------
@@ -1199,12 +1142,8 @@ public abstract class CatalogTest {
     @Test
     public void testGetTableStats_TableNotExistException() throws Exception {
         catalog.createDatabase(db1, createDb(), false);
-        assertThatThrownBy(() -> catalog.getTableStatistics(path1))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) db1.t1 does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+        exception.expect(org.apache.flink.table.catalog.exceptions.TableNotExistException.class);
+        catalog.getTableStatistics(path1);
     }
 
     @Test
@@ -1214,10 +1153,10 @@ public abstract class CatalogTest {
         catalog.createPartition(path1, createPartitionSpec(), createPartition(), false);
         CatalogTableStatistics tableStatistics =
                 catalog.getPartitionStatistics(path1, createPartitionSpec());
-        assertThat(tableStatistics.getFileCount()).isEqualTo(-1);
-        assertThat(tableStatistics.getRawDataSize()).isEqualTo(-1);
-        assertThat(tableStatistics.getTotalSize()).isEqualTo(-1);
-        assertThat(tableStatistics.getRowCount()).isEqualTo(-1);
+        assertEquals(-1, tableStatistics.getFileCount());
+        assertEquals(-1, tableStatistics.getRawDataSize());
+        assertEquals(-1, tableStatistics.getTotalSize());
+        assertEquals(-1, tableStatistics.getRowCount());
     }
 
     @Test
@@ -1232,8 +1171,8 @@ public abstract class CatalogTest {
 
         // we don't check fileCount and totalSize here for hive will automatically calc and set to
         // real num.
-        assertThat(actual.getRowCount()).isEqualTo(tableStats.getRowCount());
-        assertThat(actual.getRawDataSize()).isEqualTo(tableStats.getRawDataSize());
+        assertEquals(tableStats.getRowCount(), actual.getRowCount());
+        assertEquals(tableStats.getRawDataSize(), actual.getRawDataSize());
     }
 
     @Test
@@ -1248,7 +1187,7 @@ public abstract class CatalogTest {
 
         catalog.alterTableStatistics(path1, stats, false);
 
-        assertThat(catalog.getTableStatistics(path1)).isEqualTo(CatalogTableStatistics.UNKNOWN);
+        assertEquals(CatalogTableStatistics.UNKNOWN, catalog.getTableStatistics(path1));
     }
 
     @Test
@@ -1261,23 +1200,17 @@ public abstract class CatalogTest {
         CatalogTableStatistics stats = new CatalogTableStatistics(100, 1, 1000, 10000);
         catalog.alterPartitionStatistics(path1, partitionSpec, stats, false);
         CatalogTableStatistics actual = catalog.getPartitionStatistics(path1, partitionSpec);
-        assertThat(actual.getRowCount()).isEqualTo(stats.getRowCount());
-        assertThat(actual.getRawDataSize()).isEqualTo(stats.getRawDataSize());
+        assertEquals(stats.getRowCount(), actual.getRowCount());
+        assertEquals(stats.getRawDataSize(), actual.getRawDataSize());
     }
 
     @Test
-    public void testAlterTableStats_TableNotExistException() {
-        assertThatThrownBy(
-                        () ->
-                                catalog.alterTableStatistics(
-                                        new ObjectPath(catalog.getDefaultDatabase(), "nonexist"),
-                                        CatalogTableStatistics.UNKNOWN,
-                                        false))
-                .isInstanceOf(TableNotExistException.class)
-                .hasMessage(
-                        "Table (or view) default.nonexist does not exist in Catalog "
-                                + TEST_CATALOG_NAME
-                                + ".");
+    public void testAlterTableStats_TableNotExistException() throws Exception {
+        exception.expect(TableNotExistException.class);
+        catalog.alterTableStatistics(
+                new ObjectPath(catalog.getDefaultDatabase(), "nonexist"),
+                CatalogTableStatistics.UNKNOWN,
+                false);
     }
 
     @Test
@@ -1494,9 +1427,9 @@ public abstract class CatalogTest {
     // Can be overridden by sub test class
 
     protected void checkEquals(CatalogFunction f1, CatalogFunction f2) {
-        assertThat(f2.getClassName()).isEqualTo(f1.getClassName());
-        assertThat(f2.isGeneric()).isEqualTo(f1.isGeneric());
-        assertThat(f2.getFunctionLanguage()).isEqualTo(f1.getFunctionLanguage());
+        assertEquals(f1.getClassName(), f2.getClassName());
+        assertEquals(f1.isGeneric(), f2.isGeneric());
+        assertEquals(f1.getFunctionLanguage(), f2.getFunctionLanguage());
     }
 
     protected void checkEquals(CatalogColumnStatistics cs1, CatalogColumnStatistics cs2) {

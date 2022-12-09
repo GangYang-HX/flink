@@ -21,7 +21,6 @@ package org.apache.flink.runtime.webmonitor.stats;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
 import org.apache.flink.shaded.guava30.com.google.common.collect.Maps;
 
 import org.slf4j.Logger;
@@ -40,14 +39,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * Encapsulates the common functionality for requesting statistics from tasks and combining their
- * responses.
+ * Encapsulates the common functionality for requesting statistics from individual tasks and
+ * combining their responses.
  *
  * @param <T> Type of the statistics to be gathered.
  * @param <V> Type of the combined response.
@@ -62,7 +60,7 @@ public class TaskStatsRequestCoordinator<T, V> {
     /** Executor used to run the futures. */
     protected final Executor executor;
 
-    /** Request time out of the triggered tasks stats request. */
+    /** Request time out of a triggered task stats request. */
     protected final Duration requestTimeout;
 
     /** In progress samples. */
@@ -86,7 +84,7 @@ public class TaskStatsRequestCoordinator<T, V> {
      * Creates a new coordinator for the cluster.
      *
      * @param executor Used to execute the futures.
-     * @param requestTimeout Request time out of the triggered tasks stats request.
+     * @param requestTimeout Request time out of a triggered task stats request.
      */
     public TaskStatsRequestCoordinator(Executor executor, Duration requestTimeout) {
         checkNotNull(requestTimeout, "The request timeout must cannot be null.");
@@ -140,36 +138,30 @@ public class TaskStatsRequestCoordinator<T, V> {
     }
 
     /**
-     * Handles the successfully returned tasks stats response by collecting the corresponding
-     * subtask samples.
+     * Handles the successfully returned task stats response by collecting the corresponding subtask
+     * samples.
      *
      * @param requestId ID of the request.
-     * @param executionIds ID of the sampled task.
+     * @param executionId ID of the sampled task.
      * @param result Result of stats request returned by an individual task.
      * @throws IllegalStateException If unknown request ID and not recently finished or cancelled
      *     sample.
      */
-    public void handleSuccessfulResponse(
-            int requestId, ImmutableSet<ExecutionAttemptID> executionIds, T result) {
+    public void handleSuccessfulResponse(int requestId, ExecutionAttemptID executionId, T result) {
 
         synchronized (lock) {
             if (isShutDown) {
                 return;
             }
 
-            final String ids =
-                    executionIds.stream()
-                            .map(ExecutionAttemptID::toString)
-                            .collect(Collectors.joining(", "));
-
             if (log.isDebugEnabled()) {
-                log.debug("Collecting stats sample {} of tasks {}", requestId, ids);
+                log.debug("Collecting stats sample {} of task {}", requestId, executionId);
             }
 
             PendingStatsRequest<T, V> pending = pendingRequests.get(requestId);
 
             if (pending != null) {
-                pending.collectTaskStats(executionIds, result);
+                pending.collectTaskStats(executionId, result);
 
                 // Publish the sample
                 if (pending.isComplete()) {
@@ -180,7 +172,7 @@ public class TaskStatsRequestCoordinator<T, V> {
                 }
             } else if (recentPendingRequestIds.contains(requestId)) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Received late stats sample {} of tasks {}", requestId, ids);
+                    log.debug("Received late stats sample {} of task {}", requestId, executionId);
                 }
             } else {
                 if (log.isDebugEnabled()) {
@@ -225,12 +217,12 @@ public class TaskStatsRequestCoordinator<T, V> {
         protected final long startTime;
 
         /** All tasks what did not yet return a result. */
-        protected final Set<Set<ExecutionAttemptID>> pendingTasks;
+        protected final Set<ExecutionAttemptID> pendingTasks;
 
         /**
          * Results returned by individual tasks and stored by the tasks' {@link ExecutionAttemptID}.
          */
-        protected final Map<ImmutableSet<ExecutionAttemptID>, T> statsResultByTaskGroup;
+        protected final Map<ExecutionAttemptID, T> statsResultByTask;
 
         /** The future with the final result. */
         protected final CompletableFuture<V> resultFuture;
@@ -244,11 +236,11 @@ public class TaskStatsRequestCoordinator<T, V> {
          * @param tasksToCollect tasks from which the stats responses are expected.
          */
         protected PendingStatsRequest(
-                int requestId, Collection<? extends Set<ExecutionAttemptID>> tasksToCollect) {
+                int requestId, Collection<ExecutionAttemptID> tasksToCollect) {
             this.requestId = requestId;
             this.startTime = System.currentTimeMillis();
             this.pendingTasks = new HashSet<>(tasksToCollect);
-            this.statsResultByTaskGroup = Maps.newHashMapWithExpectedSize(tasksToCollect.size());
+            this.statsResultByTask = Maps.newHashMapWithExpectedSize(tasksToCollect.size());
             this.resultFuture = new CompletableFuture<>();
         }
 
@@ -261,7 +253,7 @@ public class TaskStatsRequestCoordinator<T, V> {
         protected void discard(Throwable cause) {
             if (!isDiscarded) {
                 pendingTasks.clear();
-                statsResultByTaskGroup.clear();
+                statsResultByTask.clear();
 
                 resultFuture.completeExceptionally(new RuntimeException("Discarded", cause));
 
@@ -275,12 +267,11 @@ public class TaskStatsRequestCoordinator<T, V> {
          * @param executionId ID of the Task.
          * @param taskStatsResult Result of the stats sample from the Task.
          */
-        protected void collectTaskStats(
-                ImmutableSet<ExecutionAttemptID> executionId, T taskStatsResult) {
+        protected void collectTaskStats(ExecutionAttemptID executionId, T taskStatsResult) {
             checkDiscarded();
 
             if (pendingTasks.remove(executionId)) {
-                statsResultByTaskGroup.put(executionId, taskStatsResult);
+                statsResultByTask.put(executionId, taskStatsResult);
             } else if (isComplete()) {
                 throw new IllegalStateException("Completed");
             } else {

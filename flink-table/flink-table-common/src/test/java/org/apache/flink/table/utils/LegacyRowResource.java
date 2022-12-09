@@ -37,12 +37,12 @@ public class LegacyRowResource extends ExternalResource {
     }
 
     @Override
-    public void before() {
+    protected void before() {
         RowUtils.USE_LEGACY_TO_STRING = true;
     }
 
     @Override
-    public void after() {
+    protected void after() {
         RowUtils.USE_LEGACY_TO_STRING = false;
     }
 }
