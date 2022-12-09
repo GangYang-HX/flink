@@ -20,76 +20,80 @@ package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.api.common.typeutils.TypeInformationTestBase;
 
-/** Test for {@link PojoTypeInfo}. */
-class PojoTypeInfoTest extends TypeInformationTestBase<PojoTypeInfo<?>> {
+/**
+ * Test for {@link PojoTypeInfo}.
+ */
+public class PojoTypeInfoTest extends TypeInformationTestBase<PojoTypeInfo<?>>{
 
-    @Override
-    protected PojoTypeInfo<?>[] getTestData() {
-        return new PojoTypeInfo<?>[] {
-            (PojoTypeInfo<?>) TypeExtractor.getForClass(TestPojo.class),
-            (PojoTypeInfo<?>) TypeExtractor.getForClass(AlternatePojo.class),
-            (PojoTypeInfo<?>) TypeExtractor.getForClass(PrimitivePojo.class),
-            (PojoTypeInfo<?>) TypeExtractor.getForClass(UnderscorePojo.class)
-        };
-    }
+	@Override
+	protected PojoTypeInfo<?>[] getTestData() {
+		return new PojoTypeInfo<?>[] {
+			(PojoTypeInfo<?>) TypeExtractor.getForClass(TestPojo.class),
+			(PojoTypeInfo<?>) TypeExtractor.getForClass(AlternatePojo.class),
+			(PojoTypeInfo<?>) TypeExtractor.getForClass(PrimitivePojo.class),
+			(PojoTypeInfo<?>) TypeExtractor.getForClass(UnderscorePojo.class)
+		};
+	}
 
-    public static final class TestPojo {
+	public static final class TestPojo {
+		
+		public int someInt;
 
-        public int someInt;
+		private String aString;
+		
+		public Double[] doubleArray;
+		
+		
+		public void setaString(String aString) {
+			this.aString = aString;
+		}
+		
+		public String getaString() {
+			return aString;
+		}
+	}
 
-        private String aString;
+	public static final class AlternatePojo {
 
-        public Double[] doubleArray;
+		public int someInt;
 
-        public void setaString(String aString) {
-            this.aString = aString;
-        }
+		private String aString;
 
-        public String getaString() {
-            return aString;
-        }
-    }
+		public Double[] doubleArray;
 
-    public static final class AlternatePojo {
 
-        public int someInt;
+		public void setaString(String aString) {
+			this.aString = aString;
+		}
 
-        private String aString;
+		public String getaString() {
+			return aString;
+		}
+	}
 
-        public Double[] doubleArray;
+	public static final class PrimitivePojo {
 
-        public void setaString(String aString) {
-            this.aString = aString;
-        }
+		private int someInt;
 
-        public String getaString() {
-            return aString;
-        }
-    }
+		public void setSomeInt(Integer someInt) {
+			this.someInt = someInt;
+		}
 
-    public static final class PrimitivePojo {
+		public Integer getSomeInt() {
+			return this.someInt;
+		}
+	}
 
-        private int someInt;
+	public static final class UnderscorePojo {
 
-        public void setSomeInt(Integer someInt) {
-            this.someInt = someInt;
-        }
+		private int some_int;
 
-        public Integer getSomeInt() {
-            return this.someInt;
-        }
-    }
+		public void setSomeInt(int some_int) {
+			this.some_int = some_int;
+		}
 
-    public static final class UnderscorePojo {
-
-        private int some_int;
-
-        public void setSomeInt(int some_int) {
-            this.some_int = some_int;
-        }
-
-        public Integer getSomeInt() {
-            return this.some_int;
-        }
-    }
+		public Integer getSomeInt() {
+			return this.some_int;
+		}
+	}
 }

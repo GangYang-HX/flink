@@ -22,7 +22,6 @@ import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.TestLogger;
 
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -34,91 +33,81 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import static org.apache.flink.test.checkpointing.EventTimeWindowCheckpointingITCase.StateBackendEnum;
-import static org.apache.flink.test.checkpointing.EventTimeWindowCheckpointingITCase.StateBackendEnum.FILE;
-import static org.apache.flink.test.checkpointing.EventTimeWindowCheckpointingITCase.StateBackendEnum.ROCKSDB_FULL;
+import static org.apache.flink.test.checkpointing.EventTimeWindowCheckpointingITCase.StateBackendEnum.FILE_ASYNC;
+import static org.apache.flink.test.checkpointing.EventTimeWindowCheckpointingITCase.StateBackendEnum.ROCKSDB_FULLY_ASYNC;
 import static org.apache.flink.test.checkpointing.EventTimeWindowCheckpointingITCase.StateBackendEnum.ROCKSDB_INCREMENTAL_ZK;
 
 /**
- * This test delegates to instances of {@link EventTimeWindowCheckpointingITCase} that have been
- * reconfigured to use local recovery.
+ * This test delegates to instances of {@link EventTimeWindowCheckpointingITCase} that have been reconfigured
+ * to use local recovery.
  *
- * <p>TODO: This class must be refactored to properly extend {@link
- * EventTimeWindowCheckpointingITCase}.
+ * <p>TODO: This class must be refactored to properly extend {@link EventTimeWindowCheckpointingITCase}.
  */
 @RunWith(Parameterized.class)
 public class LocalRecoveryITCase extends TestLogger {
 
-    @Rule public TestName testName = new TestName();
+	private final boolean localRecoveryEnabled = true;
 
-    @Parameterized.Parameter public StateBackendEnum backendEnum;
+	@Rule
+	public TestName testName = new TestName();
 
-    @Parameterized.Parameters(name = "statebackend type ={0}")
-    public static Collection<StateBackendEnum> parameter() {
-        return Arrays.asList(ROCKSDB_FULL, ROCKSDB_INCREMENTAL_ZK, FILE);
-    }
+	@Parameterized.Parameter
+	public StateBackendEnum backendEnum;
 
-    @Test
-    public final void executeTest() throws Exception {
-        EventTimeWindowCheckpointingITCase.tempFolder.create();
-        EventTimeWindowCheckpointingITCase windowChkITCase =
-                new EventTimeWindowCheckpointingITCaseInstance(backendEnum, true);
+	@Parameterized.Parameters(name = "statebackend type ={0}")
+	public static Collection<StateBackendEnum> parameter() {
+		return Arrays.asList(ROCKSDB_FULLY_ASYNC, ROCKSDB_INCREMENTAL_ZK, FILE_ASYNC);
+	}
 
-        executeTest(windowChkITCase);
-    }
+	@Test
+	public final void executeTest() throws Exception {
+		EventTimeWindowCheckpointingITCase.tempFolder.create();
+		EventTimeWindowCheckpointingITCase windowChkITCase =
+			new EventTimeWindowCheckpointingITCase() {
 
-    private void executeTest(EventTimeWindowCheckpointingITCase delegate) throws Exception {
-        delegate.name = testName;
-        delegate.stateBackendEnum = backendEnum;
-        try {
-            delegate.setupTestCluster();
-            try {
-                delegate.testTumblingTimeWindow();
-                delegate.stopTestCluster();
-            } catch (Exception e) {
-                delegate.stopTestCluster();
-                throw new RuntimeException(e);
-            }
+				@Override
+				protected StateBackendEnum getStateBackend() {
+					return backendEnum;
+				}
 
-            delegate.setupTestCluster();
-            try {
-                delegate.testSlidingTimeWindow();
-                delegate.stopTestCluster();
-            } catch (Exception e) {
-                delegate.stopTestCluster();
-                throw new RuntimeException(e);
-            }
-        } finally {
-            EventTimeWindowCheckpointingITCase.tempFolder.delete();
-        }
-    }
+				@Override
+				protected Configuration createClusterConfig() throws IOException {
+					Configuration config = super.createClusterConfig();
 
-    @Ignore("Prevents this class from being considered a test class by JUnit.")
-    private static class EventTimeWindowCheckpointingITCaseInstance
-            extends EventTimeWindowCheckpointingITCase {
+					config.setBoolean(
+						CheckpointingOptions.LOCAL_RECOVERY,
+						localRecoveryEnabled);
 
-        private final StateBackendEnum backendEnum;
-        private final boolean localRecoveryEnabled;
+					return config;
+				}
+			};
 
-        public EventTimeWindowCheckpointingITCaseInstance(
-                StateBackendEnum backendEnum, boolean localRecoveryEnabled) {
-            super(backendEnum, 2);
+		executeTest(windowChkITCase);
+	}
 
-            this.backendEnum = backendEnum;
-            this.localRecoveryEnabled = localRecoveryEnabled;
-        }
+	private void executeTest(EventTimeWindowCheckpointingITCase delegate) throws Exception {
+		delegate.name = testName;
+		delegate.stateBackendEnum = backendEnum;
+		try {
+			delegate.setupTestCluster();
+			try {
+				delegate.testTumblingTimeWindow();
+				delegate.stopTestCluster();
+			} catch (Exception e) {
+				delegate.stopTestCluster();
+				throw new RuntimeException(e);
+			}
 
-        @Override
-        protected StateBackendEnum getStateBackend() {
-            return backendEnum;
-        }
-
-        @Override
-        protected Configuration createClusterConfig() throws IOException {
-            Configuration config = super.createClusterConfig();
-
-            config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, localRecoveryEnabled);
-
-            return config;
-        }
-    }
+			delegate.setupTestCluster();
+			try {
+				delegate.testSlidingTimeWindow();
+				delegate.stopTestCluster();
+			} catch (Exception e) {
+				delegate.stopTestCluster();
+				throw new RuntimeException(e);
+			}
+		} finally {
+			EventTimeWindowCheckpointingITCase.tempFolder.delete();
+		}
+	}
 }

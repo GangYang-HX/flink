@@ -34,9 +34,8 @@ from pyflink.table.types import (_infer_schema_from_data, _infer_type,
                                  _array_type_mappings, _merge_type,
                                  _create_type_verifier, UserDefinedType, DataTypes, Row, RowField,
                                  RowType, ArrayType, BigIntType, VarCharType, MapType, DataType,
-                                 _from_java_data_type, ZonedTimestampType,
-                                 LocalZonedTimestampType, _to_java_data_type)
-from pyflink.testing.test_case_utils import PyFlinkTestCase
+                                 _to_java_type, _from_java_type, ZonedTimestampType,
+                                 LocalZonedTimestampType)
 
 
 class ExamplePointUDT(UserDefinedType):
@@ -126,7 +125,7 @@ class UTCOffsetTimezone(datetime.tzinfo):
         return self.OFFSET
 
 
-class TypesTests(PyFlinkTestCase):
+class TypesTests(unittest.TestCase):
 
     def test_infer_schema(self):
         from decimal import Decimal
@@ -544,9 +543,6 @@ class TypesTests(PyFlinkTestCase):
                                    "under Windows platform")
     def test_local_zoned_timestamp_type(self):
         lztst = DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE()
-        last_abbreviation = DataTypes.TIMESTAMP_LTZ()
-        self.assertEqual(lztst, last_abbreviation)
-
         ts = datetime.datetime(1970, 1, 1, 0, 0, 0, 0000)
         self.assertEqual(0, lztst.to_sql_type(ts))
 
@@ -605,7 +601,7 @@ class TypesTests(PyFlinkTestCase):
         self.assertEqual(t_notnull._nullable, False)
 
 
-class DataTypeVerificationTests(PyFlinkTestCase):
+class DataTypeVerificationTests(unittest.TestCase):
 
     def test_verify_type_exception_msg(self):
         self.assertRaises(
@@ -800,7 +796,7 @@ class DataTypeVerificationTests(PyFlinkTestCase):
                 _create_type_verifier(data_type.not_null())(obj)
 
 
-class DataTypeConvertTests(PyFlinkTestCase):
+class DataTypeConvertTests(unittest.TestCase):
 
     def test_basic_type(self):
         test_types = [DataTypes.STRING(),
@@ -816,9 +812,9 @@ class DataTypeConvertTests(PyFlinkTestCase):
                       DataTypes.TIME(),
                       DataTypes.TIMESTAMP(3)]
 
-        java_types = [_to_java_data_type(item) for item in test_types]
+        java_types = [_to_java_type(item) for item in test_types]
 
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
+        converted_python_types = [_from_java_type(item) for item in java_types]
 
         self.assertEqual(test_types, converted_python_types)
 
@@ -833,7 +829,7 @@ class DataTypeConvertTests(PyFlinkTestCase):
                       JDataTypes.CHAR(50).notNull(),
                       JDataTypes.DECIMAL(20, 10).notNull()]
 
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
+        converted_python_types = [_from_java_type(item) for item in java_types]
 
         expected = [DataTypes.TIME(3, False),
                     DataTypes.TIMESTAMP(3).not_null(),
@@ -844,6 +840,22 @@ class DataTypeConvertTests(PyFlinkTestCase):
                     DataTypes.DECIMAL(20, 10, False)]
         self.assertEqual(converted_python_types, expected)
 
+        # Legacy type tests
+        Types = gateway.jvm.org.apache.flink.table.api.Types
+        BlinkBigDecimalTypeInfo = \
+            gateway.jvm.org.apache.flink.table.runtime.typeutils.BigDecimalTypeInfo
+
+        java_types = [Types.STRING(),
+                      Types.DECIMAL(),
+                      BlinkBigDecimalTypeInfo(12, 5)]
+
+        converted_python_types = [_from_java_type(item) for item in java_types]
+
+        expected = [DataTypes.VARCHAR(2147483647),
+                    DataTypes.DECIMAL(38, 18),
+                    DataTypes.DECIMAL(12, 5)]
+        self.assertEqual(converted_python_types, expected)
+
     def test_array_type(self):
         # nullable/not_null flag will be lost during the conversion.
         test_types = [DataTypes.ARRAY(DataTypes.BIGINT()),
@@ -852,9 +864,9 @@ class DataTypeConvertTests(PyFlinkTestCase):
                       DataTypes.ARRAY(DataTypes.ARRAY(DataTypes.BIGINT())),
                       DataTypes.ARRAY(DataTypes.ARRAY(DataTypes.STRING()))]
 
-        java_types = [_to_java_data_type(item) for item in test_types]
+        java_types = [_to_java_type(item) for item in test_types]
 
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
+        converted_python_types = [_from_java_type(item) for item in java_types]
 
         self.assertEqual(test_types, converted_python_types)
 
@@ -864,9 +876,9 @@ class DataTypeConvertTests(PyFlinkTestCase):
                       DataTypes.MULTISET(DataTypes.MULTISET(DataTypes.BIGINT())),
                       DataTypes.MULTISET(DataTypes.MULTISET(DataTypes.STRING()))]
 
-        java_types = [_to_java_data_type(item) for item in test_types]
+        java_types = [_to_java_type(item) for item in test_types]
 
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
+        converted_python_types = [_from_java_type(item) for item in java_types]
 
         self.assertEqual(test_types, converted_python_types)
 
@@ -878,9 +890,9 @@ class DataTypeConvertTests(PyFlinkTestCase):
                       DataTypes.MAP(DataTypes.STRING(),
                                     DataTypes.MAP(DataTypes.STRING(), DataTypes.STRING()))]
 
-        java_types = [_to_java_data_type(item) for item in test_types]
+        java_types = [_to_java_type(item) for item in test_types]
 
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
+        converted_python_types = [_from_java_type(item) for item in java_types]
 
         self.assertEqual(test_types, converted_python_types)
 
@@ -891,34 +903,14 @@ class DataTypeConvertTests(PyFlinkTestCase):
                                                          [DataTypes.FIELD("c",
                                                                           DataTypes.STRING())]))])]
 
-        java_types = [_to_java_data_type(item) for item in test_types]
+        java_types = [_to_java_type(item) for item in test_types]
 
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
-
-        self.assertEqual(test_types, converted_python_types)
-
-    def test_list_view_type(self):
-        test_types = [DataTypes.LIST_VIEW(DataTypes.BIGINT()),
-                      DataTypes.LIST_VIEW(DataTypes.STRING())]
-
-        java_types = [_to_java_data_type(item) for item in test_types]
-
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
-
-        self.assertEqual(test_types, converted_python_types)
-
-    def test_map_view_type(self):
-        test_types = [DataTypes.MAP_VIEW(DataTypes.STRING(), DataTypes.BIGINT()),
-                      DataTypes.MAP_VIEW(DataTypes.INT(), DataTypes.STRING())]
-
-        java_types = [_to_java_data_type(item) for item in test_types]
-
-        converted_python_types = [_from_java_data_type(item) for item in java_types]
+        converted_python_types = [_from_java_type(item) for item in java_types]
 
         self.assertEqual(test_types, converted_python_types)
 
 
-class DataSerializerTests(PyFlinkTestCase):
+class DataSerializerTests(unittest.TestCase):
 
     def test_java_pickle_deserializer(self):
         temp_file = tempfile.NamedTemporaryFile(delete=False, dir=tempfile.mkdtemp())
@@ -926,7 +918,7 @@ class DataSerializerTests(PyFlinkTestCase):
         data = [(1, 2), (3, 4), (5, 6), (7, 8)]
 
         try:
-            serializer.serialize(data, temp_file)
+            serializer.dump_to_stream(data, temp_file)
         finally:
             temp_file.close()
 
@@ -942,7 +934,7 @@ class DataSerializerTests(PyFlinkTestCase):
         data = [(1, 2), (3, 4), (5, 6), (7, 8)]
 
         try:
-            serializer.serialize(data, temp_file)
+            serializer.dump_to_stream(data, temp_file)
         finally:
             temp_file.close()
 

@@ -26,39 +26,40 @@ import org.junit.Assert;
 
 import java.util.ArrayDeque;
 
-/** Utility class to help deserialization for testing. */
+/**
+ * Utility class to help deserialization for testing.
+ */
 public final class DeserializationUtils {
 
-    /**
-     * Iterates over the provided records to deserialize, verifies the results and stats the number
-     * of full records.
-     *
-     * @param records records to be deserialized
-     * @param deserializer the record deserializer
-     * @return the number of full deserialized records
-     */
-    public static int deserializeRecords(
-            ArrayDeque<SerializationTestType> records,
-            RecordDeserializer<SerializationTestType> deserializer)
-            throws Exception {
-        int deserializedRecords = 0;
+	/**
+	 * Iterates over the provided records to deserialize, verifies the results and stats
+	 * the number of full records.
+	 *
+	 * @param records records to be deserialized
+	 * @param deserializer the record deserializer
+	 * @return the number of full deserialized records
+	 */
+	public static int deserializeRecords(
+			ArrayDeque<SerializationTestType> records,
+			RecordDeserializer<SerializationTestType> deserializer) throws Exception {
+		int deserializedRecords = 0;
 
-        while (!records.isEmpty()) {
-            SerializationTestType expected = records.poll();
-            SerializationTestType actual = expected.getClass().newInstance();
+		while (!records.isEmpty()) {
+			SerializationTestType expected = records.poll();
+			SerializationTestType actual = expected.getClass().newInstance();
 
             final DeserializationResult result = deserializer.getNextRecord(actual);
             if (result.isFullRecord()) {
-                Assert.assertEquals(expected, actual);
-                deserializedRecords++;
-            } else {
-                records.addFirst(expected);
+				Assert.assertEquals(expected, actual);
+				deserializedRecords++;
+			} else {
+				records.addFirst(expected);
             }
             if (result.isBufferConsumed()) {
-                break;
-            }
-        }
+				break;
+			}
+		}
 
-        return deserializedRecords;
-    }
+		return deserializedRecords;
+	}
 }

@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.streaming.api.scala.testutils
 
 import org.apache.flink.api.common.functions.RuntimeContext
@@ -23,14 +24,16 @@ import org.apache.flink.streaming.api.scala.function.RichAllWindowFunction
 import org.apache.flink.streaming.api.windowing.windows.Window
 import org.apache.flink.util.Collector
 
-class CheckingIdentityRichAllWindowFunction[T, W <: Window] extends RichAllWindowFunction[T, T, W] {
 
+class CheckingIdentityRichAllWindowFunction[T, W <: Window]
+  extends RichAllWindowFunction[T, T, W] {
+  
   override def apply(window: W, input: scala.Iterable[T], out: Collector[T]): Unit = {
     for (value <- input) {
       out.collect(value)
     }
   }
-
+  
   override def open(conf: Configuration): Unit = {
     super.open(conf)
     CheckingIdentityRichAllWindowFunction.openCalled = true
@@ -46,6 +49,7 @@ class CheckingIdentityRichAllWindowFunction[T, W <: Window] extends RichAllWindo
     CheckingIdentityRichAllWindowFunction.contextSet = true
   }
 }
+
 
 object CheckingIdentityRichAllWindowFunction {
 
@@ -76,3 +80,5 @@ object CheckingIdentityRichAllWindowFunction {
     }
   }
 }
+
+

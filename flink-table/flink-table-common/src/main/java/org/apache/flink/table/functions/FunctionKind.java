@@ -20,18 +20,21 @@ package org.apache.flink.table.functions;
 
 import org.apache.flink.annotation.PublicEvolving;
 
-/** Categorizes the semantics of a {@link FunctionDefinition}. */
+/**
+ * Categorizes the semantics of a {@link FunctionDefinition}.
+ */
 @PublicEvolving
 public enum FunctionKind {
-    SCALAR,
 
-    TABLE,
+	SCALAR,
 
-    ASYNC_TABLE,
+	TABLE,
 
-    AGGREGATE,
+	ASYNC_TABLE,
 
-    TABLE_AGGREGATE,
+	AGGREGATE,
 
-    OTHER
+	TABLE_AGGREGATE,
+
+	OTHER
 }

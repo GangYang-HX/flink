@@ -18,50 +18,97 @@
 
 package org.apache.flink.client.cli;
 
+import org.apache.flink.client.deployment.ClusterClientFactory;
+import org.apache.flink.client.deployment.ClusterClientServiceLoader;
+import org.apache.flink.client.deployment.ClusterDescriptor;
+import org.apache.flink.client.deployment.DefaultClusterClientServiceLoader;
+import org.apache.flink.client.deployment.StandaloneClusterId;
+import org.apache.flink.client.program.ClusterClient;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.PipelineOptions;
+import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.configuration.RestOptions;
+import org.apache.flink.util.FlinkException;
 
 import org.apache.commons.cli.CommandLine;
-import org.junit.jupiter.api.Test;
+import org.hamcrest.Matchers;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import java.time.Duration;
+import java.net.URL;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.apache.flink.util.Preconditions.checkState;
+import static org.junit.Assert.assertThat;
 
-/** Tests for the {@link DefaultCLI}. */
-class DefaultCLITest {
+/**
+ * Tests for the {@link DefaultCLI}.
+ */
+public class DefaultCLITest extends CliFrontendTestBase {
 
-    /** Verifies command line options are correctly materialized. */
-    @Test
-    void testCommandLineMaterialization() throws Exception {
-        final String hostname = "home-sweet-home";
-        final int port = 1234;
-        final String[] args = {"-m", hostname + ':' + port};
+	@Rule
+	public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-        final AbstractCustomCommandLine defaultCLI = new DefaultCLI();
-        final CommandLine commandLine = defaultCLI.parseCommandLineOptions(args, false);
+	/**
+	 * Tests that the configuration is properly passed via the DefaultCLI to the
+	 * created ClusterDescriptor.
+	 */
+	@Test
+	public void testConfigurationPassing() throws Exception {
+		final Configuration configuration = getConfiguration();
 
-        Configuration configuration = defaultCLI.toConfiguration(commandLine);
+		final String localhost = "localhost";
+		final int port = 1234;
 
-        assertThat(configuration.get(RestOptions.ADDRESS)).isEqualTo(hostname);
-        assertThat(configuration.get(RestOptions.PORT)).isEqualTo(port);
-    }
+		configuration.setString(RestOptions.ADDRESS, localhost);
+		configuration.setInteger(RestOptions.PORT, port);
 
-    @Test
-    void testDynamicPropertyMaterialization() throws Exception {
-        final String[] args = {
-            "-D" + PipelineOptions.AUTO_WATERMARK_INTERVAL.key() + "=42",
-            "-D" + PipelineOptions.AUTO_GENERATE_UIDS.key() + "=true"
-        };
+		final AbstractCustomCommandLine defaultCLI = getCli(configuration);
 
-        final AbstractCustomCommandLine defaultCLI = new DefaultCLI();
-        final CommandLine commandLine = defaultCLI.parseCommandLineOptions(args, false);
+		final String[] args = {};
 
-        Configuration configuration = defaultCLI.toConfiguration(commandLine);
+		final CommandLine commandLine = defaultCLI.parseCommandLineOptions(args, false);
+		final ClusterClient<?> clusterClient = getClusterClient(defaultCLI, commandLine);
 
-        assertThat(configuration.get(PipelineOptions.AUTO_WATERMARK_INTERVAL))
-                .isEqualTo(Duration.ofMillis(42L));
-        assertThat(configuration.get(PipelineOptions.AUTO_GENERATE_UIDS)).isTrue();
-    }
+		final URL webInterfaceUrl = new URL(clusterClient.getWebInterfaceURL());
+
+		assertThat(webInterfaceUrl.getHost(), Matchers.equalTo(localhost));
+		assertThat(webInterfaceUrl.getPort(), Matchers.equalTo(port));
+	}
+
+	/**
+	 * Tests that command line options override the configuration settings.
+	 */
+	@Test
+	public void testManualConfigurationOverride() throws Exception {
+		final String localhost = "localhost";
+		final int port = 1234;
+		final Configuration configuration = getConfiguration();
+
+		configuration.setString(JobManagerOptions.ADDRESS, localhost);
+		configuration.setInteger(JobManagerOptions.PORT, port);
+
+		final AbstractCustomCommandLine defaultCLI = getCli(configuration);
+
+		final String manualHostname = "123.123.123.123";
+		final int manualPort = 4321;
+		final String[] args = {"-m", manualHostname + ':' + manualPort};
+
+		final CommandLine commandLine = defaultCLI.parseCommandLineOptions(args, false);
+		final ClusterClient<?> clusterClient = getClusterClient(defaultCLI, commandLine);
+
+		final URL webInterfaceUrl = new URL(clusterClient.getWebInterfaceURL());
+
+		assertThat(webInterfaceUrl.getHost(), Matchers.equalTo(manualHostname));
+		assertThat(webInterfaceUrl.getPort(), Matchers.equalTo(manualPort));
+	}
+
+	private ClusterClient<?> getClusterClient(AbstractCustomCommandLine defaultCLI, CommandLine commandLine) throws FlinkException {
+		final ClusterClientServiceLoader serviceLoader = new DefaultClusterClientServiceLoader();
+		final Configuration executorConfig = defaultCLI.applyCommandLineOptionsToConfiguration(commandLine);
+		final ClusterClientFactory<StandaloneClusterId> clusterFactory = serviceLoader.getClusterClientFactory(executorConfig);
+		checkState(clusterFactory != null);
+
+		final ClusterDescriptor<StandaloneClusterId> clusterDescriptor = clusterFactory.createClusterDescriptor(executorConfig);
+		return clusterDescriptor.retrieve(clusterFactory.getClusterId(executorConfig)).getClusterClient();
+	}
 }

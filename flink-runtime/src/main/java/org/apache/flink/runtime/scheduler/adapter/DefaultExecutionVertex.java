@@ -18,69 +18,79 @@
 
 package org.apache.flink.runtime.scheduler.adapter;
 
+import org.apache.flink.api.common.InputDependencyConstraint;
 import org.apache.flink.runtime.execution.ExecutionState;
-import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
-import org.apache.flink.runtime.scheduler.strategy.ConsumedPartitionGroup;
+import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.scheduler.strategy.SchedulingExecutionVertex;
-import org.apache.flink.util.IterableUtils;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
-/** Default implementation of {@link SchedulingExecutionVertex}. */
-class DefaultExecutionVertex implements SchedulingExecutionVertex {
+/**
+ * Default implementation of {@link SchedulingExecutionVertex}.
+ */
+public class DefaultExecutionVertex implements SchedulingExecutionVertex {
 
-    private final ExecutionVertexID executionVertexId;
+	private final ExecutionVertexID executionVertexId;
 
-    private final List<DefaultResultPartition> producedResults;
+	private final ExecutionVertex executionVertex;
 
-    private final Supplier<ExecutionState> stateSupplier;
+	private final List<DefaultResultPartition> consumedResults;
 
-    private final List<ConsumedPartitionGroup> consumedPartitionGroups;
+	private final List<DefaultResultPartition> producedResults;
 
-    private final Function<IntermediateResultPartitionID, DefaultResultPartition>
-            resultPartitionRetriever;
+	private final Supplier<ExecutionState> stateSupplier;
 
-    DefaultExecutionVertex(
-            ExecutionVertexID executionVertexId,
-            List<DefaultResultPartition> producedPartitions,
-            Supplier<ExecutionState> stateSupplier,
-            List<ConsumedPartitionGroup> consumedPartitionGroups,
-            Function<IntermediateResultPartitionID, DefaultResultPartition>
-                    resultPartitionRetriever) {
-        this.executionVertexId = checkNotNull(executionVertexId);
-        this.stateSupplier = checkNotNull(stateSupplier);
-        this.producedResults = checkNotNull(producedPartitions);
-        this.consumedPartitionGroups = checkNotNull(consumedPartitionGroups);
-        this.resultPartitionRetriever = checkNotNull(resultPartitionRetriever);
-    }
+	private final InputDependencyConstraint inputDependencyConstraint;
 
-    @Override
-    public ExecutionVertexID getId() {
-        return executionVertexId;
-    }
+	DefaultExecutionVertex(
+			ExecutionVertexID executionVertexId,
+			ExecutionVertex executionVertex,
+			List<DefaultResultPartition> producedPartitions,
+			Supplier<ExecutionState> stateSupplier,
+			InputDependencyConstraint constraint) {
+		this.executionVertexId = checkNotNull(executionVertexId);
+		this.executionVertex = executionVertex;
+		this.consumedResults = new ArrayList<>();
+		this.stateSupplier = checkNotNull(stateSupplier);
+		this.producedResults = checkNotNull(producedPartitions);
+		this.inputDependencyConstraint = checkNotNull(constraint);
+	}
 
-    @Override
-    public ExecutionState getState() {
-        return stateSupplier.get();
-    }
+	@Override
+	public ExecutionVertexID getId() {
+		return executionVertexId;
+	}
 
-    @Override
-    public Iterable<DefaultResultPartition> getConsumedResults() {
-        return IterableUtils.flatMap(consumedPartitionGroups, resultPartitionRetriever);
-    }
+	@Override
+	public ExecutionState getState() {
+		return stateSupplier.get();
+	}
 
-    @Override
-    public List<ConsumedPartitionGroup> getConsumedPartitionGroups() {
-        return consumedPartitionGroups;
-    }
+	@Override
+	public Iterable<DefaultResultPartition> getConsumedResults() {
+		return consumedResults;
+	}
 
-    @Override
-    public Iterable<DefaultResultPartition> getProducedResults() {
-        return producedResults;
-    }
+	@Override
+	public Iterable<DefaultResultPartition> getProducedResults() {
+		return producedResults;
+	}
+
+	@Override
+	public InputDependencyConstraint getInputDependencyConstraint() {
+		return inputDependencyConstraint;
+	}
+
+	void addConsumedResult(DefaultResultPartition result) {
+			consumedResults.add(result);
+	}
+
+	public ExecutionVertex getExecutionVertex() {
+		return executionVertex;
+	}
 }

@@ -20,21 +20,22 @@ package org.apache.flink.runtime.state;
 
 import javax.annotation.Nonnull;
 
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
-/** Common interface to all incremental {@link KeyedStateHandle}. */
-public interface IncrementalKeyedStateHandle
-        extends KeyedStateHandle, CheckpointBoundKeyedStateHandle {
+/**
+ * Common interface to all incremental {@link KeyedStateHandle}.
+ */
+public interface IncrementalKeyedStateHandle extends KeyedStateHandle {
 
-    /** Returns the identifier of the state backend from which this handle was created. */
-    @Nonnull
-    UUID getBackendIdentifier();
+	/** Returns the ID of the checkpoint for which the handle was created. */
+	long getCheckpointId();
 
-    /**
-     * Returns a set of ids of all registered shared states in the backend at the time this was
-     * created.
-     */
-    @Nonnull
-    Map<StateHandleID, StreamStateHandle> getSharedStateHandles();
+	/** Returns the identifier of the state backend from which this handle was created.*/
+	@Nonnull
+	UUID getBackendIdentifier();
+
+	/** Returns a set of ids of all registered shared states in the backend at the time this was created. */
+	@Nonnull
+	Set<StateHandleID> getSharedStateHandleIDs();
 }

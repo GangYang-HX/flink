@@ -16,11 +16,13 @@
 # limitations under the License.
 ################################################################################
 
-from pyflink.testing.test_case_utils import PythonAPICompletenessTestCase, PyFlinkTestCase
+import unittest
+
+from pyflink.testing.test_case_utils import PythonAPICompletenessTestCase
 from pyflink.table import Table
 
 
-class TableAPICompletenessTests(PythonAPICompletenessTestCase, PyFlinkTestCase):
+class TableAPICompletenessTests(PythonAPICompletenessTestCase, unittest.TestCase):
     """
     Tests whether the Python :class:`Table` is consistent with
     Java `org.apache.flink.table.api.Table`.
@@ -36,12 +38,12 @@ class TableAPICompletenessTests(PythonAPICompletenessTestCase, PyFlinkTestCase):
 
     @classmethod
     def excluded_methods(cls):
+        # row-based operators should be supported when UDFs supported in python.
         # getSchema method returns a TableSchema, the implementation of TableSchema requires a
         # complete type system, which does not exist currently. It will be implemented after
         # FLINK-12408 is merged. So we exclude this method for the time being.
-        # Also FLINK-25986 are excluded.
-        return {'createTemporalTableFunction', 'getQueryOperation', 'getResolvedSchema',
-                'insertInto', 'printExplain'}
+        return {'map', 'flatMap', 'flatAggregate',  'aggregate', 'leftOuterJoinLateral',
+                'createTemporalTableFunction', 'joinLateral', 'getQueryOperation'}
 
     @classmethod
     def java_method_name(cls, python_method_name):

@@ -19,16 +19,24 @@
 package org.apache.flink.contrib.streaming.state;
 
 import org.apache.flink.core.fs.CloseableRegistry;
-import org.apache.flink.runtime.state.CheckpointStateOutputStream;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.runtime.metrics.DescriptiveStatisticsHistogram;
+import org.apache.flink.runtime.speculativeframe.*;
 import org.apache.flink.runtime.state.CheckpointStreamFactory;
 import org.apache.flink.runtime.state.CheckpointedStateScope;
 import org.apache.flink.runtime.state.StateHandleID;
 import org.apache.flink.runtime.state.StreamStateHandle;
+import org.apache.flink.runtime.state.filesystem.FileStateHandle;
+import org.apache.flink.runtime.state.filesystem.FsCheckpointStreamFactory;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.IOUtils;
-import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.function.CheckedSupplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -36,128 +44,278 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
-/** Help class for uploading RocksDB state files. */
+/**
+ * Help class for uploading RocksDB state files.
+ */
 public class RocksDBStateUploader extends RocksDBStateDataTransfer {
-    private static final int READ_BUFFER_SIZE = 16 * 1024;
+	private static final Logger LOG = LoggerFactory.getLogger(RocksDBStateUploader.class);
+	private static final int READ_BUFFER_SIZE = 16 * 1024;
+	public static final String STATE_UPLOADING_SPECULATIVE_TASK_TYPE = "rocksdb_increment_state_upload";
+	private final Histogram uploadHistogram;
 
-    public RocksDBStateUploader(int numberOfSnapshottingThreads) {
-        super(numberOfSnapshottingThreads);
-    }
+	public RocksDBStateUploader(
+			int numberOfTaskSnapshottingThreads,
+			int numberSlots,
+			MetricGroup metricGroup,
+			SpeculativeTasksManager speculativeTasksManager,
+			boolean speculativeUploadingEnabled) {
 
-    /**
-     * Upload all the files to checkpoint fileSystem using specified number of threads.
-     *
-     * @param files The files will be uploaded to checkpoint filesystem.
-     * @param checkpointStreamFactory The checkpoint streamFactory used to create outputstream.
-     * @param stateScope
-     * @throws Exception Thrown if can not upload all the files.
-     */
-    public Map<StateHandleID, StreamStateHandle> uploadFilesToCheckpointFs(
-            @Nonnull Map<StateHandleID, Path> files,
-            CheckpointStreamFactory checkpointStreamFactory,
-            CheckpointedStateScope stateScope,
-            CloseableRegistry closeableRegistry)
-            throws Exception {
+		super(speculativeUploadingEnabled ?
+						// Since the speculative task only needs one executor,
+						// this thread pool shared by all tasks in taskmanager,
+						// and the size is numberSolts times the original size(In order to be as consistent as possible).
+						numberOfTaskSnapshottingThreads * numberSlots : numberOfTaskSnapshottingThreads,
+		        speculativeUploadingEnabled ? Optional.of(speculativeTasksManager) : Optional.empty());
 
-        Map<StateHandleID, StreamStateHandle> handles = new HashMap<>();
+		this.uploadHistogram = metricGroup.histogram("uploadStateRt", new DescriptiveStatisticsHistogram(500));
+	}
 
-        Map<StateHandleID, CompletableFuture<StreamStateHandle>> futures =
-                createUploadFutures(files, checkpointStreamFactory, stateScope, closeableRegistry);
+	/**
+	 * Upload all the files to checkpoint fileSystem using specified number of threads.
+	 *
+	 * @param files The files will be uploaded to checkpoint filesystem.
+	 * @param checkpointStreamFactory The checkpoint streamFactory used to create outputstream.
+	 *
+	 * @throws Exception Thrown if can not upload all the files.
+	 */
+	public Map<StateHandleID, StreamStateHandle> uploadFilesToCheckpointFs(
+		@Nonnull Map<StateHandleID, Path> files,
+		CheckpointStreamFactory checkpointStreamFactory,
+		CloseableRegistry closeableRegistry) throws Exception {
 
-        try {
-            FutureUtils.waitForAll(futures.values()).get();
+		Map<StateHandleID, StreamStateHandle> handles = new HashMap<>();
 
-            for (Map.Entry<StateHandleID, CompletableFuture<StreamStateHandle>> entry :
-                    futures.entrySet()) {
-                handles.put(entry.getKey(), entry.getValue().get());
-            }
-        } catch (ExecutionException e) {
-            Throwable throwable = ExceptionUtils.stripExecutionException(e);
-            throwable = ExceptionUtils.stripException(throwable, RuntimeException.class);
-            if (throwable instanceof IOException) {
-                throw (IOException) throwable;
-            } else {
-                throw new FlinkRuntimeException("Failed to upload data for state handles.", e);
-            }
-        }
+		Map<StateHandleID, CompletableFuture<StreamStateHandle>> futures =
+			createUploadFutures(files, checkpointStreamFactory, closeableRegistry);
 
-        return handles;
-    }
+		try {
+			FutureUtils.waitForAll(futures.values()).get();
 
-    private Map<StateHandleID, CompletableFuture<StreamStateHandle>> createUploadFutures(
-            Map<StateHandleID, Path> files,
-            CheckpointStreamFactory checkpointStreamFactory,
-            CheckpointedStateScope stateScope,
-            CloseableRegistry closeableRegistry) {
-        Map<StateHandleID, CompletableFuture<StreamStateHandle>> futures =
-                new HashMap<>(files.size());
+			for (Map.Entry<StateHandleID, CompletableFuture<StreamStateHandle>> entry : futures.entrySet()) {
+				handles.put(entry.getKey(), entry.getValue().get());
+			}
+		} catch (Exception e) {
+			handleException(futures.values());
+			if (e instanceof ExecutionException) {
+				Throwable throwable = ExceptionUtils.stripExecutionException(e);
+				throwable = ExceptionUtils.stripException(throwable, RuntimeException.class);
+				if (throwable instanceof IOException) {
+					throw (IOException) throwable;
+				} else {
+					throw new FlinkRuntimeException("Failed to upload data for state handles.", e);
+				}
+			}
+		}
 
-        for (Map.Entry<StateHandleID, Path> entry : files.entrySet()) {
-            final Supplier<StreamStateHandle> supplier =
-                    CheckedSupplier.unchecked(
-                            () ->
-                                    uploadLocalFileToCheckpointFs(
-                                            entry.getValue(),
-                                            checkpointStreamFactory,
-                                            stateScope,
-                                            closeableRegistry));
-            futures.put(entry.getKey(), CompletableFuture.supplyAsync(supplier, executorService));
-        }
+		return handles;
+	}
 
-        return futures;
-    }
+	private void handleException(Collection<CompletableFuture<StreamStateHandle>> futures) {
+		getExecutorService().execute(
+				() -> futures.forEach(
+						future -> future.whenComplete((state, throwable) -> {
+							if (throwable == null && state instanceof FileStateHandle) {
+								try {
+									state.discardStateWithRetry();
+								} catch (Exception ex) {
+									LOG.warn("Delete state file error", ex);
+								}
+							}
+						})));
+	}
 
-    private StreamStateHandle uploadLocalFileToCheckpointFs(
-            Path filePath,
-            CheckpointStreamFactory checkpointStreamFactory,
-            CheckpointedStateScope stateScope,
-            CloseableRegistry closeableRegistry)
-            throws IOException {
+	private Map<StateHandleID, CompletableFuture<StreamStateHandle>> createUploadFutures(
+		Map<StateHandleID, Path> files,
+		CheckpointStreamFactory checkpointStreamFactory,
+		CloseableRegistry closeableRegistry) {
+		Map<StateHandleID, CompletableFuture<StreamStateHandle>> futures = new HashMap<>(files.size());
 
-        InputStream inputStream = null;
-        CheckpointStateOutputStream outputStream = null;
+		for (Map.Entry<StateHandleID, Path> entry : files.entrySet()) {
+			futures.put(
+					entry.getKey(),
+					getUploadFuture(
+							entry.getValue(),
+							checkpointStreamFactory,
+							closeableRegistry));
+		}
 
-        try {
-            final byte[] buffer = new byte[READ_BUFFER_SIZE];
+		return futures;
+	}
 
-            inputStream = Files.newInputStream(filePath);
-            closeableRegistry.registerCloseable(inputStream);
+	/**
+	 * Get a future based on whether enabled speculative execution uploading.
+	 * @param filePath path
+	 * @param checkpointStreamFactory checkpointStreamFactory
+	 * @param closeableRegistry closeableRegistry
+	 * @return future
+	 */
+	private CompletableFuture<StreamStateHandle> getUploadFuture(
+			Path filePath,
+			CheckpointStreamFactory checkpointStreamFactory,
+			CloseableRegistry closeableRegistry) {
+		CompletableFuture<StreamStateHandle> future;
+		if (speculativeTasksManager.isPresent()) {
+			future = speculatedUploadLocalFileToCheckpointFs(
+					filePath,
+					checkpointStreamFactory,
+					closeableRegistry);
+		} else {
+			Supplier<StreamStateHandle> supplier =
+					CheckedSupplier.unchecked(
+							() -> {
+								CheckpointStreamFactory.CheckpointStateOutputStream outputStream  =
+										checkpointStreamFactory.createCheckpointStateOutputStream(
+												CheckpointedStateScope.SHARED);
+								closeableRegistry.registerCloseable(outputStream);
+								return uploadLocalFileToCheckpointFs(
+										filePath,
+										outputStream,
+										closeableRegistry);
+							});
+			future = CompletableFuture.supplyAsync(supplier, getExecutorService());
+		}
+		return future;
+	}
 
-            outputStream = checkpointStreamFactory.createCheckpointStateOutputStream(stateScope);
-            closeableRegistry.registerCloseable(outputStream);
+	private CompletableFuture<StreamStateHandle> speculatedUploadLocalFileToCheckpointFs(
+			Path filePath,
+			CheckpointStreamFactory checkpointStreamFactory,
+			CloseableRegistry closeableRegistry) {
+		CompletableFuture<StreamStateHandle> future = new CompletableFuture<>();
+		SpeculativeTaskInfo task = createUploadTask(
+				filePath,
+				checkpointStreamFactory,
+				closeableRegistry,
+				future);
+		submitTransferTask(task);
+		return future;
+	}
 
-            while (true) {
-                int numBytes = inputStream.read(buffer);
+	@Override
+	public SpeculativeProperties buildTaskProperties() {
+		return new SpeculativeProperties.SpeculativePropertiesBuilder(STATE_UPLOADING_SPECULATIVE_TASK_TYPE)
+				.setScope(SpeculativeScope.TaskManager)
+				.setThresholdType(SpeculativeThresholdType.NINETY_NINE)
+				.setMinNumDataPoints(100)
+				.setCustomMinThreshold(3000L)
+				.setExecutor(getExecutorService())
+				.build();
+	}
 
-                if (numBytes == -1) {
-                    break;
-                }
+	private SpeculativeTaskInfo createUploadTask(
+			Path filePath,
+			CheckpointStreamFactory checkpointStreamFactory,
+			CloseableRegistry closeableRegistry,
+			CompletableFuture<StreamStateHandle> future) {
+		OutputStreamHolder holder = new OutputStreamHolder();
+		return new SpeculativeTaskInfo.SpeculativeTaskInfoBuilder(
+				STATE_UPLOADING_SPECULATIVE_TASK_TYPE,
+				unused -> {
+					try {
+						CheckpointStreamFactory.CheckpointStateOutputStream outputStream =
+								checkpointStreamFactory.createInterruptableCheckpointStateOutputStream(
+										CheckpointedStateScope.SHARED);
+						// for cancel
+						holder.setOutputStream(outputStream);
+						closeableRegistry.registerCloseable(outputStream);
 
-                outputStream.write(buffer, 0, numBytes);
-            }
+						return uploadLocalFileToCheckpointFs(
+								filePath,
+								outputStream,
+								closeableRegistry);
+					} catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+				})
+				.setDuplicatedTaskSucceedsCallback(result -> {
+					StreamStateHandle stateHandle = (StreamStateHandle) result;
+					try {
+						stateHandle.discardStateWithRetry();
+					} catch (Exception e) {
+						LOG.warn("Fail to delete duplicated state file {}, it will still remain in DFS!",
+							((FileStateHandle) stateHandle).getFilePath());
+					}
+				})
+				.setTaskCanceller(taskFuture -> holder.cancelOutputStream())
+				.setSucceedCallback(result -> future.complete((StreamStateHandle) result))
+				.setFailCallback(taskFailureInfo -> {
+					if (taskFailureInfo.isOriginalTaskFailed() &&
+							(!taskFailureInfo.isSpeculatedTaskSubmitted() || taskFailureInfo.isSpeculatedTaskFailed())) {
+						future.completeExceptionally(taskFailureInfo.getExecutionException());
+					}
+				})
+				.build();
+	}
 
-            StreamStateHandle result = null;
-            if (closeableRegistry.unregisterCloseable(outputStream)) {
-                result = outputStream.closeAndGetHandle();
-                outputStream = null;
-            }
-            return result;
+	private StreamStateHandle uploadLocalFileToCheckpointFs(
+			Path filePath,
+			CheckpointStreamFactory.CheckpointStateOutputStream outputStream,
+			CloseableRegistry closeableRegistry) throws IOException {
 
-        } finally {
+		InputStream inputStream = null;
 
-            if (closeableRegistry.unregisterCloseable(inputStream)) {
-                IOUtils.closeQuietly(inputStream);
-            }
+		try {
+			long uploadStart = System.currentTimeMillis();
+			final byte[] buffer = new byte[READ_BUFFER_SIZE];
 
-            if (closeableRegistry.unregisterCloseable(outputStream)) {
-                IOUtils.closeQuietly(outputStream);
-            }
-        }
-    }
+			inputStream = Files.newInputStream(filePath);
+			closeableRegistry.registerCloseable(inputStream);
+
+			while (true) {
+				int numBytes = inputStream.read(buffer);
+
+				if (numBytes == -1) {
+					break;
+				}
+
+				outputStream.write(buffer, 0, numBytes);
+			}
+			long uploadCost = System.currentTimeMillis() - uploadStart;
+			if (uploadCost > LOG_THRESHOLD_MS) {
+				LOG.warn("upload increment local state file {} cost {}ms", filePath, uploadCost);
+			}
+			markCost(uploadHistogram, uploadCost);
+
+			StreamStateHandle result = null;
+			if (closeableRegistry.unregisterCloseable(outputStream)) {
+				result = outputStream.closeAndGetHandle();
+				outputStream = null;
+			}
+			return result;
+
+		} finally {
+
+			if (closeableRegistry.unregisterCloseable(inputStream)) {
+				IOUtils.closeQuietly(inputStream);
+			}
+
+			if (closeableRegistry.unregisterCloseable(outputStream)) {
+				IOUtils.closeQuietly(outputStream);
+			}
+		}
+	}
+
+	private static class OutputStreamHolder {
+		FsCheckpointStreamFactory.InterruptableFsCheckpointStateOutputStream outputStream;
+
+		private void setOutputStream(CheckpointStreamFactory.CheckpointStateOutputStream outputStream) {
+			this.outputStream =
+					(FsCheckpointStreamFactory.InterruptableFsCheckpointStateOutputStream) outputStream;
+		}
+
+		private void cancelOutputStream() {
+			if (outputStream != null) {
+				outputStream.interrupt();
+			}
+		}
+	}
 }
+

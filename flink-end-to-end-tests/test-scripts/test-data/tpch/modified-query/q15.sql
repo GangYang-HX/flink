@@ -29,7 +29,7 @@
 --   )
 -- ORDER BY
 --   s_suppkey;
--- we don't support view
+-- Blink does not support view
 
 SELECT
   s_suppkey,

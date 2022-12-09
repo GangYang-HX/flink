@@ -39,106 +39,94 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 @Internal
 public class KerberosUtils {
 
-    private static final Logger LOG = LoggerFactory.getLogger(KerberosUtils.class);
+	private static final Logger LOG = LoggerFactory.getLogger(KerberosUtils.class);
 
-    private static final String JAVA_VENDOR_NAME = System.getProperty("java.vendor");
+	private static final String JAVA_VENDOR_NAME = System.getProperty("java.vendor");
 
-    private static final boolean IBM_JAVA;
+	private static final boolean IBM_JAVA;
 
-    private static final String DEFAULT_KERBEROS_INIT_APP_ENTRY_NAME;
+	private static final Map<String, String> debugOptions = new HashMap<>();
 
-    private static final Map<String, String> debugOptions = new HashMap<>();
+	private static final Map<String, String> kerberosCacheOptions = new HashMap<>();
 
-    private static final Map<String, String> kerberosCacheOptions = new HashMap<>();
+	private static final AppConfigurationEntry userKerberosAce;
 
-    private static final AppConfigurationEntry userKerberosAce;
+	/* Return the Kerberos login module name */
+	public static String getKrb5LoginModuleName() {
+		return System.getProperty("java.vendor").contains("IBM")
+			? "com.ibm.security.auth.module.Krb5LoginModule"
+			: "com.sun.security.auth.module.Krb5LoginModule";
+	}
 
-    /* Return the Kerberos login module name */
-    public static String getKrb5LoginModuleName() {
-        return System.getProperty("java.vendor").contains("IBM")
-                ? "com.ibm.security.auth.module.Krb5LoginModule"
-                : "com.sun.security.auth.module.Krb5LoginModule";
-    }
+	static {
 
-    public static String getDefaultKerberosInitAppEntryName() {
-        return DEFAULT_KERBEROS_INIT_APP_ENTRY_NAME;
-    }
+		IBM_JAVA = JAVA_VENDOR_NAME.contains("IBM");
 
-    static {
-        IBM_JAVA = JAVA_VENDOR_NAME.contains("IBM");
+		if (LOG.isDebugEnabled()) {
+			debugOptions.put("debug", "true");
+		}
 
-        if (IBM_JAVA) {
-            DEFAULT_KERBEROS_INIT_APP_ENTRY_NAME = "com.ibm.security.jgss.krb5.initiate";
-        } else {
-            DEFAULT_KERBEROS_INIT_APP_ENTRY_NAME = "com.sun.security.jgss.krb5.initiate";
-        }
+		if (IBM_JAVA) {
+			kerberosCacheOptions.put("useDefaultCcache", "true");
+		} else {
+			kerberosCacheOptions.put("doNotPrompt", "true");
+			kerberosCacheOptions.put("useTicketCache", "true");
+		}
 
-        if (LOG.isDebugEnabled()) {
-            debugOptions.put("debug", "true");
-        }
+		String ticketCache = System.getenv("KRB5CCNAME");
+		if (ticketCache != null) {
+			if (IBM_JAVA) {
+				System.setProperty("KRB5CCNAME", ticketCache);
+			} else {
+				kerberosCacheOptions.put("ticketCache", ticketCache);
+			}
+		}
 
-        if (IBM_JAVA) {
-            kerberosCacheOptions.put("useDefaultCcache", "true");
-        } else {
-            kerberosCacheOptions.put("doNotPrompt", "true");
-            kerberosCacheOptions.put("useTicketCache", "true");
-        }
+		kerberosCacheOptions.put("renewTGT", "true");
+		kerberosCacheOptions.putAll(debugOptions);
 
-        String ticketCache = System.getenv("KRB5CCNAME");
-        if (ticketCache != null) {
-            if (IBM_JAVA) {
-                System.setProperty("KRB5CCNAME", ticketCache);
-            } else {
-                kerberosCacheOptions.put("ticketCache", ticketCache);
-            }
-        }
+		userKerberosAce = new AppConfigurationEntry(
+				getKrb5LoginModuleName(),
+				AppConfigurationEntry.LoginModuleControlFlag.OPTIONAL,
+				kerberosCacheOptions);
 
-        kerberosCacheOptions.put("renewTGT", "true");
-        kerberosCacheOptions.putAll(debugOptions);
+	}
 
-        userKerberosAce =
-                new AppConfigurationEntry(
-                        getKrb5LoginModuleName(),
-                        AppConfigurationEntry.LoginModuleControlFlag.OPTIONAL,
-                        kerberosCacheOptions);
-    }
+	public static AppConfigurationEntry ticketCacheEntry() {
+		return userKerberosAce;
+	}
 
-    public static AppConfigurationEntry ticketCacheEntry() {
-        return userKerberosAce;
-    }
+	public static AppConfigurationEntry keytabEntry(String keytab, String principal) {
 
-    public static AppConfigurationEntry keytabEntry(String keytab, String principal) {
+		checkNotNull(keytab, "keytab");
+		checkNotNull(principal, "principal");
 
-        checkNotNull(keytab, "keytab");
-        checkNotNull(principal, "principal");
+		Map<String, String> keytabKerberosOptions = new HashMap<>();
 
-        Map<String, String> keytabKerberosOptions = new HashMap<>();
+		if (IBM_JAVA) {
+			keytabKerberosOptions.put("useKeytab", prependFileUri(keytab));
+			keytabKerberosOptions.put("credsType", "both");
+		} else {
+			keytabKerberosOptions.put("keyTab", keytab);
+			keytabKerberosOptions.put("doNotPrompt", "true");
+			keytabKerberosOptions.put("useKeyTab", "true");
+			keytabKerberosOptions.put("storeKey", "true");
+		}
 
-        if (IBM_JAVA) {
-            keytabKerberosOptions.put("useKeytab", prependFileUri(keytab));
-            keytabKerberosOptions.put("credsType", "both");
-        } else {
-            keytabKerberosOptions.put("keyTab", keytab);
-            keytabKerberosOptions.put("doNotPrompt", "true");
-            keytabKerberosOptions.put("useKeyTab", "true");
-            keytabKerberosOptions.put("storeKey", "true");
-        }
+		keytabKerberosOptions.put("principal", principal);
+		keytabKerberosOptions.put("refreshKrb5Config", "true");
+		keytabKerberosOptions.putAll(debugOptions);
 
-        keytabKerberosOptions.put("principal", principal);
-        keytabKerberosOptions.put("refreshKrb5Config", "true");
-        keytabKerberosOptions.putAll(debugOptions);
+		AppConfigurationEntry keytabKerberosAce = new AppConfigurationEntry(
+				getKrb5LoginModuleName(),
+				AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+				keytabKerberosOptions);
 
-        AppConfigurationEntry keytabKerberosAce =
-                new AppConfigurationEntry(
-                        getKrb5LoginModuleName(),
-                        AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
-                        keytabKerberosOptions);
+		return keytabKerberosAce;
+	}
 
-        return keytabKerberosAce;
-    }
-
-    private static String prependFileUri(String keytabPath) {
-        File f = new File(keytabPath);
-        return f.toURI().toString();
-    }
+	private static String prependFileUri(String keytabPath) {
+		File f = new File(keytabPath);
+		return f.toURI().toString();
+	}
 }

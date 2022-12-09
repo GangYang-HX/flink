@@ -26,8 +26,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * A repartitioner that assigns the same channel state to multiple subtasks according to some
- * mapping.
+ * A repartitioner that assigns the same channel state to multiple subtasks according to some mapping.
  *
  * <p>The replicated data will then be filtered before processing the record.
  *
@@ -38,34 +37,37 @@ public class MappingBasedRepartitioner<T> implements OperatorStateRepartitioner<
     private final RescaleMappings newToOldSubtasksMapping;
 
     public MappingBasedRepartitioner(RescaleMappings newToOldSubtasksMapping) {
-        this.newToOldSubtasksMapping = newToOldSubtasksMapping;
-    }
+		this.newToOldSubtasksMapping = newToOldSubtasksMapping;
+	}
 
     private static <T> List<T> extractOldState(
             List<List<T>> previousParallelSubtaskStates, int[] oldIndexes) {
         switch (oldIndexes.length) {
-            case 0:
-                return Collections.emptyList();
-            case 1:
+			case 0:
+				return Collections.emptyList();
+			case 1:
                 return previousParallelSubtaskStates.get(oldIndexes[0]);
-            default:
+			default:
                 return Arrays.stream(oldIndexes)
                         .boxed()
-                        .flatMap(oldIndex -> previousParallelSubtaskStates.get(oldIndex).stream())
-                        .collect(Collectors.toList());
-        }
-    }
+						.flatMap(oldIndex -> previousParallelSubtaskStates.get(oldIndex).stream())
+						.collect(Collectors.toList());
+		}
+	}
 
-    @Override
-    public List<List<T>> repartitionState(
-            List<List<T>> previousParallelSubtaskStates, int oldParallelism, int newParallelism) {
-        List<List<T>> repartitioned = new ArrayList<>();
-        for (int newIndex = 0; newIndex < newParallelism; newIndex++) {
+	@Override
+	public List<List<T>> repartitionState(
+			List<List<T>> previousParallelSubtaskStates,
+			int oldParallelism,
+			int newParallelism) {
+
+		List<List<T>> repartitioned = new ArrayList<>();
+		for (int newIndex = 0; newIndex < newParallelism; newIndex++) {
             repartitioned.add(
                     extractOldState(
                             previousParallelSubtaskStates,
                             newToOldSubtasksMapping.getMappedIndexes(newIndex)));
-        }
-        return repartitioned;
-    }
+		}
+		return repartitioned;
+	}
 }

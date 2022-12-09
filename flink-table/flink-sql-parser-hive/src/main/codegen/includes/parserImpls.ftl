@@ -171,7 +171,7 @@ SqlDescribeDatabase SqlDescribeDatabase() :
     boolean isExtended = false;
 }
 {
-    ( <DESCRIBE> | <DESC> ) ( <DATABASE> | <SCHEMA> ) { pos = getPos();}
+    <DESCRIBE> ( <DATABASE> | <SCHEMA> ) { pos = getPos();}
     [ <EXTENDED> { isExtended = true;} ]
     databaseName = CompoundIdentifier()
     {
@@ -263,7 +263,7 @@ SqlRichDescribeTable SqlRichDescribeTable() :
     boolean formatted = false;
 }
 {
-    ( <DESCRIBE> | <DESC> ) { pos = getPos();}
+    <DESCRIBE> { pos = getPos();}
     [ LOOKAHEAD(2)
       ( <EXTENDED> { extended = true; }
         |
@@ -397,52 +397,42 @@ SqlDrop SqlDropTable(Span s, boolean replace) :
     }
 }
 
-void RegularColumn(List<SqlNode> list) :
+void TableColumn2(List<SqlNode> list) :
 {
+    SqlParserPos pos;
     SqlIdentifier name;
     SqlDataTypeSpec type;
-    SqlNode comment = null;
+    SqlCharStringLiteral comment = null;
 }
 {
     name = SimpleIdentifier()
     type = ExtendedDataType()
-    [
-        <COMMENT>
-        comment = StringLiteral()
-    ]
+    [ <COMMENT> <QUOTED_STRING> {
+        comment = createStringLiteral(token.image, getPos());
+    }]
     {
-        SqlTableColumn regularColumn = new SqlTableColumn.SqlRegularColumn(
-            getPos(),
-            name,
-            comment,
-            type,
-            null);
-        list.add(regularColumn);
+        SqlTableColumn tableColumn = new SqlTableColumn(name, type, null, comment, getPos());
+        list.add(tableColumn);
     }
 }
 
 void PartColumnDef(List<SqlNode> list) :
 {
+    SqlParserPos pos;
     SqlIdentifier name;
     SqlDataTypeSpec type;
-    SqlNode comment = null;
+    SqlCharStringLiteral comment = null;
 }
 {
     name = SimpleIdentifier()
     type = DataType()
-    [
-        <COMMENT>
-        comment = StringLiteral()
-    ]
+    [ <COMMENT> <QUOTED_STRING> {
+        comment = createStringLiteral(token.image, getPos());
+    }]
     {
         type = type.withNullable(true);
-        SqlTableColumn regularColumn = new SqlTableColumn.SqlRegularColumn(
-            getPos(),
-            name,
-            comment,
-            type,
-            null);
-        list.add(regularColumn);
+        SqlTableColumn tableColumn = new SqlTableColumn(name, type, null, comment, getPos());
+        list.add(tableColumn);
     }
 }
 
@@ -525,12 +515,7 @@ void TableColumnWithConstraint(HiveTableCreationContext context) :
             context.notNullTraits.add(constraintTrait);
             context.notNullCols.add(name);
         }
-        SqlTableColumn tableColumn = new SqlTableColumn.SqlRegularColumn(
-            getPos(),
-            name,
-            comment,
-            type,
-            null);
+        SqlTableColumn tableColumn = new SqlTableColumn(name, type, null, comment, getPos());
         context.columnList.add(tableColumn);
     }
     [ <COMMENT> <QUOTED_STRING> {
@@ -1005,15 +990,8 @@ SqlCreate SqlCreateFunction(Span s, boolean isTemporary) :
         functionClassName = createStringLiteral(token.image, getPos());
     }
     {
-        return new SqlCreateFunction(
-                    s.pos(),
-                    functionIdentifier,
-                    functionClassName,
-                    null,
-                    false,
-                    isTemporary,
-                    false,
-                    SqlNodeList.EMPTY);
+        return new SqlCreateFunction(s.pos(), functionIdentifier, functionClassName, null,
+                false, isTemporary, false);
     }
 }
 
@@ -1042,22 +1020,18 @@ SqlDrop SqlDropFunction(Span s, boolean replace) :
 }
 
 /**
-* Parses a show functions statement.
-* SHOW [USER] FUNCTIONS;
-*/
+ * Hive syntax:
+ *
+ * SHOW FUNCTIONS [LIKE "<pattern>"];
+ */
 SqlShowFunctions SqlShowFunctions() :
 {
     SqlParserPos pos;
-    boolean requireUser = false;
 }
 {
-    <SHOW> { pos = getPos();}
-    [
-        <USER> { requireUser = true; }
-    ]
-    <FUNCTIONS>
+    <SHOW> <FUNCTIONS> { pos = getPos();}
     {
-        return new SqlShowFunctions(pos.plus(getPos()), requireUser);
+        return new SqlShowFunctions(pos, null);
     }
 }
 
@@ -1074,30 +1048,13 @@ SqlShowCatalogs SqlShowCatalogs() :
     }
 }
 
-SqlCall SqlShowCurrentCatalogOrDatabase() :
-{
-}
-{
-    <SHOW> <CURRENT> (
-        <CATALOG>
-        {
-            return new SqlShowCurrentCatalog(getPos());
-        }
-    |
-        <DATABASE>
-        {
-            return new SqlShowCurrentDatabase(getPos());
-        }
-    )
-}
-
 SqlDescribeCatalog SqlDescribeCatalog() :
 {
     SqlIdentifier catalogName;
     SqlParserPos pos;
 }
 {
-    ( <DESCRIBE> | <DESC> ) <CATALOG> { pos = getPos();}
+    <DESCRIBE> <CATALOG> { pos = getPos();}
     catalogName = SimpleIdentifier()
     {
         return new SqlDescribeCatalog(pos, catalogName);
@@ -1263,9 +1220,9 @@ SqlAlterTable SqlAlterHiveTableAddReplaceColumn(SqlParserPos startPos, SqlIdenti
     {
       List<SqlNode> cols = new ArrayList();
     }
-    RegularColumn(cols)
+    TableColumn2(cols)
     (
-      <COMMA> RegularColumn(cols)
+      <COMMA> TableColumn2(cols)
     )*
   <RPAREN>
   [
@@ -1308,21 +1265,13 @@ SqlAlterTable SqlAlterHiveTableChangeColumn(SqlParserPos startPos, SqlIdentifier
     |
     <RESTRICT>
   ]
-  {
-    return new SqlAlterHiveTableChangeColumn(
-      startPos.plus(getPos()),
-      tableIdentifier,
-      cascade,
-      oldName,
-      new SqlTableColumn.SqlRegularColumn(
-        newName.getParserPosition(),
-        newName,
-        comment,
-        newType,
-        null),
-      first,
-      after);
-  }
+  { return new SqlAlterHiveTableChangeColumn(startPos.plus(getPos()),
+                                             tableIdentifier,
+                                             cascade,
+                                             oldName,
+                                             new SqlTableColumn(newName, newType, null, comment, newName.getParserPosition()),
+                                             first,
+                                             after); }
 }
 
 SqlAlterTable SqlAlterHiveTableSerDe(SqlParserPos startPos, SqlIdentifier tableIdentifier, SqlNodeList partitionSpec) :
@@ -1502,183 +1451,4 @@ SqlAlterTable SqlDropPartitions(SqlParserPos startPos, SqlIdentifier tableIdenti
     }
   )*
   { return new SqlDropPartitions(startPos.plus(getPos()), tableIdentifier, ifExists, partSpecs); }
-}
-
-/**
- * Hive syntax:
- *
- * SHOW PARTITIONS table_name [PARTITION partition_spec];
- */
-SqlShowPartitions SqlShowPartitions() :
-{
-     SqlParserPos pos;
-     SqlIdentifier tableIdentifier;
-     SqlNodeList partitionSpec = null;
-}
-{
-    <SHOW> <PARTITIONS> { pos = getPos(); }
-        tableIdentifier = CompoundIdentifier()
-    [ <PARTITION> { partitionSpec = new SqlNodeList(getPos()); PartitionSpecCommaList(new SqlNodeList(getPos()), partitionSpec); } ]
-    { return new SqlShowPartitions(pos, tableIdentifier, partitionSpec); }
-}
-
-/**
-* Parses a load module statement.
-* LOAD MODULE module_name [WITH (property_name=property_value, ...)];
-*/
-SqlLoadModule SqlLoadModule() :
-{
-    SqlParserPos startPos;
-    SqlIdentifier moduleName;
-    SqlNodeList propertyList = SqlNodeList.EMPTY;
-}
-{
-    <LOAD> <MODULE> { startPos = getPos(); }
-    moduleName = SimpleIdentifier()
-    [
-        <WITH>
-        propertyList = TableProperties()
-    ]
-    {
-        return new SqlLoadModule(startPos.plus(getPos()),
-            moduleName,
-            propertyList);
-    }
-}
-
-/**
-* Parses an unload module statement.
-* UNLOAD MODULE module_name;
-*/
-SqlUnloadModule SqlUnloadModule() :
-{
-    SqlParserPos startPos;
-    SqlIdentifier moduleName;
-}
-{
-    <UNLOAD> <MODULE> { startPos = getPos(); }
-    moduleName = SimpleIdentifier()
-    {
-        return new SqlUnloadModule(startPos.plus(getPos()), moduleName);
-    }
-}
-
-/**
-* Parses an use modules statement.
-* USE MODULES module_name1 [, module_name2, ...];
-*/
-SqlUseModules SqlUseModules() :
-{
-    final Span s;
-    SqlIdentifier moduleName;
-    final List<SqlIdentifier> moduleNames = new ArrayList<SqlIdentifier>();
-}
-{
-    <USE> <MODULES> { s = span(); }
-    moduleName = SimpleIdentifier()
-    {
-        moduleNames.add(moduleName);
-    }
-    [
-        (
-            <COMMA>
-            moduleName = SimpleIdentifier()
-            {
-                moduleNames.add(moduleName);
-            }
-        )+
-    ]
-    {
-        return new SqlUseModules(s.end(this), moduleNames);
-    }
-}
-
-/**
-* Parses a show modules statement.
-* SHOW [FULL] MODULES;
-*/
-SqlShowModules SqlShowModules() :
-{
-    SqlParserPos startPos;
-    boolean requireFull = false;
-}
-{
-    <SHOW> { startPos = getPos(); }
-    [
-      <FULL> { requireFull = true; }
-    ]
-    <MODULES>
-    {
-        return new SqlShowModules(startPos.plus(getPos()), requireFull);
-    }
-}
-
-/**
-* Parses a explain module statement.
-*/
-SqlNode SqlRichExplain() :
-{
-    SqlNode stmt;
-}
-{
-    <EXPLAIN> [ <PLAN> <FOR> ]
-    (
-        stmt = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
-        |
-        stmt = RichSqlInsert()
-    )
-    {
-        return new SqlRichExplain(getPos(), stmt);
-    }
-}
-
-/**
-* Parses an ADD JAR statement.
-*/
-SqlAddJar SqlAddJar() :
-{
-    SqlCharStringLiteral jarPath;
-}
-{
-    <ADD> <JAR> <QUOTED_STRING>
-    {
-        String path = SqlParserUtil.parseString(token.image);
-        jarPath = SqlLiteral.createCharString(path, getPos());
-    }
-    {
-        return new SqlAddJar(getPos(), jarPath);
-    }
-}
-
-/**
-* Parses a remove jar statement.
-* REMOVE JAR jar_path;
-*/
-SqlRemoveJar SqlRemoveJar() :
-{
-    SqlCharStringLiteral jarPath;
-}
-{
-    <REMOVE> <JAR> <QUOTED_STRING>
-    {
-        String path = SqlParserUtil.parseString(token.image);
-        jarPath = SqlLiteral.createCharString(path, getPos());
-    }
-    {
-        return new SqlRemoveJar(getPos(), jarPath);
-    }
-}
-
-/**
-* Parses a show jars statement.
-* SHOW JARS;
-*/
-SqlShowJars SqlShowJars() :
-{
-}
-{
-    <SHOW> <JARS>
-    {
-        return new SqlShowJars(getPos());
-    }
 }

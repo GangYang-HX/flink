@@ -25,45 +25,61 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Partitioner that distributes the data equally by cycling through the output channels.
+ * Partitioner that distributes the data equally by cycling through the output
+ * channels.
  *
  * @param <T> Type of the elements in the Stream being rebalanced
  */
 @Internal
 public class RebalancePartitioner<T> extends StreamPartitioner<T> {
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private int nextChannelToSendTo;
+	private final boolean loadBasedChannelSelectorEnabled;
 
-    @Override
-    public void setup(int numberOfChannels) {
-        super.setup(numberOfChannels);
+	private int nextChannelToSendTo;
 
-        nextChannelToSendTo = ThreadLocalRandom.current().nextInt(numberOfChannels);
-    }
+	public RebalancePartitioner() {
+		this(false);
+	}
 
-    @Override
-    public int selectChannel(SerializationDelegate<StreamRecord<T>> record) {
-        nextChannelToSendTo = (nextChannelToSendTo + 1) % numberOfChannels;
-        return nextChannelToSendTo;
-    }
+	public RebalancePartitioner(boolean loadBasedChannelSelectorEnabled) {
+		this.loadBasedChannelSelectorEnabled = loadBasedChannelSelectorEnabled;
+	}
 
-    @Override
-    public SubtaskStateMapper getDownstreamSubtaskStateMapper() {
-        return SubtaskStateMapper.ROUND_ROBIN;
-    }
+	@Override
+	public void setup(int numberOfChannels) {
+		super.setup(numberOfChannels);
 
-    public StreamPartitioner<T> copy() {
-        return this;
-    }
+		nextChannelToSendTo = ThreadLocalRandom.current().nextInt(numberOfChannels);
+	}
+
+	@Override
+	public int selectChannel(SerializationDelegate<StreamRecord<T>> record) {
+		nextChannelToSendTo = (nextChannelToSendTo + 1) % numberOfChannels;
+		return nextChannelToSendTo;
+	}
+
+	@Override
+	public SubtaskStateMapper getDownstreamSubtaskStateMapper() {
+		return SubtaskStateMapper.ROUND_ROBIN;
+	}
+
+	public StreamPartitioner<T> copy() {
+		return this;
+	}
+
+	@Override
+	public boolean isLoadBasedChannelSelectorEnabled() {
+		return loadBasedChannelSelectorEnabled;
+	}
 
     @Override
     public boolean isPointwise() {
         return false;
     }
 
-    @Override
-    public String toString() {
-        return "REBALANCE";
-    }
+	@Override
+	public String toString() {
+		return "REBALANCE";
+	}
 }

@@ -18,10 +18,8 @@
 
 package org.apache.flink.runtime.webmonitor;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.client.deployment.application.ApplicationRunner;
 import org.apache.flink.client.deployment.application.DetachedApplicationRunner;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.dispatcher.DispatcherGateway;
@@ -38,8 +36,6 @@ import org.apache.flink.runtime.webmonitor.handlers.JarRunHeaders;
 import org.apache.flink.runtime.webmonitor.handlers.JarUploadHandler;
 import org.apache.flink.runtime.webmonitor.handlers.JarUploadHeaders;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
-import org.apache.flink.util.concurrent.ExecutorThreadFactory;
-import org.apache.flink.util.concurrent.SeparateThreadExecutor;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 
@@ -49,143 +45,96 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.function.Supplier;
 
-/** Container for the web submission handlers. */
+/**
+ * Container for the web submission handlers.
+ */
 public class WebSubmissionExtension implements WebMonitorExtension {
 
-    private final ArrayList<Tuple2<RestHandlerSpecification, ChannelInboundHandler>>
-            webSubmissionHandlers;
+	private final ArrayList<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> webSubmissionHandlers;
 
-    // for easier access during testing
-    private final JarUploadHandler jarUploadHandler;
-    private final JarRunHandler jarRunHandler;
+	public WebSubmissionExtension(
+			Configuration configuration,
+			GatewayRetriever<? extends DispatcherGateway> leaderRetriever,
+			Map<String, String> responseHeaders,
+			CompletableFuture<String> localAddressFuture,
+			Path jarDir,
+			Executor executor,
+			Time timeout) throws Exception {
 
-    public WebSubmissionExtension(
-            Configuration configuration,
-            GatewayRetriever<? extends DispatcherGateway> leaderRetriever,
-            Map<String, String> responseHeaders,
-            CompletableFuture<String> localAddressFuture,
-            Path jarDir,
-            Executor executor,
-            Time timeout)
-            throws Exception {
-        this(
-                configuration,
-                leaderRetriever,
-                responseHeaders,
-                localAddressFuture,
-                jarDir,
-                executor,
-                timeout,
-                () -> new DetachedApplicationRunner(true));
-    }
+		webSubmissionHandlers = new ArrayList<>();
 
-    @VisibleForTesting
-    WebSubmissionExtension(
-            Configuration configuration,
-            GatewayRetriever<? extends DispatcherGateway> leaderRetriever,
-            Map<String, String> responseHeaders,
-            CompletableFuture<String> localAddressFuture,
-            Path jarDir,
-            Executor executor,
-            Time timeout,
-            Supplier<ApplicationRunner> applicationRunnerSupplier)
-            throws Exception {
+		final JarUploadHandler jarUploadHandler = new JarUploadHandler(
+			leaderRetriever,
+			timeout,
+			responseHeaders,
+			JarUploadHeaders.getInstance(),
+			jarDir,
+			executor);
 
-        webSubmissionHandlers = new ArrayList<>();
+		final JarListHandler jarListHandler = new JarListHandler(
+			leaderRetriever,
+			timeout,
+			responseHeaders,
+			JarListHeaders.getInstance(),
+			localAddressFuture,
+			jarDir.toFile(),
+			configuration,
+			executor);
 
-        final Executor jarRunExecutor =
-                new SeparateThreadExecutor(
-                        new ExecutorThreadFactory.Builder()
-                                .setPoolName("flink-jar-runner")
-                                .build());
+		final JarRunHandler jarRunHandler = new JarRunHandler(
+			leaderRetriever,
+			timeout,
+			responseHeaders,
+			JarRunHeaders.getInstance(),
+			jarDir,
+			configuration,
+			executor,
+			() -> new DetachedApplicationRunner(true));
 
-        jarUploadHandler =
-                new JarUploadHandler(
-                        leaderRetriever,
-                        timeout,
-                        responseHeaders,
-                        JarUploadHeaders.getInstance(),
-                        jarDir,
-                        executor);
+		final JarDeleteHandler jarDeleteHandler = new JarDeleteHandler(
+			leaderRetriever,
+			timeout,
+			responseHeaders,
+			JarDeleteHeaders.getInstance(),
+			jarDir,
+			executor);
 
-        final JarListHandler jarListHandler =
-                new JarListHandler(
-                        leaderRetriever,
-                        timeout,
-                        responseHeaders,
-                        JarListHeaders.getInstance(),
-                        localAddressFuture,
-                        jarDir.toFile(),
-                        configuration,
-                        executor);
+		final JarPlanHandler jarPlanHandler = new JarPlanHandler(
+			leaderRetriever,
+			timeout,
+			responseHeaders,
+			JarPlanGetHeaders.getInstance(),
+			jarDir,
+			configuration,
+			executor
+		);
 
-        jarRunHandler =
-                new JarRunHandler(
-                        leaderRetriever,
-                        timeout,
-                        responseHeaders,
-                        JarRunHeaders.getInstance(),
-                        jarDir,
-                        configuration,
-                        jarRunExecutor,
-                        applicationRunnerSupplier);
+		final JarPlanHandler postJarPlanHandler = new JarPlanHandler(
+			leaderRetriever,
+			timeout,
+			responseHeaders,
+			JarPlanPostHeaders.getInstance(),
+			jarDir,
+			configuration,
+			executor
+		);
 
-        final JarDeleteHandler jarDeleteHandler =
-                new JarDeleteHandler(
-                        leaderRetriever,
-                        timeout,
-                        responseHeaders,
-                        JarDeleteHeaders.getInstance(),
-                        jarDir,
-                        executor);
+		webSubmissionHandlers.add(Tuple2.of(JarUploadHeaders.getInstance(), jarUploadHandler));
+		webSubmissionHandlers.add(Tuple2.of(JarListHeaders.getInstance(), jarListHandler));
+		webSubmissionHandlers.add(Tuple2.of(JarRunHeaders.getInstance(), jarRunHandler));
+		webSubmissionHandlers.add(Tuple2.of(JarDeleteHeaders.getInstance(), jarDeleteHandler));
+		webSubmissionHandlers.add(Tuple2.of(JarPlanGetHeaders.getInstance(), jarPlanHandler));
+		webSubmissionHandlers.add(Tuple2.of(JarPlanPostHeaders.getInstance(), postJarPlanHandler));
+	}
 
-        final JarPlanHandler jarPlanHandler =
-                new JarPlanHandler(
-                        leaderRetriever,
-                        timeout,
-                        responseHeaders,
-                        JarPlanGetHeaders.getInstance(),
-                        jarDir,
-                        configuration,
-                        jarRunExecutor);
+	@Override
+	public CompletableFuture<Void> closeAsync() {
+		return CompletableFuture.completedFuture(null);
+	}
 
-        final JarPlanHandler postJarPlanHandler =
-                new JarPlanHandler(
-                        leaderRetriever,
-                        timeout,
-                        responseHeaders,
-                        JarPlanPostHeaders.getInstance(),
-                        jarDir,
-                        configuration,
-                        executor);
-
-        webSubmissionHandlers.add(Tuple2.of(JarUploadHeaders.getInstance(), jarUploadHandler));
-        webSubmissionHandlers.add(Tuple2.of(JarListHeaders.getInstance(), jarListHandler));
-        webSubmissionHandlers.add(Tuple2.of(JarRunHeaders.getInstance(), jarRunHandler));
-        webSubmissionHandlers.add(Tuple2.of(JarDeleteHeaders.getInstance(), jarDeleteHandler));
-        webSubmissionHandlers.add(Tuple2.of(JarPlanGetHeaders.getInstance(), jarPlanHandler));
-        webSubmissionHandlers.add(Tuple2.of(JarPlanPostHeaders.getInstance(), postJarPlanHandler));
-    }
-
-    @Override
-    public CompletableFuture<Void> closeAsync() {
-        return CompletableFuture.completedFuture(null);
-    }
-
-    @Override
-    public Collection<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> getHandlers() {
-        return webSubmissionHandlers;
-    }
-
-    @VisibleForTesting
-    JarUploadHandler getJarUploadHandler() {
-        return jarUploadHandler;
-    }
-
-    @VisibleForTesting
-    JarRunHandler getJarRunHandler() {
-        return jarRunHandler;
-    }
+	@Override
+	public Collection<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> getHandlers() {
+		return webSubmissionHandlers;
+	}
 }

@@ -16,7 +16,11 @@
  * limitations under the License.
  */
 
+
 package org.apache.flink.optimizer.dag;
+
+import java.util.Collections;
+import java.util.List;
 
 import org.apache.flink.api.common.distributions.DataDistribution;
 import org.apache.flink.api.common.functions.Partitioner;
@@ -37,134 +41,122 @@ import org.apache.flink.optimizer.plan.SingleInputPlanNode;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.util.Preconditions;
 
-import java.util.Collections;
-import java.util.List;
-
-/** The optimizer's internal representation of a <i>Partition</i> operator node. */
+/**
+ * The optimizer's internal representation of a <i>Partition</i> operator node.
+ */
 public class PartitionNode extends SingleInputNode {
 
-    private final List<OperatorDescriptorSingle> possibleProperties;
+	private final List<OperatorDescriptorSingle> possibleProperties;
+	
+	public PartitionNode(PartitionOperatorBase<?> operator) {
+		super(operator);
+		
+		OperatorDescriptorSingle descr = new PartitionDescriptor(
+					this.getOperator().getPartitionMethod(), this.keys, operator.getOrdering(), operator.getCustomPartitioner(),
+					operator.getDistribution());
+		this.possibleProperties = Collections.singletonList(descr);
+	}
 
-    public PartitionNode(PartitionOperatorBase<?> operator) {
-        super(operator);
+	@Override
+	public PartitionOperatorBase<?> getOperator() {
+		return (PartitionOperatorBase<?>) super.getOperator();
+	}
 
-        OperatorDescriptorSingle descr =
-                new PartitionDescriptor(
-                        this.getOperator().getPartitionMethod(),
-                        this.keys,
-                        operator.getOrdering(),
-                        operator.getCustomPartitioner(),
-                        operator.getDistribution());
-        this.possibleProperties = Collections.singletonList(descr);
-    }
+	@Override
+	public String getOperatorName() {
+		return "Partition";
+	}
 
-    @Override
-    public PartitionOperatorBase<?> getOperator() {
-        return (PartitionOperatorBase<?>) super.getOperator();
-    }
+	@Override
+	protected List<OperatorDescriptorSingle> getPossibleProperties() {
+		return this.possibleProperties;
+	}
 
-    @Override
-    public String getOperatorName() {
-        return "Partition";
-    }
+	@Override
+	protected void computeOperatorSpecificDefaultEstimates(DataStatistics statistics) {
+		// partitioning does not change the number of records
+		this.estimatedNumRecords = getPredecessorNode().getEstimatedNumRecords();
+		this.estimatedOutputSize = getPredecessorNode().getEstimatedOutputSize();
+	}
+	
+	@Override
+	public SemanticProperties getSemanticProperties() {
+		return new SingleInputSemanticProperties.AllFieldsForwardedProperties();
+	}
+	
+	// --------------------------------------------------------------------------------------------
+	
+	public static class PartitionDescriptor extends OperatorDescriptorSingle {
 
-    @Override
-    protected List<OperatorDescriptorSingle> getPossibleProperties() {
-        return this.possibleProperties;
-    }
+		private final PartitionMethod pMethod;
+		private final Partitioner<?> customPartitioner;
+		private final DataDistribution distribution;
+		private final Ordering ordering;
 
-    @Override
-    protected void computeOperatorSpecificDefaultEstimates(DataStatistics statistics) {
-        // partitioning does not change the number of records
-        this.estimatedNumRecords = getPredecessorNode().getEstimatedNumRecords();
-        this.estimatedOutputSize = getPredecessorNode().getEstimatedOutputSize();
-    }
+		public PartitionDescriptor(PartitionMethod pMethod, FieldSet pKeys, Ordering ordering, Partitioner<?>
+				customPartitioner, DataDistribution distribution) {
+			super(pKeys);
 
-    @Override
-    public SemanticProperties getSemanticProperties() {
-        return new SingleInputSemanticProperties.AllFieldsForwardedProperties();
-    }
+			Preconditions.checkArgument(pMethod != PartitionMethod.RANGE
+					|| pKeys.equals(new FieldSet(ordering.getFieldPositions())),
+					"Partition keys must match the given ordering.");
 
-    // --------------------------------------------------------------------------------------------
+			this.pMethod = pMethod;
+			this.customPartitioner = customPartitioner;
+			this.distribution = distribution;
+			this.ordering = ordering;
+		}
+		
+		@Override
+		public DriverStrategy getStrategy() {
+			return DriverStrategy.UNARY_NO_OP;
+		}
 
-    public static class PartitionDescriptor extends OperatorDescriptorSingle {
+		@Override
+		public SingleInputPlanNode instantiate(Channel in, SingleInputNode node) {
+			return new SingleInputPlanNode(node, "Partition", in, DriverStrategy.UNARY_NO_OP);
+		}
 
-        private final PartitionMethod pMethod;
-        private final Partitioner<?> customPartitioner;
-        private final DataDistribution distribution;
-        private final Ordering ordering;
+		@Override
+		protected List<RequestedGlobalProperties> createPossibleGlobalProperties() {
+			RequestedGlobalProperties rgps = new RequestedGlobalProperties();
+			
+			switch (this.pMethod) {
+			case HASH:
+				rgps.setHashPartitioned(this.keys);
+				break;
+			case REBALANCE:
+				rgps.setForceRebalancing();
+				break;
+			case CUSTOM:
+				rgps.setCustomPartitioned(this.keys, this.customPartitioner);
+				break;
+			case RANGE:
+				rgps.setRangePartitioned(ordering, distribution);
+				break;
+			default:
+				throw new IllegalArgumentException("Invalid partition method");
+			}
+			
+			return Collections.singletonList(rgps);
+		}
 
-        public PartitionDescriptor(
-                PartitionMethod pMethod,
-                FieldSet pKeys,
-                Ordering ordering,
-                Partitioner<?> customPartitioner,
-                DataDistribution distribution) {
-            super(pKeys);
-
-            Preconditions.checkArgument(
-                    pMethod != PartitionMethod.RANGE
-                            || pKeys.equals(new FieldSet(ordering.getFieldPositions())),
-                    "Partition keys must match the given ordering.");
-
-            this.pMethod = pMethod;
-            this.customPartitioner = customPartitioner;
-            this.distribution = distribution;
-            this.ordering = ordering;
-        }
-
-        @Override
-        public DriverStrategy getStrategy() {
-            return DriverStrategy.UNARY_NO_OP;
-        }
-
-        @Override
-        public SingleInputPlanNode instantiate(Channel in, SingleInputNode node) {
-            return new SingleInputPlanNode(node, "Partition", in, DriverStrategy.UNARY_NO_OP);
-        }
-
-        @Override
-        protected List<RequestedGlobalProperties> createPossibleGlobalProperties() {
-            RequestedGlobalProperties rgps = new RequestedGlobalProperties();
-
-            switch (this.pMethod) {
-                case HASH:
-                    rgps.setHashPartitioned(this.keys);
-                    break;
-                case REBALANCE:
-                    rgps.setForceRebalancing();
-                    break;
-                case CUSTOM:
-                    rgps.setCustomPartitioned(this.keys, this.customPartitioner);
-                    break;
-                case RANGE:
-                    rgps.setRangePartitioned(ordering, distribution);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Invalid partition method");
-            }
-
-            return Collections.singletonList(rgps);
-        }
-
-        @Override
-        protected List<RequestedLocalProperties> createPossibleLocalProperties() {
-            // partitioning does not require any local property.
-            return Collections.singletonList(new RequestedLocalProperties());
-        }
-
-        @Override
-        public GlobalProperties computeGlobalProperties(GlobalProperties gProps) {
-            // the partition node is a no-operation operation, such that all global properties are
-            // preserved.
-            return gProps;
-        }
-
-        @Override
-        public LocalProperties computeLocalProperties(LocalProperties lProps) {
-            // the partition node is a no-operation operation, such that all global properties are
-            // preserved.
-            return lProps;
-        }
-    }
+		@Override
+		protected List<RequestedLocalProperties> createPossibleLocalProperties() {
+			// partitioning does not require any local property.
+			return Collections.singletonList(new RequestedLocalProperties());
+		}
+		
+		@Override
+		public GlobalProperties computeGlobalProperties(GlobalProperties gProps) {
+			// the partition node is a no-operation operation, such that all global properties are preserved.
+			return gProps;
+		}
+		
+		@Override
+		public LocalProperties computeLocalProperties(LocalProperties lProps) {
+			// the partition node is a no-operation operation, such that all global properties are preserved.
+			return lProps;
+		}
+	}
 }

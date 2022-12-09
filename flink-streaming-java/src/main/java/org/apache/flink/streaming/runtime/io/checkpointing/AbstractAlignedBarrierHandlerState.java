@@ -29,7 +29,7 @@ import static org.apache.flink.util.Preconditions.checkState;
 /** Actions to be taken when processing aligned checkpoints. */
 abstract class AbstractAlignedBarrierHandlerState implements BarrierHandlerState {
 
-    protected final ChannelState state;
+    private final ChannelState state;
 
     protected AbstractAlignedBarrierHandlerState(ChannelState state) {
         this.state = state;
@@ -53,27 +53,17 @@ abstract class AbstractAlignedBarrierHandlerState implements BarrierHandlerState
     public final BarrierHandlerState barrierReceived(
             Controller controller,
             InputChannelInfo channelInfo,
-            CheckpointBarrier checkpointBarrier,
-            boolean markChannelBlocked)
+            CheckpointBarrier checkpointBarrier)
             throws IOException, CheckpointException {
         checkState(!checkpointBarrier.getCheckpointOptions().isUnalignedCheckpoint());
-
-        if (markChannelBlocked) {
-            state.blockChannel(channelInfo);
-        }
-
+        state.blockChannel(channelInfo);
         if (controller.allBarriersReceived()) {
-            return triggerGlobalCheckpoint(controller, checkpointBarrier);
+            controller.triggerGlobalCheckpoint(checkpointBarrier);
+            state.unblockAllChannels();
+            return new WaitingForFirstBarrier(state.getInputs());
         }
 
         return convertAfterBarrierReceived(state);
-    }
-
-    protected WaitingForFirstBarrier triggerGlobalCheckpoint(
-            Controller controller, CheckpointBarrier checkpointBarrier) throws IOException {
-        controller.triggerGlobalCheckpoint(checkpointBarrier);
-        state.unblockAllChannels();
-        return new WaitingForFirstBarrier(state.getInputs());
     }
 
     protected abstract BarrierHandlerState convertAfterBarrierReceived(ChannelState state);
@@ -83,4 +73,9 @@ abstract class AbstractAlignedBarrierHandlerState implements BarrierHandlerState
         state.unblockAllChannels();
         return new WaitingForFirstBarrier(state.getInputs());
     }
+
+	@Override
+	public void processChannelUnavailable(InputChannelInfo channelInfo) {
+		state.unblockChannel(channelInfo);
+	}
 }

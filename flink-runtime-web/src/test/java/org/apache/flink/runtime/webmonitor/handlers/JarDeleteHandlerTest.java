@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.webmonitor.handlers;
 
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.runtime.concurrent.Executors;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
 import org.apache.flink.runtime.rest.handler.HandlerRequestException;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
@@ -26,16 +27,16 @@ import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
 import org.apache.flink.runtime.webmonitor.TestingRestfulGateway;
 import org.apache.flink.util.ExceptionUtils;
-import org.apache.flink.util.concurrent.Executors;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -43,111 +44,111 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
-/** Unit tests for {@link JarDeleteHandler}. */
-class JarDeleteHandlerTest {
+/**
+ * Unit tests for {@link JarDeleteHandler}.
+ */
+public class JarDeleteHandlerTest extends TestLogger {
 
-    private static final String TEST_JAR_NAME = "test.jar";
+	private static final String TEST_JAR_NAME = "test.jar";
 
-    private JarDeleteHandler jarDeleteHandler;
+	private JarDeleteHandler jarDeleteHandler;
 
-    private RestfulGateway restfulGateway;
+	private RestfulGateway restfulGateway;
 
-    private Path jarDir;
+	@Rule
+	public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-    @BeforeEach
-    private void setUp(@TempDir File tempDir) throws Exception {
-        jarDir = tempDir.toPath();
-        restfulGateway = new TestingRestfulGateway.Builder().build();
-        jarDeleteHandler =
-                new JarDeleteHandler(
-                        () -> CompletableFuture.completedFuture(restfulGateway),
-                        Time.seconds(10),
-                        Collections.emptyMap(),
-                        new JarDeleteHeaders(),
-                        jarDir,
-                        Executors.directExecutor());
+	private Path jarDir;
 
-        Files.createFile(jarDir.resolve(TEST_JAR_NAME));
-    }
+	@Before
+	public void setUp() throws Exception {
+		jarDir = temporaryFolder.newFolder().toPath();
+		restfulGateway = new TestingRestfulGateway.Builder().build();
+		jarDeleteHandler = new JarDeleteHandler(
+			() -> CompletableFuture.completedFuture(restfulGateway),
+			Time.seconds(10),
+			Collections.emptyMap(),
+			new JarDeleteHeaders(),
+			jarDir,
+			Executors.directExecutor()
+		);
 
-    @Test
-    void testDeleteJarById() throws Exception {
-        assertThat(Files.exists(jarDir.resolve(TEST_JAR_NAME))).isTrue();
+		Files.createFile(jarDir.resolve(TEST_JAR_NAME));
+	}
 
-        final HandlerRequest<EmptyRequestBody> request = createRequest(TEST_JAR_NAME);
-        jarDeleteHandler.handleRequest(request, restfulGateway).get();
+	@Test
+	public void testDeleteJarById() throws Exception {
+		assertThat(Files.exists(jarDir.resolve(TEST_JAR_NAME)), equalTo(true));
 
-        assertThat(Files.exists(jarDir.resolve(TEST_JAR_NAME))).isFalse();
-    }
+		final HandlerRequest<EmptyRequestBody, JarDeleteMessageParameters> request = createRequest(TEST_JAR_NAME);
+		jarDeleteHandler.handleRequest(request, restfulGateway).get();
 
-    @Test
-    void testDeleteUnknownJar() throws Exception {
-        final HandlerRequest<EmptyRequestBody> request = createRequest("doesnotexist.jar");
-        assertThatThrownBy(() -> jarDeleteHandler.handleRequest(request, restfulGateway).get())
-                .satisfies(
-                        e -> {
-                            final Throwable throwable =
-                                    ExceptionUtils.stripCompletionException(e.getCause());
-                            assertThat(throwable).isInstanceOf(RestHandlerException.class);
+		assertThat(Files.exists(jarDir.resolve(TEST_JAR_NAME)), equalTo(false));
+	}
 
-                            final RestHandlerException restHandlerException =
-                                    (RestHandlerException) throwable;
-                            assertThat(restHandlerException.getMessage())
-                                    .contains("File doesnotexist.jar does not exist in");
-                            assertThat(restHandlerException.getHttpResponseStatus())
-                                    .isEqualTo(HttpResponseStatus.BAD_REQUEST);
-                        });
-    }
+	@Test
+	public void testDeleteUnknownJar() throws Exception {
+		final HandlerRequest<EmptyRequestBody, JarDeleteMessageParameters> request = createRequest("doesnotexist.jar");
+		try {
+			jarDeleteHandler.handleRequest(request, restfulGateway).get();
+		} catch (final ExecutionException e) {
+			final Throwable throwable = ExceptionUtils.stripCompletionException(e.getCause());
+			assertThat(throwable, instanceOf(RestHandlerException.class));
 
-    @Test
-    void testFailedDelete() throws Exception {
-        makeJarDirReadOnly();
+			final RestHandlerException restHandlerException = (RestHandlerException) throwable;
+			assertThat(restHandlerException.getMessage(), containsString("File doesnotexist.jar does not exist in"));
+			assertThat(restHandlerException.getHttpResponseStatus(), equalTo(HttpResponseStatus.BAD_REQUEST));
+			return;
+		}
+		fail("The test should have failed by now.");
+	}
 
-        final HandlerRequest<EmptyRequestBody> request = createRequest(TEST_JAR_NAME);
-        assertThatThrownBy(() -> jarDeleteHandler.handleRequest(request, restfulGateway).get())
-                .satisfies(
-                        e -> {
-                            final Throwable throwable =
-                                    ExceptionUtils.stripCompletionException(e.getCause());
-                            assertThat(throwable).isInstanceOf(RestHandlerException.class);
+	@Test
+	public void testFailedDelete() throws Exception {
+		makeJarDirReadOnly();
 
-                            final RestHandlerException restHandlerException =
-                                    (RestHandlerException) throwable;
-                            assertThat(restHandlerException.getMessage())
-                                    .contains("Failed to delete jar");
-                            assertThat(restHandlerException.getHttpResponseStatus())
-                                    .isEqualTo(HttpResponseStatus.INTERNAL_SERVER_ERROR);
-                        });
-    }
+		final HandlerRequest<EmptyRequestBody, JarDeleteMessageParameters> request = createRequest(TEST_JAR_NAME);
+		try {
+			jarDeleteHandler.handleRequest(request, restfulGateway).get();
+		} catch (final ExecutionException e) {
+			final Throwable throwable = ExceptionUtils.stripCompletionException(e.getCause());
+			assertThat(throwable, instanceOf(RestHandlerException.class));
 
-    private static HandlerRequest<EmptyRequestBody> createRequest(final String jarFileName)
-            throws HandlerRequestException {
-        return HandlerRequest.resolveParametersAndCreate(
-                EmptyRequestBody.getInstance(),
-                new JarDeleteMessageParameters(),
-                Collections.singletonMap(JarIdPathParameter.KEY, jarFileName),
-                Collections.emptyMap(),
-                Collections.emptyList());
-    }
+			final RestHandlerException restHandlerException = (RestHandlerException) throwable;
+			assertThat(restHandlerException.getMessage(), containsString("Failed to delete jar"));
+			assertThat(restHandlerException.getHttpResponseStatus(), equalTo(HttpResponseStatus.INTERNAL_SERVER_ERROR));
+		}
+	}
 
-    private void makeJarDirReadOnly() {
-        try {
-            Files.setPosixFilePermissions(
-                    jarDir,
-                    new HashSet<>(
-                            Arrays.asList(
-                                    PosixFilePermission.OTHERS_READ,
-                                    PosixFilePermission.GROUP_READ,
-                                    PosixFilePermission.OWNER_READ,
-                                    PosixFilePermission.OTHERS_EXECUTE,
-                                    PosixFilePermission.GROUP_EXECUTE,
-                                    PosixFilePermission.OWNER_EXECUTE)));
-        } catch (final Exception e) {
-            Assumptions.assumeTrue(e == null);
-        }
-    }
+	private static HandlerRequest<EmptyRequestBody, JarDeleteMessageParameters> createRequest(
+			final String jarFileName) throws HandlerRequestException {
+		return new HandlerRequest<>(
+			EmptyRequestBody.getInstance(),
+			new JarDeleteMessageParameters(),
+			Collections.singletonMap(JarIdPathParameter.KEY, jarFileName),
+			Collections.emptyMap());
+	}
+
+	private void makeJarDirReadOnly() {
+		try {
+			Files.setPosixFilePermissions(jarDir, new HashSet<>(Arrays.asList(
+				PosixFilePermission.OTHERS_READ,
+				PosixFilePermission.GROUP_READ,
+				PosixFilePermission.OWNER_READ,
+				PosixFilePermission.OTHERS_EXECUTE,
+				PosixFilePermission.GROUP_EXECUTE,
+				PosixFilePermission.OWNER_EXECUTE)));
+		} catch (final Exception e) {
+			Assume.assumeNoException(e);
+		}
+	}
+
 }

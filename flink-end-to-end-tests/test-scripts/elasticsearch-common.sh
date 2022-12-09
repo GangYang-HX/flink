@@ -17,12 +17,10 @@
 # limitations under the License.
 ################################################################################
 
-if [[ -z "${TEST_DATA_DIR:-}" ]]; then
+if [[ -z $TEST_DATA_DIR ]]; then
   echo "Must run common.sh before elasticsearch-common.sh."
   exit 1
 fi
-
-source "$(dirname "$0")"/common_artifact_download_cacher.sh
 
 function setup_elasticsearch {
     mkdir -p $TEST_DATA_DIR
@@ -36,15 +34,12 @@ function setup_elasticsearch {
     fi
 
     # start downloading Elasticsearch
+    echo "Downloading Elasticsearch from $downloadUrl ..."
+    curl "$downloadUrl" > $TEST_DATA_DIR/elasticsearch.tar.gz
+
     local elasticsearchDir=$TEST_DATA_DIR/elasticsearch
     mkdir -p $elasticsearchDir
-    echo "Downloading Elasticsearch from $downloadUrl ..."
-    cache_path=$(get_artifact $downloadUrl)
-    ln "$cache_path" "${TEST_DATA_DIR}/elasticsearch.tar.gz"
-    echo "Download successful."
-    echo "Extracting..."
     tar xzf $TEST_DATA_DIR/elasticsearch.tar.gz -C $elasticsearchDir --strip-components=1
-    echo "Extraction successful."
 
     if [ `uname -i` == 'aarch64' ] && [ $elasticsearch_version -ge 6 ]; then
       echo xpack.ml.enabled: false >> $elasticsearchDir/config/elasticsearch.yml
@@ -81,7 +76,6 @@ function verify_result_line_number {
         rm $TEST_DATA_DIR/output
     fi
 
-    local secondsPassed=0
     while : ; do
       curl "localhost:9200/${index}/_search?q=*&pretty&size=21" > $TEST_DATA_DIR/output || true
 
@@ -90,11 +84,6 @@ function verify_result_line_number {
           break
       else
           echo "Waiting for Elasticsearch records ..."
-          (( secondsPassed++ )) || true
-          if (( secondsPassed > 900 )); then
-              echo "Exceeded test timeout of 900 seconds."
-              exit 1
-          fi
           sleep 1
       fi
     done

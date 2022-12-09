@@ -29,34 +29,34 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
  */
 @Internal
 public class ForwardPartitioner<T> extends StreamPartitioner<T> {
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    @Override
-    public int selectChannel(SerializationDelegate<StreamRecord<T>> record) {
-        return 0;
-    }
+	@Override
+	public int selectChannel(SerializationDelegate<StreamRecord<T>> record) {
+		return 0;
+	}
 
-    public StreamPartitioner<T> copy() {
-        return this;
-    }
+	public StreamPartitioner<T> copy() {
+		return this;
+	}
 
     @Override
     public boolean isPointwise() {
         return true;
     }
 
-    @Override
-    public String toString() {
-        return "FORWARD";
-    }
+	@Override
+	public String toString() {
+		return "FORWARD";
+	}
 
-    @Override
-    public SubtaskStateMapper getDownstreamSubtaskStateMapper() {
+	@Override
+	public SubtaskStateMapper getDownstreamSubtaskStateMapper() {
         return SubtaskStateMapper.UNSUPPORTED;
     }
 
     @Override
     public SubtaskStateMapper getUpstreamSubtaskStateMapper() {
         return SubtaskStateMapper.UNSUPPORTED;
-    }
+	}
 }

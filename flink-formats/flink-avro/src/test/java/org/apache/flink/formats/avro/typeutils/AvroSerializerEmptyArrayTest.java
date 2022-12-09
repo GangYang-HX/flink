@@ -21,176 +21,197 @@ package org.apache.flink.formats.avro.typeutils;
 import org.apache.flink.api.common.typeutils.SerializerTestInstance;
 
 import org.apache.avro.reflect.Nullable;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Tests for the {@link AvroSerializer}. */
-class AvroSerializerEmptyArrayTest {
+import static org.junit.Assert.fail;
 
-    @Test
-    void testBookSerialization() {
-        Book b = new Book(123, "This is a test book", 26382648);
-        AvroSerializer<Book> serializer = new AvroSerializer<Book>(Book.class);
-        SerializerTestInstance<Book> test =
-                new SerializerTestInstance<Book>(serializer, Book.class, -1, b) {};
-        test.testAll();
-    }
+/**
+ * Tests for the {@link AvroSerializer}.
+ */
+public class AvroSerializerEmptyArrayTest {
 
-    @Test
-    void testSerialization() {
-        List<String> titles = new ArrayList<String>();
+	@Test
+	public void testBookSerialization() {
+		try {
+			Book b = new Book(123, "This is a test book", 26382648);
+			AvroSerializer<Book> serializer = new AvroSerializer<Book>(Book.class);
+			SerializerTestInstance<Book> test = new SerializerTestInstance<Book>(serializer, Book.class, -1, b);
+			test.testAll();
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+	}
 
-        List<Book> books = new ArrayList<Book>();
-        books.add(new Book(123, "This is a test book", 1));
-        books.add(new Book(24234234, "This is a test book", 1));
-        books.add(new Book(1234324, "This is a test book", 3));
+	@Test
+	public void testSerialization() {
+		try {
+			List<String> titles = new ArrayList<String>();
 
-        BookAuthor a = new BookAuthor(1, titles, "Test Author");
-        a.books = books;
-        a.bookType = BookAuthor.BookType.journal;
+			List<Book> books = new ArrayList<Book>();
+			books.add(new Book(123, "This is a test book", 1));
+			books.add(new Book(24234234, "This is a test book", 1));
+			books.add(new Book(1234324, "This is a test book", 3));
 
-        AvroSerializer<BookAuthor> serializer = new AvroSerializer<BookAuthor>(BookAuthor.class);
+			BookAuthor a = new BookAuthor(1, titles, "Test Author");
+			a.books = books;
+			a.bookType = BookAuthor.BookType.journal;
 
-        SerializerTestInstance<BookAuthor> test =
-                new SerializerTestInstance<BookAuthor>(serializer, BookAuthor.class, -1, a) {};
-        test.testAll();
-    }
+			AvroSerializer<BookAuthor> serializer = new AvroSerializer<BookAuthor>(BookAuthor.class);
 
-    /** Avro POJO for testing. */
-    public static class Book {
+			SerializerTestInstance<BookAuthor> test = new SerializerTestInstance<BookAuthor>(serializer, BookAuthor.class, -1, a);
+			test.testAll();
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+	}
 
-        long bookId;
-        @Nullable String title;
-        long authorId;
+	/**
+	 * Avro POJO for testing.
+	 */
+	public static class Book {
 
-        public Book() {}
+		long bookId;
+		@Nullable
+		String title;
+		long authorId;
 
-        public Book(long bookId, String title, long authorId) {
-            this.bookId = bookId;
-            this.title = title;
-            this.authorId = authorId;
-        }
+		public Book() {}
 
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + (int) (authorId ^ (authorId >>> 32));
-            result = prime * result + (int) (bookId ^ (bookId >>> 32));
-            result = prime * result + ((title == null) ? 0 : title.hashCode());
-            return result;
-        }
+		public Book(long bookId, String title, long authorId) {
+			this.bookId = bookId;
+			this.title = title;
+			this.authorId = authorId;
+		}
 
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            Book other = (Book) obj;
-            if (authorId != other.authorId) {
-                return false;
-            }
-            if (bookId != other.bookId) {
-                return false;
-            }
-            if (title == null) {
-                if (other.title != null) {
-                    return false;
-                }
-            } else if (!title.equals(other.title)) {
-                return false;
-            }
-            return true;
-        }
-    }
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + (int) (authorId ^ (authorId >>> 32));
+			result = prime * result + (int) (bookId ^ (bookId >>> 32));
+			result = prime * result + ((title == null) ? 0 : title.hashCode());
+			return result;
+		}
 
-    /** Avro POJO for testing. */
-    public static class BookAuthor {
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (obj == null) {
+				return false;
+			}
+			if (getClass() != obj.getClass()) {
+				return false;
+			}
+			Book other = (Book) obj;
+			if (authorId != other.authorId) {
+				return false;
+			}
+			if (bookId != other.bookId) {
+				return false;
+			}
+			if (title == null) {
+				if (other.title != null) {
+					return false;
+				}
+			} else if (!title.equals(other.title)) {
+				return false;
+			}
+			return true;
+		}
+	}
 
-        enum BookType {
-            book,
-            article,
-            journal
-        }
+	/**
+	 * Avro POJO for testing.
+	 */
+	public static class BookAuthor {
 
-        long authorId;
+		enum BookType {
+			book,
+			article,
+			journal
+		}
 
-        @Nullable List<String> bookTitles;
+		long authorId;
 
-        @Nullable List<Book> books;
+		@Nullable
+		List<String> bookTitles;
 
-        String authorName;
+		@Nullable
+		List<Book> books;
 
-        BookType bookType;
+		String authorName;
 
-        public BookAuthor() {}
+		BookType bookType;
 
-        public BookAuthor(long authorId, List<String> bookTitles, String authorName) {
-            this.authorId = authorId;
-            this.bookTitles = bookTitles;
-            this.authorName = authorName;
-        }
+		public BookAuthor() {}
 
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + (int) (authorId ^ (authorId >>> 32));
-            result = prime * result + ((authorName == null) ? 0 : authorName.hashCode());
-            result = prime * result + ((bookTitles == null) ? 0 : bookTitles.hashCode());
-            result = prime * result + ((bookType == null) ? 0 : bookType.hashCode());
-            result = prime * result + ((books == null) ? 0 : books.hashCode());
-            return result;
-        }
+		public BookAuthor(long authorId, List<String> bookTitles, String authorName) {
+			this.authorId = authorId;
+			this.bookTitles = bookTitles;
+			this.authorName = authorName;
+		}
 
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            BookAuthor other = (BookAuthor) obj;
-            if (authorId != other.authorId) {
-                return false;
-            }
-            if (authorName == null) {
-                if (other.authorName != null) {
-                    return false;
-                }
-            } else if (!authorName.equals(other.authorName)) {
-                return false;
-            }
-            if (bookTitles == null) {
-                if (other.bookTitles != null) {
-                    return false;
-                }
-            } else if (!bookTitles.equals(other.bookTitles)) {
-                return false;
-            }
-            if (bookType != other.bookType) {
-                return false;
-            }
-            if (books == null) {
-                if (other.books != null) {
-                    return false;
-                }
-            } else if (!books.equals(other.books)) {
-                return false;
-            }
-            return true;
-        }
-    }
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + (int) (authorId ^ (authorId >>> 32));
+			result = prime * result + ((authorName == null) ? 0 : authorName.hashCode());
+			result = prime * result + ((bookTitles == null) ? 0 : bookTitles.hashCode());
+			result = prime * result + ((bookType == null) ? 0 : bookType.hashCode());
+			result = prime * result + ((books == null) ? 0 : books.hashCode());
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (obj == null) {
+				return false;
+			}
+			if (getClass() != obj.getClass()) {
+				return false;
+			}
+			BookAuthor other = (BookAuthor) obj;
+			if (authorId != other.authorId) {
+				return false;
+			}
+			if (authorName == null) {
+				if (other.authorName != null) {
+					return false;
+				}
+			} else if (!authorName.equals(other.authorName)) {
+				return false;
+			}
+			if (bookTitles == null) {
+				if (other.bookTitles != null) {
+					return false;
+				}
+			} else if (!bookTitles.equals(other.bookTitles)) {
+				return false;
+			}
+			if (bookType != other.bookType) {
+				return false;
+			}
+			if (books == null) {
+				if (other.books != null) {
+					return false;
+				}
+			} else if (!books.equals(other.books)) {
+				return false;
+			}
+			return true;
+		}
+	}
 }

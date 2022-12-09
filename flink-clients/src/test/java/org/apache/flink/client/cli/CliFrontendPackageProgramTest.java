@@ -28,12 +28,14 @@ import org.apache.flink.optimizer.DataStatistics;
 import org.apache.flink.optimizer.Optimizer;
 import org.apache.flink.optimizer.costs.DefaultCostEstimator;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.commons.cli.CommandLine;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.io.FileNotFoundException;
 import java.net.URL;
@@ -43,299 +45,272 @@ import static org.apache.flink.client.cli.CliFrontendTestUtils.TEST_JAR_CLASSLOA
 import static org.apache.flink.client.cli.CliFrontendTestUtils.TEST_JAR_MAIN_CLASS;
 import static org.apache.flink.client.cli.CliFrontendTestUtils.getNonJarFilePath;
 import static org.apache.flink.client.cli.CliFrontendTestUtils.getTestJarPath;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-/** Tests for the RUN command with {@link PackagedProgram PackagedPrograms}. */
-class CliFrontendPackageProgramTest {
+/**
+ * Tests for the RUN command with {@link PackagedProgram PackagedPrograms}.
+ */
+public class CliFrontendPackageProgramTest extends TestLogger {
 
-    private CliFrontend frontend;
+	private CliFrontend frontend;
 
-    @BeforeAll
-    static void init() {
-        CliFrontendTestUtils.pipeSystemOutToNull();
-    }
+	@BeforeClass
+	public static void init() {
+		CliFrontendTestUtils.pipeSystemOutToNull();
+	}
 
-    @AfterAll
-    static void shutdown() {
-        CliFrontendTestUtils.restoreSystemOut();
-    }
+	@AfterClass
+	public static void shutdown() {
+		CliFrontendTestUtils.restoreSystemOut();
+	}
 
-    @BeforeEach
-    void setup() {
-        final Configuration configuration = new Configuration();
-        frontend = new CliFrontend(configuration, Collections.singletonList(new DefaultCLI()));
-    }
+	@Before
+	public void setup() throws Exception {
+		final Configuration configuration = new Configuration();
+		frontend = new CliFrontend(
+			configuration,
+			Collections.singletonList(new DefaultCLI(configuration)));
+	}
 
-    @Test
-    void testNonExistingJarFile() {
-        ProgramOptions programOptions = mock(ProgramOptions.class);
-        when(programOptions.getJarFilePath()).thenReturn("/some/none/existing/path");
+	@Test
+	public void testNonExistingJarFile() throws Exception {
+		ProgramOptions programOptions = mock(ProgramOptions.class);
+		when(programOptions.getJarFilePath()).thenReturn("/some/none/existing/path");
 
-        assertThatThrownBy(() -> frontend.buildProgram(programOptions))
-                .isInstanceOf(FileNotFoundException.class);
-    }
+		try {
+			frontend.buildProgram(programOptions);
+			fail("should throw an exception");
+		}
+		catch (FileNotFoundException e) {
+			// that's what we want
+		}
+	}
 
-    @Test
-    void testFileNotJarFile() {
-        ProgramOptions programOptions = mock(ProgramOptions.class);
-        when(programOptions.getJarFilePath()).thenReturn(getNonJarFilePath());
-        when(programOptions.getProgramArgs()).thenReturn(new String[0]);
-        when(programOptions.getSavepointRestoreSettings())
-                .thenReturn(SavepointRestoreSettings.none());
+	@Test
+	public void testFileNotJarFile() throws Exception {
+		ProgramOptions programOptions = mock(ProgramOptions.class);
+		when(programOptions.getJarFilePath()).thenReturn(getNonJarFilePath());
+		when(programOptions.getProgramArgs()).thenReturn(new String[0]);
+		when(programOptions.getSavepointRestoreSettings()).thenReturn(SavepointRestoreSettings.none());
 
-        assertThatThrownBy(() -> frontend.buildProgram(programOptions))
-                .isInstanceOf(ProgramInvocationException.class);
-    }
+		try {
+			frontend.buildProgram(programOptions);
+			fail("should throw an exception");
+		} catch (ProgramInvocationException e) {
+			// that's what we want
+		}
+	}
 
-    @Test
-    void testVariantWithExplicitJarAndArgumentsOption() throws Exception {
-        String[] arguments = {
-            "--classpath",
-            "file:///tmp/foo",
-            "--classpath",
-            "file:///tmp/bar",
-            "-j",
-            getTestJarPath(),
-            "-a",
-            "--debug",
-            "true",
-            "arg1",
-            "arg2"
-        };
-        URL[] classpath = new URL[] {new URL("file:///tmp/foo"), new URL("file:///tmp/bar")};
-        String[] reducedArguments = new String[] {"--debug", "true", "arg1", "arg2"};
+	@Test
+	public void testVariantWithExplicitJarAndArgumentsOption() throws Exception {
+		String[] arguments = {
+				"--classpath", "file:///tmp/foo",
+				"--classpath", "file:///tmp/bar",
+				"-j", getTestJarPath(),
+				"-a", "--debug", "true", "arg1", "arg2" };
+		URL[] classpath = new URL[] { new URL("file:///tmp/foo"), new URL("file:///tmp/bar") };
+		String[] reducedArguments = new String[] {"--debug", "true", "arg1", "arg2"};
 
-        CommandLine commandLine =
-                CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
-        ProgramOptions programOptions = ProgramOptions.create(commandLine);
+		CommandLine commandLine = CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
+		ProgramOptions programOptions = ProgramOptions.create(commandLine);
 
-        assertThat(programOptions.getJarFilePath()).isEqualTo(getTestJarPath());
-        assertThat(programOptions.getClasspaths().toArray()).isEqualTo(classpath);
-        assertThat(programOptions.getProgramArgs()).isEqualTo(reducedArguments);
+		assertEquals(getTestJarPath(), programOptions.getJarFilePath());
+		assertArrayEquals(classpath, programOptions.getClasspaths().toArray());
+		assertArrayEquals(reducedArguments, programOptions.getProgramArgs());
 
-        PackagedProgram prog = frontend.buildProgram(programOptions);
+		PackagedProgram prog = frontend.buildProgram(programOptions);
 
-        assertThat(prog.getArguments()).isEqualTo(reducedArguments);
-        assertThat(prog.getMainClassName()).isEqualTo(TEST_JAR_MAIN_CLASS);
-    }
+		Assert.assertArrayEquals(reducedArguments, prog.getArguments());
+		Assert.assertEquals(TEST_JAR_MAIN_CLASS, prog.getMainClassName());
+	}
 
-    @Test
-    void testVariantWithExplicitJarAndNoArgumentsOption() throws Exception {
-        String[] arguments = {
-            "--classpath",
-            "file:///tmp/foo",
-            "--classpath",
-            "file:///tmp/bar",
-            "-j",
-            getTestJarPath(),
-            "--debug",
-            "true",
-            "arg1",
-            "arg2"
-        };
-        URL[] classpath = new URL[] {new URL("file:///tmp/foo"), new URL("file:///tmp/bar")};
-        String[] reducedArguments = new String[] {"--debug", "true", "arg1", "arg2"};
+	@Test
+	public void testVariantWithExplicitJarAndNoArgumentsOption() throws Exception {
+		String[] arguments = {
+				"--classpath", "file:///tmp/foo",
+				"--classpath", "file:///tmp/bar",
+				"-j", getTestJarPath(),
+				"--debug", "true", "arg1", "arg2" };
+		URL[] classpath = new URL[] { new URL("file:///tmp/foo"), new URL("file:///tmp/bar") };
+		String[] reducedArguments = new String[] {"--debug", "true", "arg1", "arg2"};
 
-        CommandLine commandLine =
-                CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
-        ProgramOptions programOptions = ProgramOptions.create(commandLine);
+		CommandLine commandLine = CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
+		ProgramOptions programOptions = ProgramOptions.create(commandLine);
 
-        assertThat(programOptions.getJarFilePath()).isEqualTo(getTestJarPath());
-        assertThat(programOptions.getClasspaths().toArray()).isEqualTo(classpath);
-        assertThat(programOptions.getProgramArgs()).isEqualTo(reducedArguments);
+		assertEquals(getTestJarPath(), programOptions.getJarFilePath());
+		assertArrayEquals(classpath, programOptions.getClasspaths().toArray());
+		assertArrayEquals(reducedArguments, programOptions.getProgramArgs());
 
-        PackagedProgram prog = frontend.buildProgram(programOptions);
+		PackagedProgram prog = frontend.buildProgram(programOptions);
 
-        assertThat(prog.getArguments()).isEqualTo(reducedArguments);
-        assertThat(prog.getMainClassName()).isEqualTo(TEST_JAR_MAIN_CLASS);
-    }
+		Assert.assertArrayEquals(reducedArguments, prog.getArguments());
+		Assert.assertEquals(TEST_JAR_MAIN_CLASS, prog.getMainClassName());
+	}
 
-    @Test
-    void testValidVariantWithNoJarAndNoArgumentsOption() throws Exception {
-        String[] arguments = {
-            "--classpath",
-            "file:///tmp/foo",
-            "--classpath",
-            "file:///tmp/bar",
-            getTestJarPath(),
-            "--debug",
-            "true",
-            "arg1",
-            "arg2"
-        };
-        URL[] classpath = new URL[] {new URL("file:///tmp/foo"), new URL("file:///tmp/bar")};
-        String[] reducedArguments = {"--debug", "true", "arg1", "arg2"};
+	@Test
+	public void testValidVariantWithNoJarAndNoArgumentsOption() throws Exception {
+		String[] arguments = {
+				"--classpath", "file:///tmp/foo",
+				"--classpath", "file:///tmp/bar",
+				getTestJarPath(),
+				"--debug", "true", "arg1", "arg2" };
+		URL[] classpath = new URL[] { new URL("file:///tmp/foo"), new URL("file:///tmp/bar") };
+		String[] reducedArguments = {"--debug", "true", "arg1", "arg2"};
 
-        CommandLine commandLine =
-                CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
-        ProgramOptions programOptions = ProgramOptions.create(commandLine);
+		CommandLine commandLine = CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
+		ProgramOptions programOptions = ProgramOptions.create(commandLine);
 
-        assertThat(programOptions.getJarFilePath()).isEqualTo(getTestJarPath());
-        assertThat(programOptions.getClasspaths().toArray()).isEqualTo(classpath);
-        assertThat(programOptions.getProgramArgs()).isEqualTo(reducedArguments);
+		assertEquals(getTestJarPath(), programOptions.getJarFilePath());
+		assertArrayEquals(classpath, programOptions.getClasspaths().toArray());
+		assertArrayEquals(reducedArguments, programOptions.getProgramArgs());
 
-        PackagedProgram prog = frontend.buildProgram(programOptions);
+		PackagedProgram prog = frontend.buildProgram(programOptions);
 
-        assertThat(prog.getArguments()).isEqualTo(reducedArguments);
-        assertThat(prog.getMainClassName()).isEqualTo(TEST_JAR_MAIN_CLASS);
-    }
+		Assert.assertArrayEquals(reducedArguments, prog.getArguments());
+		Assert.assertEquals(TEST_JAR_MAIN_CLASS, prog.getMainClassName());
+	}
 
-    @Test
-    void testNoJarNoArgumentsAtAll() {
-        assertThatThrownBy(() -> frontend.run(new String[0])).isInstanceOf(CliArgsException.class);
-    }
+	@Test(expected = CliArgsException.class)
+	public void testNoJarNoArgumentsAtAll() throws Exception {
+		frontend.run(new String[0]);
+	}
 
-    @Test
-    void testNonExistingFileWithArguments() throws Exception {
-        String[] arguments = {
-            "--classpath",
-            "file:///tmp/foo",
-            "--classpath",
-            "file:///tmp/bar",
-            "/some/none/existing/path",
-            "--debug",
-            "true",
-            "arg1",
-            "arg2"
-        };
-        URL[] classpath = new URL[] {new URL("file:///tmp/foo"), new URL("file:///tmp/bar")};
-        String[] reducedArguments = {"--debug", "true", "arg1", "arg2"};
+	@Test
+	public void testNonExistingFileWithArguments() throws Exception {
+		String[] arguments = {
+				"--classpath", "file:///tmp/foo",
+				"--classpath", "file:///tmp/bar",
+				"/some/none/existing/path",
+				"--debug", "true", "arg1", "arg2"  };
+		URL[] classpath = new URL[] { new URL("file:///tmp/foo"), new URL("file:///tmp/bar") };
+		String[] reducedArguments = {"--debug", "true", "arg1", "arg2"};
 
-        CommandLine commandLine =
-                CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
-        ProgramOptions programOptions = ProgramOptions.create(commandLine);
+		CommandLine commandLine = CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
+		ProgramOptions programOptions = ProgramOptions.create(commandLine);
 
-        assertThat(programOptions.getJarFilePath()).isEqualTo(arguments[4]);
-        assertThat(programOptions.getClasspaths().toArray()).isEqualTo(classpath);
-        assertThat(programOptions.getProgramArgs()).isEqualTo(reducedArguments);
+		assertEquals(arguments[4], programOptions.getJarFilePath());
+		assertArrayEquals(classpath, programOptions.getClasspaths().toArray());
+		assertArrayEquals(reducedArguments, programOptions.getProgramArgs());
 
-        assertThatThrownBy(() -> frontend.buildProgram(programOptions))
-                .isInstanceOf(FileNotFoundException.class);
-    }
+		try {
+			frontend.buildProgram(programOptions);
+			fail("Should fail with an exception");
+		}
+		catch (FileNotFoundException e) {
+			// that's what we want
+		}
+	}
 
-    @Test
-    void testNonExistingFileWithoutArguments() throws Exception {
-        String[] arguments = {"/some/none/existing/path"};
+	@Test
+	public void testNonExistingFileWithoutArguments() throws Exception {
+		String[] arguments = {"/some/none/existing/path"};
 
-        CommandLine commandLine =
-                CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
-        ProgramOptions programOptions = ProgramOptions.create(commandLine);
+		CommandLine commandLine = CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
+		ProgramOptions programOptions = ProgramOptions.create(commandLine);
 
-        assertThat(programOptions.getJarFilePath()).isEqualTo(arguments[0]);
-        assertThat(programOptions.getProgramArgs()).isEqualTo(new String[0]);
+		assertEquals(arguments[0], programOptions.getJarFilePath());
+		assertArrayEquals(new String[0], programOptions.getProgramArgs());
 
-        try {
-            frontend.buildProgram(programOptions);
-        } catch (FileNotFoundException e) {
-            // that's what we want
-        }
-    }
+		try {
+			frontend.buildProgram(programOptions);
+		}
+		catch (FileNotFoundException e) {
+			// that's what we want
+		}
+	}
 
-    /**
-     * Ensure that we will never have the following error.
-     *
-     * <pre>
-     * 	org.apache.flink.client.program.ProgramInvocationException: The main method caused an error.
-     * 	at org.apache.flink.client.program.PackagedProgram.callMainMethod(PackagedProgram.java:398)
-     * 	at org.apache.flink.client.program.PackagedProgram.invokeInteractiveModeForExecution(PackagedProgram.java:301)
-     * 	at org.apache.flink.client.program.Client.getOptimizedPlan(Client.java:140)
-     * 	at org.apache.flink.client.program.Client.getOptimizedPlanAsJson(Client.java:125)
-     * 	at org.apache.flink.client.cli.CliFrontend.info(CliFrontend.java:439)
-     * 	at org.apache.flink.client.cli.CliFrontend.parseParameters(CliFrontend.java:931)
-     * 	at org.apache.flink.client.cli.CliFrontend.main(CliFrontend.java:951)
-     * Caused by: java.io.IOException: java.lang.RuntimeException: java.lang.ClassNotFoundException: org.apache.hadoop.hive.ql.io.RCFileInputFormat
-     * 	at org.apache.hcatalog.mapreduce.HCatInputFormat.setInput(HCatInputFormat.java:102)
-     * 	at org.apache.hcatalog.mapreduce.HCatInputFormat.setInput(HCatInputFormat.java:54)
-     * 	at tlabs.CDR_In_Report.createHCatInputFormat(CDR_In_Report.java:322)
-     * 	at tlabs.CDR_Out_Report.main(CDR_Out_Report.java:380)
-     * 	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-     * 	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:57)
-     * 	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
-     * 	at java.lang.reflect.Method.invoke(Method.java:622)
-     * 	at org.apache.flink.client.program.PackagedProgram.callMainMethod(PackagedProgram.java:383)
-     * </pre>
-     *
-     * <p>The test works as follows:
-     *
-     * <ul>
-     *   <li>Use the CliFrontend to invoke a jar file that loads a class which is only available in
-     *       the jarfile itself (via a custom classloader)
-     *   <li>Change the Usercode classloader of the PackagedProgram to a special classloader for
-     *       this test
-     *   <li>the classloader will accept the special class (and return a String.class)
-     * </ul>
-     */
-    @Test
-    void testPlanWithExternalClass() throws Exception {
-        final boolean[] callme = {
-            false
-        }; // create a final object reference, to be able to change its val later
+	/**
+	 * Ensure that we will never have the following error.
+	 *
+	 * <pre>
+	 * 	org.apache.flink.client.program.ProgramInvocationException: The main method caused an error.
+	 *		at org.apache.flink.client.program.PackagedProgram.callMainMethod(PackagedProgram.java:398)
+	 *		at org.apache.flink.client.program.PackagedProgram.invokeInteractiveModeForExecution(PackagedProgram.java:301)
+	 *		at org.apache.flink.client.program.Client.getOptimizedPlan(Client.java:140)
+	 *		at org.apache.flink.client.program.Client.getOptimizedPlanAsJson(Client.java:125)
+	 *		at org.apache.flink.client.cli.CliFrontend.info(CliFrontend.java:439)
+	 *		at org.apache.flink.client.cli.CliFrontend.parseParameters(CliFrontend.java:931)
+	 *		at org.apache.flink.client.cli.CliFrontend.main(CliFrontend.java:951)
+	 *	Caused by: java.io.IOException: java.lang.RuntimeException: java.lang.ClassNotFoundException: org.apache.hadoop.hive.ql.io.RCFileInputFormat
+	 *		at org.apache.hcatalog.mapreduce.HCatInputFormat.setInput(HCatInputFormat.java:102)
+	 *		at org.apache.hcatalog.mapreduce.HCatInputFormat.setInput(HCatInputFormat.java:54)
+	 *		at tlabs.CDR_In_Report.createHCatInputFormat(CDR_In_Report.java:322)
+	 *		at tlabs.CDR_Out_Report.main(CDR_Out_Report.java:380)
+	 *		at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	 *		at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:57)
+	 *		at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	 *		at java.lang.reflect.Method.invoke(Method.java:622)
+	 *		at org.apache.flink.client.program.PackagedProgram.callMainMethod(PackagedProgram.java:383)
+	 * </pre>
+	 *
+	 * <p>The test works as follows:
+	 *
+	 * <ul>
+	 *   <li> Use the CliFrontend to invoke a jar file that loads a class which is only available
+	 * 	      in the jarfile itself (via a custom classloader)
+	 *   <li> Change the Usercode classloader of the PackagedProgram to a special classloader for this test
+	 *   <li> the classloader will accept the special class (and return a String.class)
+	 * </ul>
+	 */
+	@Test
+	public void testPlanWithExternalClass() throws Exception {
+		final boolean[] callme = { false }; // create a final object reference, to be able to change its val later
 
-        try {
-            String[] arguments = {
-                "--classpath",
-                "file:///tmp/foo",
-                "--classpath",
-                "file:///tmp/bar",
-                "-c",
-                TEST_JAR_CLASSLOADERTEST_CLASS,
-                getTestJarPath(),
-                "true",
-                "arg1",
-                "arg2"
-            };
-            URL[] classpath = new URL[] {new URL("file:///tmp/foo"), new URL("file:///tmp/bar")};
-            String[] reducedArguments = {"true", "arg1", "arg2"};
+		try {
+			String[] arguments = {
+					"--classpath", "file:///tmp/foo",
+					"--classpath", "file:///tmp/bar",
+					"-c", TEST_JAR_CLASSLOADERTEST_CLASS, getTestJarPath(),
+					"true", "arg1", "arg2" };
+			URL[] classpath = new URL[] { new URL("file:///tmp/foo"), new URL("file:///tmp/bar") };
+			String[] reducedArguments = { "true", "arg1", "arg2" };
 
-            CommandLine commandLine =
-                    CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
-            ProgramOptions programOptions = ProgramOptions.create(commandLine);
+			CommandLine commandLine = CliFrontendParser.parse(CliFrontendParser.RUN_OPTIONS, arguments, true);
+			ProgramOptions programOptions = ProgramOptions.create(commandLine);
 
-            assertThat(programOptions.getJarFilePath()).isEqualTo(getTestJarPath());
-            assertThat(programOptions.getClasspaths().toArray()).isEqualTo(classpath);
-            assertThat(programOptions.getEntryPointClassName())
-                    .isEqualTo(TEST_JAR_CLASSLOADERTEST_CLASS);
-            assertThat(programOptions.getProgramArgs()).isEqualTo(reducedArguments);
+			assertEquals(getTestJarPath(), programOptions.getJarFilePath());
+			assertArrayEquals(classpath, programOptions.getClasspaths().toArray());
+			assertEquals(TEST_JAR_CLASSLOADERTEST_CLASS, programOptions.getEntryPointClassName());
+			assertArrayEquals(reducedArguments, programOptions.getProgramArgs());
 
-            PackagedProgram prog = spy(frontend.buildProgram(programOptions));
+			PackagedProgram prog = spy(frontend.buildProgram(programOptions));
 
-            ClassLoader testClassLoader =
-                    new ClassLoader(prog.getUserCodeClassLoader()) {
-                        @Override
-                        public Class<?> loadClass(String name) throws ClassNotFoundException {
-                            if ("org.apache.hadoop.hive.ql.io.RCFileInputFormat".equals(name)) {
-                                callme[0] = true;
-                                return String.class; // Intentionally return the wrong class.
-                            } else {
-                                return super.loadClass(name);
-                            }
-                        }
-                    };
-            when(prog.getUserCodeClassLoader()).thenReturn(testClassLoader);
+			ClassLoader testClassLoader = new ClassLoader(prog.getUserCodeClassLoader()) {
+				@Override
+				public Class<?> loadClass(String name) throws ClassNotFoundException {
+					if ("org.apache.hadoop.hive.ql.io.RCFileInputFormat".equals(name)) {
+						callme[0] = true;
+						return String.class; // Intentionally return the wrong class.
+					} else {
+						return super.loadClass(name);
+					}
+				}
+			};
+			when(prog.getUserCodeClassLoader()).thenReturn(testClassLoader);
 
-            assertThat(prog.getMainClassName()).isEqualTo(TEST_JAR_CLASSLOADERTEST_CLASS);
-            assertThat(prog.getArguments()).isEqualTo(reducedArguments);
+			assertEquals(TEST_JAR_CLASSLOADERTEST_CLASS, prog.getMainClassName());
+			assertArrayEquals(reducedArguments, prog.getArguments());
 
-            Configuration c = new Configuration();
-            Optimizer compiler = new Optimizer(new DataStatistics(), new DefaultCostEstimator(), c);
+			Configuration c = new Configuration();
+			Optimizer compiler = new Optimizer(new DataStatistics(), new DefaultCostEstimator(), c);
 
-            // we expect this to fail with a "ClassNotFoundException"
-            Pipeline pipeline = PackagedProgramUtils.getPipelineFromProgram(prog, c, 666, true);
-            FlinkPipelineTranslationUtil.translateToJSONExecutionPlan(pipeline);
-            fail("Should have failed with a ClassNotFoundException");
-        } catch (ProgramInvocationException e) {
-            if (!(e.getCause() instanceof ClassNotFoundException)) {
-                e.printStackTrace();
-                fail("Program didn't throw ClassNotFoundException");
-            }
-            if (!callme[0]) {
-                fail("Classloader was not called");
-            }
-        }
-    }
+			// we expect this to fail with a "ClassNotFoundException"
+			Pipeline pipeline = PackagedProgramUtils.getPipelineFromProgram(prog, c, 666, true);
+			FlinkPipelineTranslationUtil.translateToJSONExecutionPlan(pipeline);
+			fail("Should have failed with a ClassNotFoundException");
+		}
+		catch (ProgramInvocationException e) {
+			if (!(e.getCause() instanceof ClassNotFoundException)) {
+				e.printStackTrace();
+				fail("Program didn't throw ClassNotFoundException");
+			}
+			assertTrue("Classloader was not called", callme[0]);
+		}
+	}
 }

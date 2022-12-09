@@ -31,106 +31,105 @@ import org.apache.flink.api.common.typeutils.base.EnumSerializer;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * A {@link TypeInformation} for java enumeration types.
+ * A {@link TypeInformation} for java enumeration types. 
  *
  * @param <T> The type represented by this type information.
  */
 @Public
 public class EnumTypeInfo<T extends Enum<T>> extends TypeInformation<T> implements AtomicType<T> {
 
-    private static final long serialVersionUID = 8936740290137178660L;
+	private static final long serialVersionUID = 8936740290137178660L;
+	
+	private final Class<T> typeClass;
 
-    private final Class<T> typeClass;
+	@PublicEvolving
+	public EnumTypeInfo(Class<T> typeClass) {
+		checkNotNull(typeClass, "Enum type class must not be null.");
 
-    @PublicEvolving
-    public EnumTypeInfo(Class<T> typeClass) {
-        checkNotNull(typeClass, "Enum type class must not be null.");
+		if (!Enum.class.isAssignableFrom(typeClass) ) {
+			throw new IllegalArgumentException("EnumTypeInfo can only be used for subclasses of " + Enum.class.getName());
+		}
 
-        if (!Enum.class.isAssignableFrom(typeClass)) {
-            throw new IllegalArgumentException(
-                    "EnumTypeInfo can only be used for subclasses of " + Enum.class.getName());
-        }
+		this.typeClass = typeClass;
+	}
 
-        this.typeClass = typeClass;
-    }
+	@Override
+	@PublicEvolving
+	public TypeComparator<T> createComparator(boolean sortOrderAscending, ExecutionConfig executionConfig) {
+		return new EnumComparator<T>(sortOrderAscending);
+	}
 
-    @Override
-    @PublicEvolving
-    public TypeComparator<T> createComparator(
-            boolean sortOrderAscending, ExecutionConfig executionConfig) {
-        return new EnumComparator<T>(sortOrderAscending);
-    }
+	@Override
+	@PublicEvolving
+	public boolean isBasicType() {
+		return false;
+	}
 
-    @Override
-    @PublicEvolving
-    public boolean isBasicType() {
-        return false;
-    }
+	@Override
+	@PublicEvolving
+	public boolean isTupleType() {
+		return false;
+	}
 
-    @Override
-    @PublicEvolving
-    public boolean isTupleType() {
-        return false;
-    }
+	@Override
+	@PublicEvolving
+	public int getArity() {
+		return 1;
+	}
+	
+	@Override
+	@PublicEvolving
+	public int getTotalFields() {
+		return 1;
+	}
 
-    @Override
-    @PublicEvolving
-    public int getArity() {
-        return 1;
-    }
+	@Override
+	@PublicEvolving
+	public Class<T> getTypeClass() {
+		return this.typeClass;
+	}
 
-    @Override
-    @PublicEvolving
-    public int getTotalFields() {
-        return 1;
-    }
+	@Override
+	@PublicEvolving
+	public boolean isKeyType() {
+		return true;
+	}
 
-    @Override
-    @PublicEvolving
-    public Class<T> getTypeClass() {
-        return this.typeClass;
-    }
+	@Override
+	@PublicEvolving
+	public TypeSerializer<T> createSerializer(ExecutionConfig executionConfig) {
+		return new EnumSerializer<T>(typeClass);
+	}
+	
+	// ------------------------------------------------------------------------
+	//  Standard utils
+	// ------------------------------------------------------------------------
+	
+	@Override
+	public String toString() {
+		return "EnumTypeInfo<" + typeClass.getName() + ">";
+	}	
+	
+	@Override
+	public int hashCode() {
+		return typeClass.hashCode();
+	}
 
-    @Override
-    @PublicEvolving
-    public boolean isKeyType() {
-        return true;
-    }
+	@Override
+	public boolean canEqual(Object obj) {
+		return obj instanceof EnumTypeInfo;
+	}
 
-    @Override
-    @PublicEvolving
-    public TypeSerializer<T> createSerializer(ExecutionConfig executionConfig) {
-        return new EnumSerializer<T>(typeClass);
-    }
+	@Override
+	public boolean equals(Object obj) {
+		if (obj instanceof EnumTypeInfo) {
+			@SuppressWarnings("unchecked")
+			EnumTypeInfo<T> enumTypeInfo = (EnumTypeInfo<T>) obj;
 
-    // ------------------------------------------------------------------------
-    //  Standard utils
-    // ------------------------------------------------------------------------
-
-    @Override
-    public String toString() {
-        return "EnumTypeInfo<" + typeClass.getName() + ">";
-    }
-
-    @Override
-    public int hashCode() {
-        return typeClass.hashCode();
-    }
-
-    @Override
-    public boolean canEqual(Object obj) {
-        return obj instanceof EnumTypeInfo;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof EnumTypeInfo) {
-            @SuppressWarnings("unchecked")
-            EnumTypeInfo<T> enumTypeInfo = (EnumTypeInfo<T>) obj;
-
-            return enumTypeInfo.canEqual(this) && typeClass == enumTypeInfo.typeClass;
-        } else {
-            return false;
-        }
-    }
+			return enumTypeInfo.canEqual(this) &&
+				typeClass == enumTypeInfo.typeClass;
+		} else {
+			return false;
+		}
+	}
 }

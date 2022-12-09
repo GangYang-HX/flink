@@ -20,45 +20,63 @@ package org.apache.flink.runtime.metrics.groups;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.metrics.CharacterFilter;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.metrics.dump.QueryScopeInfo;
 
 /**
- * A simple named {@link org.apache.flink.metrics.MetricGroup} that is used to hold subgroups of
- * metrics.
+ * A simple named {@link org.apache.flink.metrics.MetricGroup} that is used to hold
+ * subgroups of metrics.
  */
 @Internal
 public class GenericMetricGroup extends AbstractMetricGroup<AbstractMetricGroup<?>> {
-    /** The name of this group. */
-    private String name;
+	/** The name of this group. */
+	private final String name;
 
-    public GenericMetricGroup(MetricRegistry registry, AbstractMetricGroup parent, String name) {
-        super(registry, makeScopeComponents(parent, name), parent);
-        this.name = name;
-    }
+	/** Flag indicating which mode does the metric group belong to. */
+	private final QueryServiceMode mode;
 
-    @Override
-    protected QueryScopeInfo createQueryServiceMetricInfo(CharacterFilter filter) {
-        return parent.getQueryServiceMetricInfo(filter).copy(filter.filterCharacters(this.name));
-    }
+	public GenericMetricGroup(
+			MetricRegistry registry,
+			AbstractMetricGroup parent,
+			String name,
+			QueryServiceMode mode) {
+		super(registry, makeScopeComponents(parent, name), parent);
+		this.name = name;
+		this.mode = mode;
+	}
 
-    // ------------------------------------------------------------------------
+	public GenericMetricGroup(MetricRegistry registry, AbstractMetricGroup parent, String name) {
+		this(registry, parent, name, QueryServiceMode.ENABLE);
+	}
 
-    private static String[] makeScopeComponents(AbstractMetricGroup parent, String name) {
-        if (parent != null) {
-            String[] parentComponents = parent.getScopeComponents();
-            if (parentComponents != null && parentComponents.length > 0) {
-                String[] parts = new String[parentComponents.length + 1];
-                System.arraycopy(parentComponents, 0, parts, 0, parentComponents.length);
-                parts[parts.length - 1] = name;
-                return parts;
-            }
-        }
-        return new String[] {name};
-    }
+	@Override
+	protected QueryScopeInfo createQueryServiceMetricInfo(CharacterFilter filter) {
+		return parent.getQueryServiceMetricInfo(filter).copy(filter.filterCharacters(this.name));
+	}
 
-    @Override
-    protected String getGroupName(CharacterFilter filter) {
-        return filter.filterCharacters(name);
-    }
+	// ------------------------------------------------------------------------
+
+	private static String[] makeScopeComponents(AbstractMetricGroup parent, String name) {
+		if (parent != null) {
+			String[] parentComponents = parent.getScopeComponents();
+			if (parentComponents != null && parentComponents.length > 0) {
+				String[] parts = new String[parentComponents.length + 1];
+				System.arraycopy(parentComponents, 0, parts, 0, parentComponents.length);
+				parts[parts.length - 1] = name;
+				return parts;
+			}
+		}
+		return new String[] { name };
+	}
+
+	@Override
+	protected String getGroupName(CharacterFilter filter) {
+		return filter.filterCharacters(name);
+	}
+
+	@Override
+	public QueryServiceMode getQueryServiceMode() {
+		return mode;
+	}
 }

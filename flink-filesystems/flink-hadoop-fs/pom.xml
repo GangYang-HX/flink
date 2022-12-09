@@ -23,11 +23,12 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-filesystems</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-hadoop-fs</artifactId>
-	<name>Flink : FileSystems : Hadoop FS</name>
+	<name>flink-hadoop-fs</name>
 
 	<packaging>jar</packaging>
 
@@ -73,7 +74,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-hdfs</artifactId>
-			<version>${flink.hadoop.version}</version>
+			<version>${hadoop.version}</version>
 			<scope>test</scope>
 			<type>test-jar</type>
 			<exclusions>
@@ -88,7 +89,7 @@ under the License.
 			<artifactId>hadoop-common</artifactId>
 			<scope>test</scope>
 			<type>test-jar</type>
-			<version>${flink.hadoop.version}</version><!--$NO-MVN-MAN-VER$-->
+			<version>${hadoop.version}</version><!--$NO-MVN-MAN-VER$-->
 			<exclusions>
 				<exclusion>
 					<groupId>log4j</groupId>

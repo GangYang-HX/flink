@@ -29,105 +29,105 @@ import java.util.Map;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
-/** Serialization proxy for the timer services for a given key-group. */
+/**
+ * Serialization proxy for the timer services for a given key-group.
+ */
 @Internal
 public class InternalTimerServiceSerializationProxy<K> extends PostVersionedIOReadableWritable {
 
-    public static final int VERSION = 2;
+	public static final int VERSION = 2;
 
-    /** The key-group timer services to write / read. */
-    private final InternalTimeServiceManagerImpl<K> timerServicesManager;
+	/** The key-group timer services to write / read. */
+	private final InternalTimeServiceManager<K> timerServicesManager;
 
-    /** The user classloader; only relevant if the proxy is used to restore timer services. */
-    private ClassLoader userCodeClassLoader;
+	/** The user classloader; only relevant if the proxy is used to restore timer services. */
+	private ClassLoader userCodeClassLoader;
 
-    /** Properties of restored timer services. */
-    private final int keyGroupIdx;
+	/** Properties of restored timer services. */
+	private final int keyGroupIdx;
 
-    /** Constructor to use when restoring timer services. */
-    public InternalTimerServiceSerializationProxy(
-            InternalTimeServiceManagerImpl<K> timerServicesManager,
-            ClassLoader userCodeClassLoader,
-            int keyGroupIdx) {
-        this.timerServicesManager = checkNotNull(timerServicesManager);
-        this.userCodeClassLoader = checkNotNull(userCodeClassLoader);
-        this.keyGroupIdx = keyGroupIdx;
-    }
 
-    /** Constructor to use when writing timer services. */
-    public InternalTimerServiceSerializationProxy(
-            InternalTimeServiceManagerImpl<K> timerServicesManager, int keyGroupIdx) {
-        this.timerServicesManager = checkNotNull(timerServicesManager);
-        this.keyGroupIdx = keyGroupIdx;
-    }
+	/**
+	 * Constructor to use when restoring timer services.
+	 */
+	public InternalTimerServiceSerializationProxy(
+		InternalTimeServiceManager<K> timerServicesManager,
+		ClassLoader userCodeClassLoader,
+		int keyGroupIdx) {
+		this.timerServicesManager = checkNotNull(timerServicesManager);
+		this.userCodeClassLoader = checkNotNull(userCodeClassLoader);
+		this.keyGroupIdx = keyGroupIdx;
+	}
 
-    @Override
-    public int getVersion() {
-        return VERSION;
-    }
+	/**
+	 * Constructor to use when writing timer services.
+	 */
+	public InternalTimerServiceSerializationProxy(
+		InternalTimeServiceManager<K> timerServicesManager,
+		int keyGroupIdx) {
+		this.timerServicesManager = checkNotNull(timerServicesManager);
+		this.keyGroupIdx = keyGroupIdx;
+	}
 
-    @Override
-    public int[] getCompatibleVersions() {
-        return new int[] {VERSION, 1};
-    }
+	@Override
+	public int getVersion() {
+		return VERSION;
+	}
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public void write(DataOutputView out) throws IOException {
-        super.write(out);
-        final Map<String, InternalTimerServiceImpl<K, ?>> registeredTimerServices =
-                timerServicesManager.getRegisteredTimerServices();
+	@Override
+	public int[] getCompatibleVersions() {
+		return new int[] { VERSION, 1 };
+	}
 
-        out.writeInt(registeredTimerServices.size());
-        for (Map.Entry<String, InternalTimerServiceImpl<K, ?>> entry :
-                registeredTimerServices.entrySet()) {
-            String serviceName = entry.getKey();
-            InternalTimerServiceImpl<K, ?> timerService = entry.getValue();
+	@Override
+	@SuppressWarnings("unchecked")
+	public void write(DataOutputView out) throws IOException {
+		super.write(out);
+		final Map<String, InternalTimerServiceImpl<K, ?>> registeredTimerServices =
+			timerServicesManager.getRegisteredTimerServices();
 
-            out.writeUTF(serviceName);
-            InternalTimersSnapshotReaderWriters.getWriterForVersion(
-                            VERSION,
-                            timerService.snapshotTimersForKeyGroup(keyGroupIdx),
-                            timerService.getKeySerializer(),
-                            (TypeSerializer) timerService.getNamespaceSerializer())
-                    .writeTimersSnapshot(out);
-        }
-    }
+		out.writeInt(registeredTimerServices.size());
+		for (Map.Entry<String, InternalTimerServiceImpl<K, ?>> entry : registeredTimerServices.entrySet()) {
+			String serviceName = entry.getKey();
+			InternalTimerServiceImpl<K, ?> timerService = entry.getValue();
 
-    @Override
-    protected void read(DataInputView in, boolean wasVersioned) throws IOException {
-        int noOfTimerServices = in.readInt();
+			out.writeUTF(serviceName);
+			InternalTimersSnapshotReaderWriters
+				.getWriterForVersion(
+					VERSION,
+					timerService.snapshotTimersForKeyGroup(keyGroupIdx),
+					timerService.getKeySerializer(),
+					(TypeSerializer) timerService.getNamespaceSerializer())
+				.writeTimersSnapshot(out);
+		}
+	}
 
-        for (int i = 0; i < noOfTimerServices; i++) {
-            String serviceName = in.readUTF();
+	@Override
+	protected void read(DataInputView in, boolean wasVersioned) throws IOException {
+		int noOfTimerServices = in.readInt();
 
-            int readerVersion =
-                    wasVersioned
-                            ? getReadVersion()
-                            : InternalTimersSnapshotReaderWriters.NO_VERSION;
-            InternalTimersSnapshot<?, ?> restoredTimersSnapshot =
-                    InternalTimersSnapshotReaderWriters.getReaderForVersion(
-                                    readerVersion, userCodeClassLoader)
-                            .readTimersSnapshot(in);
+		for (int i = 0; i < noOfTimerServices; i++) {
+			String serviceName = in.readUTF();
 
-            InternalTimerServiceImpl<K, ?> timerService =
-                    registerOrGetTimerService(serviceName, restoredTimersSnapshot);
+			int readerVersion = wasVersioned ? getReadVersion() : InternalTimersSnapshotReaderWriters.NO_VERSION;
+			InternalTimersSnapshot<?, ?> restoredTimersSnapshot = InternalTimersSnapshotReaderWriters
+				.getReaderForVersion(readerVersion, userCodeClassLoader)
+				.readTimersSnapshot(in);
 
-            timerService.restoreTimersForKeyGroup(restoredTimersSnapshot, keyGroupIdx);
-        }
-    }
+			InternalTimerServiceImpl<K, ?> timerService = registerOrGetTimerService(
+				serviceName,
+				restoredTimersSnapshot);
 
-    @SuppressWarnings("unchecked")
-    private <N> InternalTimerServiceImpl<K, N> registerOrGetTimerService(
-            String serviceName, InternalTimersSnapshot<?, ?> restoredTimersSnapshot) {
-        final TypeSerializer<K> keySerializer =
-                (TypeSerializer<K>)
-                        restoredTimersSnapshot.getKeySerializerSnapshot().restoreSerializer();
-        final TypeSerializer<N> namespaceSerializer =
-                (TypeSerializer<N>)
-                        restoredTimersSnapshot.getNamespaceSerializerSnapshot().restoreSerializer();
-        TimerSerializer<K, N> timerSerializer =
-                new TimerSerializer<>(keySerializer, namespaceSerializer);
-        return timerServicesManager.registerOrGetTimerService(serviceName, timerSerializer);
-    }
+			timerService.restoreTimersForKeyGroup(restoredTimersSnapshot, keyGroupIdx);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private <N> InternalTimerServiceImpl<K, N> registerOrGetTimerService(
+		String serviceName, InternalTimersSnapshot<?, ?> restoredTimersSnapshot) {
+		final TypeSerializer<K> keySerializer = (TypeSerializer<K>) restoredTimersSnapshot.getKeySerializerSnapshot().restoreSerializer();
+		final TypeSerializer<N> namespaceSerializer = (TypeSerializer<N>) restoredTimersSnapshot.getNamespaceSerializerSnapshot().restoreSerializer();
+		TimerSerializer<K, N> timerSerializer = new TimerSerializer<>(keySerializer, namespaceSerializer);
+		return timerServicesManager.registerOrGetTimerService(serviceName, timerSerializer);
+	}
 }

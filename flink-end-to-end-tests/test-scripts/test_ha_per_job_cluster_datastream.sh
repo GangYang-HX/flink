@@ -20,9 +20,11 @@
 source "$(dirname "$0")"/common.sh
 source "$(dirname "$0")"/common_ha.sh
 
+TEST_TIMEOUT_SECONDS=540
 TEST_PROGRAM_JAR_NAME=DataStreamAllroundTestProgram.jar
 TEST_PROGRAM_JAR=${END_TO_END_DIR}/flink-datastream-allround-test/target/${TEST_PROGRAM_JAR_NAME}
 FLINK_LIB_DIR=${FLINK_DIR}/lib
+JOB_ID="00000000000000000000000000000000"
 
 #
 # NOTE: This script requires at least Bash version >= 4. Mac OS in 2020 still ships 3.x
@@ -99,7 +101,7 @@ function run_ha_test() {
     local INCREM=$4
     local ZOOKEEPER_VERSION=$5
 
-    local JM_KILLS=2
+    local JM_KILLS=3
 
     CLEARED=0
 
@@ -125,8 +127,6 @@ function run_ha_test() {
     local neededTaskmanagers=$(( (${PARALLELISM} + ${TASK_SLOTS_PER_TM_HA} - 1)  / ${TASK_SLOTS_PER_TM_HA} ))
     start_taskmanagers ${neededTaskmanagers}
 
-    wait_num_of_occurence_in_logs "Job [a-z0-9]+ is submitted." 1 "standalonejob"
-    JOB_ID=$(grep -E -o 'Job [a-z0-9]+ is submitted' $FLINK_LOG_DIR/*standalonejob*.log* | awk '{print $2}')
     wait_job_running ${JOB_ID}
 
     # start the watchdog that keeps the number of JMs stable
@@ -154,6 +154,23 @@ function run_ha_test() {
 STATE_BACKEND_TYPE=${1:-file}
 STATE_BACKEND_FILE_ASYNC=${2:-true}
 STATE_BACKEND_ROCKS_INCREMENTAL=${3:-false}
-ZOOKEEPER_VERSION=${4:-3.5}
+ZOOKEEPER_VERSION=${4:-3.4}
 
-run_test_with_timeout 900 run_ha_test 4 ${STATE_BACKEND_TYPE} ${STATE_BACKEND_FILE_ASYNC} ${STATE_BACKEND_ROCKS_INCREMENTAL} ${ZOOKEEPER_VERSION}
+function kill_test_watchdog() {
+    local watchdog_pid=`cat $TEST_DATA_DIR/job_watchdog.pid`
+    echo "Stopping job timeout watchdog (with pid=$watchdog_pid)"
+    kill $watchdog_pid
+}
+on_exit kill_test_watchdog
+
+( 
+    cmdpid=$BASHPID; 
+    (sleep $TEST_TIMEOUT_SECONDS; # set a timeout of 10 minutes for this test
+    echo "Test (pid: $cmdpid) did not finish after $TEST_TIMEOUT_SECONDS seconds."
+    echo "Printing Flink logs and killing it:"
+    cat ${FLINK_DIR}/log/* 
+    kill "$cmdpid") & watchdog_pid=$!
+    echo $watchdog_pid > $TEST_DATA_DIR/job_watchdog.pid
+    
+    run_ha_test 4 ${STATE_BACKEND_TYPE} ${STATE_BACKEND_FILE_ASYNC} ${STATE_BACKEND_ROCKS_INCREMENTAL} ${ZOOKEEPER_VERSION}
+)

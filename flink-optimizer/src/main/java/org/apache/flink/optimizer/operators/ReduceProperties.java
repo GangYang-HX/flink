@@ -18,6 +18,9 @@
 
 package org.apache.flink.optimizer.operators;
 
+import java.util.Collections;
+import java.util.List;
+
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.api.common.operators.util.FieldSet;
 import org.apache.flink.optimizer.costs.Costs;
@@ -35,119 +38,98 @@ import org.apache.flink.runtime.io.network.DataExchangeMode;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
 import org.apache.flink.runtime.operators.util.LocalStrategy;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.List;
-
 public final class ReduceProperties extends OperatorDescriptorSingle {
-    private static final Logger LOG = LoggerFactory.getLogger(ReduceProperties.class);
+	private static final Logger LOG = LoggerFactory.getLogger(ReduceProperties.class);
+	
+	private final Partitioner<?> customPartitioner;
 
-    private final Partitioner<?> customPartitioner;
+	private final DriverStrategy combinerStrategy;
+	
+	public ReduceProperties(FieldSet keys, DriverStrategy combinerStrategy) {
+		this(keys, null, combinerStrategy);
+	}
+	
+	public ReduceProperties(FieldSet keys, Partitioner<?> customPartitioner, DriverStrategy combinerStrategy) {
+		super(keys);
+		this.customPartitioner = customPartitioner;
+		this.combinerStrategy = combinerStrategy;
+	}
+	
+	@Override
+	public DriverStrategy getStrategy() {
+		return DriverStrategy.SORTED_REDUCE;
+	}
 
-    private final DriverStrategy combinerStrategy;
+	@Override
+	public SingleInputPlanNode instantiate(Channel in, SingleInputNode node) {
+		Channel toReducer = in;
 
-    public ReduceProperties(FieldSet keys, DriverStrategy combinerStrategy) {
-        this(keys, null, combinerStrategy);
-    }
+		if (in.getShipStrategy() == ShipStrategyType.FORWARD ||
+				(node.getBroadcastConnections() != null && !node.getBroadcastConnections().isEmpty())) {
+			if (in.getSource().getOptimizerNode() instanceof PartitionNode) {
+				LOG.warn("Cannot automatically inject combiner for ReduceFunction. Please add an explicit combiner with combineGroup() in front of the partition operator.");
+			}
+		} else if (combinerStrategy != DriverStrategy.NONE) {
+			// non forward case. all local properties are killed anyways, so we can safely plug in a combiner
+			Channel toCombiner = new Channel(in.getSource());
+			toCombiner.setShipStrategy(ShipStrategyType.FORWARD, DataExchangeMode.PIPELINED);
 
-    public ReduceProperties(
-            FieldSet keys, Partitioner<?> customPartitioner, DriverStrategy combinerStrategy) {
-        super(keys);
-        this.customPartitioner = customPartitioner;
-        this.combinerStrategy = combinerStrategy;
-    }
+			// create an input node for combine with same parallelism as input node
+			ReduceNode combinerNode = ((ReduceNode) node).getCombinerUtilityNode();
+			combinerNode.setParallelism(in.getSource().getParallelism());
 
-    @Override
-    public DriverStrategy getStrategy() {
-        return DriverStrategy.SORTED_REDUCE;
-    }
+			SingleInputPlanNode combiner = new SingleInputPlanNode(combinerNode,
+								"Combine ("+node.getOperator().getName()+")", toCombiner,
+								this.combinerStrategy, this.keyList);
 
-    @Override
-    public SingleInputPlanNode instantiate(Channel in, SingleInputNode node) {
-        Channel toReducer = in;
+			combiner.setCosts(new Costs(0, 0));
+			combiner.initProperties(toCombiner.getGlobalProperties(), toCombiner.getLocalProperties());
 
-        if (in.getShipStrategy() == ShipStrategyType.FORWARD
-                || (node.getBroadcastConnections() != null
-                        && !node.getBroadcastConnections().isEmpty())) {
-            if (in.getSource().getOptimizerNode() instanceof PartitionNode) {
-                LOG.warn(
-                        "Cannot automatically inject combiner for ReduceFunction. Please add an explicit combiner with combineGroup() in front of the partition operator.");
-            }
-        } else if (combinerStrategy != DriverStrategy.NONE) {
-            // non forward case. all local properties are killed anyways, so we can safely plug in a
-            // combiner
-            Channel toCombiner = new Channel(in.getSource());
-            toCombiner.setShipStrategy(ShipStrategyType.FORWARD, DataExchangeMode.PIPELINED);
+			toReducer = new Channel(combiner);
+			toReducer.setShipStrategy(in.getShipStrategy(), in.getShipStrategyKeys(),
+										in.getShipStrategySortOrder(), in.getDataExchangeMode());
+			toReducer.setLocalStrategy(LocalStrategy.SORT, in.getLocalStrategyKeys(), in.getLocalStrategySortOrder());
+		}
 
-            // create an input node for combine with same parallelism as input node
-            ReduceNode combinerNode = ((ReduceNode) node).getCombinerUtilityNode();
-            combinerNode.setParallelism(in.getSource().getParallelism());
+		return new SingleInputPlanNode(node, "Reduce (" + node.getOperator().getName() + ")", toReducer,
+			DriverStrategy.SORTED_REDUCE, this.keyList);
 
-            SingleInputPlanNode combiner =
-                    new SingleInputPlanNode(
-                            combinerNode,
-                            "Combine (" + node.getOperator().getName() + ")",
-                            toCombiner,
-                            this.combinerStrategy,
-                            this.keyList);
+	}
 
-            combiner.setCosts(new Costs(0, 0));
-            combiner.initProperties(
-                    toCombiner.getGlobalProperties(), toCombiner.getLocalProperties());
+	@Override
+	protected List<RequestedGlobalProperties> createPossibleGlobalProperties() {
+		RequestedGlobalProperties props = new RequestedGlobalProperties();
+		if (customPartitioner == null) {
+			props.setAnyPartitioning(this.keys);
+		} else {
+			props.setCustomPartitioned(this.keys, this.customPartitioner);
+		}
+		return Collections.singletonList(props);
+	}
 
-            toReducer = new Channel(combiner);
-            toReducer.setShipStrategy(
-                    in.getShipStrategy(),
-                    in.getShipStrategyKeys(),
-                    in.getShipStrategySortOrder(),
-                    in.getDataExchangeMode());
-            toReducer.setLocalStrategy(
-                    LocalStrategy.SORT, in.getLocalStrategyKeys(), in.getLocalStrategySortOrder());
-        }
+	@Override
+	protected List<RequestedLocalProperties> createPossibleLocalProperties() {
+		RequestedLocalProperties props = new RequestedLocalProperties();
+		props.setGroupedFields(this.keys);
+		return Collections.singletonList(props);
+	}
 
-        return new SingleInputPlanNode(
-                node,
-                "Reduce (" + node.getOperator().getName() + ")",
-                toReducer,
-                DriverStrategy.SORTED_REDUCE,
-                this.keyList);
-    }
+	@Override
+	public GlobalProperties computeGlobalProperties(GlobalProperties gProps) {
+		if (gProps.getUniqueFieldCombination() != null && gProps.getUniqueFieldCombination().size() > 0 &&
+				gProps.getPartitioning() == PartitioningProperty.RANDOM_PARTITIONED)
+		{
+			gProps.setAnyPartitioning(gProps.getUniqueFieldCombination().iterator().next().toFieldList());
+		}
+		gProps.clearUniqueFieldCombinations();
+		return gProps;
+	}
 
-    @Override
-    protected List<RequestedGlobalProperties> createPossibleGlobalProperties() {
-        RequestedGlobalProperties props = new RequestedGlobalProperties();
-        if (customPartitioner == null) {
-            props.setAnyPartitioning(this.keys);
-        } else {
-            props.setCustomPartitioned(this.keys, this.customPartitioner);
-        }
-        return Collections.singletonList(props);
-    }
-
-    @Override
-    protected List<RequestedLocalProperties> createPossibleLocalProperties() {
-        RequestedLocalProperties props = new RequestedLocalProperties();
-        props.setGroupedFields(this.keys);
-        return Collections.singletonList(props);
-    }
-
-    @Override
-    public GlobalProperties computeGlobalProperties(GlobalProperties gProps) {
-        if (gProps.getUniqueFieldCombination() != null
-                && gProps.getUniqueFieldCombination().size() > 0
-                && gProps.getPartitioning() == PartitioningProperty.RANDOM_PARTITIONED) {
-            gProps.setAnyPartitioning(
-                    gProps.getUniqueFieldCombination().iterator().next().toFieldList());
-        }
-        gProps.clearUniqueFieldCombinations();
-        return gProps;
-    }
-
-    @Override
-    public LocalProperties computeLocalProperties(LocalProperties lProps) {
-        return lProps.clearUniqueFieldSets();
-    }
+	@Override
+	public LocalProperties computeLocalProperties(LocalProperties lProps) {
+		return lProps.clearUniqueFieldSets();
+	}
 }

@@ -18,5 +18,8 @@
 
 package org.apache.flink.tests.util.categories;
 
-/** Dummy marker interface used for excluding all other groups. */
-public interface Dummy {}
+/**
+ * Dummy marker interface used for excluding all other groups.
+ */
+public interface Dummy {
+}

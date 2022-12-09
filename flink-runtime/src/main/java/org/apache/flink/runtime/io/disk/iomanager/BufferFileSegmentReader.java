@@ -22,9 +22,10 @@ import java.io.IOException;
 
 public interface BufferFileSegmentReader extends FileIOChannel {
 
-    void read() throws IOException;
+	void read() throws IOException;
 
-    void seekTo(long position) throws IOException;
+	void seekTo(long position) throws IOException;
 
-    boolean hasReachedEndOfFile();
+	boolean hasReachedEndOfFile();
+
 }

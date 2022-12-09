@@ -23,24 +23,8 @@ import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 import org.apache.flink.runtime.topology.PipelinedRegion;
 
-/** Pipelined region on execution level, i.e., {@link ExecutionGraph} level. */
-public interface SchedulingPipelinedRegion
-        extends PipelinedRegion<
-                ExecutionVertexID,
-                IntermediateResultPartitionID,
-                SchedulingExecutionVertex,
-                SchedulingResultPartition> {
-    /**
-     * Get all distinct blocking {@link ConsumedPartitionGroup}s.
-     *
-     * @return set of {@link ConsumedPartitionGroup}s
-     */
-    Iterable<ConsumedPartitionGroup> getAllNonPipelinedConsumedPartitionGroups();
-
-    /**
-     * Get all distinct releaseByScheduler {@link ConsumedPartitionGroup}s.
-     *
-     * @return set of {@link ConsumedPartitionGroup}s
-     */
-    Iterable<ConsumedPartitionGroup> getAllReleaseBySchedulerConsumedPartitionGroups();
+/**
+ * Pipelined region on execution level, i.e., {@link ExecutionGraph} level.
+ */
+public interface SchedulingPipelinedRegion extends PipelinedRegion<ExecutionVertexID, IntermediateResultPartitionID, SchedulingExecutionVertex, SchedulingResultPartition> {
 }

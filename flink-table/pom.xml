@@ -23,11 +23,12 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-parent</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-table</artifactId>
-	<name>Flink : Table : </name>
+	<name>flink-table</name>
 
 	<packaging>pom</packaging>
 
@@ -35,21 +36,16 @@ under the License.
 		<module>flink-table-common</module>
 		<module>flink-table-api-java</module>
 		<module>flink-table-api-scala</module>
-		<module>flink-table-api-bridge-base</module>
 		<module>flink-table-api-java-bridge</module>
 		<module>flink-table-api-scala-bridge</module>
-		<module>flink-table-api-java-uber</module>
 		<module>flink-table-planner</module>
-		<module>flink-table-planner-loader</module>
-		<module>flink-table-planner-loader-bundle</module>
-		<module>flink-table-runtime</module>
-		<module>flink-sql-gateway-api</module>
-		<module>flink-sql-gateway</module>
+		<module>flink-table-planner-blink</module>
+		<module>flink-table-runtime-blink</module>
+		<module>flink-table-uber</module>
+		<module>flink-table-uber-blink</module>
 		<module>flink-sql-client</module>
 		<module>flink-sql-parser</module>
 		<module>flink-sql-parser-hive</module>
-		<module>flink-table-code-splitter</module>
-		<module>flink-table-test-utils</module>
 	</modules>
 
 	<dependencyManagement>
@@ -76,10 +72,9 @@ under the License.
 	</dependencyManagement>
 
 	<properties>
-		<calcite.version>1.26.0</calcite.version>
-		<!-- Keep Janino in sync with calcite. -->
-		<janino.version>3.0.11</janino.version>
-		<jsonpath.version>2.6.0</jsonpath.version>
-		<guava.version>29.0-jre</guava.version>
+		<!-- When updating Janino, make sure that Calcite supports it as well. -->
+		<janino.version>3.0.9</janino.version>
+		<calcite.version>1.22.7-flink</calcite.version>
+		<guava.version>19.0</guava.version>
 	</properties>
 </project>

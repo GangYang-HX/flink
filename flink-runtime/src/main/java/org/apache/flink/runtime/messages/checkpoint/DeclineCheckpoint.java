@@ -21,57 +21,52 @@ package org.apache.flink.runtime.messages.checkpoint;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.checkpoint.CheckpointException;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
-import org.apache.flink.util.Preconditions;
-
-import javax.annotation.Nonnull;
+import org.apache.flink.util.SerializedThrowable;
 
 /**
  * This message is sent from the {@link org.apache.flink.runtime.taskexecutor.TaskExecutor} to the
- * {@link org.apache.flink.runtime.jobmaster.JobMaster} to tell the checkpoint coordinator that a
- * checkpoint request could not be heeded. This can happen if a Task is already in RUNNING state but
- * is internally not yet ready to perform checkpoints.
+ * {@link org.apache.flink.runtime.jobmaster.JobMaster} to tell the checkpoint coordinator
+ * that a checkpoint request could not be heeded. This can happen if a Task is already in
+ * RUNNING state but is internally not yet ready to perform checkpoints.
  */
 public class DeclineCheckpoint extends AbstractCheckpointMessage implements java.io.Serializable {
 
-    private static final long serialVersionUID = 2094094662279578953L;
+	private static final long serialVersionUID = 2094094662279578953L;
 
-    /** The serialized reason why the checkpoint was declined. */
-    private final SerializedCheckpointException serializedCheckpointException;
+	/** The reason why the checkpoint was declined. */
+	private final Throwable reason;
 
-    public DeclineCheckpoint(
-            JobID job,
-            ExecutionAttemptID taskExecutionId,
-            long checkpointId,
-            CheckpointException checkpointException) {
-        super(job, taskExecutionId, checkpointId);
+	public DeclineCheckpoint(JobID job, ExecutionAttemptID taskExecutionId, long checkpointId) {
+		this(job, taskExecutionId, checkpointId, null);
+	}
 
-        Preconditions.checkNotNull(
-                checkpointException, "The checkpoint exception must not be null.");
-        // replace with a serialized throwable, to be on the safe side
-        this.serializedCheckpointException = new SerializedCheckpointException(checkpointException);
-    }
+	public DeclineCheckpoint(JobID job, ExecutionAttemptID taskExecutionId, long checkpointId, Throwable reason) {
+		super(job, taskExecutionId, checkpointId);
 
-    // --------------------------------------------------------------------------------------------
+		if (reason == null || reason instanceof CheckpointException) {
+			this.reason = reason;
+		} else {
+			// some other exception. replace with a serialized throwable, to be on the safe side
+			this.reason = new SerializedThrowable(reason);
+		}
+	}
 
-    /**
-     * Gets the reason why the checkpoint was declined.
-     *
-     * @return The reason why the checkpoint was declined
-     */
-    @Nonnull
-    public SerializedCheckpointException getSerializedCheckpointException() {
-        return serializedCheckpointException;
-    }
+	// --------------------------------------------------------------------------------------------
 
-    // --------------------------------------------------------------------------------------------
+	/**
+	 * Gets the reason why the checkpoint was declined.
+	 *
+	 * @return The reason why the checkpoint was declined
+	 */
+	public Throwable getReason() {
+		return reason;
+	}
 
-    @Override
-    public String toString() {
-        return String.format(
-                "Declined Checkpoint %d for (%s/%s): %s",
-                getCheckpointId(),
-                getJob(),
-                getTaskExecutionId(),
-                serializedCheckpointException.getCheckpointFailureReason());
-    }
+	// --------------------------------------------------------------------------------------------
+
+	@Override
+	public String toString() {
+		return String.format("Declined Checkpoint %d for (%s/%s): %s",
+				getCheckpointId(), getJob(), getTaskExecutionId(), reason);
+	}
 }

@@ -22,15 +22,15 @@ import org.rocksdb.Cache;
 import org.rocksdb.WriteBufferManager;
 
 /**
- * The set of resources that can be shared by all RocksDB instances in a slot. Sharing these
- * resources helps RocksDB a predictable resource footprint.
+ * The set of resources that can be shared by all RocksDB instances in a slot.
+ * Sharing these resources helps RocksDB a predictable resource footprint.
  */
 final class RocksDBSharedResources implements AutoCloseable {
 
-    private final Cache cache;
+	private final Cache cache;
+    private final long writeBufferManagerCapacity;
 
     private final WriteBufferManager writeBufferManager;
-    private final long writeBufferManagerCapacity;
 
     private final boolean usingPartitionedIndexFilters;
 
@@ -45,13 +45,13 @@ final class RocksDBSharedResources implements AutoCloseable {
         this.usingPartitionedIndexFilters = usingPartitionedIndexFilters;
     }
 
-    public Cache getCache() {
-        return cache;
-    }
+	public Cache getCache() {
+		return cache;
+	}
 
-    public WriteBufferManager getWriteBufferManager() {
-        return writeBufferManager;
-    }
+	public WriteBufferManager getWriteBufferManager() {
+		return writeBufferManager;
+	}
 
     public long getWriteBufferManagerCapacity() {
         return writeBufferManagerCapacity;

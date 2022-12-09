@@ -22,28 +22,27 @@ import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 
 class TtlStateContext<T, SV> {
-    /** Wrapped original state handler. */
-    final T original;
+	/** Wrapped original state handler. */
+	final T original;
+	final StateTtlConfig config;
+	final TtlTimeProvider timeProvider;
 
-    final StateTtlConfig config;
-    final TtlTimeProvider timeProvider;
+	/** Serializer of original user stored value without timestamp. */
+	final TypeSerializer<SV> valueSerializer;
 
-    /** Serializer of original user stored value without timestamp. */
-    final TypeSerializer<SV> valueSerializer;
+	/** This registered callback is to be called whenever state is accessed for read or write. */
+	final Runnable accessCallback;
 
-    /** This registered callback is to be called whenever state is accessed for read or write. */
-    final Runnable accessCallback;
-
-    TtlStateContext(
-            T original,
-            StateTtlConfig config,
-            TtlTimeProvider timeProvider,
-            TypeSerializer<SV> valueSerializer,
-            Runnable accessCallback) {
-        this.original = original;
-        this.config = config;
-        this.timeProvider = timeProvider;
-        this.valueSerializer = valueSerializer;
-        this.accessCallback = accessCallback;
-    }
+	TtlStateContext(
+		T original,
+		StateTtlConfig config,
+		TtlTimeProvider timeProvider,
+		TypeSerializer<SV> valueSerializer,
+		Runnable accessCallback) {
+		this.original = original;
+		this.config = config;
+		this.timeProvider = timeProvider;
+		this.valueSerializer = valueSerializer;
+		this.accessCallback = accessCallback;
+	}
 }

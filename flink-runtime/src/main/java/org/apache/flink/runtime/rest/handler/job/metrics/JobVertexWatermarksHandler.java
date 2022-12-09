@@ -45,58 +45,55 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
-/** Handler that returns the watermarks given a {@link JobID} and {@link JobVertexID}. */
-public class JobVertexWatermarksHandler
-        extends AbstractJobVertexHandler<MetricCollectionResponseBody, JobVertexMessageParameters> {
 
-    private final MetricFetcher metricFetcher;
+/**
+ * Handler that returns the watermarks given a {@link JobID} and {@link JobVertexID}.
+ */
+public class JobVertexWatermarksHandler extends AbstractJobVertexHandler<MetricCollectionResponseBody, JobVertexMessageParameters> {
 
-    public JobVertexWatermarksHandler(
-            GatewayRetriever<? extends RestfulGateway> leaderRetriever,
-            Time timeout,
-            Map<String, String> responseHeaders,
-            MetricFetcher metricFetcher,
-            ExecutionGraphCache executionGraphCache,
-            Executor executor) {
-        super(
-                leaderRetriever,
-                timeout,
-                responseHeaders,
-                JobVertexWatermarksHeaders.INSTANCE,
-                executionGraphCache,
-                executor);
-        this.metricFetcher = metricFetcher;
-    }
+	private final MetricFetcher metricFetcher;
 
-    @Override
-    protected MetricCollectionResponseBody handleRequest(
-            HandlerRequest<EmptyRequestBody> request, AccessExecutionJobVertex jobVertex)
-            throws RestHandlerException {
+	public JobVertexWatermarksHandler(
+			GatewayRetriever<? extends RestfulGateway> leaderRetriever,
+			Time timeout,
+			Map<String, String> responseHeaders,
+			MetricFetcher metricFetcher,
+			ExecutionGraphCache executionGraphCache,
+			Executor executor) {
+		super(leaderRetriever,
+			timeout,
+			responseHeaders,
+			JobVertexWatermarksHeaders.INSTANCE,
+			executionGraphCache,
+			executor);
+		this.metricFetcher = metricFetcher;
+	}
 
-        String jobID = request.getPathParameter(JobIDPathParameter.class).toString();
-        String taskID = jobVertex.getJobVertexId().toString();
+	@Override
+	protected MetricCollectionResponseBody handleRequest(
+			HandlerRequest<EmptyRequestBody, JobVertexMessageParameters> request,
+			AccessExecutionJobVertex jobVertex) throws RestHandlerException {
 
-        metricFetcher.update();
-        MetricStore.TaskMetricStore taskMetricStore =
-                metricFetcher.getMetricStore().getTaskMetricStore(jobID, taskID);
-        if (taskMetricStore == null) {
-            return new MetricCollectionResponseBody(Collections.emptyList());
-        }
+		String jobID = request.getPathParameter(JobIDPathParameter.class).toString();
+		String taskID = jobVertex.getJobVertexId().toString();
 
-        AccessExecutionVertex[] taskVertices = jobVertex.getTaskVertices();
-        List<Metric> metrics = new ArrayList<>(taskVertices.length);
+		metricFetcher.update();
+		MetricStore.TaskMetricStore taskMetricStore = metricFetcher.getMetricStore().getTaskMetricStore(jobID, taskID);
+		if (taskMetricStore == null) {
+			return new MetricCollectionResponseBody(Collections.emptyList());
+		}
 
-        for (AccessExecutionVertex taskVertex : taskVertices) {
-            String id =
-                    taskVertex.getParallelSubtaskIndex()
-                            + "."
-                            + MetricNames.IO_CURRENT_INPUT_WATERMARK;
-            String watermarkValue = taskMetricStore.getMetric(id);
-            if (watermarkValue != null) {
-                metrics.add(new Metric(id, watermarkValue));
-            }
-        }
+		AccessExecutionVertex[] taskVertices = jobVertex.getTaskVertices();
+		List<Metric> metrics = new ArrayList<>(taskVertices.length);
 
-        return new MetricCollectionResponseBody(metrics);
-    }
+		for (AccessExecutionVertex taskVertex : taskVertices) {
+			String id = taskVertex.getParallelSubtaskIndex() + "." + MetricNames.IO_CURRENT_INPUT_WATERMARK;
+			String watermarkValue = taskMetricStore.getMetric(id);
+			if (watermarkValue != null) {
+				metrics.add(new Metric(id, watermarkValue));
+			}
+		}
+
+		return new MetricCollectionResponseBody(metrics);
+	}
 }

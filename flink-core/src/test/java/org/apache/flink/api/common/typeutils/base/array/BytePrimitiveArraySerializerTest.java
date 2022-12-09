@@ -18,54 +18,58 @@
 
 package org.apache.flink.api.common.typeutils.base.array;
 
-import org.apache.flink.api.common.typeutils.SerializerTestBase;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
-
 import java.util.Random;
 
-/** A test for the {@link BytePrimitiveArraySerializer}. */
-class BytePrimitiveArraySerializerTest extends SerializerTestBase<byte[]> {
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.base.array.BytePrimitiveArraySerializer;
+import org.apache.flink.api.common.typeutils.base.array.LongPrimitiveArraySerializer;
 
-    private final Random rnd = new Random(346283764872L);
+/**
+ * A test for the {@link LongPrimitiveArraySerializer}.
+ */
+public class BytePrimitiveArraySerializerTest extends SerializerTestBase<byte[]> {
 
-    @Override
-    protected TypeSerializer<byte[]> createSerializer() {
-        return new BytePrimitiveArraySerializer();
-    }
+	private final Random rnd = new Random(346283764872L);
+	
+	@Override
+	protected TypeSerializer<byte[]> createSerializer() {
+		return new BytePrimitiveArraySerializer();
+	}
 
-    @Override
-    protected Class<byte[]> getTypeClass() {
-        return byte[].class;
-    }
+	@Override
+	protected Class<byte[]> getTypeClass() {
+		return byte[].class;
+	}
+	
+	@Override
+	protected int getLength() {
+		return -1;
+	}
 
-    @Override
-    protected int getLength() {
-        return -1;
-    }
-
-    @Override
-    protected byte[][] getTestData() {
-        return new byte[][] {
-            randomByteArray(),
-            randomByteArray(),
-            new byte[] {},
-            randomByteArray(),
-            randomByteArray(),
-            randomByteArray(),
-            new byte[] {},
-            randomByteArray(),
-            randomByteArray(),
-            randomByteArray(),
-            new byte[] {}
-        };
-    }
-
-    private final byte[] randomByteArray() {
-        int len = rnd.nextInt(1024 * 1024);
-        byte[] data = new byte[len];
-        for (int i = 0; i < len; i++) {
-            data[i] = (byte) rnd.nextInt();
-        }
-        return data;
-    }
+	@Override
+	protected byte[][] getTestData() {
+		return new byte[][] {
+			randomByteArray(),
+			randomByteArray(),
+			new byte[] {},
+			randomByteArray(),
+			randomByteArray(),
+			randomByteArray(),
+			new byte[] {},
+			randomByteArray(),
+			randomByteArray(),
+			randomByteArray(),
+			new byte[] {}
+		};
+	}
+	
+	private final byte[] randomByteArray() {
+		int len = rnd.nextInt(1024 * 1024);
+		byte[] data = new byte[len];
+		for (int i = 0; i < len; i++) {
+			data[i] = (byte) rnd.nextInt();
+		}
+		return data;
+	}
 }

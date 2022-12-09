@@ -36,60 +36,46 @@ import java.util.Properties;
  */
 public class ClassLoaderTestProgram {
 
-    public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Exception {
 
-        final ParameterTool params = ParameterTool.fromArgs(args);
+		final ParameterTool params = ParameterTool.fromArgs(args);
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        env.fromElements("Hello")
-                .map(
-                        (MapFunction<String, String>)
-                                value -> {
-                                    String messageFromPropsFile;
+		env
+			.fromElements("Hello")
+			.map((MapFunction<String, String>) value -> {
 
-                                    try (InputStream propFile =
-                                            ClassLoaderTestProgram.class
-                                                    .getClassLoader()
-                                                    .getResourceAsStream(
-                                                            "parent-child-test.properties")) {
-                                        Properties properties = new Properties();
-                                        properties.load(propFile);
-                                        messageFromPropsFile = properties.getProperty("message");
-                                    }
+				String messageFromPropsFile;
 
-                                    // Enumerate all properties files we can find and store the
-                                    // messages in the
-                                    // order we find them. The order will be different between
-                                    // parent-first and
-                                    // child-first classloader mode.
-                                    Enumeration<URL> resources =
-                                            ClassLoaderTestProgram.class
-                                                    .getClassLoader()
-                                                    .getResources("parent-child-test.properties");
+				try (InputStream propFile = ClassLoaderTestProgram.class.getClassLoader().getResourceAsStream("parent-child-test.properties")) {
+					Properties properties = new Properties();
+					properties.load(propFile);
+					messageFromPropsFile = properties.getProperty("message");
+				}
 
-                                    StringBuilder orderedProperties = new StringBuilder();
-                                    while (resources.hasMoreElements()) {
-                                        URL url = resources.nextElement();
-                                        try (InputStream in = url.openStream()) {
-                                            Properties properties = new Properties();
-                                            properties.load(in);
-                                            String messageFromEnumeratedPropsFile =
-                                                    properties.getProperty("message");
-                                            orderedProperties.append(
-                                                    messageFromEnumeratedPropsFile);
-                                        }
-                                    }
+				// Enumerate all properties files we can find and store the messages in the
+				// order we find them. The order will be different between parent-first and
+				// child-first classloader mode.
+				Enumeration<URL> resources = ClassLoaderTestProgram.class.getClassLoader().getResources(
+					"parent-child-test.properties");
 
-                                    String message = ParentChildTestingVehicle.getMessage();
-                                    return message
-                                            + ":"
-                                            + messageFromPropsFile
-                                            + ":"
-                                            + orderedProperties;
-                                })
-                .writeAsText(params.getRequired("output"), FileSystem.WriteMode.OVERWRITE);
+				StringBuilder orderedProperties = new StringBuilder();
+				while (resources.hasMoreElements()) {
+					URL url = resources.nextElement();
+					try (InputStream in = url.openStream()) {
+						Properties properties = new Properties();
+						properties.load(in);
+						String messageFromEnumeratedPropsFile = properties.getProperty("message");
+						orderedProperties.append(messageFromEnumeratedPropsFile);
+					}
+				}
 
-        env.execute("ClassLoader Test Program");
-    }
+				String message = ParentChildTestingVehicle.getMessage();
+				return message + ":" + messageFromPropsFile + ":" + orderedProperties;
+			})
+			.writeAsText(params.getRequired("output"), FileSystem.WriteMode.OVERWRITE);
+
+		env.execute("ClassLoader Test Program");
+	}
 }

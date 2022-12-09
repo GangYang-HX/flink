@@ -18,6 +18,8 @@
 
 package org.apache.flink.api.common.typeutils.base;
 
+import java.io.IOException;
+
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.typeutils.SimpleTypeSerializerSnapshot;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
@@ -25,76 +27,75 @@ import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.types.FloatValue;
 
-import java.io.IOException;
-
 @Internal
 public class FloatValueSerializer extends TypeSerializerSingleton<FloatValue> {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
+	
+	public static final FloatValueSerializer INSTANCE = new FloatValueSerializer();
 
-    public static final FloatValueSerializer INSTANCE = new FloatValueSerializer();
+	@Override
+	public boolean isImmutableType() {
+		return false;
+	}
 
-    @Override
-    public boolean isImmutableType() {
-        return false;
-    }
+	@Override
+	public FloatValue createInstance() {
+		return new FloatValue();
+	}
 
-    @Override
-    public FloatValue createInstance() {
-        return new FloatValue();
-    }
+	@Override
+	public FloatValue copy(FloatValue from) {
+		return copy(from, new FloatValue());
+	}
+	
+	@Override
+	public FloatValue copy(FloatValue from, FloatValue reuse) {
+		reuse.setValue(from.getValue());
+		return reuse;
+	}
 
-    @Override
-    public FloatValue copy(FloatValue from) {
-        return copy(from, new FloatValue());
-    }
+	@Override
+	public int getLength() {
+		return 4;
+	}
 
-    @Override
-    public FloatValue copy(FloatValue from, FloatValue reuse) {
-        reuse.setValue(from.getValue());
-        return reuse;
-    }
+	@Override
+	public void serialize(FloatValue record, DataOutputView target) throws IOException {
+		record.write(target);
+	}
 
-    @Override
-    public int getLength() {
-        return 4;
-    }
+	@Override
+	public FloatValue deserialize(DataInputView source) throws IOException {
+		return deserialize(new FloatValue(), source);
+	}
+	
+	@Override
+	public FloatValue deserialize(FloatValue reuse, DataInputView source) throws IOException {
+		reuse.read(source);
+		return reuse;
+	}
 
-    @Override
-    public void serialize(FloatValue record, DataOutputView target) throws IOException {
-        record.write(target);
-    }
+	@Override
+	public void copy(DataInputView source, DataOutputView target) throws IOException {
+		target.writeFloat(source.readFloat());
+	}
 
-    @Override
-    public FloatValue deserialize(DataInputView source) throws IOException {
-        return deserialize(new FloatValue(), source);
-    }
+	@Override
+	public TypeSerializerSnapshot<FloatValue> snapshotConfiguration() {
+		return new FloatValueSerializerSnapshot();
+	}
 
-    @Override
-    public FloatValue deserialize(FloatValue reuse, DataInputView source) throws IOException {
-        reuse.read(source);
-        return reuse;
-    }
+	// ------------------------------------------------------------------------
 
-    @Override
-    public void copy(DataInputView source, DataOutputView target) throws IOException {
-        target.writeFloat(source.readFloat());
-    }
+	/**
+	 * Serializer configuration snapshot for compatibility and format evolution.
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static final class FloatValueSerializerSnapshot extends SimpleTypeSerializerSnapshot<FloatValue> {
 
-    @Override
-    public TypeSerializerSnapshot<FloatValue> snapshotConfiguration() {
-        return new FloatValueSerializerSnapshot();
-    }
-
-    // ------------------------------------------------------------------------
-
-    /** Serializer configuration snapshot for compatibility and format evolution. */
-    @SuppressWarnings("WeakerAccess")
-    public static final class FloatValueSerializerSnapshot
-            extends SimpleTypeSerializerSnapshot<FloatValue> {
-
-        public FloatValueSerializerSnapshot() {
-            super(() -> INSTANCE);
-        }
-    }
+		public FloatValueSerializerSnapshot() {
+			super(() -> INSTANCE);
+		}
+	}
 }

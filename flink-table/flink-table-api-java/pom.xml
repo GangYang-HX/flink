@@ -23,11 +23,12 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-table</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-table-api-java</artifactId>
-	<name>Flink : Table : API Java</name>
+	<name>flink-table-api-java</name>
 	<description>
 		This module contains the Table/SQL API for writing table programs
 		within the table ecosystem using the Java programming language.
@@ -51,19 +52,18 @@ under the License.
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
-
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-core</artifactId>
-			<version>${project.version}</version>
-			<type>test-jar</type>
-			<scope>test</scope>
-		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-test-utils-junit</artifactId>
 		</dependency>
-	</dependencies>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-runtime_2.11</artifactId>
+            <version>${project.version}</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
 
 	<build>
 		<plugins>
@@ -77,12 +77,6 @@ under the License.
 						</goals>
 					</execution>
 				</executions>
-				<configuration>
-					<excludes>
-						<!-- test-jar is still used by JUnit4 modules -->
-						<exclude>META-INF/services/org.junit.jupiter.api.extension.Extension</exclude>
-					</excludes>
-				</configuration>
 			</plugin>
 		</plugins>
 	</build>

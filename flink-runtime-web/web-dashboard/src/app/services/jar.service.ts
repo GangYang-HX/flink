@@ -16,23 +16,22 @@
  * limitations under the License.
  */
 
-import { HttpClient, HttpEvent, HttpParams, HttpRequest } from '@angular/common/http';
+import { HttpClient, HttpRequest, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { BASE_URL } from 'config';
+import { JarListInterface, NodesItemCorrectInterface, PlanInterface, VerticesLinkInterface } from 'interfaces';
+import { of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-
-import { JarList, NodesItemCorrect, Plan, PlanDetail, VerticesLink } from '@flink-runtime-web/interfaces';
-
-import { ConfigService } from './config.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class JarService {
-  constructor(private readonly httpClient: HttpClient, private readonly configService: ConfigService) {}
-
-  public loadJarList(): Observable<JarList> {
-    return this.httpClient.get<JarList>(`${this.configService.BASE_URL}/jars`).pipe(
+  /**
+   * Get uploaded jar list
+   */
+  loadJarList() {
+    return this.httpClient.get<JarListInterface>(`${BASE_URL}/jars`).pipe(
       catchError(() => {
         return of({
           address: '',
@@ -43,27 +42,44 @@ export class JarService {
     );
   }
 
-  public uploadJar(fd: File): Observable<HttpEvent<unknown>> {
+  /**
+   * Upload jar
+   * @param fd
+   */
+  uploadJar(fd: File) {
     const formData = new FormData();
     formData.append('jarfile', fd, fd.name);
-    const req = new HttpRequest('POST', `${this.configService.BASE_URL}/jars/upload`, formData, {
+    const req = new HttpRequest('POST', `${BASE_URL}/jars/upload`, formData, {
       reportProgress: true
     });
     return this.httpClient.request(req);
   }
 
-  public deleteJar(jarId: string): Observable<void> {
-    return this.httpClient.delete<void>(`${this.configService.BASE_URL}/jars/${jarId}`);
+  /**
+   * Delete jar
+   * @param jarId
+   */
+  deleteJar(jarId: string) {
+    return this.httpClient.delete(`${BASE_URL}/jars/${jarId}`);
   }
 
-  public runJob(
+  /**
+   * Run job
+   * @param jarId
+   * @param entryClass
+   * @param parallelism
+   * @param programArgs
+   * @param savepointPath
+   * @param allowNonRestoredState
+   */
+  runJob(
     jarId: string,
     entryClass: string,
     parallelism: string,
     programArgs: string,
     savepointPath: string,
     allowNonRestoredState: string
-  ): Observable<{ jobid: string }> {
+  ) {
     const requestParam = { entryClass, parallelism, programArgs, savepointPath, allowNonRestoredState };
     let params = new HttpParams();
     if (entryClass) {
@@ -81,12 +97,17 @@ export class JarService {
     if (allowNonRestoredState) {
       params = params.append('allowNonRestoredState', allowNonRestoredState);
     }
-    return this.httpClient.post<{ jobid: string }>(`${this.configService.BASE_URL}/jars/${jarId}/run`, requestParam, {
-      params
-    });
+    return this.httpClient.post<{ jobid: string }>(`${BASE_URL}/jars/${jarId}/run`, requestParam, { params });
   }
 
-  public getPlan(jarId: string, entryClass: string, parallelism: string, programArgs: string): Observable<PlanDetail> {
+  /**
+   * Get plan json from jar
+   * @param jarId
+   * @param entryClass
+   * @param parallelism
+   * @param programArgs
+   */
+  getPlan(jarId: string, entryClass: string, parallelism: string, programArgs: string) {
     let params = new HttpParams();
     if (entryClass) {
       params = params.append('entry-class', entryClass);
@@ -97,10 +118,10 @@ export class JarService {
     if (programArgs) {
       params = params.append('program-args', programArgs);
     }
-    return this.httpClient.get<Plan>(`${this.configService.BASE_URL}/jars/${jarId}/plan`, { params }).pipe(
+    return this.httpClient.get<PlanInterface>(`${BASE_URL}/jars/${jarId}/plan`, { params }).pipe(
       map(data => {
-        const links: VerticesLink[] = [];
-        let nodes: NodesItemCorrect[] = [];
+        const links: VerticesLinkInterface[] = [];
+        let nodes: NodesItemCorrectInterface[] = [];
         if (data.plan.nodes.length) {
           nodes = data.plan.nodes.map(node => {
             return {
@@ -120,4 +141,6 @@ export class JarService {
       })
     );
   }
+
+  constructor(private httpClient: HttpClient) {}
 }

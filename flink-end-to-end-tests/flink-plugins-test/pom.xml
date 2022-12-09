@@ -25,13 +25,13 @@ under the License.
     <parent>
         <artifactId>flink-end-to-end-tests</artifactId>
         <groupId>org.apache.flink</groupId>
-        <version>1.16-SNAPSHOT</version>
+        <version>1.11.4-SNAPSHOT</version>
     </parent>
 
     <packaging>pom</packaging>
 
     <artifactId>flink-plugins-test</artifactId>
-    <name>Flink : E2E Tests : Plugins : </name>
+    <name>flink-plugins-test</name>
 
     <modules>
         <module>dummy-fs</module>

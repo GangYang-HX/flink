@@ -16,7 +16,12 @@
  * limitations under the License.
  */
 
+
 package org.apache.flink.optimizer.plan;
+
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 
 import org.apache.flink.optimizer.costs.Costs;
 import org.apache.flink.optimizer.dag.BinaryUnionNode;
@@ -26,79 +31,76 @@ import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.util.IterableIterator;
 import org.apache.flink.util.Visitor;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-
-/** A union operation over multiple inputs (2 or more). */
+/**
+ * A union operation over multiple inputs (2 or more).
+ */
 public class NAryUnionPlanNode extends PlanNode {
+	
+	private final List<Channel> inputs;
+	
+	/**
+	 * @param template
+	 */
+	public NAryUnionPlanNode(BinaryUnionNode template, List<Channel> inputs, GlobalProperties gProps,
+			Costs cumulativeCosts)
+	{
+		super(template, "Union", DriverStrategy.NONE);
+		
+		this.inputs = inputs;
+		this.globalProps = gProps;
+		this.localProps = new LocalProperties();
+		this.nodeCosts = new Costs();
+		this.cumulativeCosts = cumulativeCosts;
+	}
 
-    private final List<Channel> inputs;
+	@Override
+	public void accept(Visitor<PlanNode> visitor) {
+		visitor.preVisit(this);
+		for (Channel c : this.inputs) {
+			c.getSource().accept(visitor);
+		}
+		visitor.postVisit(this);
+	}
+	
+	public List<Channel> getListOfInputs() {
+		return this.inputs;
+	}
 
-    /** @param template */
-    public NAryUnionPlanNode(
-            BinaryUnionNode template,
-            List<Channel> inputs,
-            GlobalProperties gProps,
-            Costs cumulativeCosts) {
-        super(template, "Union", DriverStrategy.NONE);
+	@Override
+	public Iterable<Channel> getInputs() {
+		return Collections.unmodifiableList(this.inputs);
+	}
 
-        this.inputs = inputs;
-        this.globalProps = gProps;
-        this.localProps = new LocalProperties();
-        this.nodeCosts = new Costs();
-        this.cumulativeCosts = cumulativeCosts;
-    }
+	@Override
+	public Iterable<PlanNode> getPredecessors() {
+		final Iterator<Channel> channels = this.inputs.iterator();
+		return new IterableIterator<PlanNode>() {
 
-    @Override
-    public void accept(Visitor<PlanNode> visitor) {
-        visitor.preVisit(this);
-        for (Channel c : this.inputs) {
-            c.getSource().accept(visitor);
-        }
-        visitor.postVisit(this);
-    }
+			@Override
+			public boolean hasNext() {
+				return channels.hasNext();
+			}
 
-    public List<Channel> getListOfInputs() {
-        return this.inputs;
-    }
+			@Override
+			public PlanNode next() {
+				return channels.next().getSource();
+			}
 
-    @Override
-    public Iterable<Channel> getInputs() {
-        return Collections.unmodifiableList(this.inputs);
-    }
+			@Override
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+			
+			@Override
+			public Iterator<PlanNode> iterator() {
+				return this;
+			}
+		};
+	}
 
-    @Override
-    public Iterable<PlanNode> getPredecessors() {
-        final Iterator<Channel> channels = this.inputs.iterator();
-        return new IterableIterator<PlanNode>() {
-
-            @Override
-            public boolean hasNext() {
-                return channels.hasNext();
-            }
-
-            @Override
-            public PlanNode next() {
-                return channels.next().getSource();
-            }
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public Iterator<PlanNode> iterator() {
-                return this;
-            }
-        };
-    }
-
-    @Override
-    public SourceAndDamReport hasDamOnPathDownTo(PlanNode source) {
-        // this node is used after the plan enumeration. consequently, this will never be invoked
-        // here
-        throw new UnsupportedOperationException();
-    }
+	@Override
+	public SourceAndDamReport hasDamOnPathDownTo(PlanNode source) {
+		// this node is used after the plan enumeration. consequently, this will never be invoked here
+		throw new UnsupportedOperationException();
+	}
 }

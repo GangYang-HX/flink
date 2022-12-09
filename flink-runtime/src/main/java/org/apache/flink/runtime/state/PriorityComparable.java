@@ -22,11 +22,12 @@ import javax.annotation.Nonnull;
 
 /**
  * Interface for objects that can be compared by priority.
- *
  * @param <T> type of the compared objects.
  */
 public interface PriorityComparable<T> {
 
-    /** @see PriorityComparator#comparePriority(Object, Object). */
-    int comparePriorityTo(@Nonnull T other);
+	/**
+	 * @see PriorityComparator#comparePriority(Object, Object).
+	 */
+	int comparePriorityTo(@Nonnull T other);
 }

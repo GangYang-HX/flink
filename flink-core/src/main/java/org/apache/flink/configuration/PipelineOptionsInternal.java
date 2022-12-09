@@ -20,17 +20,29 @@ package org.apache.flink.configuration;
 
 import org.apache.flink.annotation.Internal;
 
+import java.util.List;
+
 import static org.apache.flink.configuration.ConfigOptions.key;
 
-/** Pipeline options that are not meant to be used by the user. */
+/**
+ * Pipeline options that are not meant to be used by the user.
+ */
 @Internal
 public class PipelineOptionsInternal {
 
-    public static final ConfigOption<String> PIPELINE_FIXED_JOB_ID =
-            key("$internal.pipeline.job-id")
-                    .stringType()
-                    .noDefaultValue()
-                    .withDescription(
-                            "**DO NOT USE** The static JobId to be used for the specific pipeline. "
-                                    + "For fault-tolerance, this value needs to stay the same across runs.");
+	public static final ConfigOption<String> PIPELINE_FIXED_JOB_ID =
+			key("$internal.pipeline.job-id")
+					.stringType()
+					.noDefaultValue()
+					.withDescription("**DO NOT USE** The static JobId to be used for the specific pipeline. " +
+							"For fault-tolerance, this value needs to stay the same across runs.");
+
+	public static final ConfigOption<List<String>> REMOTE_JARS =
+		key("$internal.pipeline.remote.jars")
+			.stringType()
+			.asList()
+			.noDefaultValue()
+			.withDescription("**DO NOT USE** A semicolon-separated list of the user jars that are uploaded to YARN application" +
+				"working directory. These jars are as same as `PipelineOptions.JARS` and this option is set when starting Flink Cluster.");
+
 }

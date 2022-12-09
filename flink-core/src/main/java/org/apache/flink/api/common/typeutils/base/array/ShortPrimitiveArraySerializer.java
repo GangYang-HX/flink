@@ -18,6 +18,8 @@
 
 package org.apache.flink.api.common.typeutils.base.array;
 
+import java.io.IOException;
+
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.typeutils.SimpleTypeSerializerSnapshot;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
@@ -25,97 +27,98 @@ import org.apache.flink.api.common.typeutils.base.TypeSerializerSingleton;
 import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 
-import java.io.IOException;
-
-/** A serializer for short arrays. */
+/**
+ * A serializer for short arrays.
+ */
 @Internal
-public final class ShortPrimitiveArraySerializer extends TypeSerializerSingleton<short[]> {
+public final class ShortPrimitiveArraySerializer extends TypeSerializerSingleton<short[]>{
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
+	
+	private static final short[] EMPTY = new short[0];
 
-    private static final short[] EMPTY = new short[0];
+	public static final ShortPrimitiveArraySerializer INSTANCE = new ShortPrimitiveArraySerializer();
 
-    public static final ShortPrimitiveArraySerializer INSTANCE =
-            new ShortPrimitiveArraySerializer();
+	@Override
+	public boolean isImmutableType() {
+		return false;
+	}
+	
+	@Override
+	public short[] createInstance() {
+		return EMPTY;
+	}
 
-    @Override
-    public boolean isImmutableType() {
-        return false;
-    }
+	@Override
+	public short[] copy(short[] from) {
+		short[] copy = new short[from.length];
+		System.arraycopy(from, 0, copy, 0, from.length);
+		return copy;
+	}
+	
+	@Override
+	public short[] copy(short[] from, short[] reuse) {
+		return copy(from);
+	}
 
-    @Override
-    public short[] createInstance() {
-        return EMPTY;
-    }
+	@Override
+	public int getLength() {
+		return -1;
+	}
 
-    @Override
-    public short[] copy(short[] from) {
-        short[] copy = new short[from.length];
-        System.arraycopy(from, 0, copy, 0, from.length);
-        return copy;
-    }
 
-    @Override
-    public short[] copy(short[] from, short[] reuse) {
-        return copy(from);
-    }
+	@Override
+	public void serialize(short[] record, DataOutputView target) throws IOException {
+		if (record == null) {
+			throw new IllegalArgumentException("The record must not be null.");
+		}
+		
+		final int len = record.length;
+		target.writeInt(len);
+		for (int i = 0; i < len; i++) {
+			target.writeShort(record[i]);
+		}
+	}
 
-    @Override
-    public int getLength() {
-        return -1;
-    }
+	@Override
+	public short[] deserialize(DataInputView source) throws IOException {
+		final int len = source.readInt();
+		short[] array = new short[len];
+		
+		for (int i = 0; i < len; i++) {
+			array[i] = source.readShort();
+		}
+		
+		return array;
+	}
 
-    @Override
-    public void serialize(short[] record, DataOutputView target) throws IOException {
-        if (record == null) {
-            throw new IllegalArgumentException("The record must not be null.");
-        }
+	@Override
+	public short[] deserialize(short[] reuse, DataInputView source) throws IOException {
+		return deserialize(source);
+	}
 
-        final int len = record.length;
-        target.writeInt(len);
-        for (int i = 0; i < len; i++) {
-            target.writeShort(record[i]);
-        }
-    }
+	@Override
+	public void copy(DataInputView source, DataOutputView target) throws IOException {
+		final int len = source.readInt();
+		target.writeInt(len);
+		target.write(source, len * 2);
+	}
 
-    @Override
-    public short[] deserialize(DataInputView source) throws IOException {
-        final int len = source.readInt();
-        short[] array = new short[len];
+	@Override
+	public TypeSerializerSnapshot<short[]> snapshotConfiguration() {
+		return new ShortPrimitiveArraySerializerSnapshot();
+	}
 
-        for (int i = 0; i < len; i++) {
-            array[i] = source.readShort();
-        }
+	// ------------------------------------------------------------------------
 
-        return array;
-    }
+	/**
+	 * Serializer configuration snapshot for compatibility and format evolution.
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static final class ShortPrimitiveArraySerializerSnapshot extends SimpleTypeSerializerSnapshot<short[]> {
 
-    @Override
-    public short[] deserialize(short[] reuse, DataInputView source) throws IOException {
-        return deserialize(source);
-    }
-
-    @Override
-    public void copy(DataInputView source, DataOutputView target) throws IOException {
-        final int len = source.readInt();
-        target.writeInt(len);
-        target.write(source, len * 2);
-    }
-
-    @Override
-    public TypeSerializerSnapshot<short[]> snapshotConfiguration() {
-        return new ShortPrimitiveArraySerializerSnapshot();
-    }
-
-    // ------------------------------------------------------------------------
-
-    /** Serializer configuration snapshot for compatibility and format evolution. */
-    @SuppressWarnings("WeakerAccess")
-    public static final class ShortPrimitiveArraySerializerSnapshot
-            extends SimpleTypeSerializerSnapshot<short[]> {
-
-        public ShortPrimitiveArraySerializerSnapshot() {
-            super(() -> INSTANCE);
-        }
-    }
+		public ShortPrimitiveArraySerializerSnapshot() {
+			super(() -> INSTANCE);
+		}
+	}
 }

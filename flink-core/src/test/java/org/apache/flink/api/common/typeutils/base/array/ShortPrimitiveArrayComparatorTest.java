@@ -18,28 +18,27 @@
 package org.apache.flink.api.common.typeutils.base.array;
 
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
+import org.junit.Assert;
 
-import static org.assertj.core.api.Assertions.assertThat;
+public class ShortPrimitiveArrayComparatorTest extends PrimitiveArrayComparatorTestBase<short[]> {
+	public ShortPrimitiveArrayComparatorTest() {
+		super(PrimitiveArrayTypeInfo.SHORT_PRIMITIVE_ARRAY_TYPE_INFO);
+	}
 
-class ShortPrimitiveArrayComparatorTest extends PrimitiveArrayComparatorTestBase<short[]> {
-    public ShortPrimitiveArrayComparatorTest() {
-        super(PrimitiveArrayTypeInfo.SHORT_PRIMITIVE_ARRAY_TYPE_INFO);
-    }
+	@Override
+	protected void deepEquals(String message, short[] should, short[] is) {
+		Assert.assertArrayEquals(message, should, is);
+	}
 
-    @Override
-    protected void deepEquals(String message, short[] should, short[] is) {
-        assertThat(is).as(message).containsExactly(should);
-    }
-
-    @Override
-    protected short[][] getSortedTestData() {
-        return new short[][] {
-            new short[] {-1, 0},
-            new short[] {0, -1},
-            new short[] {0, 0},
-            new short[] {0, 1},
-            new short[] {0, 1, 2},
-            new short[] {2}
-        };
-    }
+	@Override
+	protected short[][] getSortedTestData() {
+		return new short[][]{
+			new short[]{-1, 0},
+			new short[]{0, -1},
+			new short[]{0, 0},
+			new short[]{0, 1},
+			new short[]{0, 1, 2},
+			new short[]{2}
+		};
+	}
 }

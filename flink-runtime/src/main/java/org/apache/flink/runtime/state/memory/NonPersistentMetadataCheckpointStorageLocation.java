@@ -32,117 +32,126 @@ import java.util.UUID;
  * A checkpoint storage location for the {@link MemoryStateBackend} in case no durable persistence
  * for metadata has been configured.
  */
-public class NonPersistentMetadataCheckpointStorageLocation extends MemCheckpointStreamFactory
-        implements CheckpointStorageLocation {
+public class NonPersistentMetadataCheckpointStorageLocation
+		extends MemCheckpointStreamFactory
+		implements CheckpointStorageLocation {
 
-    /** The external pointer returned for checkpoints that are not externally addressable. */
-    public static final String EXTERNAL_POINTER = "<checkpoint-not-externally-addressable>";
+	/** The external pointer returned for checkpoints that are not externally addressable. */
+	public static final String EXTERNAL_POINTER = "<checkpoint-not-externally-addressable>";
 
-    public NonPersistentMetadataCheckpointStorageLocation(int maxStateSize) {
-        super(maxStateSize);
-    }
+	public NonPersistentMetadataCheckpointStorageLocation(int maxStateSize) {
+		super(maxStateSize);
+	}
 
-    @Override
-    public CheckpointMetadataOutputStream createMetadataOutputStream() throws IOException {
-        return new MetadataOutputStream();
-    }
+	@Override
+	public CheckpointMetadataOutputStream createMetadataOutputStream() throws IOException {
+		return new MetadataOutputStream();
+	}
 
-    @Override
-    public void disposeOnFailure() {}
+	@Override
+	public void disposeOnFailure() {}
 
-    @Override
-    public CheckpointStorageLocationReference getLocationReference() {
-        return CheckpointStorageLocationReference.getDefault();
-    }
+	@Override
+	public CheckpointStorageLocationReference getLocationReference() {
+		return CheckpointStorageLocationReference.getDefault();
+	}
 
-    // ------------------------------------------------------------------------
-    //  CompletedCheckpointStorageLocation
-    // ------------------------------------------------------------------------
+	@Override
+	public String getMetadataFileFullPath() {
+		return null;
+	}
 
-    /**
-     * A {@link CompletedCheckpointStorageLocation} that is not persistent and only holds the
-     * metadata in an internal byte array.
-     */
-    private static class NonPersistentCompletedCheckpointStorageLocation
-            implements CompletedCheckpointStorageLocation {
+	// ------------------------------------------------------------------------
+	//  CompletedCheckpointStorageLocation
+	// ------------------------------------------------------------------------
 
-        private static final long serialVersionUID = 1L;
+	/**
+	 * A {@link CompletedCheckpointStorageLocation} that is not persistent and only holds the
+	 * metadata in an internal byte array.
+	 */
+	private static class NonPersistentCompletedCheckpointStorageLocation implements CompletedCheckpointStorageLocation {
 
-        private final ByteStreamStateHandle metaDataHandle;
+		private static final long serialVersionUID = 1L;
 
-        NonPersistentCompletedCheckpointStorageLocation(ByteStreamStateHandle metaDataHandle) {
-            this.metaDataHandle = metaDataHandle;
-        }
+		private final ByteStreamStateHandle metaDataHandle;
 
-        @Override
-        public String getExternalPointer() {
-            return EXTERNAL_POINTER;
-        }
+		NonPersistentCompletedCheckpointStorageLocation(ByteStreamStateHandle metaDataHandle) {
+			this.metaDataHandle = metaDataHandle;
+		}
 
-        @Override
-        public StreamStateHandle getMetadataHandle() {
-            return metaDataHandle;
-        }
+		@Override
+		public String getExternalPointer() {
+			return EXTERNAL_POINTER;
+		}
 
-        @Override
-        public void disposeStorageLocation() {}
-    }
+		@Override
+		public StreamStateHandle getMetadataHandle() {
+			return metaDataHandle;
+		}
 
-    // ------------------------------------------------------------------------
-    //  CheckpointMetadataOutputStream
-    // ------------------------------------------------------------------------
+		@Override
+		public void disposeStorageLocation() {}
 
-    private static class MetadataOutputStream extends CheckpointMetadataOutputStream {
+		@Override
+		public String getMetadataFileFullPath() {
+			return null;
+		}
+	}
 
-        private final ByteArrayOutputStreamWithPos os = new ByteArrayOutputStreamWithPos();
+	// ------------------------------------------------------------------------
+	//  CheckpointMetadataOutputStream
+	// ------------------------------------------------------------------------
 
-        private boolean closed;
+	private static class MetadataOutputStream extends CheckpointMetadataOutputStream {
 
-        @Override
-        public void write(int b) throws IOException {
-            os.write(b);
-        }
+		private final ByteArrayOutputStreamWithPos os = new ByteArrayOutputStreamWithPos();
 
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-            os.write(b, off, len);
-        }
+		private boolean closed;
 
-        @Override
-        public void flush() throws IOException {
-            os.flush();
-        }
+		@Override
+		public void write(int b) throws IOException {
+			os.write(b);
+		}
 
-        @Override
-        public long getPos() throws IOException {
-            return os.getPosition();
-        }
+		@Override
+		public void write(byte[] b, int off, int len) throws IOException {
+			os.write(b, off, len);
+		}
 
-        @Override
-        public void sync() throws IOException {}
+		@Override
+		public void flush() throws IOException {
+			os.flush();
+		}
 
-        @Override
-        public CompletedCheckpointStorageLocation closeAndFinalizeCheckpoint() throws IOException {
-            synchronized (this) {
-                if (!closed) {
-                    closed = true;
+		@Override
+		public long getPos() throws IOException {
+			return os.getPosition();
+		}
 
-                    byte[] bytes = os.toByteArray();
-                    ByteStreamStateHandle handle =
-                            new ByteStreamStateHandle(UUID.randomUUID().toString(), bytes);
-                    return new NonPersistentCompletedCheckpointStorageLocation(handle);
-                } else {
-                    throw new IOException("Already closed");
-                }
-            }
-        }
+		@Override
+		public void sync() throws IOException { }
 
-        @Override
-        public void close() {
-            if (!closed) {
-                closed = true;
-                os.reset();
-            }
-        }
-    }
+		@Override
+		public CompletedCheckpointStorageLocation closeAndFinalizeCheckpoint() throws IOException {
+			synchronized (this) {
+				if (!closed) {
+					closed = true;
+
+					byte[] bytes = os.toByteArray();
+					ByteStreamStateHandle handle = new ByteStreamStateHandle(UUID.randomUUID().toString(), bytes);
+					return new NonPersistentCompletedCheckpointStorageLocation(handle);
+				} else {
+					throw new IOException("Already closed");
+				}
+			}
+		}
+
+		@Override
+		public void close() {
+			if (!closed) {
+				closed = true;
+				os.reset();
+			}
+		}
+	}
 }

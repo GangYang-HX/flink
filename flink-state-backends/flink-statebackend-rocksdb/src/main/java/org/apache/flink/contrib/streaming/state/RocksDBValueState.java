@@ -23,6 +23,7 @@ import org.apache.flink.api.common.state.StateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.internal.InternalValueState;
 import org.apache.flink.util.FlinkRuntimeException;
@@ -31,6 +32,7 @@ import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
 
 import java.io.IOException;
+import java.time.Clock;
 
 /**
  * {@link ValueState} implementation that stores state in RocksDB.
@@ -39,102 +41,117 @@ import java.io.IOException;
  * @param <N> The type of the namespace.
  * @param <V> The type of value that the state state stores.
  */
-class RocksDBValueState<K, N, V> extends AbstractRocksDBState<K, N, V>
-        implements InternalValueState<K, N, V> {
+class RocksDBValueState<K, N, V>
+	extends AbstractRocksDBState<K, N, V>
+	implements InternalValueState<K, N, V> {
 
-    /**
-     * Creates a new {@code RocksDBValueState}.
-     *
-     * @param columnFamily The RocksDB column family that this state is associated to.
-     * @param namespaceSerializer The serializer for the namespace.
-     * @param valueSerializer The serializer for the state.
-     * @param defaultValue The default value for the state.
-     * @param backend The backend for which this state is bind to.
-     */
-    private RocksDBValueState(
-            ColumnFamilyHandle columnFamily,
-            TypeSerializer<N> namespaceSerializer,
-            TypeSerializer<V> valueSerializer,
-            V defaultValue,
-            RocksDBKeyedStateBackend<K> backend) {
+	/**
+	 * Creates a new {@code RocksDBValueState}.
+	 *
+	 * @param columnFamily The RocksDB column family that this state is associated to.
+	 * @param namespaceSerializer The serializer for the namespace.
+	 * @param valueSerializer The serializer for the state.
+	 * @param defaultValue The default value for the state.
+	 * @param backend The backend for which this state is bind to.
+	 */
+	private RocksDBValueState(
+			ColumnFamilyHandle columnFamily,
+			TypeSerializer<N> namespaceSerializer,
+			TypeSerializer<V> valueSerializer,
+			V defaultValue,
+			RocksDBKeyedStateBackend<K> backend,
+			MetricGroup metricGroup) {
 
-        super(columnFamily, namespaceSerializer, valueSerializer, defaultValue, backend);
-    }
+		super(columnFamily, namespaceSerializer, valueSerializer, defaultValue, backend, metricGroup);
+	}
 
-    @Override
-    public TypeSerializer<K> getKeySerializer() {
-        return backend.getKeySerializer();
-    }
+	@Override
+	public TypeSerializer<K> getKeySerializer() {
+		return backend.getKeySerializer();
+	}
 
-    @Override
-    public TypeSerializer<N> getNamespaceSerializer() {
-        return namespaceSerializer;
-    }
+	@Override
+	public TypeSerializer<N> getNamespaceSerializer() {
+		return namespaceSerializer;
+	}
 
-    @Override
-    public TypeSerializer<V> getValueSerializer() {
-        return valueSerializer;
-    }
+	@Override
+	public TypeSerializer<V> getValueSerializer() {
+		return valueSerializer;
+	}
 
-    @Override
-    public V value() {
-        try {
-            byte[] valueBytes =
-                    backend.db.get(columnFamily, serializeCurrentKeyWithGroupAndNamespace());
-
-            if (valueBytes == null) {
-                return getDefaultValue();
-            }
+	@Override
+	public V value() {
+		try {
+			byte[] rawKeyBytes = serializeCurrentKeyWithGroupAndNamespace();
+			updateCatchingRate();
+			long start = 0;
+			if (catchSample) {
+				start = System.nanoTime();
+			}
+			byte[] valueBytes = backend.db.get(columnFamily, rawKeyBytes);
+			if (valueBytes == null) {
+				readNullCounter.inc();
+				if (catchSample) {
+					long end = System.nanoTime();
+					readNull.update(end - start);
+				}
+				loopLock++;
+				return getDefaultValue();
+			}
+			readCounter.inc();
+			if (catchSample) {
+				readHist.update(System.nanoTime() - start);
+				readKeyLength.update(rawKeyBytes.length);
+				readValueLength.update(valueBytes.length);
+			}
+            valueBytes = decompress(valueBytes);
             dataInputView.setBuffer(valueBytes);
-            return valueSerializer.deserialize(dataInputView);
-        } catch (IOException | RocksDBException e) {
-            throw new FlinkRuntimeException("Error while retrieving data from RocksDB.", e);
-        }
-    }
+			loopLock++;
+			return valueSerializer.deserialize(dataInputView);
+		} catch (IOException | RocksDBException e) {
+			throw new FlinkRuntimeException("Error while retrieving data from RocksDB.", e);
+		}
+	}
 
-    @Override
-    public void update(V value) {
-        if (value == null) {
-            clear();
-            return;
-        }
+	@Override
+	public void update(V value) {
+		if (value == null) {
+			clear();
+			return;
+		}
 
-        try {
-            backend.db.put(
-                    columnFamily,
-                    writeOptions,
-                    serializeCurrentKeyWithGroupAndNamespace(),
-                    serializeValue(value));
-        } catch (Exception e) {
-            throw new FlinkRuntimeException("Error while adding data to RocksDB", e);
-        }
-    }
+		try {
+            updateCatchingRate();
+			byte[]  rawKeyBytes = serializeCurrentKeyWithGroupAndNamespace();
+			byte[] rawValueBytes = serializeValue(value);
+            rawValueBytes = compress(rawValueBytes);
 
-    @SuppressWarnings("unchecked")
-    static <K, N, SV, S extends State, IS extends S> IS create(
-            StateDescriptor<S, SV> stateDesc,
-            Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>>
-                    registerResult,
-            RocksDBKeyedStateBackend<K> backend) {
-        return (IS)
-                new RocksDBValueState<>(
-                        registerResult.f0,
-                        registerResult.f1.getNamespaceSerializer(),
-                        registerResult.f1.getStateSerializer(),
-                        stateDesc.getDefaultValue(),
-                        backend);
-    }
+			long start = 0;
+			if (catchSample) {
+				start = System.nanoTime();
+			}
+			backend.db.put(columnFamily, writeOptions,
+				rawKeyBytes,
+				rawValueBytes);
+			takeWriteMetrics(start, rawKeyBytes, rawValueBytes);
+		} catch (Exception e) {
+			throw new FlinkRuntimeException("Error while adding data to RocksDB", e);
+		}
+	}
 
-    @SuppressWarnings("unchecked")
-    static <K, N, SV, S extends State, IS extends S> IS update(
-            StateDescriptor<S, SV> stateDesc,
-            Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>>
-                    registerResult,
-            IS existingState) {
-        return (IS)
-                ((RocksDBValueState<K, N, SV>) existingState)
-                        .setNamespaceSerializer(registerResult.f1.getNamespaceSerializer())
-                        .setValueSerializer(registerResult.f1.getStateSerializer())
-                        .setDefaultValue(stateDesc.getDefaultValue());
-    }
+	@SuppressWarnings("unchecked")
+	static <K, N, SV, S extends State, IS extends S> IS create(
+		StateDescriptor<S, SV> stateDesc,
+		Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>> registerResult,
+		RocksDBKeyedStateBackend<K> backend,
+		MetricGroup metricGroup) {
+		return (IS) new RocksDBValueState<>(
+			registerResult.f0,
+			registerResult.f1.getNamespaceSerializer(),
+			registerResult.f1.getStateSerializer(),
+			stateDesc.getDefaultValue(),
+			backend,
+			metricGroup);
+	}
 }

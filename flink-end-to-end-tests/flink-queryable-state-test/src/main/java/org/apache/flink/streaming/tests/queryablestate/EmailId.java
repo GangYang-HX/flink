@@ -20,48 +20,54 @@ package org.apache.flink.streaming.tests.queryablestate;
 import java.io.Serializable;
 import java.util.Objects;
 
-/** POJO representing an EmailId. */
+/**
+ * POJO representing an EmailId.
+ */
 public class EmailId implements Serializable {
 
-    private static final long serialVersionUID = -5001464312464872467L;
+	private static final long serialVersionUID = -5001464312464872467L;
 
-    private String emailId;
+	private String emailId;
 
-    public EmailId() {}
+	public EmailId() {
 
-    public EmailId(String emailId) {
-        this.emailId = Objects.requireNonNull(emailId);
-    }
+	}
 
-    public void setEmailId(String emailId) {
-        this.emailId = emailId;
-    }
+	public EmailId(String emailId) {
+		this.emailId = Objects.requireNonNull(emailId);
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
+	public void setEmailId(String emailId) {
+		this.emailId = emailId;
+	}
 
-        EmailId emailId1 = (EmailId) o;
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
 
-        return Objects.equals(emailId, emailId1.emailId);
-    }
+		EmailId emailId1 = (EmailId) o;
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(emailId);
-    }
+		return Objects.equals(emailId, emailId1.emailId);
+	}
 
-    public String getEmailId() {
-        return emailId;
-    }
+	@Override
+	public int hashCode() {
+		return Objects.hash(emailId);
+	}
 
-    @Override
-    public String toString() {
-        return "EmailId{" + "emailId='" + emailId + '\'' + '}';
-    }
+	public String getEmailId() {
+		return emailId;
+	}
+
+	@Override
+	public String toString() {
+		return "EmailId{" +
+				"emailId='" + emailId + '\'' +
+				'}';
+	}
 }

@@ -18,51 +18,69 @@
 
 package org.apache.flink.runtime.dispatcher;
 
-import org.apache.flink.api.common.JobID;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.heartbeat.HeartbeatServices;
+import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.TestingJobManagerRunner;
-import org.apache.flink.util.Preconditions;
+import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
+import org.apache.flink.runtime.rpc.FatalErrorHandler;
+import org.apache.flink.runtime.rpc.RpcService;
+
+import javax.annotation.Nonnull;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Testing implementation of {@link JobManagerRunnerFactory} which returns a {@link
- * TestingJobManagerRunner}.
+ * Testing implementation of {@link JobManagerRunnerFactory} which returns a {@link TestingJobManagerRunner}.
  */
-public class TestingJobManagerRunnerFactory {
+public class TestingJobManagerRunnerFactory implements JobManagerRunnerFactory {
 
-    private final BlockingQueue<TestingJobManagerRunner> createdJobManagerRunner =
-            new ArrayBlockingQueue<>(16);
+	private final BlockingQueue<TestingJobManagerRunner> createdJobManagerRunner = new ArrayBlockingQueue<>(16);
 
-    private final AtomicInteger numBlockingJobManagerRunners;
+	private int numBlockingJobManagerRunners;
 
-    protected TestingJobManagerRunnerFactory(int numBlockingJobManagerRunners) {
-        this.numBlockingJobManagerRunners = new AtomicInteger(numBlockingJobManagerRunners);
-    }
+	public TestingJobManagerRunnerFactory() {
+		this(0);
+	}
 
-    protected TestingJobManagerRunner offerTestingJobManagerRunner(JobID jobId) {
-        final TestingJobManagerRunner testingJobManagerRunner =
-                createTestingJobManagerRunner(jobId);
-        Preconditions.checkState(
-                createdJobManagerRunner.offer(testingJobManagerRunner),
-                "Unable to persist created the new runner.");
-        return testingJobManagerRunner;
-    }
+	public TestingJobManagerRunnerFactory(int numBlockingJobManagerRunners) {
+		this.numBlockingJobManagerRunners = numBlockingJobManagerRunners;
+	}
 
-    private TestingJobManagerRunner createTestingJobManagerRunner(JobID jobId) {
-        final boolean blockingTermination = numBlockingJobManagerRunners.getAndDecrement() > 0;
-        return TestingJobManagerRunner.newBuilder()
-                .setJobId(jobId)
-                .setBlockingTermination(blockingTermination)
-                .build();
-    }
+	@Override
+	public TestingJobManagerRunner createJobManagerRunner(
+			JobGraph jobGraph,
+			Configuration configuration,
+			RpcService rpcService,
+			HighAvailabilityServices highAvailabilityServices,
+			HeartbeatServices heartbeatServices,
+			JobManagerSharedServices jobManagerServices,
+			JobManagerJobMetricGroupFactory jobManagerJobMetricGroupFactory,
+			FatalErrorHandler fatalErrorHandler) throws Exception {
+		final TestingJobManagerRunner testingJobManagerRunner = createTestingJobManagerRunner(jobGraph);
+		createdJobManagerRunner.offer(testingJobManagerRunner);
 
-    public TestingJobManagerRunner takeCreatedJobManagerRunner() throws InterruptedException {
-        return createdJobManagerRunner.take();
-    }
+		return testingJobManagerRunner;
+	}
 
-    public int getQueueSize() {
-        return createdJobManagerRunner.size();
-    }
+	@Nonnull
+	private TestingJobManagerRunner createTestingJobManagerRunner(JobGraph jobGraph) {
+		final boolean blockingTermination;
+
+		if (numBlockingJobManagerRunners > 0) {
+			numBlockingJobManagerRunners--;
+			blockingTermination = true;
+		} else {
+			blockingTermination = false;
+		}
+
+		return new TestingJobManagerRunner(jobGraph.getJobID(), blockingTermination);
+	}
+
+	public TestingJobManagerRunner takeCreatedJobManagerRunner() throws InterruptedException {
+		return createdJobManagerRunner.take();
+	}
 }

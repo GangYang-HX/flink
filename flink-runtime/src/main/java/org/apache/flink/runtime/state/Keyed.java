@@ -25,6 +25,8 @@ package org.apache.flink.runtime.state;
  */
 public interface Keyed<K> {
 
-    /** Returns the key attribute. */
-    K getKey();
+	/**
+	 * Returns the key attribute.
+	 */
+	K getKey();
 }

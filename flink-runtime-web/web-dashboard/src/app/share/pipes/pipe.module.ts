@@ -16,16 +16,13 @@
  * limitations under the License.
  */
 
-import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
-
-import { HumanizeBytesPipe } from '@flink-runtime-web/share/pipes/humanize-bytes.pipe';
-import { HumanizeWatermarkPipe } from '@flink-runtime-web/share/pipes/humanize-watermark.pipe';
-
-import { HumanizeChartNumericPipe } from './humanize-chart-numeric.pipe';
-import { HumanizeDatePipe } from './humanize-date.pipe';
+import { CommonModule } from '@angular/common';
+import { HumanizeBytesPipe } from 'share/pipes/humanize-bytes.pipe';
+import { HumanizeWatermarkPipe } from 'share/pipes/humanize-watermark.pipe';
 import { HumanizeDurationPipe } from './humanize-duration.pipe';
-import { ParseIntPipe } from './parse-int.pipe';
+import { HumanizeDatePipe } from './humanize-date.pipe';
+import { HumanizeChartNumericPipe } from './humanize-chart-numeric.pipe';
 
 @NgModule({
   imports: [CommonModule],
@@ -34,16 +31,8 @@ import { ParseIntPipe } from './parse-int.pipe';
     HumanizeDatePipe,
     HumanizeBytesPipe,
     HumanizeWatermarkPipe,
-    ParseIntPipe,
     HumanizeChartNumericPipe
   ],
-  exports: [
-    HumanizeDurationPipe,
-    HumanizeDatePipe,
-    HumanizeBytesPipe,
-    HumanizeWatermarkPipe,
-    HumanizeChartNumericPipe,
-    ParseIntPipe
-  ]
+  exports: [HumanizeDurationPipe, HumanizeDatePipe, HumanizeBytesPipe, HumanizeWatermarkPipe, HumanizeChartNumericPipe]
 })
 export class PipeModule {}

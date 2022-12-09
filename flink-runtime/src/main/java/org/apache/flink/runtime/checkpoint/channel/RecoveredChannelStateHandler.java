@@ -17,6 +17,7 @@
 
 package org.apache.flink.runtime.checkpoint.channel;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.checkpoint.InflightDataRescalingDescriptor;
 import org.apache.flink.runtime.checkpoint.RescaleMappings;
 import org.apache.flink.runtime.io.network.api.SubtaskConnectionDescriptor;
@@ -25,6 +26,7 @@ import org.apache.flink.runtime.io.network.api.writer.ResultPartitionWriter;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferBuilder;
 import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
+import org.apache.flink.runtime.io.network.logger.NetworkActionsLogger;
 import org.apache.flink.runtime.io.network.partition.CheckpointedResultPartition;
 import org.apache.flink.runtime.io.network.partition.CheckpointedResultSubpartition;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
@@ -41,34 +43,23 @@ import java.util.stream.Collectors;
 import static org.apache.flink.runtime.checkpoint.channel.ChannelStateByteBuffer.wrap;
 
 interface RecoveredChannelStateHandler<Info, Context> extends AutoCloseable {
-    class BufferWithContext<Context> {
-        final ChannelStateByteBuffer buffer;
-        final Context context;
+	class BufferWithContext<Context> {
+		final ChannelStateByteBuffer buffer;
+		final Context context;
 
-        BufferWithContext(ChannelStateByteBuffer buffer, Context context) {
-            this.buffer = buffer;
-            this.context = context;
-        }
+		BufferWithContext(ChannelStateByteBuffer buffer, Context context) {
+			this.buffer = buffer;
+			this.context = context;
+		}
+	}
 
-        public void close() {
-            buffer.close();
-        }
-    }
+	BufferWithContext<Context> getBuffer(Info info) throws IOException, InterruptedException;
 
-    BufferWithContext<Context> getBuffer(Info info) throws IOException, InterruptedException;
-
-    /**
-     * Recover the data from buffer. This method is taking over the ownership of the
-     * bufferWithContext and is fully responsible for cleaning it up both on the happy path and in
-     * case of an error.
-     */
-    void recover(Info info, int oldSubtaskIndex, BufferWithContext<Context> bufferWithContext)
-            throws IOException;
+    void recover(Info info, int oldSubtaskIndex, Context context) throws IOException;
 }
 
-class InputChannelRecoveredStateHandler
-        implements RecoveredChannelStateHandler<InputChannelInfo, Buffer> {
-    private final InputGate[] inputGates;
+class InputChannelRecoveredStateHandler implements RecoveredChannelStateHandler<InputChannelInfo, Buffer> {
+	private final InputGate[] inputGates;
 
     private final InflightDataRescalingDescriptor channelMapping;
 
@@ -78,49 +69,44 @@ class InputChannelRecoveredStateHandler
 
     InputChannelRecoveredStateHandler(
             InputGate[] inputGates, InflightDataRescalingDescriptor channelMapping) {
-        this.inputGates = inputGates;
+		this.inputGates = inputGates;
         this.channelMapping = channelMapping;
-    }
+	}
 
-    @Override
+	@Override
     public BufferWithContext<Buffer> getBuffer(InputChannelInfo channelInfo)
             throws IOException, InterruptedException {
         // request the buffer from any mapped channel as they all will receive the same buffer
         RecoveredInputChannel channel = getMappedChannels(channelInfo).get(0);
-        Buffer buffer = channel.requestBufferBlocking();
-        return new BufferWithContext<>(wrap(buffer), buffer);
-    }
+		Buffer buffer = channel.requestBufferBlocking();
+		return new BufferWithContext<>(wrap(buffer), buffer);
+	}
 
-    @Override
-    public void recover(
-            InputChannelInfo channelInfo,
-            int oldSubtaskIndex,
-            BufferWithContext<Buffer> bufferWithContext)
-            throws IOException {
-        Buffer buffer = bufferWithContext.context;
-        try {
-            if (buffer.readableBytes() > 0) {
-                for (final RecoveredInputChannel channel : getMappedChannels(channelInfo)) {
-                    channel.onRecoveredStateBuffer(
-                            EventSerializer.toBuffer(
-                                    new SubtaskConnectionDescriptor(
-                                            oldSubtaskIndex, channelInfo.getInputChannelIdx()),
-                                    false));
-                    channel.onRecoveredStateBuffer(buffer.retainBuffer());
-                }
-            }
-        } finally {
-            buffer.recycleBuffer();
-        }
-    }
+	@Override
+    public void recover(InputChannelInfo channelInfo, int oldSubtaskIndex, Buffer buffer) throws IOException {
+		try {
+			if (buffer.readableBytes() > 0) {
+				for (final RecoveredInputChannel channel : getMappedChannels(channelInfo)) {
+					channel.onRecoveredStateBuffer(
+						EventSerializer.toBuffer(
+							new SubtaskConnectionDescriptor(
+								oldSubtaskIndex, channelInfo.getInputChannelIdx()),
+							false));
+					channel.onRecoveredStateBuffer(buffer.retainBuffer());
+				}
+			}
+		} finally {
+			buffer.recycleBuffer();
+		}
+	}
 
-    @Override
-    public void close() throws IOException {
-        // note that we need to finish all RecoveredInputChannels, not just those with state
-        for (final InputGate inputGate : inputGates) {
-            inputGate.finishReadRecoveredState();
-        }
-    }
+	@Override
+	public void close() throws IOException {
+		// note that we need to finish all RecoveredInputChannels, not just those with state
+		for (final InputGate inputGate : inputGates) {
+			inputGate.finishReadRecoveredState();
+		}
+	}
 
     private RecoveredInputChannel getChannel(int gateIndex, int subPartitionIndex) {
         final InputChannel inputChannel = inputGates[gateIndex].getChannel(subPartitionIndex);
@@ -151,14 +137,13 @@ class InputChannelRecoveredStateHandler
                             + channelMapping.getChannelMapping(info.getGateIdx()));
         }
         return channels;
-    }
+	}
 }
 
-class ResultSubpartitionRecoveredStateHandler
-        implements RecoveredChannelStateHandler<ResultSubpartitionInfo, BufferBuilder> {
+class ResultSubpartitionRecoveredStateHandler implements RecoveredChannelStateHandler<ResultSubpartitionInfo, Tuple2<BufferBuilder, BufferConsumer>> {
 
-    private final ResultPartitionWriter[] writers;
-    private final boolean notifyAndBlockOnCompletion;
+	private final ResultPartitionWriter[] writers;
+	private final boolean notifyAndBlockOnCompletion;
 
     private final InflightDataRescalingDescriptor channelMapping;
 
@@ -170,47 +155,57 @@ class ResultSubpartitionRecoveredStateHandler
             ResultPartitionWriter[] writers,
             boolean notifyAndBlockOnCompletion,
             InflightDataRescalingDescriptor channelMapping) {
-        this.writers = writers;
+		this.writers = writers;
         this.channelMapping = channelMapping;
-        this.notifyAndBlockOnCompletion = notifyAndBlockOnCompletion;
-    }
+		this.notifyAndBlockOnCompletion = notifyAndBlockOnCompletion;
+	}
 
-    @Override
-    public BufferWithContext<BufferBuilder> getBuffer(ResultSubpartitionInfo subpartitionInfo)
-            throws IOException, InterruptedException {
+	@Override
+    public BufferWithContext<Tuple2<BufferBuilder, BufferConsumer>> getBuffer(
+            ResultSubpartitionInfo subpartitionInfo) throws IOException, InterruptedException {
         // request the buffer from any mapped subpartition as they all will receive the same buffer
         final List<CheckpointedResultSubpartition> channels = getMappedChannels(subpartitionInfo);
         BufferBuilder bufferBuilder = channels.get(0).requestBufferBuilderBlocking();
-        return new BufferWithContext<>(wrap(bufferBuilder), bufferBuilder);
-    }
+        return new BufferWithContext<>(
+                wrap(bufferBuilder),
+                Tuple2.of(bufferBuilder, bufferBuilder.createBufferConsumer()));
+	}
 
-    @Override
+	@Override
     public void recover(
-            ResultSubpartitionInfo subpartitionInfo,
-            int oldSubtaskIndex,
-            BufferWithContext<BufferBuilder> bufferWithContext)
-            throws IOException {
-        try (BufferBuilder bufferBuilder = bufferWithContext.context) {
-            try (BufferConsumer bufferConsumer =
-                    bufferBuilder.createBufferConsumerFromBeginning()) {
-                bufferBuilder.finish();
-                if (bufferConsumer.isDataAvailable()) {
-                    final List<CheckpointedResultSubpartition> channels =
-                            getMappedChannels(subpartitionInfo);
-                    for (final CheckpointedResultSubpartition channel : channels) {
-                        // channel selector is created from the downstream's point of view: the
-                        // subtask of downstream = subpartition index of recovered buffer
-                        final SubtaskConnectionDescriptor channelSelector =
-                                new SubtaskConnectionDescriptor(
-                                        subpartitionInfo.getSubPartitionIdx(), oldSubtaskIndex);
-                        channel.addRecovered(
-                                EventSerializer.toBufferConsumer(channelSelector, false));
-                        channel.addRecovered(bufferConsumer.copy());
-                    }
-                }
-            }
-        }
-    }
+			ResultSubpartitionInfo subpartitionInfo,
+			int oldSubtaskIndex,
+			Tuple2<BufferBuilder, BufferConsumer> bufferBuilderAndConsumer) throws IOException {
+		try {
+			bufferBuilderAndConsumer.f0.finish();
+			if (bufferBuilderAndConsumer.f1.isDataAvailable()) {
+				NetworkActionsLogger.traceRecover(
+					"ResultSubpartitionRecoveredStateHandler#recover",
+					bufferBuilderAndConsumer.f1,
+					subpartitionInfo);
+				final List<CheckpointedResultSubpartition> channels =
+					getMappedChannels(subpartitionInfo);
+				for (final CheckpointedResultSubpartition channel : channels) {
+					// channel selector is created from the downstream's point of view: the subtask
+					// of
+					// downstream = subpartition index of recovered buffer
+					final SubtaskConnectionDescriptor channelSelector =
+						new SubtaskConnectionDescriptor(
+							subpartitionInfo.getSubPartitionIdx(), oldSubtaskIndex);
+					channel.addBufferConsumer(
+						EventSerializer.toBufferConsumer(channelSelector, false));
+					int added =
+						channel.addBufferConsumer(bufferBuilderAndConsumer.f1.copy());
+					if (added == 0) {
+						throw new IOException(
+							"Buffer consumer couldn't be added to ResultSubpartition");
+					}
+				}
+			}
+		} finally {
+			bufferBuilderAndConsumer.f1.close();
+		}
+	}
 
     private CheckpointedResultSubpartition getSubpartition(
             int partitionIndex, int subPartitionIdx) {
@@ -237,22 +232,21 @@ class ResultSubpartitionRecoveredStateHandler
                         .mapToObj(newIndexes -> getSubpartition(info.getPartitionIdx(), newIndexes))
                         .collect(Collectors.toList());
         if (subpartitions.isEmpty()) {
-            throw new IllegalStateException(
+			throw new IllegalStateException(
                     "Recovered a buffer from old "
                             + info
                             + " that has no mapping in "
                             + channelMapping.getChannelMapping(info.getPartitionIdx()));
-        }
+		}
         return subpartitions;
-    }
+	}
 
-    @Override
-    public void close() throws IOException {
-        for (ResultPartitionWriter writer : writers) {
-            if (writer instanceof CheckpointedResultPartition) {
-                ((CheckpointedResultPartition) writer)
-                        .finishReadRecoveredState(notifyAndBlockOnCompletion);
-            }
-        }
-    }
+	@Override
+	public void close() throws IOException {
+		for (ResultPartitionWriter writer : writers) {
+			if (writer instanceof CheckpointedResultPartition) {
+				((CheckpointedResultPartition) writer).finishReadRecoveredState(notifyAndBlockOnCompletion);
+			}
+		}
+	}
 }

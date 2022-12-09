@@ -23,7 +23,12 @@
 RELEASE_CANDIDATE=${RELEASE_CANDIDATE:-none}
 MVN=${MVN:-mvn}
 
-if [ -z "${NEW_VERSION:-}" ]; then
+if [ -z "${OLD_VERSION}" ]; then
+    echo "OLD_VERSION was not set."
+    exit 1
+fi
+
+if [ -z "${NEW_VERSION}" ]; then
     echo "NEW_VERSION was not set."
     exit 1
 fi
@@ -52,7 +57,7 @@ fi
 git checkout -b $target_branch
 
 #change version in all pom files
-$MVN org.codehaus.mojo:versions-maven-plugin:2.8.1:set -DnewVersion=$NEW_VERSION -DgenerateBackupPoms=false --quiet
+find . -name 'pom.xml' -type f -exec perl -pi -e 's#<version>(.*)'$OLD_VERSION'(.*)</version>#<version>${1}'$NEW_VERSION'${2}</version>#' {} \;
 
 pushd tools
 ./releasing/update_japicmp_configuration.sh
@@ -60,11 +65,11 @@ popd
 
 #change version of documentation
 cd docs
-perl -pi -e "s#^  Version = .*#  Version = \"${NEW_VERSION}\"#" config.toml
+perl -pi -e "s#^version: .*#version: \"${NEW_VERSION}\"#" _config.yml
 
 # The version in the title should not contain the bugfix version (e.g. 1.3)
 VERSION_TITLE=$(echo $NEW_VERSION | sed 's/\.[^.]*$//')
-perl -pi -e "s#^  VersionTitle = .*#  VersionTitle = \"${VERSION_TITLE}\"#" config.toml
+perl -pi -e "s#^version_title: .*#version_title: ${VERSION_TITLE}#" _config.yml
 cd ..
 
 #change version of pyflink

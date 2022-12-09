@@ -18,133 +18,135 @@
 
 package org.apache.flink.runtime.operators.testutils.types;
 
+import java.io.IOException;
+
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.base.IntComparator;
 import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.core.memory.MemorySegment;
 
-import java.io.IOException;
-
 @SuppressWarnings("rawtypes")
 public class IntListComparator extends TypeComparator<IntList> {
+	
+	private static final long serialVersionUID = 1L;
+	
+	private int reference;
 
-    private static final long serialVersionUID = 1L;
+	private final TypeComparator[] comparators = new TypeComparator[] {new IntComparator(true)};
 
-    private int reference;
+	@Override
+	public int hash(IntList record) {
+		return record.getKey() * 73;
+	}
 
-    private final TypeComparator[] comparators = new TypeComparator[] {new IntComparator(true)};
+	@Override
+	public void setReference(IntList toCompare) {
+		this.reference = toCompare.getKey();
+	}
 
-    @Override
-    public int hash(IntList record) {
-        return record.getKey() * 73;
-    }
+	@Override
+	public boolean equalToReference(IntList candidate) {
+		return candidate.getKey() == this.reference;
+	}
 
-    @Override
-    public void setReference(IntList toCompare) {
-        this.reference = toCompare.getKey();
-    }
+	@Override
+	public int compareToReference(TypeComparator<IntList> referencedComparator) {
+		final IntListComparator comp = (IntListComparator) referencedComparator;
+		return comp.reference - this.reference;
+	}
+	
+	@Override
+	public int compare(IntList first, IntList second) {
+		return first.getKey() - second.getKey();
+	}
 
-    @Override
-    public boolean equalToReference(IntList candidate) {
-        return candidate.getKey() == this.reference;
-    }
+	@Override
+	public int compareSerialized(DataInputView source1, DataInputView source2) throws IOException {
+		return source1.readInt() - source2.readInt();
+	}
 
-    @Override
-    public int compareToReference(TypeComparator<IntList> referencedComparator) {
-        final IntListComparator comp = (IntListComparator) referencedComparator;
-        return comp.reference - this.reference;
-    }
+	@Override
+	public boolean supportsNormalizedKey() {
+		return true;
+	}
 
-    @Override
-    public int compare(IntList first, IntList second) {
-        return first.getKey() - second.getKey();
-    }
+	@Override
+	public boolean supportsSerializationWithKeyNormalization() {
+		return true;
+	}
 
-    @Override
-    public int compareSerialized(DataInputView source1, DataInputView source2) throws IOException {
-        return source1.readInt() - source2.readInt();
-    }
+	@Override
+	public int getNormalizeKeyLen() {
+		return 4;
+	}
 
-    @Override
-    public boolean supportsNormalizedKey() {
-        return true;
-    }
+	@Override
+	public boolean isNormalizedKeyPrefixOnly(int keyBytes) {
+		return keyBytes < 4;
+	}
 
-    @Override
-    public boolean supportsSerializationWithKeyNormalization() {
-        return true;
-    }
+	@Override
+	public void putNormalizedKey(IntList record, MemorySegment target, int offset, int len) {
+		final int value = record.getKey() - Integer.MIN_VALUE;
+		
+		if (len == 4) {
+			target.putIntBigEndian(offset, value);
+		}
+		else if (len <= 0) {
+		}
+		else if (len < 4) {
+			for (int i = 0; len > 0; len--, i++) {
+				target.put(offset + i, (byte) ((value >>> ((3-i)<<3)) & 0xff));
+			}
+		}
+		else {
+			target.putIntBigEndian(offset, value);
+			for (int i = 4; i < len; i++) {
+				target.put(offset + i, (byte) 0);
+			}
+		}
+	}
 
-    @Override
-    public int getNormalizeKeyLen() {
-        return 4;
-    }
+	@Override
+	public void writeWithKeyNormalization(IntList record, DataOutputView target)
+			throws IOException {
+		target.writeInt(record.getKey() - Integer.MIN_VALUE);
+		target.writeInt(record.getValue().length);
+		for (int i = 0; i < record.getValue().length; i++) {
+			target.writeInt(record.getValue()[i]);
+		}
+	}
+	@Override
+	public IntList readWithKeyDenormalization(IntList record, DataInputView source)
+			throws IOException {
+		record.setKey(source.readInt() + Integer.MIN_VALUE);
+		int[] value = new int[source.readInt()];
+		for (int i = 0; i < value.length; i++) {
+			value[i] = source.readInt();
+		}
+		record.setValue(value);
+		return record;
+	}
 
-    @Override
-    public boolean isNormalizedKeyPrefixOnly(int keyBytes) {
-        return keyBytes < 4;
-    }
+	@Override
+	public boolean invertNormalizedKey() {
+		return false;
+	}
 
-    @Override
-    public void putNormalizedKey(IntList record, MemorySegment target, int offset, int len) {
-        final int value = record.getKey() - Integer.MIN_VALUE;
+	@Override
+	public TypeComparator<IntList> duplicate() {
+		return new IntListComparator();
+	}
 
-        if (len == 4) {
-            target.putIntBigEndian(offset, value);
-        } else if (len <= 0) {
-        } else if (len < 4) {
-            for (int i = 0; len > 0; len--, i++) {
-                target.put(offset + i, (byte) ((value >>> ((3 - i) << 3)) & 0xff));
-            }
-        } else {
-            target.putIntBigEndian(offset, value);
-            for (int i = 4; i < len; i++) {
-                target.put(offset + i, (byte) 0);
-            }
-        }
-    }
+	@Override
+	public int extractKeys(Object record, Object[] target, int index) {
+		target[index] = (Comparable) record;
+		return 1;
+	}
 
-    @Override
-    public void writeWithKeyNormalization(IntList record, DataOutputView target)
-            throws IOException {
-        target.writeInt(record.getKey() - Integer.MIN_VALUE);
-        target.writeInt(record.getValue().length);
-        for (int i = 0; i < record.getValue().length; i++) {
-            target.writeInt(record.getValue()[i]);
-        }
-    }
+	@Override public TypeComparator[] getFlatComparators() {
+		return comparators;
+	}
 
-    @Override
-    public IntList readWithKeyDenormalization(IntList record, DataInputView source)
-            throws IOException {
-        record.setKey(source.readInt() + Integer.MIN_VALUE);
-        int[] value = new int[source.readInt()];
-        for (int i = 0; i < value.length; i++) {
-            value[i] = source.readInt();
-        }
-        record.setValue(value);
-        return record;
-    }
-
-    @Override
-    public boolean invertNormalizedKey() {
-        return false;
-    }
-
-    @Override
-    public TypeComparator<IntList> duplicate() {
-        return new IntListComparator();
-    }
-
-    @Override
-    public int extractKeys(Object record, Object[] target, int index) {
-        target[index] = (Comparable) record;
-        return 1;
-    }
-
-    @Override
-    public TypeComparator[] getFlatComparators() {
-        return comparators;
-    }
 }

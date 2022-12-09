@@ -22,7 +22,7 @@ import socketserver
 handler = http.server.SimpleHTTPRequestHandler
 
 # azure says that ports are still in use if this is not set
-socketserver.TCPServer.allow_reuse_address = True
+SocketServer.TCPServer.allow_reuse_address = True
 httpd = socketserver.TCPServer(("", 9999), handler)
 
 try:

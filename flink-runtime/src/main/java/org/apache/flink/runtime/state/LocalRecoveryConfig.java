@@ -18,41 +18,42 @@
 
 package org.apache.flink.runtime.state;
 
-import javax.annotation.Nullable;
-
-import java.util.Optional;
-import java.util.function.Supplier;
+import javax.annotation.Nonnull;
 
 /**
- * This class encapsulates the completed configuration for local recovery, i.e. the root directories
- * into which all file-based snapshots can be written and the general mode for the local recover
- * feature.
+ * This class encapsulates the completed configuration for local recovery, i.e. the root
+ * directories into which all file-based snapshots can be written and the general mode for the local recover feature.
  */
 public class LocalRecoveryConfig {
 
-    /** Encapsulates the root directories and the subtask-specific path. */
-    @Nullable private final LocalRecoveryDirectoryProvider localStateDirectories;
+	/** The local recovery mode. */
+	private final boolean localRecoveryEnabled;
 
-    public LocalRecoveryConfig(@Nullable LocalRecoveryDirectoryProvider directoryProvider) {
-        this.localStateDirectories = directoryProvider;
-    }
+	/** Encapsulates the root directories and the subtask-specific path. */
+	@Nonnull
+	private final LocalRecoveryDirectoryProvider localStateDirectories;
 
-    public boolean isLocalRecoveryEnabled() {
-        return localStateDirectories != null;
-    }
+	public LocalRecoveryConfig(
+		boolean localRecoveryEnabled,
+		@Nonnull LocalRecoveryDirectoryProvider directoryProvider) {
+		this.localRecoveryEnabled = localRecoveryEnabled;
+		this.localStateDirectories = directoryProvider;
+	}
 
-    public Optional<LocalRecoveryDirectoryProvider> getLocalStateDirectoryProvider() {
-        return Optional.ofNullable(localStateDirectories);
-    }
+	public boolean isLocalRecoveryEnabled() {
+		return localRecoveryEnabled;
+	}
 
-    @Override
-    public String toString() {
-        return "LocalRecoveryConfig{" + "localStateDirectories=" + localStateDirectories + '}';
-    }
+	@Nonnull
+	public LocalRecoveryDirectoryProvider getLocalStateDirectoryProvider() {
+		return localStateDirectories;
+	}
 
-    public static Supplier<IllegalStateException> localRecoveryNotEnabled() {
-        return () ->
-                new IllegalStateException(
-                        "Getting a LocalRecoveryDirectoryProvider is only supported with the local recovery enabled. This is a bug and should be reported.");
-    }
+	@Override
+	public String toString() {
+		return "LocalRecoveryConfig{" +
+			"localRecoveryMode=" + localRecoveryEnabled +
+			", localStateDirectories=" + localStateDirectories +
+			'}';
+	}
 }

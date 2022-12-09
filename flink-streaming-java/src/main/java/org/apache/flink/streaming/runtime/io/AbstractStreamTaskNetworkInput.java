@@ -18,10 +18,11 @@
 package org.apache.flink.streaming.runtime.io;
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.core.io.InputStatus;
 import org.apache.flink.runtime.checkpoint.channel.InputChannelInfo;
 import org.apache.flink.runtime.event.AbstractEvent;
-import org.apache.flink.runtime.io.network.api.EndOfData;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
+import org.apache.flink.runtime.io.network.api.ChannelUnavailableEvent;
 import org.apache.flink.runtime.io.network.api.serialization.RecordDeserializer;
 import org.apache.flink.runtime.io.network.partition.consumer.BufferOrEvent;
 import org.apache.flink.runtime.io.network.partition.consumer.EndOfChannelStateEvent;
@@ -30,7 +31,10 @@ import org.apache.flink.runtime.plugable.NonReusingDeserializationDelegate;
 import org.apache.flink.streaming.runtime.io.checkpointing.CheckpointedInputGate;
 import org.apache.flink.streaming.runtime.streamrecord.StreamElement;
 import org.apache.flink.streaming.runtime.streamrecord.StreamElementSerializer;
-import org.apache.flink.streaming.runtime.watermarkstatus.StatusWatermarkValve;
+import org.apache.flink.streaming.runtime.streamstatus.StatusWatermarkValve;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,12 +54,15 @@ import static org.apache.flink.util.Preconditions.checkState;
 public abstract class AbstractStreamTaskNetworkInput<
                 T, R extends RecordDeserializer<DeserializationDelegate<StreamElement>>>
         implements StreamTaskInput<T> {
+
+	private static final Logger LOG = LoggerFactory.getLogger(AbstractStreamTaskNetworkInput.class);
+
     protected final CheckpointedInputGate checkpointedInputGate;
     protected final DeserializationDelegate<StreamElement> deserializationDelegate;
     protected final TypeSerializer<T> inputSerializer;
     protected final Map<InputChannelInfo, R> recordDeserializers;
     protected final Map<InputChannelInfo, Integer> flattenedChannelIndices = new HashMap<>();
-    /** Valve that controls how watermarks and watermark statuses are forwarded. */
+    /** Valve that controls how watermarks and stream statuses are forwarded. */
     protected final StatusWatermarkValve statusWatermarkValve;
 
     protected final int inputIndex;
@@ -85,7 +92,7 @@ public abstract class AbstractStreamTaskNetworkInput<
     }
 
     @Override
-    public DataInputStatus emitNext(DataOutput<T> output) throws Exception {
+    public InputStatus emitNext(DataOutput<T> output) throws Exception {
 
         while (true) {
             // get the stream element from the deserializer
@@ -103,7 +110,7 @@ public abstract class AbstractStreamTaskNetworkInput<
 
                 if (result.isFullRecord()) {
                     processElement(deserializationDelegate.getInstance(), output);
-                    return DataInputStatus.MORE_AVAILABLE;
+                    return InputStatus.MORE_AVAILABLE;
                 }
             }
 
@@ -122,9 +129,9 @@ public abstract class AbstractStreamTaskNetworkInput<
                     checkState(
                             checkpointedInputGate.getAvailableFuture().isDone(),
                             "Finished BarrierHandler should be available");
-                    return DataInputStatus.END_OF_INPUT;
+                    return InputStatus.END_OF_INPUT;
                 }
-                return DataInputStatus.NOTHING_AVAILABLE;
+                return InputStatus.NOTHING_AVAILABLE;
             }
         }
     }
@@ -134,46 +141,45 @@ public abstract class AbstractStreamTaskNetworkInput<
             output.emitRecord(recordOrMark.asRecord());
         } else if (recordOrMark.isWatermark()) {
             statusWatermarkValve.inputWatermark(
-                    recordOrMark.asWatermark(), flattenedChannelIndices.get(lastChannel), output);
+                    recordOrMark.asWatermark(), flattenedChannelIndices.get(lastChannel));
         } else if (recordOrMark.isLatencyMarker()) {
             output.emitLatencyMarker(recordOrMark.asLatencyMarker());
-        } else if (recordOrMark.isWatermarkStatus()) {
-            statusWatermarkValve.inputWatermarkStatus(
-                    recordOrMark.asWatermarkStatus(),
-                    flattenedChannelIndices.get(lastChannel),
-                    output);
+        } else if (recordOrMark.isStreamStatus()) {
+            statusWatermarkValve.inputStreamStatus(
+                    recordOrMark.asStreamStatus(),
+                    flattenedChannelIndices.get(lastChannel));
         } else {
             throw new UnsupportedOperationException("Unknown type of StreamElement");
         }
     }
 
-    protected DataInputStatus processEvent(BufferOrEvent bufferOrEvent) {
+    protected InputStatus processEvent(BufferOrEvent bufferOrEvent) {
         // Event received
         final AbstractEvent event = bufferOrEvent.getEvent();
-        if (event.getClass() == EndOfData.class) {
-            switch (checkpointedInputGate.hasReceivedEndOfData()) {
-                case NOT_END_OF_DATA:
-                    // skip
-                    break;
-                case DRAINED:
-                    return DataInputStatus.END_OF_DATA;
-                case STOPPED:
-                    return DataInputStatus.STOPPED;
-            }
-        } else if (event.getClass() == EndOfPartitionEvent.class) {
+        // TODO: with checkpointedInputGate.isFinished() we might not need to support any events on
+        // this level.
+        if (event.getClass() == EndOfPartitionEvent.class) {
             // release the record deserializer immediately,
             // which is very valuable in case of bounded stream
             releaseDeserializer(bufferOrEvent.getChannelInfo());
-            if (checkpointedInputGate.isFinished()) {
-                return DataInputStatus.END_OF_INPUT;
-            }
         } else if (event.getClass() == EndOfChannelStateEvent.class) {
             if (checkpointedInputGate.allChannelsRecovered()) {
-                return DataInputStatus.END_OF_RECOVERY;
+                return InputStatus.END_OF_RECOVERY;
             }
-        }
-        return DataInputStatus.MORE_AVAILABLE;
+        } else if (event.getClass() == ChannelUnavailableEvent.class) {
+			int channelIndex = bufferOrEvent.getChannelInfo().getInputChannelIdx();
+			LOG.info("ChannelUnavailableEvent received on channel {}, clean its incomplete buffers.", channelIndex);
+			RecordDeserializer<?> deserializer = getActiveSerializer(bufferOrEvent.getChannelInfo());
+			cleanupBuffersFromDeserializer(deserializer);
+		}
+        return InputStatus.MORE_AVAILABLE;
     }
+
+	private void cleanupBuffersFromDeserializer(RecordDeserializer<?> deserializer) {
+		if (deserializer != null) {
+			deserializer.clear();
+		}
+	}
 
     protected void processBuffer(BufferOrEvent bufferOrEvent) throws IOException {
         lastChannel = bufferOrEvent.getChannelInfo();

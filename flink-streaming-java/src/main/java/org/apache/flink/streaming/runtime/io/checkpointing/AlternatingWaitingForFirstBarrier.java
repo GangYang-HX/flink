@@ -19,16 +19,16 @@
 package org.apache.flink.streaming.runtime.io.checkpointing;
 
 import org.apache.flink.runtime.checkpoint.CheckpointException;
-import org.apache.flink.runtime.checkpoint.channel.InputChannelInfo;
 import org.apache.flink.runtime.io.network.api.CheckpointBarrier;
+import org.apache.flink.runtime.io.network.partition.consumer.CheckpointableInput;
 
 import java.io.IOException;
 
-/** We are performing aligned checkpoints with time out. We have not seen any barriers yet. */
 final class AlternatingWaitingForFirstBarrier
         extends AbstractAlternatingAlignedBarrierHandlerState {
-    AlternatingWaitingForFirstBarrier(ChannelState state) {
-        super(state);
+
+    AlternatingWaitingForFirstBarrier(CheckpointableInput[] inputs) {
+        super(new ChannelState(inputs));
     }
 
     @Override
@@ -36,16 +36,8 @@ final class AlternatingWaitingForFirstBarrier
             Controller controller, CheckpointBarrier checkpointBarrier)
             throws IOException, CheckpointException {
         state.prioritizeAllAnnouncements();
-        return new AlternatingWaitingForFirstBarrierUnaligned(true, state);
-    }
-
-    @Override
-    public BarrierHandlerState endOfPartitionReceived(
-            Controller controller, InputChannelInfo channelInfo) throws IOException {
-        state.channelFinished(channelInfo);
-
-        // Do nothing since we have no pending checkpoint.
-        return this;
+        state.unblockAllChannels();
+        return new WaitingForFirstBarrierUnaligned(true, state.getInputs());
     }
 
     @Override

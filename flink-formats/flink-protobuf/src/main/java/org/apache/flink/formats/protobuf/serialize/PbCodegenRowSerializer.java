@@ -18,12 +18,12 @@
 
 package org.apache.flink.formats.protobuf.serialize;
 
+import org.apache.flink.formats.protobuf.PbCodegenAppender;
 import org.apache.flink.formats.protobuf.PbCodegenException;
-import org.apache.flink.formats.protobuf.PbFormatContext;
-import org.apache.flink.formats.protobuf.util.PbCodegenAppender;
-import org.apache.flink.formats.protobuf.util.PbCodegenUtils;
-import org.apache.flink.formats.protobuf.util.PbCodegenVarId;
-import org.apache.flink.formats.protobuf.util.PbFormatUtils;
+import org.apache.flink.formats.protobuf.PbCodegenUtils;
+import org.apache.flink.formats.protobuf.PbCodegenVarId;
+import org.apache.flink.formats.protobuf.PbFormatConfig;
+import org.apache.flink.formats.protobuf.PbFormatUtils;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.RowType;
@@ -34,28 +34,25 @@ import com.google.protobuf.Descriptors;
 public class PbCodegenRowSerializer implements PbCodegenSerializer {
     private final Descriptors.Descriptor descriptor;
     private final RowType rowType;
-    private final PbFormatContext formatContext;
+    private final PbFormatConfig formatConfig;
 
     public PbCodegenRowSerializer(
-            Descriptors.Descriptor descriptor, RowType rowType, PbFormatContext formatContext) {
+            Descriptors.Descriptor descriptor, RowType rowType, PbFormatConfig formatConfig) {
         this.rowType = rowType;
         this.descriptor = descriptor;
-        this.formatContext = formatContext;
+        this.formatConfig = formatConfig;
     }
 
     @Override
-    public String codegen(String resultVar, String flinkObjectCode, int indent)
+    public String codegen(String returnPbVarName, String internalDataGetStr)
             throws PbCodegenException {
-        // The type of flinkObjectCode is a RowData of flink,
-        // it should be converted to object of protobuf as resultVariable.
         PbCodegenVarId varUid = PbCodegenVarId.getInstance();
         int uid = varUid.getAndIncrement();
-        PbCodegenAppender appender = new PbCodegenAppender(indent);
-        String flinkRowDataVar = "rowData" + uid;
-        String pbMessageTypeStr =
-                PbFormatUtils.getFullJavaName(descriptor, formatContext.getOuterPrefix());
+        PbCodegenAppender appender = new PbCodegenAppender();
+        String rowDataVar = "rowData" + uid;
+        String pbMessageTypeStr = PbFormatUtils.getFullJavaName(descriptor);
         String messageBuilderVar = "messageBuilder" + uid;
-        appender.appendLine("RowData " + flinkRowDataVar + " = " + flinkObjectCode);
+        appender.appendLine("RowData " + rowDataVar + " = " + internalDataGetStr);
         appender.appendLine(
                 pbMessageTypeStr
                         + ".Builder "
@@ -71,28 +68,24 @@ public class PbCodegenRowSerializer implements PbCodegenSerializer {
             String elementPbVar = "elementPbVar" + subUid;
             String elementPbTypeStr;
             if (elementFd.isMapField()) {
-                elementPbTypeStr =
-                        PbCodegenUtils.getTypeStrFromProto(
-                                elementFd, false, formatContext.getOuterPrefix());
+                elementPbTypeStr = PbCodegenUtils.getTypeStrFromProto(elementFd, false);
             } else {
                 elementPbTypeStr =
                         PbCodegenUtils.getTypeStrFromProto(
-                                elementFd,
-                                PbFormatUtils.isArrayType(subType),
-                                formatContext.getOuterPrefix());
+                                elementFd, PbFormatUtils.isArrayType(subType));
             }
             String strongCamelFieldName = PbFormatUtils.getStrongCamelCaseJsonName(fieldName);
 
             // Only set non-null element of flink row to proto object. The real value in proto
             // result depends on protobuf implementation.
-            appender.begin("if(!" + flinkRowDataVar + ".isNullAt(" + index + ")){");
+            appender.appendSegment("if(!" + rowDataVar + ".isNullAt(" + index + ")){");
             appender.appendLine(elementPbTypeStr + " " + elementPbVar);
-            String flinkRowElementCode =
-                    PbCodegenUtils.flinkContainerElementCode(flinkRowDataVar, index + "", subType);
+            String subRowGetCode =
+                    PbCodegenUtils.getContainerDataFieldGetterCodePhrase(
+                            rowDataVar, index + "", subType);
             PbCodegenSerializer codegen =
-                    PbCodegenSerializeFactory.getPbCodegenSer(elementFd, subType, formatContext);
-            String code =
-                    codegen.codegen(elementPbVar, flinkRowElementCode, appender.currentIndent());
+                    PbCodegenSerializeFactory.getPbCodegenSer(elementFd, subType, formatConfig);
+            String code = codegen.codegen(elementPbVar, subRowGetCode);
             appender.appendSegment(code);
             if (subType.getTypeRoot() == LogicalTypeRoot.ARRAY) {
                 appender.appendLine(
@@ -119,10 +112,10 @@ public class PbCodegenRowSerializer implements PbCodegenSerializer {
                                 + elementPbVar
                                 + ")");
             }
-            appender.end("}");
+            appender.appendSegment("}");
             index += 1;
         }
-        appender.appendLine(resultVar + " = " + messageBuilderVar + ".build()");
+        appender.appendLine(returnPbVarName + " = " + messageBuilderVar + ".build()");
         return appender.code();
     }
 }

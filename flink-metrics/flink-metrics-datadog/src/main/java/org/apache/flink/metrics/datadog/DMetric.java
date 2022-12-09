@@ -18,66 +18,67 @@
 
 package org.apache.flink.metrics.datadog;
 
-import org.apache.flink.annotation.VisibleForTesting;
-
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonGetter;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnore;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Abstract metric of Datadog for serialization. */
+/**
+ * Abstract metric of Datadog for serialization.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public abstract class DMetric {
 
-    @VisibleForTesting static final String FIELD_NAME_TYPE = "type";
-    @VisibleForTesting static final String FIELD_NAME_METRIC = "metric";
-    @VisibleForTesting static final String FIELD_NAME_HOST = "host";
-    @VisibleForTesting static final String FIELD_NAME_TAGS = "tags";
-    @VisibleForTesting static final String FIELD_NAME_POINTS = "points";
+	/**
+	 * Names of metric/type/tags field and their getters must not be changed
+	 * since they are mapped to json objects in a Datadog-defined format.
+	 */
+	private final String metric; // Metric name
+	private final MetricType type;
+	private final String host;
+	private final List<String> tags;
+	private final Clock clock;
 
-    private final MetricMetaData metaData;
+	public DMetric(MetricType metricType, String metric, String host, List<String> tags, Clock clock) {
+		this.type = metricType;
+		this.metric = metric;
+		this.host = host;
+		this.tags = tags;
+		this.clock = clock;
+	}
 
-    public DMetric(MetricMetaData metaData) {
-        this.metaData = metaData;
-    }
+	public MetricType getType() {
+		return type;
+	}
 
-    @JsonGetter(FIELD_NAME_TYPE)
-    public MetricType getType() {
-        return metaData.getType();
-    }
+	public String getMetric() {
+		return metric;
+	}
 
-    @JsonGetter(FIELD_NAME_METRIC)
-    public String getMetricName() {
-        return metaData.getMetricName();
-    }
+	public String getHost() {
+		return host;
+	}
 
-    @JsonGetter(FIELD_NAME_HOST)
-    public String getHost() {
-        return metaData.getHost();
-    }
+	public List<String> getTags() {
+		return tags;
+	}
 
-    @JsonGetter(FIELD_NAME_TAGS)
-    public List<String> getTags() {
-        return metaData.getTags();
-    }
+	public List<List<Number>> getPoints() {
+		// One single data point
+		List<Number> point = new ArrayList<>();
+		point.add(clock.getUnixEpochTimestamp());
+		point.add(getMetricValue());
 
-    @JsonGetter(FIELD_NAME_POINTS)
-    public List<List<Number>> getPoints() {
-        // One single data point
-        List<Number> point = new ArrayList<>();
-        point.add(metaData.getClock().getUnixEpochTimestamp());
-        point.add(getMetricValue());
+		List<List<Number>> points = new ArrayList<>();
+		points.add(point);
 
-        List<List<Number>> points = new ArrayList<>();
-        points.add(point);
+		return points;
+	}
 
-        return points;
-    }
+	@JsonIgnore
+	public abstract Number getMetricValue();
 
-    @JsonIgnore
-    public abstract Number getMetricValue();
-
-    public void ackReport() {}
+	public void ackReport() {
+	}
 }

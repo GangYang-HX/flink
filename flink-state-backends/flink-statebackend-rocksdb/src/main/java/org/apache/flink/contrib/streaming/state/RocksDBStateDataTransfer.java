@@ -17,31 +17,96 @@
 
 package org.apache.flink.contrib.streaming.state;
 
-import org.apache.flink.util.concurrent.ExecutorThreadFactory;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.runtime.speculativeframe.SpeculativeProperties;
+import org.apache.flink.runtime.speculativeframe.SpeculativeTaskInfo;
+import org.apache.flink.runtime.speculativeframe.SpeculativeTasksManager;
+import org.apache.flink.util.Preconditions;
 
 import java.io.Closeable;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static org.apache.flink.util.concurrent.Executors.newDirectExecutorService;
+import static org.apache.flink.runtime.concurrent.Executors.newDirectExecutorService;
 
-/** Data transfer base class for {@link RocksDBKeyedStateBackend}. */
-class RocksDBStateDataTransfer implements Closeable {
+/**
+ * Data transfer base class for {@link RocksDBKeyedStateBackend}.
+ */
+abstract class RocksDBStateDataTransfer implements Closeable {
 
-    protected final ExecutorService executorService;
+	protected static final int LOG_THRESHOLD_MS = 10_000;
+	private final ExecutorService taskExecutorService;
+	private final Object lock = new Object();
+	protected Optional<SpeculativeTasksManager> speculativeTasksManager;
 
-    RocksDBStateDataTransfer(int threadNum) {
-        if (threadNum > 1) {
-            executorService =
-                    Executors.newFixedThreadPool(
-                            threadNum, new ExecutorThreadFactory("Flink-RocksDBStateDataTransfer"));
-        } else {
-            executorService = newDirectExecutorService();
-        }
-    }
 
-    @Override
-    public void close() {
-        executorService.shutdownNow();
-    }
+	RocksDBStateDataTransfer(
+			int threadNum,
+			Optional<SpeculativeTasksManager> speculativeTasksManager) {
+		this.speculativeTasksManager = speculativeTasksManager;
+		if (speculativeTasksManager.isPresent()) {
+			taskExecutorService = ExecutorServiceHolder.getExecutor(threadNum);
+
+			// register task type
+			registerSpeculativeTask();
+		} else {
+			if (threadNum > 1) {
+				taskExecutorService = Executors.newFixedThreadPool(threadNum);
+			} else {
+				taskExecutorService = newDirectExecutorService();
+			}
+		}
+	}
+
+	public abstract SpeculativeProperties buildTaskProperties();
+
+	private void registerSpeculativeTask() {
+		SpeculativeProperties taskProperties = buildTaskProperties();
+		Preconditions.checkNotNull(taskProperties, "taskProperties is null");
+		Preconditions.checkArgument(speculativeTasksManager.isPresent());
+		speculativeTasksManager.get().registerTaskType(taskProperties);
+	}
+
+	protected void markCost(Histogram metrics, long duration) {
+		//thread safe
+		synchronized (lock) {
+			metrics.update(duration);
+		}
+	}
+
+	protected void submitTransferTask(SpeculativeTaskInfo taskInfo) {
+		Preconditions.checkArgument(speculativeTasksManager.isPresent());
+		speculativeTasksManager.get().submitTask(taskInfo);
+	}
+
+	protected ExecutorService getExecutorService() {
+		return taskExecutorService;
+	}
+
+	@Override
+	public void close() {
+		if (taskExecutorService != null) {
+			// Since there is only one executor for downloading and uploading, we needn't close it.
+			if (!speculativeTasksManager.isPresent()) {
+				taskExecutorService.shutdownNow();
+			}
+		}
+	}
+
+	private static class ExecutorServiceHolder {
+
+		private static volatile ExecutorService transferExecutor;
+
+		private static ExecutorService getExecutor(int threadNum) {
+			if (transferExecutor == null) {
+				synchronized (ExecutorServiceHolder.class) {
+					if (transferExecutor == null) {
+						transferExecutor = Executors.newFixedThreadPool(threadNum);
+					}
+				}
+			}
+			return transferExecutor;
+		}
+	}
 }

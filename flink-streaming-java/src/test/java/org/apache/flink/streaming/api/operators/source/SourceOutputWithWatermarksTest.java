@@ -24,7 +24,6 @@ import org.apache.flink.api.common.eventtime.TimestampAssigner;
 import org.apache.flink.api.common.eventtime.Watermark;
 import org.apache.flink.api.common.eventtime.WatermarkGenerator;
 import org.apache.flink.api.common.eventtime.WatermarkOutput;
-import org.apache.flink.streaming.runtime.io.PushingAsyncDataInput;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import org.junit.Test;
@@ -34,76 +33,53 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 
-/** Tests for the {@link SourceOutputWithWatermarks}. */
+/**
+ * Tests for the {@link SourceOutputWithWatermarks}.
+ */
 public class SourceOutputWithWatermarksTest {
 
-    /**
-     * Creates a new SourceOutputWithWatermarks that emits records to the given DataOutput and
-     * watermarks to the (possibly different) WatermarkOutput.
-     */
-    private static <E> SourceOutputWithWatermarks<E> createWithSameOutputs(
-            PushingAsyncDataInput.DataOutput<E> recordsAndWatermarksOutput,
-            TimestampAssigner<E> timestampAssigner,
-            WatermarkGenerator<E> watermarkGenerator) {
+	@Test
+	public void testNoTimestampValue() {
+		final CollectingDataOutput<Integer> dataOutput = new CollectingDataOutput<>();
+		final SourceOutputWithWatermarks<Integer> out = SourceOutputWithWatermarks.createWithSameOutputs(
+				dataOutput, new RecordTimestampAssigner<>(), new NoWatermarksGenerator<>());
 
-        final WatermarkOutput watermarkOutput =
-                new WatermarkToDataOutput(recordsAndWatermarksOutput);
+		out.collect(17);
 
-        return new SourceOutputWithWatermarks<>(
-                recordsAndWatermarksOutput,
-                watermarkOutput,
-                watermarkOutput,
-                timestampAssigner,
-                watermarkGenerator);
-    }
+		final Object event = dataOutput.events.get(0);
+		assertThat(event, instanceOf(StreamRecord.class));
+		assertEquals(TimestampAssigner.NO_TIMESTAMP, ((StreamRecord<?>) event).getTimestamp());
+	}
 
-    @Test
-    public void testNoTimestampValue() {
-        final CollectingDataOutput<Integer> dataOutput = new CollectingDataOutput<>();
-        final SourceOutputWithWatermarks<Integer> out =
-                createWithSameOutputs(
-                        dataOutput, new RecordTimestampAssigner<>(), new NoWatermarksGenerator<>());
+	@Test
+	public void eventsAreBeforeWatermarks() {
+		final CollectingDataOutput<Integer> dataOutput = new CollectingDataOutput<>();
+		final SourceOutputWithWatermarks<Integer> out = SourceOutputWithWatermarks.createWithSameOutputs(
+				dataOutput, new RecordTimestampAssigner<>(), new TestWatermarkGenerator<>());
 
-        out.collect(17);
+		out.collect(42, 12345L);
 
-        final Object event = dataOutput.events.get(0);
-        assertThat(event, instanceOf(StreamRecord.class));
-        assertEquals(TimestampAssigner.NO_TIMESTAMP, ((StreamRecord<?>) event).getTimestamp());
-    }
+		assertThat(dataOutput.events, contains(
+				new StreamRecord<>(42, 12345L),
+				new org.apache.flink.streaming.api.watermark.Watermark(12345L)
+		));
+	}
 
-    @Test
-    public void eventsAreBeforeWatermarks() {
-        final CollectingDataOutput<Integer> dataOutput = new CollectingDataOutput<>();
-        final SourceOutputWithWatermarks<Integer> out =
-                createWithSameOutputs(
-                        dataOutput,
-                        new RecordTimestampAssigner<>(),
-                        new TestWatermarkGenerator<>());
+	// ------------------------------------------------------------------------
 
-        out.collect(42, 12345L);
+	private static final class TestWatermarkGenerator<T> implements WatermarkGenerator<T> {
 
-        assertThat(
-                dataOutput.events,
-                contains(
-                        new StreamRecord<>(42, 12345L),
-                        new org.apache.flink.streaming.api.watermark.Watermark(12345L)));
-    }
+		private long lastTimestamp;
 
-    // ------------------------------------------------------------------------
+		@Override
+		public void onEvent(T event, long eventTimestamp, WatermarkOutput output) {
+			lastTimestamp = eventTimestamp;
+			output.emitWatermark(new Watermark(eventTimestamp));
+		}
 
-    private static final class TestWatermarkGenerator<T> implements WatermarkGenerator<T> {
-
-        private long lastTimestamp;
-
-        @Override
-        public void onEvent(T event, long eventTimestamp, WatermarkOutput output) {
-            lastTimestamp = eventTimestamp;
-            output.emitWatermark(new Watermark(eventTimestamp));
-        }
-
-        @Override
-        public void onPeriodicEmit(WatermarkOutput output) {
-            output.emitWatermark(new Watermark(lastTimestamp));
-        }
-    }
+		@Override
+		public void onPeriodicEmit(WatermarkOutput output) {
+			output.emitWatermark(new Watermark(lastTimestamp));
+		}
+	}
 }

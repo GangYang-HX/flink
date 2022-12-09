@@ -24,6 +24,7 @@ import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.runtime.checkpoint.CheckpointMetaData;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
 import org.apache.flink.runtime.checkpoint.JobManagerTaskRestore;
@@ -57,210 +58,203 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.apache.flink.configuration.CheckpointingOptions.CHECKPOINTS_DIRECTORY;
 import static org.apache.flink.configuration.CheckpointingOptions.INCREMENTAL_CHECKPOINTS;
-import static org.apache.flink.configuration.StateBackendOptions.STATE_BACKEND;
+import static org.apache.flink.configuration.CheckpointingOptions.STATE_BACKEND;
 import static org.junit.Assert.assertEquals;
 
-/** Test for StatefulOperatorChainedTaskTest. */
+/**
+ * Test for StatefulOperatorChainedTaskTest.
+ */
 public class StatefulOperatorChainedTaskTest {
 
-    private static final Set<OperatorID> RESTORED_OPERATORS = ConcurrentHashMap.newKeySet();
-    private TemporaryFolder temporaryFolder;
+	private static final Set<OperatorID> RESTORED_OPERATORS = ConcurrentHashMap.newKeySet();
+	private TemporaryFolder temporaryFolder;
 
-    @Before
-    public void setup() throws IOException {
-        RESTORED_OPERATORS.clear();
-        temporaryFolder = new TemporaryFolder();
-        temporaryFolder.create();
-    }
+	@Before
+	public void setup() throws IOException {
+		RESTORED_OPERATORS.clear();
+		temporaryFolder = new TemporaryFolder();
+		temporaryFolder.create();
+	}
 
-    @Test
-    public void testMultipleStatefulOperatorChainedSnapshotAndRestore() throws Exception {
+	@Test
+	public void testMultipleStatefulOperatorChainedSnapshotAndRestore() throws Exception {
 
-        OperatorID headOperatorID = new OperatorID(42L, 42L);
-        OperatorID tailOperatorID = new OperatorID(44L, 44L);
+		OperatorID headOperatorID = new OperatorID(42L, 42L);
+		OperatorID tailOperatorID = new OperatorID(44L, 44L);
 
-        JobManagerTaskRestore restore =
-                createRunAndCheckpointOperatorChain(
-                        headOperatorID,
-                        new CounterOperator("head"),
-                        tailOperatorID,
-                        new CounterOperator("tail"),
-                        Optional.empty());
+		JobManagerTaskRestore restore = createRunAndCheckpointOperatorChain(
+			headOperatorID,
+			new CounterOperator("head"),
+			tailOperatorID,
+			new CounterOperator("tail"),
+			Optional.empty());
 
-        TaskStateSnapshot stateHandles = restore.getTaskStateSnapshot();
+		TaskStateSnapshot stateHandles = restore.getTaskStateSnapshot();
 
-        assertEquals(2, stateHandles.getSubtaskStateMappings().size());
+		assertEquals(2, stateHandles.getSubtaskStateMappings().size());
 
-        createRunAndCheckpointOperatorChain(
-                headOperatorID,
-                new CounterOperator("head"),
-                tailOperatorID,
-                new CounterOperator("tail"),
-                Optional.of(restore));
+		createRunAndCheckpointOperatorChain(
+			headOperatorID,
+			new CounterOperator("head"),
+			tailOperatorID,
+			new CounterOperator("tail"),
+			Optional.of(restore));
 
-        assertEquals(
-                new HashSet<>(Arrays.asList(headOperatorID, tailOperatorID)), RESTORED_OPERATORS);
-    }
+		assertEquals(new HashSet<>(Arrays.asList(headOperatorID, tailOperatorID)), RESTORED_OPERATORS);
+	}
 
-    private JobManagerTaskRestore createRunAndCheckpointOperatorChain(
-            OperatorID headId,
-            OneInputStreamOperator<String, String> headOperator,
-            OperatorID tailId,
-            OneInputStreamOperator<String, String> tailOperator,
-            Optional<JobManagerTaskRestore> restore)
-            throws Exception {
+	private JobManagerTaskRestore createRunAndCheckpointOperatorChain(
+		OperatorID headId,
+		OneInputStreamOperator<String, String> headOperator,
+		OperatorID tailId,
+		OneInputStreamOperator<String, String> tailOperator,
+		Optional<JobManagerTaskRestore> restore) throws Exception {
 
-        File localRootDir = temporaryFolder.newFolder();
-        final OneInputStreamTaskTestHarness<String, String> testHarness =
-                new OneInputStreamTaskTestHarness<>(
-                        OneInputStreamTask::new,
-                        1,
-                        1,
-                        BasicTypeInfo.STRING_TYPE_INFO,
-                        BasicTypeInfo.STRING_TYPE_INFO,
-                        localRootDir);
+		File localRootDir = temporaryFolder.newFolder();
+		final OneInputStreamTaskTestHarness<String, String> testHarness =
+			new OneInputStreamTaskTestHarness<>(
+				OneInputStreamTask::new,
+				1, 1,
+				BasicTypeInfo.STRING_TYPE_INFO,
+				BasicTypeInfo.STRING_TYPE_INFO,
+				localRootDir);
 
-        testHarness
-                .setupOperatorChain(headId, headOperator)
-                .chain(tailId, tailOperator, StringSerializer.INSTANCE, true)
-                .finish();
+		testHarness.setupOperatorChain(headId, headOperator)
+			.chain(tailId, tailOperator, StringSerializer.INSTANCE, true)
+			.finish();
 
-        if (restore.isPresent()) {
-            JobManagerTaskRestore taskRestore = restore.get();
-            testHarness.setTaskStateSnapshot(
-                    taskRestore.getRestoreCheckpointId(), taskRestore.getTaskStateSnapshot());
-        }
+		if (restore.isPresent()) {
+			JobManagerTaskRestore taskRestore = restore.get();
+			testHarness.setTaskStateSnapshot(
+				taskRestore.getRestoreCheckpointId(),
+				taskRestore.getTaskStateSnapshot());
+		}
 
-        StreamMockEnvironment environment =
-                new StreamMockEnvironment(
-                        testHarness.jobConfig,
-                        testHarness.taskConfig,
-                        testHarness.getExecutionConfig(),
-                        testHarness.memorySize,
-                        new MockInputSplitProvider(),
-                        testHarness.bufferSize,
-                        testHarness.getTaskStateManager());
+		StreamMockEnvironment environment = new StreamMockEnvironment(
+			testHarness.jobConfig,
+			testHarness.taskConfig,
+			testHarness.getExecutionConfig(),
+			testHarness.memorySize,
+			new MockInputSplitProvider(),
+			testHarness.bufferSize,
+			testHarness.getTaskStateManager());
 
-        Configuration configuration = new Configuration();
-        configuration.setString(STATE_BACKEND.key(), "rocksdb");
-        File file = temporaryFolder.newFolder();
-        configuration.setString(CHECKPOINTS_DIRECTORY.key(), file.toURI().toString());
-        configuration.setString(INCREMENTAL_CHECKPOINTS.key(), "true");
-        environment.setTaskManagerInfo(
-                new TestingTaskManagerRuntimeInfo(
-                        configuration,
-                        System.getProperty("java.io.tmpdir").split(",|" + File.pathSeparator)));
-        testHarness.invoke(environment);
-        testHarness.waitForTaskRunning();
+		Configuration configuration = new Configuration();
+		configuration.setString(STATE_BACKEND.key(), "rocksdb");
+		File file = temporaryFolder.newFolder();
+		configuration.setString(CHECKPOINTS_DIRECTORY.key(), file.toURI().toString());
+		configuration.setString(INCREMENTAL_CHECKPOINTS.key(), "true");
+		environment.setTaskManagerInfo(
+			new TestingTaskManagerRuntimeInfo(
+				configuration,
+				System.getProperty("java.io.tmpdir").split(",|" + File.pathSeparator)));
+		testHarness.invoke(environment);
+		testHarness.waitForTaskRunning();
 
-        OneInputStreamTask<String, String> streamTask = testHarness.getTask();
+		OneInputStreamTask<String, String> streamTask = testHarness.getTask();
 
-        processRecords(testHarness);
-        triggerCheckpoint(testHarness, streamTask);
+		processRecords(testHarness);
+		triggerCheckpoint(testHarness, streamTask);
 
-        TestTaskStateManager taskStateManager = testHarness.getTaskStateManager();
+		TestTaskStateManager taskStateManager = testHarness.getTaskStateManager();
 
-        JobManagerTaskRestore jobManagerTaskRestore =
-                new JobManagerTaskRestore(
-                        taskStateManager.getReportedCheckpointId(),
-                        taskStateManager.getLastJobManagerTaskStateSnapshot());
+		JobManagerTaskRestore jobManagerTaskRestore = new JobManagerTaskRestore(
+			taskStateManager.getReportedCheckpointId(),
+			taskStateManager.getLastJobManagerTaskStateSnapshot());
 
-        testHarness.endInput();
-        testHarness.waitForTaskCompletion();
-        return jobManagerTaskRestore;
-    }
+		testHarness.endInput();
+		testHarness.waitForTaskCompletion();
+		return jobManagerTaskRestore;
+	}
 
-    private void triggerCheckpoint(
-            OneInputStreamTaskTestHarness<String, String> testHarness,
-            OneInputStreamTask<String, String> streamTask)
-            throws Exception {
+	private void triggerCheckpoint(
+		OneInputStreamTaskTestHarness<String, String> testHarness,
+		OneInputStreamTask<String, String> streamTask) throws Exception {
 
-        long checkpointId = 1L;
-        CheckpointMetaData checkpointMetaData = new CheckpointMetaData(checkpointId, 1L);
+		long checkpointId = 1L;
+		CheckpointMetaData checkpointMetaData = new CheckpointMetaData(checkpointId, 1L);
 
-        testHarness.getTaskStateManager().getWaitForReportLatch().reset();
-        while (!streamTask
-                .triggerCheckpointAsync(
-                        checkpointMetaData, CheckpointOptions.forCheckpointWithDefaultLocation())
-                .get()) {}
+		testHarness.getTaskStateManager().setWaitForReportLatch(new OneShotLatch());
 
-        testHarness.getTaskStateManager().getWaitForReportLatch().await();
-        long reportedCheckpointId = testHarness.getTaskStateManager().getReportedCheckpointId();
+		while (!streamTask.triggerCheckpointAsync(checkpointMetaData, CheckpointOptions.forCheckpointWithDefaultLocation(), false).get()) {}
 
-        assertEquals(checkpointId, reportedCheckpointId);
-    }
+		testHarness.getTaskStateManager().getWaitForReportLatch().await();
+		long reportedCheckpointId = testHarness.getTaskStateManager().getReportedCheckpointId();
 
-    private void processRecords(OneInputStreamTaskTestHarness<String, String> testHarness)
-            throws Exception {
-        ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<>();
+		assertEquals(checkpointId, reportedCheckpointId);
+	}
 
-        testHarness.processElement(new StreamRecord<>("10"), 0, 0);
-        testHarness.processElement(new StreamRecord<>("20"), 0, 0);
-        testHarness.processElement(new StreamRecord<>("30"), 0, 0);
+	private void processRecords(OneInputStreamTaskTestHarness<String, String> testHarness) throws Exception {
+		ConcurrentLinkedQueue<Object> expectedOutput = new ConcurrentLinkedQueue<>();
 
-        testHarness.waitForInputProcessing();
+		testHarness.processElement(new StreamRecord<>("10"), 0, 0);
+		testHarness.processElement(new StreamRecord<>("20"), 0, 0);
+		testHarness.processElement(new StreamRecord<>("30"), 0, 0);
 
-        expectedOutput.add(new StreamRecord<>("10"));
-        expectedOutput.add(new StreamRecord<>("20"));
-        expectedOutput.add(new StreamRecord<>("30"));
-        TestHarnessUtil.assertOutputEquals(
-                "Output was not correct.", expectedOutput, testHarness.getOutput());
-    }
+		testHarness.waitForInputProcessing();
 
-    private abstract static class RestoreWatchOperator<IN, OUT> extends AbstractStreamOperator<OUT>
-            implements OneInputStreamOperator<IN, OUT> {
+		expectedOutput.add(new StreamRecord<>("10"));
+		expectedOutput.add(new StreamRecord<>("20"));
+		expectedOutput.add(new StreamRecord<>("30"));
+		TestHarnessUtil.assertOutputEquals("Output was not correct.", expectedOutput, testHarness.getOutput());
+	}
 
-        @Override
-        public void initializeState(StateInitializationContext context) throws Exception {
-            if (context.isRestored()) {
-                RESTORED_OPERATORS.add(getOperatorID());
-            }
-        }
-    }
+	private abstract static class RestoreWatchOperator<IN, OUT>
+		extends AbstractStreamOperator<OUT>
+		implements OneInputStreamOperator<IN, OUT> {
 
-    /** Operator that counts processed messages and keeps result on state. */
-    private static class CounterOperator extends RestoreWatchOperator<String, String> {
-        private static final long serialVersionUID = 2048954179291813243L;
+		@Override
+		public void initializeState(StateInitializationContext context) throws Exception {
+			if (context.isRestored()) {
+				RESTORED_OPERATORS.add(getOperatorID());
+			}
+		}
+	}
 
-        private static long snapshotOutData = 0L;
-        private ValueState<Long> counterState;
-        private long counter = 0;
-        private String prefix;
+	/**
+	 * Operator that counts processed messages and keeps result on state.
+	 */
+	private static class CounterOperator extends RestoreWatchOperator<String, String> {
+		private static final long serialVersionUID = 2048954179291813243L;
 
-        CounterOperator(String prefix) {
-            this.prefix = prefix;
-        }
+		private static long snapshotOutData = 0L;
+		private ValueState<Long> counterState;
+		private long counter = 0;
+		private String prefix;
 
-        @Override
-        public void processElement(StreamRecord<String> element) throws Exception {
-            counter++;
-            output.collect(element);
-        }
+		CounterOperator(String prefix) {
+			this.prefix = prefix;
+		}
 
-        @Override
-        public void initializeState(StateInitializationContext context) throws Exception {
-            super.initializeState(context);
+		@Override
+		public void processElement(StreamRecord<String> element) throws Exception {
+			counter++;
+			output.collect(element);
+		}
 
-            counterState =
-                    context.getKeyedStateStore()
-                            .getState(
-                                    new ValueStateDescriptor<>(
-                                            prefix + "counter-state", LongSerializer.INSTANCE));
+		@Override
+		public void initializeState(StateInitializationContext context) throws Exception {
+			super.initializeState(context);
 
-            // set key manually to make RocksDBListState get the serialized key.
-            setCurrentKey("10");
+			counterState = context
+				.getKeyedStateStore()
+				.getState(new ValueStateDescriptor<>(prefix + "counter-state", LongSerializer.INSTANCE));
 
-            if (context.isRestored()) {
-                counter = counterState.value();
-                assertEquals(snapshotOutData, counter);
-                counterState.clear();
-            }
-        }
+			// set key manually to make RocksDBListState get the serialized key.
+			setCurrentKey("10");
 
-        @Override
-        public void snapshotState(StateSnapshotContext context) throws Exception {
-            counterState.update(counter);
-            snapshotOutData = counter;
-        }
-    }
+			if (context.isRestored()) {
+				counter =  counterState.value();
+				assertEquals(snapshotOutData, counter);
+				counterState.clear();
+			}
+		}
+
+		@Override
+		public void snapshotState(StateSnapshotContext context) throws Exception {
+			counterState.update(counter);
+			snapshotOutData = counter;
+		}
+	}
 }
+

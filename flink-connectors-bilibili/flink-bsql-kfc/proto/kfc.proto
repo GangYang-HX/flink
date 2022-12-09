@@ -1,0 +1,8 @@
+syntax = "proto3";
+package ai.kfc;
+
+import "kfc_message.proto";
+
+service KFC {
+    rpc GetValues (KFCRequest) returns (KFCResponse);
+}

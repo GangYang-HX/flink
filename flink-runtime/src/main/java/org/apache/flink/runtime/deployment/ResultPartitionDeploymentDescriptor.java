@@ -37,57 +37,65 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  */
 public class ResultPartitionDeploymentDescriptor implements Serializable {
 
-    private static final long serialVersionUID = 6343547936086963705L;
+	private static final long serialVersionUID = 6343547936086963705L;
 
-    private final PartitionDescriptor partitionDescriptor;
+	private final PartitionDescriptor partitionDescriptor;
 
-    private final ShuffleDescriptor shuffleDescriptor;
+	private final ShuffleDescriptor shuffleDescriptor;
 
-    private final int maxParallelism;
+	private final int maxParallelism;
 
-    public ResultPartitionDeploymentDescriptor(
-            PartitionDescriptor partitionDescriptor,
-            ShuffleDescriptor shuffleDescriptor,
-            int maxParallelism) {
-        this.partitionDescriptor = checkNotNull(partitionDescriptor);
-        this.shuffleDescriptor = checkNotNull(shuffleDescriptor);
-        KeyGroupRangeAssignment.checkParallelismPreconditions(maxParallelism);
-        this.maxParallelism = maxParallelism;
-    }
+	/** Flag whether the result partition should send scheduleOrUpdateConsumer messages. */
+	private final boolean sendScheduleOrUpdateConsumersMessage;
 
-    public IntermediateDataSetID getResultId() {
-        return partitionDescriptor.getResultId();
-    }
+	public ResultPartitionDeploymentDescriptor(
+			PartitionDescriptor partitionDescriptor,
+			ShuffleDescriptor shuffleDescriptor,
+			int maxParallelism,
+			boolean sendScheduleOrUpdateConsumersMessage) {
+		this.partitionDescriptor = checkNotNull(partitionDescriptor);
+		this.shuffleDescriptor = checkNotNull(shuffleDescriptor);
+		KeyGroupRangeAssignment.checkParallelismPreconditions(maxParallelism);
+		this.maxParallelism = maxParallelism;
+		this.sendScheduleOrUpdateConsumersMessage = sendScheduleOrUpdateConsumersMessage;
+	}
 
-    public IntermediateResultPartitionID getPartitionId() {
-        return partitionDescriptor.getPartitionId();
-    }
+	public IntermediateDataSetID getResultId() {
+		return partitionDescriptor.getResultId();
+	}
 
-    public ResultPartitionType getPartitionType() {
-        return partitionDescriptor.getPartitionType();
-    }
+	public IntermediateResultPartitionID getPartitionId() {
+		return partitionDescriptor.getPartitionId();
+	}
 
-    public int getTotalNumberOfPartitions() {
-        return partitionDescriptor.getTotalNumberOfPartitions();
-    }
+	public ResultPartitionType getPartitionType() {
+		return partitionDescriptor.getPartitionType();
+	}
 
-    public int getNumberOfSubpartitions() {
-        return partitionDescriptor.getNumberOfSubpartitions();
-    }
+	public int getTotalNumberOfPartitions() {
+		return partitionDescriptor.getTotalNumberOfPartitions();
+	}
 
-    public int getMaxParallelism() {
-        return maxParallelism;
-    }
+	public int getNumberOfSubpartitions() {
+		return partitionDescriptor.getNumberOfSubpartitions();
+	}
 
-    public ShuffleDescriptor getShuffleDescriptor() {
-        return shuffleDescriptor;
-    }
+	public int getMaxParallelism() {
+		return maxParallelism;
+	}
 
-    @Override
-    public String toString() {
-        return String.format(
-                "ResultPartitionDeploymentDescriptor [PartitionDescriptor: %s, "
-                        + "ShuffleDescriptor: %s]",
-                partitionDescriptor, shuffleDescriptor);
-    }
+	public ShuffleDescriptor getShuffleDescriptor() {
+		return shuffleDescriptor;
+	}
+
+	public boolean sendScheduleOrUpdateConsumersMessage() {
+		return sendScheduleOrUpdateConsumersMessage;
+	}
+
+	@Override
+	public String toString() {
+		return String.format("ResultPartitionDeploymentDescriptor [PartitionDescriptor: %s, "
+						+ "ShuffleDescriptor: %s]",
+			partitionDescriptor, shuffleDescriptor);
+	}
 }

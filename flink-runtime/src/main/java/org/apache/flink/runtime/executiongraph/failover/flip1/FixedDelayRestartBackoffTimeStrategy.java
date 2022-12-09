@@ -21,101 +21,132 @@ package org.apache.flink.runtime.executiongraph.failover.flip1;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.RestartStrategyOptions;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.apache.flink.util.Preconditions.checkArgument;
 
 /**
- * Restart strategy which tries to restart a fixed number of times with a fixed backoff time in
- * between.
+ * Restart strategy which tries to restart a fixed number of times with a fixed backoff time in between.
  */
 public class FixedDelayRestartBackoffTimeStrategy implements RestartBackoffTimeStrategy {
 
-    private final int maxNumberRestartAttempts;
+	private static final Logger LOG = LoggerFactory.getLogger(FixedDelayRestartBackoffTimeStrategy.class);
 
-    private final long backoffTimeMS;
+	public static final long DISABLE_RESETTING_PERIOD = 0;
 
-    private final String strategyString;
+	private final long resetRestartAttemptPeriodMs;
 
-    private int currentRestartAttempt;
+	private static final ScheduledExecutorService scheduleExecutor = Executors.newSingleThreadScheduledExecutor();
 
-    FixedDelayRestartBackoffTimeStrategy(int maxNumberRestartAttempts, long backoffTimeMS) {
-        checkArgument(
-                maxNumberRestartAttempts >= 0,
-                "Maximum number of restart attempts must be at least 0.");
-        checkArgument(
-                backoffTimeMS >= 0, "Backoff time between restart attempts must be at least 0 ms.");
+	private final int maxNumberRestartAttempts;
 
-        this.maxNumberRestartAttempts = maxNumberRestartAttempts;
-        this.backoffTimeMS = backoffTimeMS;
-        this.currentRestartAttempt = 0;
-        this.strategyString = generateStrategyString();
-    }
+	private final long backoffTimeMS;
 
-    @Override
-    public boolean canRestart() {
-        return currentRestartAttempt <= maxNumberRestartAttempts;
-    }
+	private final String strategyString;
 
-    @Override
-    public long getBackoffTime() {
-        return backoffTimeMS;
-    }
+	private AtomicInteger currentRestartAttempt;
 
-    public int getMaxNumberRestartAttempts() {
-        return maxNumberRestartAttempts;
-    }
+	FixedDelayRestartBackoffTimeStrategy(
+			int maxNumberRestartAttempts, long backoffTimeMS, long resetRestartAttemptPeriodMs) {
+		checkArgument(maxNumberRestartAttempts >= 0, "Maximum number of restart attempts must be at least 0.");
+		checkArgument(backoffTimeMS >= 0, "Backoff time between restart attempts must be at least 0 ms.");
 
-    @Override
-    public void notifyFailure(Throwable cause) {
-        currentRestartAttempt++;
-    }
+		this.maxNumberRestartAttempts = maxNumberRestartAttempts;
+		this.backoffTimeMS = backoffTimeMS;
+		this.currentRestartAttempt = new AtomicInteger(0);
+		this.strategyString = generateStrategyString();
+		this.resetRestartAttemptPeriodMs = resetRestartAttemptPeriodMs;
 
-    @Override
-    public String toString() {
-        return strategyString;
-    }
+		if (resetRestartAttemptPeriodMs > 0) {
+			resetCurrentRestartAttemptSchedule();
+		}
+	}
 
-    private String generateStrategyString() {
-        StringBuilder str = new StringBuilder("FixedDelayRestartBackoffTimeStrategy(");
-        str.append("maxNumberRestartAttempts=");
-        str.append(maxNumberRestartAttempts);
-        str.append(", backoffTimeMS=");
-        str.append(backoffTimeMS);
-        str.append(")");
+	public void resetCurrentRestartAttemptSchedule() {
+		scheduleExecutor.scheduleAtFixedRate(() -> {
+			currentRestartAttempt.set(0);
+			LOG.info("Reset task restart attempt value to zero.");
+		}, 0, resetRestartAttemptPeriodMs, TimeUnit.MILLISECONDS);
+	}
 
-        return str.toString();
-    }
+	public static FixedDelayRestartBackoffTimeStrategyFactory createFactory(final Configuration configuration) {
+		int maxAttempts = configuration.getInteger(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS);
+		long delay = configuration.get(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY).toMillis();
+		long period = configuration.get(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_RESET_ATTEMPTS_PERIOD).toMillis();
 
-    public static FixedDelayRestartBackoffTimeStrategyFactory createFactory(
-            final Configuration configuration) {
-        int maxAttempts =
-                configuration.getInteger(
-                        RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS);
-        long delay =
-                configuration
-                        .get(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY)
-                        .toMillis();
+		return new FixedDelayRestartBackoffTimeStrategyFactory(maxAttempts, delay, period);
+	}
 
-        return new FixedDelayRestartBackoffTimeStrategyFactory(maxAttempts, delay);
-    }
+	@Override
+	public boolean canRestart() {
+		return currentRestartAttempt.get() <= maxNumberRestartAttempts;
+	}
 
-    /** The factory for creating {@link FixedDelayRestartBackoffTimeStrategy}. */
-    public static class FixedDelayRestartBackoffTimeStrategyFactory
-            implements RestartBackoffTimeStrategy.Factory {
+	@Override
+	public long getBackoffTime() {
+		return backoffTimeMS;
+	}
 
-        private final int maxNumberRestartAttempts;
+	public int getMaxNumberRestartAttempts() {
+		return maxNumberRestartAttempts;
+	}
 
-        private final long backoffTimeMS;
+	@Override
+	public void notifyFailure(Throwable cause) {
+		currentRestartAttempt.incrementAndGet();
+		LOG.info("Task failed. Restart attempt {} of {}.", currentRestartAttempt.get(), maxNumberRestartAttempts);
+	}
 
-        public FixedDelayRestartBackoffTimeStrategyFactory(
-                int maxNumberRestartAttempts, long backoffTimeMS) {
-            this.maxNumberRestartAttempts = maxNumberRestartAttempts;
-            this.backoffTimeMS = backoffTimeMS;
-        }
+	@Override
+	public String toString() {
+		return strategyString;
+	}
 
-        @Override
-        public RestartBackoffTimeStrategy create() {
-            return new FixedDelayRestartBackoffTimeStrategy(
-                    maxNumberRestartAttempts, backoffTimeMS);
-        }
-    }
+	private String generateStrategyString() {
+		StringBuilder str = new StringBuilder("FixedDelayRestartBackoffTimeStrategy(");
+		str.append("maxNumberRestartAttempts=");
+		str.append(maxNumberRestartAttempts);
+		str.append(", backoffTimeMS=");
+		str.append(backoffTimeMS);
+		str.append(")");
+
+		return str.toString();
+	}
+
+	/**
+	 * The factory for creating {@link FixedDelayRestartBackoffTimeStrategy}.
+	 */
+	public static class FixedDelayRestartBackoffTimeStrategyFactory implements RestartBackoffTimeStrategy.Factory {
+
+		private final int maxNumberRestartAttempts;
+
+		private final long backoffTimeMS;
+
+		private final long resetRestartAttemptPeriodMs;
+
+		public FixedDelayRestartBackoffTimeStrategyFactory(int maxNumberRestartAttempts, long backoffTimeMS) {
+			this(maxNumberRestartAttempts, backoffTimeMS, DISABLE_RESETTING_PERIOD);
+		}
+
+		public FixedDelayRestartBackoffTimeStrategyFactory(
+				int maxNumberRestartAttempts, long backoffTimeMS, long resetRestartAttemptPeriodMs) {
+			this.maxNumberRestartAttempts = maxNumberRestartAttempts;
+			this.backoffTimeMS = backoffTimeMS;
+			this.resetRestartAttemptPeriodMs = resetRestartAttemptPeriodMs;
+		}
+
+		@Override
+		public RestartBackoffTimeStrategy create() {
+			return new FixedDelayRestartBackoffTimeStrategy(
+					maxNumberRestartAttempts,
+					backoffTimeMS,
+					resetRestartAttemptPeriodMs);
+		}
+	}
 }

@@ -18,150 +18,227 @@
 
 package org.apache.flink.streaming.util;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.flink.api.common.JobExecutionResult;
+import org.apache.flink.client.deployment.executors.LocalExecutor;
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.configuration.StateChangelogOptions;
+import org.apache.flink.configuration.DeploymentOptions;
+import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.minicluster.JobExecutor;
 import org.apache.flink.runtime.minicluster.MiniCluster;
+import org.apache.flink.runtime.util.EnvironmentInformation;
 import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironmentFactory;
-import org.apache.flink.test.util.MiniClusterPipelineExecutorServiceLoader;
+import org.apache.flink.streaming.api.graph.StreamGraph;
+import org.apache.flink.util.Preconditions;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.time.Duration;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Optional;
+import java.util.Random;
+import java.util.function.Function;
 
-import static org.apache.flink.configuration.CheckpointingOptions.LOCAL_RECOVERY;
-import static org.apache.flink.runtime.testutils.PseudoRandomValueSelector.randomize;
-
-/** A {@link StreamExecutionEnvironment} that executes its jobs on {@link MiniCluster}. */
+/**
+ * A {@link StreamExecutionEnvironment} that executes its jobs on {@link MiniCluster}.
+ */
 public class TestStreamEnvironment extends StreamExecutionEnvironment {
-    private static final String STATE_CHANGE_LOG_CONFIG_ON = "on";
-    private static final String STATE_CHANGE_LOG_CONFIG_UNSET = "unset";
-    private static final String STATE_CHANGE_LOG_CONFIG_RAND = "random";
-    private static final boolean RANDOMIZE_CHECKPOINTING_CONFIG =
-            Boolean.parseBoolean(System.getProperty("checkpointing.randomization", "false"));
-    private static final String STATE_CHANGE_LOG_CONFIG =
-            System.getProperty("checkpointing.changelog", STATE_CHANGE_LOG_CONFIG_UNSET).trim();
 
-    public TestStreamEnvironment(
-            MiniCluster miniCluster,
-            Configuration config,
-            int parallelism,
-            Collection<Path> jarFiles,
-            Collection<URL> classPaths) {
-        super(
-                new MiniClusterPipelineExecutorServiceLoader(miniCluster),
-                MiniClusterPipelineExecutorServiceLoader.updateConfigurationForMiniCluster(
-                        config, jarFiles, classPaths),
-                null);
+	private static final boolean RANDOMIZE_CHECKPOINTING_CONFIG =
+		Boolean.parseBoolean(System.getProperty("checkpointing.randomization", "false"));
 
-        setParallelism(parallelism);
-    }
+	/** The job executor to use to execute environment's jobs. */
+	private final JobExecutor jobExecutor;
 
-    public TestStreamEnvironment(MiniCluster miniCluster, int parallelism) {
-        this(
-                miniCluster,
-                new Configuration(),
-                parallelism,
-                Collections.emptyList(),
-                Collections.emptyList());
-    }
+	private final Collection<Path> jarFiles;
+
+	private final Collection<URL> classPaths;
+
+	private static final boolean RANDOMIZE_BUFFER_DEBLOAT_CONFIG =
+			Boolean.parseBoolean(System.getProperty("buffer-debloat.randomization", "false"));
+
+	public TestStreamEnvironment(
+			JobExecutor jobExecutor,
+			int parallelism,
+			Collection<Path> jarFiles,
+			Collection<URL> classPaths) {
+
+		this.jobExecutor = Preconditions.checkNotNull(jobExecutor);
+		this.jarFiles = Preconditions.checkNotNull(jarFiles);
+		this.classPaths = Preconditions.checkNotNull(classPaths);
+		getConfiguration().set(DeploymentOptions.TARGET, LocalExecutor.NAME);
+		getConfiguration().set(DeploymentOptions.ATTACHED, true);
+
+		setParallelism(parallelism);
+	}
+
+	public TestStreamEnvironment(
+			JobExecutor jobExecutor,
+			int parallelism) {
+		this(jobExecutor, parallelism, Collections.emptyList(), Collections.emptyList());
+	}
+
+	@Override
+	public JobExecutionResult execute(StreamGraph streamGraph) throws Exception {
+		final JobGraph jobGraph = streamGraph.getJobGraph();
+
+		for (Path jarFile : jarFiles) {
+			jobGraph.addJar(jarFile);
+		}
+
+		jobGraph.setClasspaths(new ArrayList<>(classPaths));
+
+		return jobExecutor.executeJobBlocking(jobGraph);
+	}
+
+	// ------------------------------------------------------------------------
+
+	/**
+	 * Sets the streaming context environment to a TestStreamEnvironment that runs its programs on
+	 * the given cluster with the given default parallelism and the specified jar files and class
+	 * paths.
+	 *
+	 * @param jobExecutor The executor to execute the jobs on
+	 * @param parallelism The default parallelism for the test programs.
+	 * @param jarFiles Additional jar files to execute the job with
+	 * @param classpaths Additional class paths to execute the job with
+	 */
+	public static void setAsContext(
+			final JobExecutor jobExecutor,
+			final int parallelism,
+			final Collection<Path> jarFiles,
+			final Collection<URL> classpaths) {
+
+		StreamExecutionEnvironmentFactory factory = () -> {
+			TestStreamEnvironment environment = new TestStreamEnvironment(
+					jobExecutor,
+					parallelism,
+					jarFiles,
+					classpaths);
+
+			if (RANDOMIZE_BUFFER_DEBLOAT_CONFIG) {
+				PseudoRandomValueSelector.randomize(
+						"StreamEnvTest",
+						environment.getConfiguration(),
+						TaskManagerOptions.BUFFER_DEBLOAT_ENABLED,
+						true,
+						false);
+			}
+			randomize(environment.getConfiguration());
+
+			return environment;
+		};
+
+		initializeContextEnvironment(factory);
+	}
 
     /**
-     * Sets the streaming context environment to a TestStreamEnvironment that runs its programs on
-     * the given cluster with the given default parallelism and the specified jar files and class
-     * paths.
+     * Randomizes configuration on test case level even if mini cluster is used in a class rule.
      *
-     * @param miniCluster The MiniCluster to execute jobs on.
-     * @param parallelism The default parallelism for the test programs.
-     * @param jarFiles Additional jar files to execute the job with
-     * @param classpaths Additional class paths to execute the job with
+     * <p>Note that only unset properties are randomized.
+     *
+     * @param conf the configuration to randomize
      */
-    public static void setAsContext(
-            final MiniCluster miniCluster,
-            final int parallelism,
-            final Collection<Path> jarFiles,
-            final Collection<URL> classpaths) {
-
-        StreamExecutionEnvironmentFactory factory =
-                conf -> {
-                    TestStreamEnvironment env =
-                            new TestStreamEnvironment(
-                                    miniCluster, conf, parallelism, jarFiles, classpaths);
-
-                    randomizeConfiguration(miniCluster, conf);
-
-                    env.configure(conf, env.getUserClassloader());
-                    return env;
-                };
-
-        initializeContextEnvironment(factory);
-    }
-
-    /**
-     * This is the place for randomization the configuration that relates to DataStream API such as
-     * ExecutionConf, CheckpointConf, StreamExecutionEnvironment. List of the configurations can be
-     * found here {@link StreamExecutionEnvironment#configure(ReadableConfig, ClassLoader)}. All
-     * other configuration should be randomized here {@link
-     * org.apache.flink.runtime.testutils.MiniClusterResource#randomizeConfiguration(Configuration)}.
-     */
-    private static void randomizeConfiguration(MiniCluster miniCluster, Configuration conf) {
-        // randomize ITTests for enabling unaligned checkpoint
+    private static void randomize(Configuration conf) {
         if (RANDOMIZE_CHECKPOINTING_CONFIG) {
-            randomize(conf, ExecutionCheckpointingOptions.ENABLE_UNALIGNED, true, false);
-            randomize(
+            final String testName = "TestNameProvider.getCurrentTestName()";
+            final PseudoRandomValueSelector valueSelector =
+                    PseudoRandomValueSelector.create(testName != null ? testName : "unknown");
+            valueSelector.select(conf, ExecutionCheckpointingOptions.ENABLE_UNALIGNED, true, false);
+            valueSelector.select(
                     conf,
                     ExecutionCheckpointingOptions.ALIGNMENT_TIMEOUT,
                     Duration.ofSeconds(0),
                     Duration.ofMillis(100),
                     Duration.ofSeconds(2));
         }
-
-        // randomize ITTests for enabling state change log
-        if (isConfigurationSupportedByChangelog(miniCluster.getConfiguration())) {
-            if (STATE_CHANGE_LOG_CONFIG.equalsIgnoreCase(STATE_CHANGE_LOG_CONFIG_ON)) {
-                if (!conf.contains(StateChangelogOptions.ENABLE_STATE_CHANGE_LOG)) {
-                    conf.set(StateChangelogOptions.ENABLE_STATE_CHANGE_LOG, true);
-                    miniCluster.overrideRestoreModeForChangelogStateBackend();
-                }
-            } else if (STATE_CHANGE_LOG_CONFIG.equalsIgnoreCase(STATE_CHANGE_LOG_CONFIG_RAND)) {
-                boolean enabled =
-                        randomize(conf, StateChangelogOptions.ENABLE_STATE_CHANGE_LOG, true, false);
-                if (enabled) {
-                    randomize(
-                            conf,
-                            StateChangelogOptions.PERIODIC_MATERIALIZATION_INTERVAL,
-                            Duration.ofMillis(100),
-                            Duration.ofMillis(500),
-                            Duration.ofSeconds(1),
-                            Duration.ofSeconds(5),
-                            Duration.ofSeconds(-1));
-                    miniCluster.overrideRestoreModeForChangelogStateBackend();
-                }
-            }
-        }
     }
 
-    private static boolean isConfigurationSupportedByChangelog(Configuration configuration) {
-        return !configuration.get(LOCAL_RECOVERY);
-    }
+	/**
+	 * Sets the streaming context environment to a TestStreamEnvironment that runs its programs on
+	 * the given cluster with the given default parallelism.
+	 *
+	 * @param jobExecutor The executor to execute the jobs on
+	 * @param parallelism The default parallelism for the test programs.
+	 */
+	public static void setAsContext(final JobExecutor jobExecutor, final int parallelism) {
+		setAsContext(
+			jobExecutor,
+			parallelism,
+			Collections.emptyList(),
+			Collections.emptyList());
+	}
 
-    /**
-     * Sets the streaming context environment to a TestStreamEnvironment that runs its programs on
-     * the given cluster with the given default parallelism.
-     *
-     * @param miniCluster The MiniCluster to execute jobs on.
-     * @param parallelism The default parallelism for the test programs.
-     */
-    public static void setAsContext(final MiniCluster miniCluster, final int parallelism) {
-        setAsContext(miniCluster, parallelism, Collections.emptyList(), Collections.emptyList());
-    }
+	/**
+	 * Resets the streaming context environment to null.
+	 */
+	public static void unsetAsContext() {
+		resetContextEnvironment();
+	}
 
-    /** Resets the streaming context environment to null. */
-    public static void unsetAsContext() {
-        resetContextEnvironment();
-    }
+	public static class PseudoRandomValueSelector {
+
+		private final Function<Integer, Integer> randomValueSupplier;
+
+		private static final long GLOBAL_SEED = (long) getGlobalSeed().hashCode() << 32;
+
+		private PseudoRandomValueSelector(Function<Integer, Integer> randomValueSupplier) {
+			this.randomValueSupplier = randomValueSupplier;
+		}
+
+		public <T> void select(Configuration configuration, ConfigOption<T> option, T... alternatives) {
+			if (configuration.contains(option)) {
+				return;
+			}
+			final int choice = randomValueSupplier.apply(alternatives.length);
+			T value = alternatives[choice];
+			configuration.set(option, value);
+		}
+
+		public static PseudoRandomValueSelector create(Object entryPointSeed) {
+			final long combinedSeed = GLOBAL_SEED | entryPointSeed.hashCode();
+			final Random random = new Random(combinedSeed);
+			return new PseudoRandomValueSelector(random::nextInt);
+		}
+
+		private static String getGlobalSeed() {
+			// manual seed or set by maven
+			final String seed = System.getProperty("test.randomization.seed");
+			if (seed != null && !seed.isEmpty()) {
+				return seed;
+			}
+
+			// Read with git command (if installed)
+			final Optional<String> gitCommitId = getGitCommitId();
+			return gitCommitId.orElseGet(EnvironmentInformation::getGitCommitId);
+		}
+
+		public static Optional<String> getGitCommitId() {
+			try {
+				Process process = new ProcessBuilder("git", "rev-parse", "HEAD").start();
+				InputStream input = process.getInputStream();
+				final String commit = IOUtils.toString(input, Charset.defaultCharset()).trim();
+				if (commit.matches("[a-f0-9]{40}")) {
+					return Optional.of(commit);
+				}
+			} catch (IOException e) {
+				//
+			}
+			return Optional.empty();
+		}
+
+		public static <T> void randomize(String testName, Configuration conf, ConfigOption<T> option, T... t1) {
+			final PseudoRandomValueSelector valueSelector = PseudoRandomValueSelector.create(testName);
+			valueSelector.select(conf, option, t1);
+		}
+	}
 }

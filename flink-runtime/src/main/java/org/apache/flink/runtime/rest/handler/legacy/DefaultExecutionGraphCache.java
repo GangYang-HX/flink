@@ -20,7 +20,8 @@ package org.apache.flink.runtime.rest.handler.legacy;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
-import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
+import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
+import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
 import org.apache.flink.util.Preconditions;
 
@@ -30,128 +31,127 @@ import java.util.function.Function;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
-/** Default implementation of {@link ExecutionGraphCache}. */
+/**
+ * Default implementation of {@link ExecutionGraphCache}.
+ */
 public class DefaultExecutionGraphCache implements ExecutionGraphCache {
 
-    private final Time timeout;
+	private final Time timeout;
 
-    private final Time timeToLive;
+	private final Time timeToLive;
 
-    private final ConcurrentHashMap<JobID, ExecutionGraphEntry> cachedExecutionGraphs;
+	private final ConcurrentHashMap<JobID, ExecutionGraphEntry> cachedExecutionGraphs;
 
-    private volatile boolean running = true;
+	private volatile boolean running = true;
 
-    public DefaultExecutionGraphCache(Time timeout, Time timeToLive) {
-        this.timeout = checkNotNull(timeout);
-        this.timeToLive = checkNotNull(timeToLive);
+	public DefaultExecutionGraphCache(
+			Time timeout,
+			Time timeToLive) {
+		this.timeout = checkNotNull(timeout);
+		this.timeToLive = checkNotNull(timeToLive);
 
-        cachedExecutionGraphs = new ConcurrentHashMap<>(4);
-    }
+		cachedExecutionGraphs = new ConcurrentHashMap<>(4);
+	}
 
-    @Override
-    public void close() {
-        running = false;
+	@Override
+	public void close() {
+		running = false;
 
-        // clear all cached AccessExecutionGraphs
-        cachedExecutionGraphs.clear();
-    }
+		// clear all cached AccessExecutionGraphs
+		cachedExecutionGraphs.clear();
+	}
 
-    @Override
-    public int size() {
-        return cachedExecutionGraphs.size();
-    }
+	@Override
+	public int size() {
+		return cachedExecutionGraphs.size();
+	}
 
-    @Override
-    public CompletableFuture<ExecutionGraphInfo> getExecutionGraphInfo(
-            JobID jobId, RestfulGateway restfulGateway) {
-        return getExecutionGraphInternal(jobId, restfulGateway).thenApply(Function.identity());
-    }
+	@Override
+	public CompletableFuture<AccessExecutionGraph> getExecutionGraph(JobID jobId, RestfulGateway restfulGateway) {
+		return getExecutionGraphInternal(jobId, restfulGateway).thenApply(Function.identity());
+	}
 
-    private CompletableFuture<ExecutionGraphInfo> getExecutionGraphInternal(
-            JobID jobId, RestfulGateway restfulGateway) {
-        Preconditions.checkState(running, "ExecutionGraphCache is no longer running");
+	private CompletableFuture<ArchivedExecutionGraph> getExecutionGraphInternal(JobID jobId, RestfulGateway restfulGateway) {
+		Preconditions.checkState(running, "ExecutionGraphCache is no longer running");
 
-        while (true) {
-            final ExecutionGraphEntry oldEntry = cachedExecutionGraphs.get(jobId);
+		while (true) {
+			final ExecutionGraphEntry oldEntry = cachedExecutionGraphs.get(jobId);
 
-            final long currentTime = System.currentTimeMillis();
+			final long currentTime = System.currentTimeMillis();
 
-            if (oldEntry != null && currentTime < oldEntry.getTTL()) {
-                final CompletableFuture<ExecutionGraphInfo> executionGraphInfoFuture =
-                        oldEntry.getExecutionGraphInfoFuture();
-                if (!executionGraphInfoFuture.isCompletedExceptionally()) {
-                    return executionGraphInfoFuture;
-                }
-                // otherwise it must be completed exceptionally
-            }
+			if (oldEntry != null && currentTime < oldEntry.getTTL()) {
+				final CompletableFuture<ArchivedExecutionGraph> executionGraphFuture = oldEntry.getExecutionGraphFuture();
+				if (!executionGraphFuture.isCompletedExceptionally()) {
+					return executionGraphFuture;
+				}
+				// otherwise it must be completed exceptionally
+			}
 
-            final ExecutionGraphEntry newEntry =
-                    new ExecutionGraphEntry(currentTime + timeToLive.toMilliseconds());
+			final ExecutionGraphEntry newEntry = new ExecutionGraphEntry(currentTime + timeToLive.toMilliseconds());
 
-            final boolean successfulUpdate;
+			final boolean successfulUpdate;
 
-            if (oldEntry == null) {
-                successfulUpdate = cachedExecutionGraphs.putIfAbsent(jobId, newEntry) == null;
-            } else {
-                successfulUpdate = cachedExecutionGraphs.replace(jobId, oldEntry, newEntry);
-                // cancel potentially outstanding futures
-                oldEntry.getExecutionGraphInfoFuture().cancel(false);
-            }
+			if (oldEntry == null) {
+				successfulUpdate = cachedExecutionGraphs.putIfAbsent(jobId, newEntry) == null;
+			} else {
+				successfulUpdate = cachedExecutionGraphs.replace(jobId, oldEntry, newEntry);
+				// cancel potentially outstanding futures
+				oldEntry.getExecutionGraphFuture().cancel(false);
+			}
 
-            if (successfulUpdate) {
-                final CompletableFuture<ExecutionGraphInfo> executionGraphInfoFuture =
-                        restfulGateway.requestExecutionGraphInfo(jobId, timeout);
+			if (successfulUpdate) {
+				final CompletableFuture<ArchivedExecutionGraph> executionGraphFuture = restfulGateway.requestJob(jobId, timeout);
 
-                executionGraphInfoFuture.whenComplete(
-                        (ExecutionGraphInfo executionGraph, Throwable throwable) -> {
-                            if (throwable != null) {
-                                newEntry.getExecutionGraphInfoFuture()
-                                        .completeExceptionally(throwable);
+				executionGraphFuture.whenComplete(
+					(ArchivedExecutionGraph executionGraph, Throwable throwable) -> {
+						if (throwable != null) {
+							newEntry.getExecutionGraphFuture().completeExceptionally(throwable);
 
-                                // remove exceptionally completed entry because it doesn't help
-                                cachedExecutionGraphs.remove(jobId, newEntry);
-                            } else {
-                                newEntry.getExecutionGraphInfoFuture().complete(executionGraph);
-                            }
-                        });
+							// remove exceptionally completed entry because it doesn't help
+							cachedExecutionGraphs.remove(jobId, newEntry);
+						} else {
+							newEntry.getExecutionGraphFuture().complete(executionGraph);
+						}
+					});
 
-                if (!running) {
-                    // delete newly added entry in case of a concurrent stopping operation
-                    cachedExecutionGraphs.remove(jobId, newEntry);
-                }
+				if (!running) {
+					// delete newly added entry in case of a concurrent stopping operation
+					cachedExecutionGraphs.remove(jobId, newEntry);
+				}
 
-                return newEntry.getExecutionGraphInfoFuture();
-            }
-        }
-    }
+				return newEntry.getExecutionGraphFuture();
+			}
+		}
+	}
 
-    @Override
-    public void cleanup() {
-        long currentTime = System.currentTimeMillis();
+	@Override
+	public void cleanup() {
+		long currentTime = System.currentTimeMillis();
 
-        // remove entries which have exceeded their time to live
-        cachedExecutionGraphs
-                .values()
-                .removeIf((ExecutionGraphEntry entry) -> currentTime >= entry.getTTL());
-    }
+		// remove entries which have exceeded their time to live
+		cachedExecutionGraphs.values().removeIf(
+			(ExecutionGraphEntry entry) -> currentTime >= entry.getTTL());
+	}
 
-    /** Wrapper containing the current execution graph and it's time to live (TTL). */
-    private static final class ExecutionGraphEntry {
-        private final long ttl;
+	/**
+	 * Wrapper containing the current execution graph and it's time to live (TTL).
+	 */
+	private static final class ExecutionGraphEntry {
+		private final long ttl;
 
-        private final CompletableFuture<ExecutionGraphInfo> executionGraphInfoFuture;
+		private final CompletableFuture<ArchivedExecutionGraph> executionGraphFuture;
 
-        ExecutionGraphEntry(long ttl) {
-            this.ttl = ttl;
-            this.executionGraphInfoFuture = new CompletableFuture<>();
-        }
+		ExecutionGraphEntry(long ttl) {
+			this.ttl = ttl;
+			this.executionGraphFuture = new CompletableFuture<>();
+		}
 
-        public long getTTL() {
-            return ttl;
-        }
+		public long getTTL() {
+			return ttl;
+		}
 
-        public CompletableFuture<ExecutionGraphInfo> getExecutionGraphInfoFuture() {
-            return executionGraphInfoFuture;
-        }
-    }
+		public CompletableFuture<ArchivedExecutionGraph> getExecutionGraphFuture() {
+			return executionGraphFuture;
+		}
+	}
 }

@@ -18,40 +18,42 @@
 import glob
 import os
 import subprocess
+import unittest
 
 from pyflink.find_flink_home import _find_flink_source_root
 from pyflink.java_gateway import get_gateway
-from pyflink.table import ResultKind
-from pyflink.table import expressions as expr
+from pyflink.table import DataTypes, ResultKind
 from pyflink.testing import source_sink_utils
-from pyflink.testing.test_case_utils import PyFlinkStreamTableTestCase, \
-    PyFlinkTestCase
+from pyflink.testing.test_case_utils import PyFlinkStreamTableTestCase, PyFlinkBatchTableTestCase
 
 
-class StreamSqlTests(PyFlinkStreamTableTestCase):
+class SqlTests(object):
 
     def test_sql_ddl(self):
-        self.t_env.execute_sql("create temporary function func1 as "
-                               "'pyflink.table.tests.test_udf.add' language python")
-        table = self.t_env.from_elements([(1, 2)]) \
-            .alias("a", "b") \
-            .select(expr.call("func1", expr.col("a"), expr.col("b")))
+        self.t_env.sql_update("create temporary function func1 as "
+                              "'pyflink.table.tests.test_udf.add' language python")
+        table = self.t_env.from_elements([(1, 2)]).alias("a, b").select("func1(a, b)")
         plan = table.explain()
-        self.assertTrue(plan.find("PythonCalc(select=[func1(f0, f1) AS _c0])") >= 0)
+        self.assertTrue(plan.find("PythonCalc(select=[add(f0, f1) AS _c0])") >= 0)
+
+
+class StreamSqlTests(SqlTests, PyFlinkStreamTableTestCase):
 
     def test_sql_query(self):
         t_env = self.t_env
         source = t_env.from_elements([(1, "Hi", "Hello"), (2, "Hello", "Hello")], ["a", "b", "c"])
-        sink_table_ddl = """
-        CREATE TABLE sinks(a BIGINT, b STRING, c STRING) WITH ('connector'='test-sink')
-        """
-        t_env.execute_sql(sink_table_ddl)
+        field_names = ["a", "b", "c"]
+        field_types = [DataTypes.BIGINT(), DataTypes.STRING(), DataTypes.STRING()]
+        t_env.register_table_sink(
+            "sinks",
+            source_sink_utils.TestAppendSink(field_names, field_types))
 
         result = t_env.sql_query("select a + 1, b, c from %s" % source)
-        result.execute_insert("sinks").wait()
+        result.insert_into("sinks")
+        self.t_env.execute("test")
         actual = source_sink_utils.results()
 
-        expected = ['+I[2, Hi, Hello]', '+I[3, Hello, Hello]']
+        expected = ['2,Hi,Hello', '3,Hello,Hello']
         self.assert_equals(actual, expected)
 
     def test_execute_sql(self):
@@ -76,19 +78,12 @@ class StreamSqlTests(PyFlinkStreamTableTestCase):
         self.assertEqual(table_result.get_result_kind(), ResultKind.SUCCESS)
         table_result.print()
 
-        sink_table_ddl = """
-        CREATE TABLE sinks(k1 BIGINT, k2 INT, c STRING) WITH ('connector'='test-sink')
-        """
-        t_env.execute_sql(sink_table_ddl)
+        field_names = ["k1", "k2", "c"]
+        field_types = [DataTypes.BIGINT(), DataTypes.INT(), DataTypes.STRING()]
+        t_env.register_table_sink(
+            "sinks",
+            source_sink_utils.TestAppendSink(field_names, field_types))
         table_result = t_env.execute_sql("insert into sinks select * from tbl")
-        from pyflink.common.job_status import JobStatus
-        from py4j.protocol import Py4JJavaError
-        try:
-            self.assertTrue(isinstance(table_result.get_job_client().get_job_status().result(),
-                                       JobStatus))
-        except Py4JJavaError as e:
-            self.assertIn('MiniCluster is not yet running or has already been shut down.', str(e))
-
         job_execution_result = table_result.get_job_client().get_job_execution_result().result()
         self.assertIsNotNone(job_execution_result.get_job_id())
         self.assert_equals(table_result.get_table_schema().get_field_names(),
@@ -102,8 +97,28 @@ class StreamSqlTests(PyFlinkStreamTableTestCase):
         self.assertEqual(table_result.get_result_kind(), ResultKind.SUCCESS)
         table_result.print()
 
+    def test_sql_update(self):
+        t_env = self.t_env
+        source = t_env.from_elements([(1, "Hi", "Hello"), (2, "Hello", "Hello")], ["a", "b", "c"])
+        field_names = ["a", "b", "c"]
+        field_types = [DataTypes.BIGINT(), DataTypes.STRING(), DataTypes.STRING()]
+        t_env.register_table_sink(
+            "sinks",
+            source_sink_utils.TestAppendSink(field_names, field_types))
 
-class JavaSqlTests(PyFlinkTestCase):
+        t_env.sql_update("insert into sinks select * from %s" % source)
+        self.t_env.execute("test_sql_job")
+
+        actual = source_sink_utils.results()
+        expected = ['1,Hi,Hello', '2,Hello,Hello']
+        self.assert_equals(actual, expected)
+
+
+class BatchSqlTests(SqlTests, PyFlinkBatchTableTestCase):
+    pass
+
+
+class JavaSqlTests(unittest.TestCase):
     """
     We need to start these Java tests from python process to make sure that Python environment is
     available when the tests are running.
@@ -129,7 +144,7 @@ class JavaSqlTests(PyFlinkTestCase):
 
     def test_java_sql_ddl(self):
         test_class = "org.apache.flink.client.python.PythonFunctionFactoryTest"
-        test_jar_pattern = "flink-python/target/artifacts/testJavaDdl.jar"
+        test_jar_pattern = "flink-python/target/javaDDL/flink-python*-tests.jar"
         test_jar_path = self.get_jar_path(test_jar_pattern)
         test_classpath = self.get_classpath() + os.pathsep + test_jar_path
         java_executable = self.get_java_executable()

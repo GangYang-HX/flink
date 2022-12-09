@@ -18,20 +18,21 @@
 
 package org.apache.flink.api.common.io;
 
-import org.junit.Test;
-
 import java.io.InputStream;
+
+import org.junit.Test;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 public class InputStreamFSInputWrapperTest {
 
-    @Test
-    public void testClose() throws Exception {
-        InputStream mockedInputStream = mock(InputStream.class);
-        InputStreamFSInputWrapper wrapper = new InputStreamFSInputWrapper(mockedInputStream);
-        wrapper.close();
-        verify(mockedInputStream).close();
-    }
+	@Test
+	public void testClose() throws Exception {
+		InputStream mockedInputStream = mock(InputStream.class);
+		InputStreamFSInputWrapper wrapper = new InputStreamFSInputWrapper(mockedInputStream);
+		wrapper.close();
+		verify(mockedInputStream).close();
+	}
+
 }

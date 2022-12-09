@@ -24,11 +24,12 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-examples</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-examples-batch_${scala.binary.version}</artifactId>
-	<name>Flink : Examples : Batch</name>
+	<name>flink-examples-batch</name>
 	<packaging>jar</packaging>
 
 	<dependencies>
@@ -46,7 +47,7 @@ under the License.
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-clients</artifactId>
+			<artifactId>flink-clients_${scala.binary.version}</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 	</dependencies>
@@ -54,40 +55,6 @@ under the License.
 	
 	<build>
 		<plugins>
-			<plugin>
-				<groupId>com.diffplug.spotless</groupId>
-				<artifactId>spotless-maven-plugin</artifactId>
-				<configuration>
-					<scala>
-						<scalafmt>
-							<version>${spotless.scalafmt.version}</version>
-							<file>${project.basedir}/../../.scalafmt.conf</file>
-						</scalafmt>
-						<licenseHeader>
-							<content>${spotless.license.header}</content>
-							<delimiter>${spotless.delimiter}</delimiter>
-						</licenseHeader>
-					</scala>
-				</configuration>
-			</plugin>
-			<!-- Fail compilation on deprecation warnings to prevent from showing users outdated examples. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>compile</id>
-						<phase>process-sources</phase>
-						<goals>
-							<goal>compile</goal>
-						</goals>
-						<configuration>
-							<compilerArgument>-Xlint:deprecation</compilerArgument>
-							<failOnWarning>true</failOnWarning>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
 
 			<!-- Scala Compiler -->
 			<plugin>
@@ -102,11 +69,6 @@ under the License.
 						<goals>
 							<goal>compile</goal>
 						</goals>
-						<configuration>
-							<args>
-								<arg>-Xfatal-warnings</arg>
-							</args>
-						</configuration>
 					</execution>
 				</executions>
 				<configuration>
@@ -179,6 +141,15 @@ under the License.
 					</execution>
 				</executions>
 			</plugin>
+
+			<!-- Scala Code Style, most of the configuration done via plugin management -->
+			<plugin>
+				<groupId>org.scalastyle</groupId>
+				<artifactId>scalastyle-maven-plugin</artifactId>
+				<configuration>
+					<configLocation>${project.basedir}/../../tools/maven/scalastyle-config.xml</configLocation>
+				</configuration>
+			</plugin>
 			
 			<!-- create the example JAR files -->
 			<plugin>
@@ -208,8 +179,6 @@ under the License.
 								<include>**/java/clustering/KMeans$*.class</include>
 								<include>**/java/clustering/util/KMeansDataGenerator.class</include>
 								<include>**/java/clustering/util/KMeansData.class</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -234,8 +203,6 @@ under the License.
 								<include>**/java/graph/TransitiveClosureNaive.class</include>
 								<include>**/java/graph/TransitiveClosureNaive$*.class</include>
 								<include>**/java/graph/util/ConnectedComponentsData.class</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -260,8 +227,6 @@ under the License.
 								<include>**/java/graph/ConnectedComponents.class</include>
 								<include>**/java/graph/ConnectedComponents$*.class</include>
 								<include>**/java/graph/util/ConnectedComponentsData.class</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -288,8 +253,6 @@ under the License.
 								<include>**/java/graph/util/EnumTrianglesDataTypes.class</include>
 								<include>**/java/graph/util/EnumTrianglesDataTypes$*.class</include>
 								<include>**/java/graph/util/EnumTrianglesData.class</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -314,8 +277,6 @@ under the License.
 								<include>**/java/graph/PageRank.class</include>
 								<include>**/java/graph/PageRank$*.class</include>
 								<include>**/java/graph/util/PageRankData.class</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -341,8 +302,6 @@ under the License.
 								<include>**/java/relational/WebLogAnalysis$*.class</include>
 								<include>**/java/relational/util/WebLogData.class</include>
 								<include>**/java/relational/util/WebLogDataGenerator.class</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -367,8 +326,6 @@ under the License.
 								<include>**/java/wordcount/WordCount.class</include>
 								<include>**/java/wordcount/WordCount$*.class</include>
 								<include>**/java/wordcount/util/WordCountData.class</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -391,8 +348,6 @@ under the License.
 
 							<includes>
 								<include>**/java/distcp/*</include>
-								<include>META-INF/LICENSE</include>
-								<include>META-INF/NOTICE</include>
 							</includes>
 						</configuration>
 					</execution>

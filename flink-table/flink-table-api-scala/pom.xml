@@ -23,11 +23,12 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-table</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-table-api-scala_${scala.binary.version}</artifactId>
-	<name>Flink : Table : API Scala</name>
+	<name>flink-table-api-scala</name>
 	<description>
 		This module contains the Table/SQL API for writing table programs
 		within the table ecosystem using the Scala programming language.
@@ -67,7 +68,10 @@ under the License.
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-test-utils-junit</artifactId>
+			<artifactId>flink-core</artifactId>
+			<version>${project.version}</version>
+			<type>test-jar</type>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
@@ -87,22 +91,6 @@ under the License.
 
 	<build>
 		<plugins>
-			<plugin>
-				<groupId>com.diffplug.spotless</groupId>
-				<artifactId>spotless-maven-plugin</artifactId>
-				<configuration>
-					<scala>
-						<scalafmt>
-							<version>${spotless.scalafmt.version}</version>
-							<file>${project.basedir}/../../.scalafmt.conf</file>
-						</scalafmt>
-						<licenseHeader>
-							<content>${spotless.license.header}</content>
-							<delimiter>${spotless.delimiter}</delimiter>
-						</licenseHeader>
-					</scala>
-				</configuration>
-			</plugin>
 			<!-- Scala Compiler -->
 			<plugin>
 				<groupId>net.alchim31.maven</groupId>
@@ -128,6 +116,15 @@ under the License.
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+
+			<!-- Scala Code Style -->
+			<plugin>
+				<groupId>org.scalastyle</groupId>
+				<artifactId>scalastyle-maven-plugin</artifactId>
+				<configuration>
+					<configLocation>${project.basedir}/../../tools/maven/scalastyle-config.xml</configLocation>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

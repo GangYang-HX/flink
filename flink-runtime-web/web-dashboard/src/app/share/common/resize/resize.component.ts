@@ -31,8 +31,7 @@ import {
 } from '@angular/core';
 import { fromEvent, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-
-import { isNil } from '@flink-runtime-web/utils';
+import { isNil } from 'utils';
 
 export enum ResizeModeEnums {
   Vertical = 'vertical',
@@ -58,19 +57,18 @@ export class ResizeComponent implements OnInit, OnDestroy {
   @Output() leftChange = new EventEmitter();
   @Output() topChange = new EventEmitter();
   @Output() resizeEnd = new EventEmitter<{ left: number; top: number }>();
-  @ViewChild('trigger', { static: true }) trigger: ElementRef<HTMLDivElement>;
+  @ViewChild('trigger') trigger: ElementRef<HTMLDivElement>;
 
-  startMove(): void {
+  startMove() {
     this.isMoving = true;
   }
 
   /**
    * Get recursive top
-   *
    * @param e
    */
   getResizeTop(e: MouseEvent): number {
-    const getOffsetTop = (elem: HTMLElement | null): number => {
+    const getOffsetTop = (elem: HTMLElement | null) => {
       let innerOffsetTop = 0;
       do {
         if (!isNil(elem!.offsetTop)) {
@@ -93,11 +91,10 @@ export class ResizeComponent implements OnInit, OnDestroy {
 
   /**
    * Get recursive left
-   *
    * @param e
    */
   getResizeLeft(e: MouseEvent): number {
-    const getOffsetLeft = (elem: HTMLElement | null): number => {
+    const getOffsetLeft = (elem: HTMLElement | null) => {
       let innerOffsetLeft = 0;
       do {
         if (!isNil(elem!.offsetLeft)) {
@@ -118,7 +115,7 @@ export class ResizeComponent implements OnInit, OnDestroy {
     return newLeft;
   }
 
-  constructor(@Inject(DOCUMENT) private readonly document: Document) {}
+  constructor(@Inject(DOCUMENT) private document: any) {}
 
   ngOnInit(): void {
     fromEvent<MouseEvent>(this.document, 'mouseup')

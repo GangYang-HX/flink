@@ -33,70 +33,73 @@ import java.util.List;
  * This accumulator stores a collection of objects in serialized form, so that the stored objects
  * are not affected by modifications to the original objects.
  *
- * <p>Objects may be deserialized on demand with a specific classloader.
+ * Objects may be deserialized on demand with a specific classloader.
  *
  * @param <T> The type of the accumulated objects
  */
 @PublicEvolving
 public class SerializedListAccumulator<T> implements Accumulator<T, ArrayList<byte[]>> {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private ArrayList<byte[]> localValue = new ArrayList<>();
+	private ArrayList<byte[]> localValue = new ArrayList<>();
 
-    @Override
-    public void add(T value) {
-        throw new UnsupportedOperationException();
-    }
 
-    public void add(T value, TypeSerializer<T> serializer) throws IOException {
-        try {
-            ByteArrayOutputStream outStream = new ByteArrayOutputStream();
-            DataOutputViewStreamWrapper out = new DataOutputViewStreamWrapper(outStream);
-            serializer.serialize(value, out);
-            localValue.add(outStream.toByteArray());
-        } catch (IOException e) {
-            throw new IOException("Failed to serialize value '" + value + '\'', e);
-        }
-    }
+	@Override
+	public void add(T value) {
+		throw new UnsupportedOperationException();
+	}
 
-    @Override
-    public ArrayList<byte[]> getLocalValue() {
-        return localValue;
-    }
+	public void add(T value, TypeSerializer<T> serializer) throws IOException {
+		try {
+			ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+			DataOutputViewStreamWrapper out = new DataOutputViewStreamWrapper(outStream);
+			serializer.serialize(value, out);
+			localValue.add(outStream.toByteArray());
+		}
+		catch (IOException e) {
+			throw new IOException("Failed to serialize value '" + value + '\'', e);
+		}
+	}
 
-    @Override
-    public void resetLocal() {
-        localValue.clear();
-    }
+	@Override
+	public ArrayList<byte[]> getLocalValue() {
+		return localValue;
+	}
 
-    @Override
-    public void merge(Accumulator<T, ArrayList<byte[]>> other) {
-        localValue.addAll(other.getLocalValue());
-    }
+	@Override
+	public void resetLocal() {
+		localValue.clear();
+	}
 
-    @Override
-    public SerializedListAccumulator<T> clone() {
-        SerializedListAccumulator<T> newInstance = new SerializedListAccumulator<T>();
-        newInstance.localValue = new ArrayList<byte[]>(localValue);
-        return newInstance;
-    }
+	@Override
+	public void merge(Accumulator<T, ArrayList<byte[]>> other) {
+		localValue.addAll(other.getLocalValue());
+	}
 
-    @SuppressWarnings("unchecked")
-    public static <T> List<T> deserializeList(ArrayList<byte[]> data, TypeSerializer<T> serializer)
-            throws IOException, ClassNotFoundException {
-        List<T> result = new ArrayList<T>(data.size());
-        for (byte[] bytes : data) {
-            ByteArrayInputStream inStream = new ByteArrayInputStream(bytes);
-            DataInputViewStreamWrapper in = new DataInputViewStreamWrapper(inStream);
-            T val = serializer.deserialize(in);
-            result.add(val);
-        }
-        return result;
-    }
+	@Override
+	public SerializedListAccumulator<T> clone() {
+		SerializedListAccumulator<T> newInstance = new SerializedListAccumulator<T>();
+		newInstance.localValue = new ArrayList<byte[]>(localValue);
+		return newInstance;
+	}
 
-    @Override
-    public String toString() {
-        return "SerializedListAccumulator: " + localValue.size() + " elements";
-    }
+	@SuppressWarnings("unchecked")
+	public static <T> List<T> deserializeList(ArrayList<byte[]> data, TypeSerializer<T> serializer)
+			throws IOException, ClassNotFoundException
+	{
+		List<T> result = new ArrayList<T>(data.size());
+		for (byte[] bytes : data) {
+			ByteArrayInputStream inStream = new ByteArrayInputStream(bytes);
+			DataInputViewStreamWrapper in = new DataInputViewStreamWrapper(inStream);
+			T val = serializer.deserialize(in);
+			result.add(val);
+		}
+		return result;
+	}
+
+	@Override
+	public String toString() {
+		return "SerializedListAccumulator: " + localValue.size() + " elements";
+	}
 }

@@ -34,6 +34,7 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
+import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -42,6 +43,7 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSin
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
@@ -64,304 +66,309 @@ import java.util.concurrent.TimeUnit;
 /**
  * End-to-end test for Stream SQL queries.
  *
- * <p>Includes the following SQL features: - OVER window aggregation - keyed and non-keyed GROUP BY
- * TUMBLE aggregation - windowed INNER JOIN - TableSource with event-time attribute
+ * <p>Includes the following SQL features:
+ * - OVER window aggregation
+ * - keyed and non-keyed GROUP BY TUMBLE aggregation
+ * - windowed INNER JOIN
+ * - TableSource with event-time attribute
  *
- * <p>The stream is bounded and will complete after about a minute. The result is always constant.
+ * <p>The stream is bounded and will complete after about a minute.
+ * The result is always constant.
  * The job is killed on the first attempt and restarted.
  *
- * <p>Parameters: -outputPath Sets the path to where the result data is written.
+ * <p>Parameters:
+ * -outputPath Sets the path to where the result data is written.
  */
 public class StreamSQLTestProgram {
 
-    public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Exception {
 
-        ParameterTool params = ParameterTool.fromArgs(args);
-        String outputPath = params.getRequired("outputPath");
+		ParameterTool params = ParameterTool.fromArgs(args);
+		String outputPath = params.getRequired("outputPath");
+		String planner = params.get("planner", "blink");
 
-        final StreamExecutionEnvironment sEnv =
-                StreamExecutionEnvironment.getExecutionEnvironment();
-        sEnv.setRestartStrategy(
-                RestartStrategies.fixedDelayRestart(3, Time.of(10, TimeUnit.SECONDS)));
-        sEnv.enableCheckpointing(4000);
-        sEnv.getConfig().setAutoWatermarkInterval(1000);
+		final EnvironmentSettings.Builder builder = EnvironmentSettings.newInstance();
+		builder.inStreamingMode();
 
-        final StreamTableEnvironment tEnv = StreamTableEnvironment.create(sEnv);
+		if (planner.equals("old")) {
+			builder.useOldPlanner();
+		} else if (planner.equals("blink")) {
+			builder.useBlinkPlanner();
+		}
 
-        ((TableEnvironmentInternal) tEnv)
-                .registerTableSourceInternal("table1", new GeneratorTableSource(10, 100, 60, 0));
-        ((TableEnvironmentInternal) tEnv)
-                .registerTableSourceInternal("table2", new GeneratorTableSource(5, 0.2f, 60, 5));
+		final EnvironmentSettings settings = builder.build();
 
-        int overWindowSizeSeconds = 1;
-        int tumbleWindowSizeSeconds = 10;
+		final StreamExecutionEnvironment sEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+		sEnv.setRestartStrategy(RestartStrategies.fixedDelayRestart(
+			3,
+			Time.of(10, TimeUnit.SECONDS)
+		));
+		sEnv.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+		sEnv.enableCheckpointing(4000);
+		sEnv.getConfig().setAutoWatermarkInterval(1000);
 
-        String overQuery =
-                String.format(
-                        "SELECT "
-                                + "  key, "
-                                + "  rowtime, "
-                                + "  COUNT(*) OVER (PARTITION BY key ORDER BY rowtime RANGE BETWEEN INTERVAL '%d' SECOND PRECEDING AND CURRENT ROW) AS cnt "
-                                + "FROM table1",
-                        overWindowSizeSeconds);
+		final StreamTableEnvironment tEnv = StreamTableEnvironment.create(sEnv, settings);
 
-        String tumbleQuery =
-                String.format(
-                        "SELECT "
-                                + "  key, "
-                                + "  CASE SUM(cnt) / COUNT(*) WHEN 101 THEN 1 ELSE 99 END AS correct, "
-                                + "  TUMBLE_START(rowtime, INTERVAL '%d' SECOND) AS wStart, "
-                                + "  TUMBLE_ROWTIME(rowtime, INTERVAL '%d' SECOND) AS rowtime "
-                                + "FROM (%s) "
-                                + "WHERE rowtime > TIMESTAMP '1970-01-01 00:00:01' "
-                                + "GROUP BY key, TUMBLE(rowtime, INTERVAL '%d' SECOND)",
-                        tumbleWindowSizeSeconds,
-                        tumbleWindowSizeSeconds,
-                        overQuery,
-                        tumbleWindowSizeSeconds);
+		((TableEnvironmentInternal) tEnv).registerTableSourceInternal("table1", new GeneratorTableSource(10, 100, 60, 0));
+		((TableEnvironmentInternal) tEnv).registerTableSourceInternal("table2", new GeneratorTableSource(5, 0.2f, 60, 5));
 
-        String joinQuery =
-                String.format(
-                        "SELECT "
-                                + "  t1.key, "
-                                + "  t2.rowtime AS rowtime, "
-                                + "  t2.correct,"
-                                + "  t2.wStart "
-                                + "FROM table2 t1, (%s) t2 "
-                                + "WHERE "
-                                + "  t1.key = t2.key AND "
-                                + "  t1.rowtime BETWEEN t2.rowtime AND t2.rowtime + INTERVAL '%d' SECOND",
-                        tumbleQuery, tumbleWindowSizeSeconds);
+		int overWindowSizeSeconds = 1;
+		int tumbleWindowSizeSeconds = 10;
 
-        String finalAgg =
-                String.format(
-                        "SELECT "
-                                + "  SUM(correct) AS correct, "
-                                + "  TUMBLE_START(rowtime, INTERVAL '20' SECOND) AS rowtime "
-                                + "FROM (%s) "
-                                + "GROUP BY TUMBLE(rowtime, INTERVAL '20' SECOND)",
-                        joinQuery);
+		String overQuery = String.format(
+			"SELECT " +
+			"  key, " +
+			"  rowtime, " +
+			"  COUNT(*) OVER (PARTITION BY key ORDER BY rowtime RANGE BETWEEN INTERVAL '%d' SECOND PRECEDING AND CURRENT ROW) AS cnt " +
+			"FROM table1",
+			overWindowSizeSeconds);
 
-        // get Table for SQL query
-        Table result = tEnv.sqlQuery(finalAgg);
-        // convert Table into append-only DataStream
-        DataStream<Row> resultStream =
-                tEnv.toAppendStream(result, Types.ROW(Types.INT, Types.SQL_TIMESTAMP));
+		String tumbleQuery = String.format(
+			"SELECT " +
+			"  key, " +
+			"  CASE SUM(cnt) / COUNT(*) WHEN 101 THEN 1 ELSE 99 END AS correct, " +
+			"  TUMBLE_START(rowtime, INTERVAL '%d' SECOND) AS wStart, " +
+			"  TUMBLE_ROWTIME(rowtime, INTERVAL '%d' SECOND) AS rowtime " +
+			"FROM (%s) " +
+			"WHERE rowtime > TIMESTAMP '1970-01-01 00:00:01' " +
+			"GROUP BY key, TUMBLE(rowtime, INTERVAL '%d' SECOND)",
+			tumbleWindowSizeSeconds,
+			tumbleWindowSizeSeconds,
+			overQuery,
+			tumbleWindowSizeSeconds);
 
-        final StreamingFileSink<Row> sink =
-                StreamingFileSink.forRowFormat(
-                                new Path(outputPath),
-                                (Encoder<Row>)
-                                        (element, stream) -> {
-                                            PrintStream out = new PrintStream(stream);
-                                            out.println(element.toString());
-                                        })
-                        .withBucketAssigner(new KeyBucketAssigner())
-                        .withRollingPolicy(OnCheckpointRollingPolicy.build())
-                        .build();
+		String joinQuery = String.format(
+			"SELECT " +
+			"  t1.key, " +
+			"  t2.rowtime AS rowtime, " +
+			"  t2.correct," +
+			"  t2.wStart " +
+			"FROM table2 t1, (%s) t2 " +
+			"WHERE " +
+			"  t1.key = t2.key AND " +
+			"  t1.rowtime BETWEEN t2.rowtime AND t2.rowtime + INTERVAL '%d' SECOND",
+			tumbleQuery,
+			tumbleWindowSizeSeconds);
 
-        resultStream
-                // inject a KillMapper that forwards all records but terminates the first execution
-                // attempt
-                .map(new KillMapper())
-                .setParallelism(1)
-                // add sink function
-                .addSink(sink)
-                .setParallelism(1);
+		String finalAgg = String.format(
+			"SELECT " +
+			"  SUM(correct) AS correct, " +
+			"  TUMBLE_START(rowtime, INTERVAL '20' SECOND) AS rowtime " +
+			"FROM (%s) " +
+			"GROUP BY TUMBLE(rowtime, INTERVAL '20' SECOND)",
+			joinQuery);
 
-        sEnv.execute();
-    }
+		// get Table for SQL query
+		Table result = tEnv.sqlQuery(finalAgg);
+		// convert Table into append-only DataStream
+		DataStream<Row> resultStream =
+			tEnv.toAppendStream(result, Types.ROW(Types.INT, Types.SQL_TIMESTAMP));
 
-    /** Use first field for buckets. */
-    public static final class KeyBucketAssigner implements BucketAssigner<Row, String> {
+		final StreamingFileSink<Row> sink = StreamingFileSink
+			.forRowFormat(new Path(outputPath), (Encoder<Row>) (element, stream) -> {
+				PrintStream out = new PrintStream(stream);
+				out.println(element.toString());
+			})
+			.withBucketAssigner(new KeyBucketAssigner())
+			.withRollingPolicy(OnCheckpointRollingPolicy.build())
+			.build();
 
-        private static final long serialVersionUID = 987325769970523326L;
+		resultStream
+			// inject a KillMapper that forwards all records but terminates the first execution attempt
+			.map(new KillMapper()).setParallelism(1)
+			// add sink function
+			.addSink(sink).setParallelism(1);
 
-        @Override
-        public String getBucketId(final Row element, final Context context) {
-            return String.valueOf(element.getField(0));
-        }
+		sEnv.execute();
+	}
 
-        @Override
-        public SimpleVersionedSerializer<String> getSerializer() {
-            return SimpleVersionedStringSerializer.INSTANCE;
-        }
-    }
+	/**
+	 * Use first field for buckets.
+	 */
+	public static final class KeyBucketAssigner implements BucketAssigner<Row, String> {
 
-    /** TableSource for generated data. */
-    public static class GeneratorTableSource
-            implements StreamTableSource<Row>, DefinedRowtimeAttributes, DefinedFieldMapping {
+		private static final long serialVersionUID = 987325769970523326L;
 
-        private final int numKeys;
-        private final float recordsPerKeyAndSecond;
-        private final int durationSeconds;
-        private final int offsetSeconds;
+		@Override
+		public String getBucketId(final Row element, final Context context) {
+			return String.valueOf(element.getField(0));
+		}
 
-        public GeneratorTableSource(
-                int numKeys, float recordsPerKeyAndSecond, int durationSeconds, int offsetSeconds) {
-            this.numKeys = numKeys;
-            this.recordsPerKeyAndSecond = recordsPerKeyAndSecond;
-            this.durationSeconds = durationSeconds;
-            this.offsetSeconds = offsetSeconds;
-        }
+		@Override
+		public SimpleVersionedSerializer<String> getSerializer() {
+			return SimpleVersionedStringSerializer.INSTANCE;
+		}
+	}
 
-        @Override
-        public DataStream<Row> getDataStream(StreamExecutionEnvironment execEnv) {
-            return execEnv.addSource(
-                    new Generator(numKeys, recordsPerKeyAndSecond, durationSeconds, offsetSeconds));
-        }
+	/**
+	 * TableSource for generated data.
+	 */
+	public static class GeneratorTableSource
+		implements StreamTableSource<Row>, DefinedRowtimeAttributes, DefinedFieldMapping {
 
-        @Override
-        public TypeInformation<Row> getReturnType() {
-            return Types.ROW(Types.INT, Types.LONG, Types.STRING);
-        }
+		private final int numKeys;
+		private final float recordsPerKeyAndSecond;
+		private final int durationSeconds;
+		private final int offsetSeconds;
 
-        @Override
-        public TableSchema getTableSchema() {
-            return new TableSchema(
-                    new String[] {"key", "rowtime", "payload"},
-                    new TypeInformation[] {Types.INT, Types.SQL_TIMESTAMP, Types.STRING});
-        }
+		public GeneratorTableSource(int numKeys, float recordsPerKeyAndSecond, int durationSeconds, int offsetSeconds) {
+			this.numKeys = numKeys;
+			this.recordsPerKeyAndSecond = recordsPerKeyAndSecond;
+			this.durationSeconds = durationSeconds;
+			this.offsetSeconds = offsetSeconds;
+		}
 
-        @Override
-        public String explainSource() {
-            return "GeneratorTableSource";
-        }
+		@Override
+		public DataStream<Row> getDataStream(StreamExecutionEnvironment execEnv) {
+			return execEnv.addSource(new Generator(numKeys, recordsPerKeyAndSecond, durationSeconds, offsetSeconds));
+		}
 
-        @Override
-        public List<RowtimeAttributeDescriptor> getRowtimeAttributeDescriptors() {
-            return Collections.singletonList(
-                    new RowtimeAttributeDescriptor(
-                            "rowtime",
-                            new ExistingField("ts"),
-                            new BoundedOutOfOrderTimestamps(100)));
-        }
+		@Override
+		public TypeInformation<Row> getReturnType() {
+			return Types.ROW(Types.INT, Types.LONG, Types.STRING);
+		}
 
-        @Override
-        public Map<String, String> getFieldMapping() {
-            Map<String, String> mapping = new HashMap<>();
-            mapping.put("key", "f0");
-            mapping.put("ts", "f1");
-            mapping.put("payload", "f2");
-            return mapping;
-        }
-    }
+		@Override
+		public TableSchema getTableSchema() {
+			return new TableSchema(
+				new String[] {"key", "rowtime", "payload"},
+				new TypeInformation[] {Types.INT, Types.SQL_TIMESTAMP, Types.STRING});
+		}
 
-    /** Data-generating source function. */
-    public static class Generator
-            implements SourceFunction<Row>, ResultTypeQueryable<Row>, CheckpointedFunction {
+		@Override
+		public String explainSource() {
+			return "GeneratorTableSource";
+		}
 
-        private final int numKeys;
-        private final int offsetSeconds;
+		@Override
+		public List<RowtimeAttributeDescriptor> getRowtimeAttributeDescriptors() {
+			return Collections.singletonList(
+				new RowtimeAttributeDescriptor(
+					"rowtime",
+					new ExistingField("ts"),
+					new BoundedOutOfOrderTimestamps(100)));
+		}
 
-        private final int sleepMs;
-        private final int durationMs;
+		@Override
+		public Map<String, String> getFieldMapping() {
+			Map<String, String> mapping = new HashMap<>();
+			mapping.put("key", "f0");
+			mapping.put("ts", "f1");
+			mapping.put("payload", "f2");
+			return mapping;
+		}
+	}
 
-        private long ms = 0;
-        private ListState<Long> state = null;
+	/**
+	 * Data-generating source function.
+	 */
+	public static class Generator implements SourceFunction<Row>, ResultTypeQueryable<Row>, CheckpointedFunction {
 
-        public Generator(
-                int numKeys, float rowsPerKeyAndSecond, int durationSeconds, int offsetSeconds) {
-            this.numKeys = numKeys;
-            this.durationMs = durationSeconds * 1000;
-            this.offsetSeconds = offsetSeconds;
+		private final int numKeys;
+		private final int offsetSeconds;
 
-            this.sleepMs = (int) (1000 / rowsPerKeyAndSecond);
-        }
+		private final int sleepMs;
+		private final int durationMs;
 
-        @Override
-        public void run(SourceContext<Row> ctx) throws Exception {
-            long offsetMS = offsetSeconds * 2000L;
+		private long ms = 0;
+		private ListState<Long> state = null;
 
-            while (ms < durationMs) {
-                synchronized (ctx.getCheckpointLock()) {
-                    for (int i = 0; i < numKeys; i++) {
-                        ctx.collect(Row.of(i, ms + offsetMS, "Some payload..."));
-                    }
-                    ms += sleepMs;
-                }
-                Thread.sleep(sleepMs);
-            }
-        }
+		public Generator(int numKeys, float rowsPerKeyAndSecond, int durationSeconds, int offsetSeconds) {
+			this.numKeys = numKeys;
+			this.durationMs = durationSeconds * 1000;
+			this.offsetSeconds = offsetSeconds;
 
-        @Override
-        public void cancel() {}
+			this.sleepMs = (int) (1000 / rowsPerKeyAndSecond);
+		}
 
-        @Override
-        public TypeInformation<Row> getProducedType() {
-            return Types.ROW(Types.INT, Types.LONG, Types.STRING);
-        }
+		@Override
+		public void run(SourceContext<Row> ctx) throws Exception {
+			long offsetMS = offsetSeconds * 2000L;
 
-        @Override
-        public void initializeState(FunctionInitializationContext context) throws Exception {
-            state =
-                    context.getOperatorStateStore()
-                            .getListState(
-                                    new ListStateDescriptor<Long>(
-                                            "state", LongSerializer.INSTANCE));
+			while (ms < durationMs) {
+				synchronized (ctx.getCheckpointLock()) {
+					for (int i = 0; i < numKeys; i++) {
+						ctx.collect(Row.of(i, ms + offsetMS, "Some payload..."));
+					}
+					ms += sleepMs;
+				}
+				Thread.sleep(sleepMs);
+			}
+		}
 
-            for (Long l : state.get()) {
-                ms += l;
-            }
-        }
+		@Override
+		public void cancel() { }
 
-        @Override
-        public void snapshotState(FunctionSnapshotContext context) throws Exception {
-            state.clear();
-            state.add(ms);
-        }
-    }
+		@Override
+		public TypeInformation<Row> getProducedType() {
+			return Types.ROW(Types.INT, Types.LONG, Types.STRING);
+		}
 
-    /** Kills the first execution attempt of an application when it receives the second record. */
-    public static class KillMapper
-            implements MapFunction<Row, Row>, CheckpointedFunction, ResultTypeQueryable {
+		@Override
+		public void initializeState(FunctionInitializationContext context) throws Exception {
+			state = context.getOperatorStateStore().getListState(
+					new ListStateDescriptor<Long>("state", LongSerializer.INSTANCE));
 
-        // counts all processed records of all previous execution attempts
-        private int saveRecordCnt = 0;
-        // counts all processed records of this execution attempt
-        private int lostRecordCnt = 0;
+			for (Long l : state.get()) {
+				ms += l;
+			}
+		}
 
-        private ListState<Integer> state = null;
+		@Override
+		public void snapshotState(FunctionSnapshotContext context) throws Exception {
+			state.clear();
+			state.add(ms);
+		}
+	}
 
-        @Override
-        public Row map(Row value) {
+	/**
+	 * Kills the first execution attempt of an application when it receives the second record.
+	 */
+	public static class KillMapper implements MapFunction<Row, Row>, CheckpointedFunction, ResultTypeQueryable {
 
-            // the both counts are the same only in the first execution attempt
-            if (saveRecordCnt == 1 && lostRecordCnt == 1) {
-                throw new RuntimeException("Kill this Job!");
-            }
+		// counts all processed records of all previous execution attempts
+		private int saveRecordCnt = 0;
+		// counts all processed records of this execution attempt
+		private int lostRecordCnt = 0;
 
-            // update checkpointed counter
-            saveRecordCnt++;
-            // update non-checkpointed counter
-            lostRecordCnt++;
+		private ListState<Integer> state = null;
 
-            // forward record
-            return value;
-        }
+		@Override
+		public Row map(Row value) {
 
-        @Override
-        public TypeInformation getProducedType() {
-            return Types.ROW(Types.INT, Types.SQL_TIMESTAMP);
-        }
+			// the both counts are the same only in the first execution attempt
+			if (saveRecordCnt == 1 && lostRecordCnt == 1) {
+				throw new RuntimeException("Kill this Job!");
+			}
 
-        @Override
-        public void initializeState(FunctionInitializationContext context) throws Exception {
-            state =
-                    context.getOperatorStateStore()
-                            .getListState(
-                                    new ListStateDescriptor<Integer>(
-                                            "state", IntSerializer.INSTANCE));
+			// update checkpointed counter
+			saveRecordCnt++;
+			// update non-checkpointed counter
+			lostRecordCnt++;
 
-            for (Integer i : state.get()) {
-                saveRecordCnt += i;
-            }
-        }
+			// forward record
+			return value;
+		}
 
-        @Override
-        public void snapshotState(FunctionSnapshotContext context) throws Exception {
-            state.clear();
-            state.add(saveRecordCnt);
-        }
-    }
+		@Override
+		public TypeInformation getProducedType() {
+			return Types.ROW(Types.INT, Types.SQL_TIMESTAMP);
+		}
+
+		@Override
+		public void initializeState(FunctionInitializationContext context) throws Exception {
+			state = context.getOperatorStateStore().getListState(
+					new ListStateDescriptor<Integer>("state", IntSerializer.INSTANCE));
+
+			for (Integer i : state.get()) {
+				saveRecordCnt += i;
+			}
+		}
+
+		@Override
+		public void snapshotState(FunctionSnapshotContext context) throws Exception {
+			state.clear();
+			state.add(saveRecordCnt);
+		}
+	}
 }

@@ -20,50 +20,51 @@ package org.apache.flink.runtime.messages;
 
 import java.io.Serializable;
 
-/** A generic acknowledgement message. */
+/**
+ * A generic acknowledgement message.
+ */
 public class Acknowledge implements Serializable {
 
-    private static final long serialVersionUID = 7808628311617273755L;
+	private static final long serialVersionUID = 7808628311617273755L;
 
-    /** The singleton instance */
-    private static final Acknowledge INSTANCE = new Acknowledge();
+	/** The singleton instance */
+	private static final Acknowledge INSTANCE = new Acknowledge();
 
-    /**
-     * Gets the singleton instance.
-     *
-     * @return The singleton instance.
-     */
-    public static Acknowledge get() {
-        return INSTANCE;
-    }
+	/**
+	 * Gets the singleton instance.
+	 * @return The singleton instance.
+	 */
+	public static Acknowledge get() {
+		return INSTANCE;
+	}
+	
+	// ------------------------------------------------------------------------
+	
+	/** Private constructor to prevent instantiation */
+	private Acknowledge() {}
 
-    // ------------------------------------------------------------------------
+	// ------------------------------------------------------------------------
 
-    /** Private constructor to prevent instantiation */
-    private Acknowledge() {}
+	@Override
+	public boolean equals(Object obj) {
+		return obj != null && obj.getClass() == Acknowledge.class;
+	}
 
-    // ------------------------------------------------------------------------
+	@Override
+	public int hashCode() {
+		return 41;
+	}
 
-    @Override
-    public boolean equals(Object obj) {
-        return obj != null && obj.getClass() == Acknowledge.class;
-    }
+	@Override
+	public String toString() {
+		return getClass().getSimpleName();
+	}
 
-    @Override
-    public int hashCode() {
-        return 41;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName();
-    }
-
-    /**
-     * Read resolve to preserve the singleton object property. (per best practices, this should have
-     * visibility 'protected')
-     */
-    protected Object readResolve() throws java.io.ObjectStreamException {
-        return INSTANCE;
-    }
+	/**
+	 * Read resolve to preserve the singleton object property.
+	 * (per best practices, this should have visibility 'protected')
+	 */
+	protected Object readResolve() throws java.io.ObjectStreamException {
+		return INSTANCE;
+	}
 }

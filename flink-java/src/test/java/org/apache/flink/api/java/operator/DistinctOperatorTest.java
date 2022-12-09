@@ -33,200 +33,206 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Tests for {@link DataSet#distinct()}. */
+/**
+ * Tests for {@link DataSet#distinct()}.
+ */
 public class DistinctOperatorTest {
 
-    // TUPLE DATA
-    private final List<Tuple5<Integer, Long, String, Long, Integer>> emptyTupleData =
-            new ArrayList<Tuple5<Integer, Long, String, Long, Integer>>();
+	// TUPLE DATA
+	private final List<Tuple5<Integer, Long, String, Long, Integer>> emptyTupleData =
+			new ArrayList<Tuple5<Integer, Long, String, Long, Integer>>();
 
-    private final TupleTypeInfo<Tuple5<Integer, Long, String, Long, Integer>> tupleTypeInfo =
-            new TupleTypeInfo<Tuple5<Integer, Long, String, Long, Integer>>(
-                    BasicTypeInfo.INT_TYPE_INFO,
-                    BasicTypeInfo.LONG_TYPE_INFO,
-                    BasicTypeInfo.STRING_TYPE_INFO,
-                    BasicTypeInfo.LONG_TYPE_INFO,
-                    BasicTypeInfo.INT_TYPE_INFO);
+	private final TupleTypeInfo<Tuple5<Integer, Long, String, Long, Integer>> tupleTypeInfo = new
+			TupleTypeInfo<Tuple5<Integer, Long, String, Long, Integer>>(
+					BasicTypeInfo.INT_TYPE_INFO,
+					BasicTypeInfo.LONG_TYPE_INFO,
+					BasicTypeInfo.STRING_TYPE_INFO,
+					BasicTypeInfo.LONG_TYPE_INFO,
+					BasicTypeInfo.INT_TYPE_INFO
+			);
 
-    // LONG DATA
-    private final List<Long> emptyLongData = new ArrayList<Long>();
+	// LONG DATA
+	private final List<Long> emptyLongData = new ArrayList<Long>();
 
-    private final List<CustomType> customTypeData = new ArrayList<CustomType>();
+	private final List<CustomType> customTypeData = new ArrayList<CustomType>();
 
-    @Test
-    public void testDistinctByKeyFields1() {
+	@Test
+	public void testDistinctByKeyFields1() {
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-        DataSet<Tuple5<Integer, Long, String, Long, Integer>> tupleDs =
-                env.fromCollection(emptyTupleData, tupleTypeInfo);
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		DataSet<Tuple5<Integer, Long, String, Long, Integer>> tupleDs = env.fromCollection(emptyTupleData, tupleTypeInfo);
 
-        // should work
-        try {
-            tupleDs.distinct(0);
-        } catch (Exception e) {
-            Assert.fail();
-        }
-    }
+		// should work
+		try {
+			tupleDs.distinct(0);
+		} catch (Exception e) {
+			Assert.fail();
+		}
+	}
 
-    @Test(expected = InvalidProgramException.class)
-    public void testDistinctByKeyFields2() {
+	@Test(expected = InvalidProgramException.class)
+	public void testDistinctByKeyFields2() {
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-        DataSet<Long> longDs = env.fromCollection(emptyLongData, BasicTypeInfo.LONG_TYPE_INFO);
-        // should not work: distinct on basic type
-        longDs.distinct(0);
-    }
+		DataSet<Long> longDs = env.fromCollection(emptyLongData, BasicTypeInfo.LONG_TYPE_INFO);
+		// should not work: distinct on basic type
+		longDs.distinct(0);
+	}
 
-    @Test(expected = InvalidProgramException.class)
-    public void testDistinctByKeyFields3() {
+	@Test(expected = InvalidProgramException.class)
+	public void testDistinctByKeyFields3() {
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-        this.customTypeData.add(new CustomType());
+		this.customTypeData.add(new CustomType());
 
-        DataSet<CustomType> customDs = env.fromCollection(customTypeData);
-        // should not work: distinct on custom type
-        customDs.distinct(0);
-    }
+		DataSet<CustomType> customDs = env.fromCollection(customTypeData);
+		// should not work: distinct on custom type
+		customDs.distinct(0);
 
-    @Test
-    public void testDistinctByKeyFields4() {
+	}
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-        DataSet<Tuple5<Integer, Long, String, Long, Integer>> tupleDs =
-                env.fromCollection(emptyTupleData, tupleTypeInfo);
+	@Test
+	public void testDistinctByKeyFields4() {
 
-        // should work
-        tupleDs.distinct();
-    }
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		DataSet<Tuple5<Integer, Long, String, Long, Integer>> tupleDs = env.fromCollection(emptyTupleData, tupleTypeInfo);
 
-    @Test
-    public void testDistinctByKeyFields5() {
+		// should work
+		tupleDs.distinct();
+	}
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+	@Test
+	public void testDistinctByKeyFields5() {
 
-        this.customTypeData.add(new CustomType());
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-        DataSet<CustomType> customDs = env.fromCollection(customTypeData);
+		this.customTypeData.add(new CustomType());
 
-        // should work
-        customDs.distinct();
-    }
+		DataSet<CustomType> customDs = env.fromCollection(customTypeData);
 
-    @Test(expected = IndexOutOfBoundsException.class)
-    public void testDistinctByKeyFields6() {
+		// should work
+		customDs.distinct();
+	}
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-        DataSet<Tuple5<Integer, Long, String, Long, Integer>> tupleDs =
-                env.fromCollection(emptyTupleData, tupleTypeInfo);
+	@Test(expected = IndexOutOfBoundsException.class)
+	public void testDistinctByKeyFields6() {
 
-        // should not work, negative field position
-        tupleDs.distinct(-1);
-    }
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		DataSet<Tuple5<Integer, Long, String, Long, Integer>> tupleDs = env.fromCollection(emptyTupleData, tupleTypeInfo);
 
-    @Test
-    public void testDistinctByKeyFields7() {
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-        DataSet<Long> longDs = env.fromCollection(emptyLongData, BasicTypeInfo.LONG_TYPE_INFO);
+		// should not work, negative field position
+		tupleDs.distinct(-1);
+	}
 
-        // should work
-        try {
-            longDs.distinct("*");
-        } catch (Exception e) {
-            Assert.fail();
-        }
-    }
+	@Test
+	public void testDistinctByKeyFields7(){
+		final ExecutionEnvironment env  = ExecutionEnvironment.getExecutionEnvironment();
+		DataSet<Long> longDs = env.fromCollection(emptyLongData, BasicTypeInfo.LONG_TYPE_INFO);
 
-    @Test
-    @SuppressWarnings("serial")
-    public void testDistinctByKeySelector1() {
+		// should work
+		try {
+			longDs.distinct("*");
+		} catch (Exception e){
+			Assert.fail();
+		}
+	}
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-        this.customTypeData.add(new CustomType());
+	@Test
+	@SuppressWarnings("serial")
+	public void testDistinctByKeySelector1() {
 
-        try {
-            DataSet<CustomType> customDs = env.fromCollection(customTypeData);
-            // should work
-            customDs.distinct(
-                    new KeySelector<DistinctOperatorTest.CustomType, Long>() {
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		this.customTypeData.add(new CustomType());
 
-                        @Override
-                        public Long getKey(CustomType value) {
-                            return value.myLong;
-                        }
-                    });
-        } catch (Exception e) {
-            Assert.fail();
-        }
-    }
+		try {
+			DataSet<CustomType> customDs = env.fromCollection(customTypeData);
+			// should work
+			customDs.distinct(
+					new KeySelector<DistinctOperatorTest.CustomType, Long>() {
 
-    @Test
-    public void testDistinctByKeyIndices1() {
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-        try {
-            DataSet<Long> longDs = env.fromCollection(emptyLongData, BasicTypeInfo.LONG_TYPE_INFO);
-            // should work
-            longDs.distinct();
-        } catch (Exception e) {
-            Assert.fail();
-        }
-    }
+						@Override
+						public Long getKey(CustomType value) {
+							return value.myLong;
+					}
+			});
+		} catch (Exception e) {
+			Assert.fail();
+		}
 
-    @Test(expected = InvalidProgramException.class)
-    public void testDistinctOnNotKeyDataType() throws Exception {
-        /*
-         * should not work. NotComparable data type cannot be used as key
-         */
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+	}
 
-        NotComparable a = new NotComparable();
-        List<NotComparable> l = new ArrayList<NotComparable>();
-        l.add(a);
+	@Test
+	public void  testDistinctByKeyIndices1() {
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		try {
+			DataSet<Long> longDs = env.fromCollection(emptyLongData, BasicTypeInfo.LONG_TYPE_INFO);
+			// should work
+			longDs.distinct();
+		} catch (Exception e) {
+			Assert.fail();
+		}
+	}
 
-        DataSet<NotComparable> ds = env.fromCollection(l);
-        DataSet<NotComparable> reduceDs = ds.distinct();
-    }
+	@Test(expected = InvalidProgramException.class)
+	public void testDistinctOnNotKeyDataType() throws Exception {
+    	/*
+     	* should not work. NotComparable data type cannot be used as key
+     	*/
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-    @Test(expected = InvalidProgramException.class)
-    public void testDistinctOnNotKeyDataTypeOnSelectAllChar() throws Exception {
-        /*
-         * should not work. NotComparable data type cannot be used as key
-         */
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		NotComparable a = new NotComparable();
+		List<NotComparable> l = new ArrayList<NotComparable>();
+		l.add(a);
 
-        NotComparable a = new NotComparable();
-        List<NotComparable> l = new ArrayList<NotComparable>();
-        l.add(a);
+		DataSet<NotComparable> ds = env.fromCollection(l);
+		DataSet<NotComparable> reduceDs = ds.distinct();
 
-        DataSet<NotComparable> ds = env.fromCollection(l);
-        DataSet<NotComparable> reduceDs = ds.distinct("*");
-    }
+	}
 
-    class NotComparable {
-        public List<Integer> myInts;
-    }
+	@Test(expected = InvalidProgramException.class)
+	public void testDistinctOnNotKeyDataTypeOnSelectAllChar() throws Exception {
+    	/*
+     	* should not work. NotComparable data type cannot be used as key
+     	*/
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-    /** Custom data type, for testing purposes. */
-    public static class CustomType implements Serializable {
+		NotComparable a = new NotComparable();
+		List<NotComparable> l = new ArrayList<NotComparable>();
+		l.add(a);
 
-        private static final long serialVersionUID = 1L;
+		DataSet<NotComparable> ds = env.fromCollection(l);
+		DataSet<NotComparable> reduceDs = ds.distinct("*");
+	}
 
-        public int myInt;
-        public long myLong;
-        public String myString;
+	class NotComparable {
+		public List<Integer> myInts;
+	}
 
-        public CustomType() {}
+	/**
+	 * Custom data type, for testing purposes.
+	 */
+	public static class CustomType implements Serializable {
 
-        public CustomType(int i, long l, String s) {
-            myInt = i;
-            myLong = l;
-            myString = s;
-        }
+		private static final long serialVersionUID = 1L;
 
-        @Override
-        public String toString() {
-            return myInt + "," + myLong + "," + myString;
-        }
-    }
+		public int myInt;
+		public long myLong;
+		public String myString;
+
+		public CustomType() {}
+
+		public CustomType(int i, long l, String s) {
+			myInt = i;
+			myLong = l;
+			myString = s;
+		}
+
+		@Override
+		public String toString() {
+			return myInt + "," + myLong + "," + myString;
+		}
+	}
+
 }

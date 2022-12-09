@@ -42,21 +42,19 @@ import java.util.concurrent.ScheduledExecutorService;
  */
 public interface RestEndpointFactory<T extends RestfulGateway> {
 
-    WebMonitorEndpoint<T> createRestEndpoint(
-            Configuration configuration,
-            LeaderGatewayRetriever<DispatcherGateway> dispatcherGatewayRetriever,
-            LeaderGatewayRetriever<ResourceManagerGateway> resourceManagerGatewayRetriever,
-            TransientBlobService transientBlobService,
-            ScheduledExecutorService executor,
-            MetricFetcher metricFetcher,
-            LeaderElectionService leaderElectionService,
-            FatalErrorHandler fatalErrorHandler)
-            throws Exception;
+	WebMonitorEndpoint<T> createRestEndpoint(
+		Configuration configuration,
+		LeaderGatewayRetriever<DispatcherGateway> dispatcherGatewayRetriever,
+		LeaderGatewayRetriever<ResourceManagerGateway> resourceManagerGatewayRetriever,
+		TransientBlobService transientBlobService,
+		ScheduledExecutorService executor,
+		MetricFetcher metricFetcher,
+		LeaderElectionService leaderElectionService,
+		FatalErrorHandler fatalErrorHandler) throws Exception;
 
-    static ExecutionGraphCache createExecutionGraphCache(
-            RestHandlerConfiguration restConfiguration) {
-        return new DefaultExecutionGraphCache(
-                restConfiguration.getTimeout(),
-                Time.milliseconds(restConfiguration.getRefreshInterval()));
-    }
+	static ExecutionGraphCache createExecutionGraphCache(RestHandlerConfiguration restConfiguration) {
+		return new DefaultExecutionGraphCache(
+			restConfiguration.getTimeout(),
+			Time.milliseconds(restConfiguration.getRefreshInterval()));
+	}
 }

@@ -25,11 +25,12 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-connectors</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-hcatalog_${scala.binary.version}</artifactId>
-	<name>Flink : Connectors : HCatalog</name>
+	<name>flink-hcatalog</name>
 
 	<packaging>jar</packaging>
 
@@ -96,22 +97,6 @@ under the License.
 
 	<build>
 		<plugins>
-			<plugin>
-				<groupId>com.diffplug.spotless</groupId>
-				<artifactId>spotless-maven-plugin</artifactId>
-				<configuration>
-					<scala>
-						<scalafmt>
-							<version>${spotless.scalafmt.version}</version>
-							<file>${project.basedir}/../../.scalafmt.conf</file>
-						</scalafmt>
-						<licenseHeader>
-							<content>${spotless.license.header}</content>
-							<delimiter>${spotless.delimiter}</delimiter>
-						</licenseHeader>
-					</scala>
-				</configuration>
-			</plugin>
 			<!-- Scala Compiler -->
 			<plugin>
 				<groupId>net.alchim31.maven</groupId>
@@ -207,6 +192,16 @@ under the License.
 					</execution>
 				</executions>
 			</plugin>
+
+			<!-- Scala Code Style, most of the configuration done via plugin management -->
+			<plugin>
+				<groupId>org.scalastyle</groupId>
+				<artifactId>scalastyle-maven-plugin</artifactId>
+				<configuration>
+					<configLocation>${project.basedir}/../../tools/maven/scalastyle-config.xml</configLocation>
+				</configuration>
+			</plugin>
+
 		</plugins>
 	</build>
 

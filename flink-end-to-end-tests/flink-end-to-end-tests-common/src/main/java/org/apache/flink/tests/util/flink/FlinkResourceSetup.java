@@ -22,84 +22,66 @@ import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
 
-/** Setup instructions for a {@link FlinkResource}. */
+/**
+ * Setup instructions for a {@link FlinkResource}.
+ */
 public class FlinkResourceSetup {
 
-    @Nullable private final Configuration config;
-    private final Collection<JarOperation> jarOperations;
-    private final Collection<JarAddition> jarAdditions;
+	@Nullable
+	private final Configuration config;
+	private final Collection<JarOperation> jarOperations;
 
-    private FlinkResourceSetup(
-            @Nullable Configuration config,
-            Collection<JarOperation> jarOperations,
-            Collection<JarAddition> jarAdditions) {
-        this.config = config;
-        this.jarOperations = Preconditions.checkNotNull(jarOperations);
-        this.jarAdditions = Preconditions.checkNotNull(jarAdditions);
-    }
+	private FlinkResourceSetup(@Nullable Configuration config, Collection<JarOperation> jarOperations) {
+		this.config = config;
+		this.jarOperations = Preconditions.checkNotNull(jarOperations);
+	}
 
-    public Optional<Configuration> getConfig() {
-        return Optional.ofNullable(config);
-    }
+	public Optional<Configuration> getConfig() {
+		return Optional.ofNullable(config);
+	}
 
-    public Collection<JarOperation> getJarOperations() {
-        return jarOperations;
-    }
+	public Collection<JarOperation> getJarOperations() {
+		return jarOperations;
+	}
 
-    public Collection<JarAddition> getJarAdditions() {
-        return jarAdditions;
-    }
+	public static FlinkResourceSetupBuilder builder() {
+		return new FlinkResourceSetupBuilder();
+	}
 
-    public static FlinkResourceSetupBuilder builder() {
-        return new FlinkResourceSetupBuilder();
-    }
+	/**
+	 * Builder for {@link FlinkResourceSetup}.
+	 */
+	public static class FlinkResourceSetupBuilder {
 
-    /** Builder for {@link FlinkResourceSetup}. */
-    public static class FlinkResourceSetupBuilder {
+		private Configuration config;
+		private final Collection<JarOperation> jarOperations = new ArrayList<>();
 
-        private Configuration config;
-        private final Collection<JarOperation> jarOperations = new ArrayList<>();
-        private final Collection<JarAddition> jarAdditions = new ArrayList<>();
+		private FlinkResourceSetupBuilder() {
+		}
 
-        private FlinkResourceSetupBuilder() {}
+		public FlinkResourceSetupBuilder addConfiguration(Configuration config) {
+			this.config = config;
+			return this;
+		}
 
-        public FlinkResourceSetupBuilder addConfiguration(Configuration config) {
-            this.config = config;
-            return this;
-        }
+		public FlinkResourceSetupBuilder moveJar(String jarNamePrefix, JarLocation source, JarLocation target) {
+			this.jarOperations.add(new JarOperation(jarNamePrefix, source, target, JarOperation.OperationType.MOVE));
+			return this;
+		}
 
-        public FlinkResourceSetupBuilder addJar(Path jar, JarLocation target) {
-            this.jarAdditions.add(new JarAddition(jar, target));
-            return this;
-        }
+		public FlinkResourceSetupBuilder copyJar(String jarNamePrefix, JarLocation source, JarLocation target) {
+			this.jarOperations.add(new JarOperation(jarNamePrefix, source, target, JarOperation.OperationType.COPY));
+			return this;
+		}
 
-        public FlinkResourceSetupBuilder moveJar(
-                String jarNamePrefix, JarLocation source, JarLocation target) {
-            this.jarOperations.add(
-                    new JarOperation(
-                            jarNamePrefix, source, target, JarOperation.OperationType.MOVE));
-            return this;
-        }
+		public FlinkResourceSetup build() {
+			return new FlinkResourceSetup(config,  Collections.unmodifiableCollection(jarOperations));
+		}
+	}
 
-        public FlinkResourceSetupBuilder copyJar(
-                String jarNamePrefix, JarLocation source, JarLocation target) {
-            this.jarOperations.add(
-                    new JarOperation(
-                            jarNamePrefix, source, target, JarOperation.OperationType.COPY));
-            return this;
-        }
-
-        public FlinkResourceSetup build() {
-            return new FlinkResourceSetup(
-                    config,
-                    Collections.unmodifiableCollection(jarOperations),
-                    Collections.unmodifiableCollection(jarAdditions));
-        }
-    }
 }

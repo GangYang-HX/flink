@@ -21,90 +21,68 @@ package org.apache.flink.connector.jdbc.catalog.factory;
 import org.apache.flink.connector.jdbc.catalog.JdbcCatalog;
 import org.apache.flink.connector.jdbc.catalog.PostgresCatalog;
 import org.apache.flink.table.catalog.Catalog;
-import org.apache.flink.table.catalog.CommonCatalogOptions;
-import org.apache.flink.table.factories.FactoryUtil;
-import org.apache.flink.util.DockerImageVersions;
+import org.apache.flink.table.descriptors.CatalogDescriptor;
+import org.apache.flink.table.descriptors.JdbcCatalogDescriptor;
+import org.apache.flink.table.factories.CatalogFactory;
+import org.apache.flink.table.factories.TableFactoryService;
 
+import com.opentable.db.postgres.junit.EmbeddedPostgresRules;
+import com.opentable.db.postgres.junit.SingleInstancePostgresRule;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.utility.DockerImageName;
 
 import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-/** Test for {@link JdbcCatalogFactory}. */
+/**
+ * Test for {@link JdbcCatalogFactory}.
+ */
 public class JdbcCatalogFactoryTest {
+	@ClassRule
+	public static SingleInstancePostgresRule pg = EmbeddedPostgresRules.singleInstance();
 
-    public static final Logger LOG = LoggerFactory.getLogger(JdbcCatalogFactoryTest.class);
+	protected static String baseUrl;
+	protected static JdbcCatalog catalog;
 
-    protected static String baseUrl;
-    protected static JdbcCatalog catalog;
+	protected static final String TEST_CATALOG_NAME = "mypg";
+	protected static final String TEST_USERNAME = "postgres";
+	protected static final String TEST_PWD = "postgres";
 
-    protected static final String TEST_CATALOG_NAME = "mypg";
-    protected static final String TEST_USERNAME = "postgres";
-    protected static final String TEST_PWD = "postgres";
+	@BeforeClass
+	public static void setup() throws SQLException {
+		// jdbc:postgresql://localhost:50807/postgres?user=postgres
+		String embeddedJdbcUrl = pg.getEmbeddedPostgres().getJdbcUrl(TEST_USERNAME, TEST_PWD);
+		// jdbc:postgresql://localhost:50807/
+		baseUrl = embeddedJdbcUrl.substring(0, embeddedJdbcUrl.lastIndexOf("/") + 1);
 
-    protected static final DockerImageName POSTGRES_IMAGE =
-            DockerImageName.parse(DockerImageVersions.POSTGRES);
+		catalog = new JdbcCatalog(
+			TEST_CATALOG_NAME, PostgresCatalog.DEFAULT_DATABASE, TEST_USERNAME, TEST_PWD, baseUrl);
+	}
 
-    @ClassRule
-    public static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>(POSTGRES_IMAGE)
-                    .withUsername(TEST_USERNAME)
-                    .withPassword(TEST_PWD)
-                    .withLogConsumer(new Slf4jLogConsumer(LOG));
+	@Test
+	public void test() {
+		final CatalogDescriptor catalogDescriptor =
+			new JdbcCatalogDescriptor(PostgresCatalog.DEFAULT_DATABASE, TEST_USERNAME, TEST_PWD, baseUrl);
 
-    @BeforeClass
-    public static void setup() throws SQLException {
-        // jdbc:postgresql://localhost:50807/postgres?user=postgres
-        String jdbcUrl = POSTGRES_CONTAINER.getJdbcUrl();
-        // jdbc:postgresql://localhost:50807/
-        baseUrl = jdbcUrl.substring(0, jdbcUrl.lastIndexOf("/"));
+		final Map<String, String> properties = catalogDescriptor.toProperties();
 
-        catalog =
-                new JdbcCatalog(
-                        TEST_CATALOG_NAME,
-                        PostgresCatalog.DEFAULT_DATABASE,
-                        TEST_USERNAME,
-                        TEST_PWD,
-                        baseUrl);
-    }
+		final Catalog actualCatalog = TableFactoryService.find(CatalogFactory.class, properties)
+			.createCatalog(TEST_CATALOG_NAME, properties);
 
-    @Test
-    public void test() {
-        final Map<String, String> options = new HashMap<>();
-        options.put(CommonCatalogOptions.CATALOG_TYPE.key(), JdbcCatalogFactoryOptions.IDENTIFIER);
-        options.put(
-                JdbcCatalogFactoryOptions.DEFAULT_DATABASE.key(), PostgresCatalog.DEFAULT_DATABASE);
-        options.put(JdbcCatalogFactoryOptions.USERNAME.key(), TEST_USERNAME);
-        options.put(JdbcCatalogFactoryOptions.PASSWORD.key(), TEST_PWD);
-        options.put(JdbcCatalogFactoryOptions.BASE_URL.key(), baseUrl);
+		checkEquals(catalog, (JdbcCatalog) actualCatalog);
 
-        final Catalog actualCatalog =
-                FactoryUtil.createCatalog(
-                        TEST_CATALOG_NAME,
-                        options,
-                        null,
-                        Thread.currentThread().getContextClassLoader());
+		assertTrue(((JdbcCatalog) actualCatalog).getInternal() instanceof PostgresCatalog);
+	}
 
-        checkEquals(catalog, (JdbcCatalog) actualCatalog);
-
-        assertThat(((JdbcCatalog) actualCatalog).getInternal()).isInstanceOf(PostgresCatalog.class);
-    }
-
-    private static void checkEquals(JdbcCatalog c1, JdbcCatalog c2) {
-        assertThat(c2.getName()).isEqualTo(c1.getName());
-        assertThat(c2.getDefaultDatabase()).isEqualTo(c1.getDefaultDatabase());
-        assertThat(c2.getUsername()).isEqualTo(c1.getUsername());
-        assertThat(c2.getPassword()).isEqualTo(c1.getPassword());
-        assertThat(c2.getBaseUrl()).isEqualTo(c1.getBaseUrl());
-    }
+	private static void checkEquals(JdbcCatalog c1, JdbcCatalog c2) {
+		assertEquals(c1.getName(), c2.getName());
+		assertEquals(c1.getDefaultDatabase(), c2.getDefaultDatabase());
+		assertEquals(c1.getUsername(), c2.getUsername());
+		assertEquals(c1.getPassword(), c2.getPassword());
+		assertEquals(c1.getBaseUrl(), c2.getBaseUrl());
+	}
 }

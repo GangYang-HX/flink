@@ -19,75 +19,52 @@
 package org.apache.flink.runtime.taskexecutor;
 
 import org.apache.flink.api.common.resources.CPUResource;
-import org.apache.flink.api.common.resources.ExternalResource;
 import org.apache.flink.configuration.MemorySize;
-import org.apache.flink.util.Preconditions;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
- * Specification of resources to use in running {@link
- * org.apache.flink.runtime.taskexecutor.TaskExecutor}.
+ * Specification of resources to use in running {@link org.apache.flink.runtime.taskexecutor.TaskExecutor}.
  */
 public class TaskExecutorResourceSpec {
-    private final CPUResource cpuCores;
+	private final CPUResource cpuCores;
 
-    private final MemorySize taskHeapSize;
+	private final MemorySize taskHeapSize;
 
-    private final MemorySize taskOffHeapSize;
+	private final MemorySize taskOffHeapSize;
 
-    private final MemorySize networkMemSize;
+	private final MemorySize networkMemSize;
 
-    private final MemorySize managedMemorySize;
+	private final MemorySize managedMemorySize;
 
-    private final Map<String, ExternalResource> extendedResources;
+	public TaskExecutorResourceSpec(
+			CPUResource cpuCores,
+			MemorySize taskHeapSize,
+			MemorySize taskOffHeapSize,
+			MemorySize networkMemSize,
+			MemorySize managedMemorySize) {
+		this.cpuCores = cpuCores;
+		this.taskHeapSize = taskHeapSize;
+		this.taskOffHeapSize = taskOffHeapSize;
+		this.networkMemSize = networkMemSize;
+		this.managedMemorySize = managedMemorySize;
+	}
 
-    public TaskExecutorResourceSpec(
-            CPUResource cpuCores,
-            MemorySize taskHeapSize,
-            MemorySize taskOffHeapSize,
-            MemorySize networkMemSize,
-            MemorySize managedMemorySize,
-            Collection<ExternalResource> extendedResources) {
-        this.cpuCores = cpuCores;
-        this.taskHeapSize = taskHeapSize;
-        this.taskOffHeapSize = taskOffHeapSize;
-        this.networkMemSize = networkMemSize;
-        this.managedMemorySize = managedMemorySize;
-        this.extendedResources =
-                Preconditions.checkNotNull(extendedResources).stream()
-                        .filter(resource -> !resource.isZero())
-                        .collect(Collectors.toMap(ExternalResource::getName, Function.identity()));
-        Preconditions.checkArgument(
-                this.extendedResources.size() == extendedResources.size(),
-                "Duplicate resource name encountered in external resources.");
-    }
+	public CPUResource getCpuCores() {
+		return cpuCores;
+	}
 
-    public CPUResource getCpuCores() {
-        return cpuCores;
-    }
+	public MemorySize getTaskHeapSize() {
+		return taskHeapSize;
+	}
 
-    public MemorySize getTaskHeapSize() {
-        return taskHeapSize;
-    }
+	public MemorySize getTaskOffHeapSize() {
+		return taskOffHeapSize;
+	}
 
-    public MemorySize getTaskOffHeapSize() {
-        return taskOffHeapSize;
-    }
+	public MemorySize getNetworkMemSize() {
+		return networkMemSize;
+	}
 
-    public MemorySize getNetworkMemSize() {
-        return networkMemSize;
-    }
-
-    public MemorySize getManagedMemorySize() {
-        return managedMemorySize;
-    }
-
-    public Map<String, ExternalResource> getExtendedResources() {
-        return Collections.unmodifiableMap(extendedResources);
-    }
+	public MemorySize getManagedMemorySize() {
+		return managedMemorySize;
+	}
 }

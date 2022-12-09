@@ -18,6 +18,11 @@
 
 package org.apache.flink.optimizer.dag;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.flink.api.common.ExecutionMode;
 import org.apache.flink.api.common.operators.GenericDataSinkBase;
 import org.apache.flink.api.common.operators.Operator;
@@ -35,223 +40,216 @@ import org.apache.flink.optimizer.plan.PlanNode;
 import org.apache.flink.optimizer.plan.SinkPlanNode;
 import org.apache.flink.util.Visitor;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-/** The Optimizer representation of a data sink. */
+/**
+ * The Optimizer representation of a data sink.
+ */
 public class DataSinkNode extends OptimizerNode {
+	
+	protected DagConnection input;			// The input edge
+	
+	/**
+	 * Creates a new DataSinkNode for the given sink operator.
+	 * 
+	 * @param sink The data sink contract object.
+	 */
+	public DataSinkNode(GenericDataSinkBase<?> sink) {
+		super(sink);
+	}
 
-    protected DagConnection input; // The input edge
+	// --------------------------------------------------------------------------------------
+	
+	/**
+	 * Gets the input of the sink.
+	 * 
+	 * @return The input connection.
+	 */
+	public DagConnection getInputConnection() {
+		return this.input;
+	}
+	
+	/**
+	 * Gets the predecessor of this node.
+	 *
+	 * @return The predecessor, or null, if no predecessor has been set.
+	 */
+	public OptimizerNode getPredecessorNode() {
+		if(this.input != null) {
+			return input.getSource();
+		} else {
+			return null;
+		}
+	}
 
-    /**
-     * Creates a new DataSinkNode for the given sink operator.
-     *
-     * @param sink The data sink contract object.
-     */
-    public DataSinkNode(GenericDataSinkBase<?> sink) {
-        super(sink);
-    }
+	/**
+	 * Gets the operator for which this optimizer sink node was created.
+	 * 
+	 * @return The node's underlying operator.
+	 */
+	@Override
+	public GenericDataSinkBase<?> getOperator() {
+		return (GenericDataSinkBase<?>) super.getOperator();
+	}
 
-    // --------------------------------------------------------------------------------------
+	@Override
+	public String getOperatorName() {
+		return "Data Sink";
+	}
 
-    /**
-     * Gets the input of the sink.
-     *
-     * @return The input connection.
-     */
-    public DagConnection getInputConnection() {
-        return this.input;
-    }
+	@Override
+	public List<DagConnection> getIncomingConnections() {
+		return Collections.singletonList(this.input);
+	}
 
-    /**
-     * Gets the predecessor of this node.
-     *
-     * @return The predecessor, or null, if no predecessor has been set.
-     */
-    public OptimizerNode getPredecessorNode() {
-        if (this.input != null) {
-            return input.getSource();
-        } else {
-            return null;
-        }
-    }
+	/**
+	 * Gets all outgoing connections, which is an empty set for the data sink.
+	 *
+	 * @return An empty list.
+	 */
+	@Override
+	public List<DagConnection> getOutgoingConnections() {
+		return Collections.emptyList();
+	}
 
-    /**
-     * Gets the operator for which this optimizer sink node was created.
-     *
-     * @return The node's underlying operator.
-     */
-    @Override
-    public GenericDataSinkBase<?> getOperator() {
-        return (GenericDataSinkBase<?>) super.getOperator();
-    }
+	@Override
+	public void setInput(Map<Operator<?>, OptimizerNode> contractToNode, ExecutionMode defaultExchangeMode) {
+		Operator<?> children = getOperator().getInput();
 
-    @Override
-    public String getOperatorName() {
-        return "Data Sink";
-    }
+		final OptimizerNode pred;
+		final DagConnection conn;
+		
+		pred = contractToNode.get(children);
+		conn = new DagConnection(pred, this, defaultExchangeMode);
+			
+		// create the connection and add it
+		this.input = conn;
+		pred.addOutgoingConnection(conn);
+	}
 
-    @Override
-    public List<DagConnection> getIncomingConnections() {
-        return Collections.singletonList(this.input);
-    }
+	/**
+	 * Computes the estimated outputs for the data sink. Since the sink does not modify anything, it simply
+	 * copies the output estimates from its direct predecessor.
+	 */
+	@Override
+	protected void computeOperatorSpecificDefaultEstimates(DataStatistics statistics) {
+		this.estimatedNumRecords = getPredecessorNode().getEstimatedNumRecords();
+		this.estimatedOutputSize = getPredecessorNode().getEstimatedOutputSize();
+	}
 
-    /**
-     * Gets all outgoing connections, which is an empty set for the data sink.
-     *
-     * @return An empty list.
-     */
-    @Override
-    public List<DagConnection> getOutgoingConnections() {
-        return Collections.emptyList();
-    }
+	@Override
+	public void computeInterestingPropertiesForInputs(CostEstimator estimator) {
+		final InterestingProperties iProps = new InterestingProperties();
 
-    @Override
-    public void setInput(
-            Map<Operator<?>, OptimizerNode> contractToNode, ExecutionMode defaultExchangeMode) {
-        Operator<?> children = getOperator().getInput();
+		{
+			final RequestedGlobalProperties partitioningProps = new RequestedGlobalProperties();
+			iProps.addGlobalProperties(partitioningProps);
+		}
 
-        final OptimizerNode pred;
-        final DagConnection conn;
+		{
+			final Ordering localOrder = getOperator().getLocalOrder();
+			final RequestedLocalProperties orderProps = new RequestedLocalProperties();
+			if (localOrder != null) {
+				orderProps.setOrdering(localOrder);
+			}
+			iProps.addLocalProperties(orderProps);
+		}
+		
+		this.input.setInterestingProperties(iProps);
+	}
+	
+	// --------------------------------------------------------------------------------------------
+	//                                     Branch Handling
+	// --------------------------------------------------------------------------------------------
 
-        pred = contractToNode.get(children);
-        conn = new DagConnection(pred, this, defaultExchangeMode);
+	@Override
+	public void computeUnclosedBranchStack() {
+		if (this.openBranches != null) {
+			return;
+		}
 
-        // create the connection and add it
-        this.input = conn;
-        pred.addOutgoingConnection(conn);
-    }
+		// we need to track open branches even in the sinks, because they get "closed" when
+		// we build a single "root" for the data flow plan
+		addClosedBranches(getPredecessorNode().closedBranchingNodes);
+		this.openBranches = getPredecessorNode().getBranchesForParent(this.input);
+	}
+	
+	@Override
+	protected List<UnclosedBranchDescriptor> getBranchesForParent(DagConnection parent) {
+		// return our own stack of open branches, because nothing is added
+		return this.openBranches;
+	}
 
-    /**
-     * Computes the estimated outputs for the data sink. Since the sink does not modify anything, it
-     * simply copies the output estimates from its direct predecessor.
-     */
-    @Override
-    protected void computeOperatorSpecificDefaultEstimates(DataStatistics statistics) {
-        this.estimatedNumRecords = getPredecessorNode().getEstimatedNumRecords();
-        this.estimatedOutputSize = getPredecessorNode().getEstimatedOutputSize();
-    }
+	// --------------------------------------------------------------------------------------------
+	//                                   Recursive Optimization
+	// --------------------------------------------------------------------------------------------
+	
+	@Override
+	public List<PlanNode> getAlternativePlans(CostEstimator estimator) {
+		// check if we have a cached version
+		if (this.cachedPlans != null) {
+			return this.cachedPlans;
+		}
+		
+		// calculate alternative sub-plans for predecessor
+		List<? extends PlanNode> subPlans = getPredecessorNode().getAlternativePlans(estimator);
+		List<PlanNode> outputPlans = new ArrayList<PlanNode>();
+		
+		final int parallelism = getParallelism();
+		final int inDop = getPredecessorNode().getParallelism();
 
-    @Override
-    public void computeInterestingPropertiesForInputs(CostEstimator estimator) {
-        final InterestingProperties iProps = new InterestingProperties();
+		final ExecutionMode executionMode = this.input.getDataExchangeMode();
+		final boolean dopChange = parallelism != inDop;
+		final boolean breakPipeline = this.input.isBreakingPipeline();
 
-        {
-            final RequestedGlobalProperties partitioningProps = new RequestedGlobalProperties();
-            iProps.addGlobalProperties(partitioningProps);
-        }
+		InterestingProperties ips = this.input.getInterestingProperties();
+		for (PlanNode p : subPlans) {
+			for (RequestedGlobalProperties gp : ips.getGlobalProperties()) {
+				for (RequestedLocalProperties lp : ips.getLocalProperties()) {
+					Channel c = new Channel(p);
+					gp.parameterizeChannel(c, dopChange, executionMode, breakPipeline);
+					lp.parameterizeChannel(c);
+					c.setRequiredLocalProps(lp);
+					c.setRequiredGlobalProps(gp);
+					
+					// no need to check whether the created properties meet what we need in case
+					// of ordering or global ordering, because the only interesting properties we have
+					// are what we require
+					outputPlans.add(new SinkPlanNode(this, "DataSink ("+this.getOperator().getName()+")" ,c));
+				}
+			}
+		}
+		
+		// cost and prune the plans
+		for (PlanNode node : outputPlans) {
+			estimator.costOperator(node);
+		}
+		prunePlanAlternatives(outputPlans);
 
-        {
-            final Ordering localOrder = getOperator().getLocalOrder();
-            final RequestedLocalProperties orderProps = new RequestedLocalProperties();
-            if (localOrder != null) {
-                orderProps.setOrdering(localOrder);
-            }
-            iProps.addLocalProperties(orderProps);
-        }
+		this.cachedPlans = outputPlans;
+		return outputPlans;
+	}
+	
+	// --------------------------------------------------------------------------------------------
+	//                                   Function Annotation Handling
+	// --------------------------------------------------------------------------------------------
 
-        this.input.setInterestingProperties(iProps);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    //                                     Branch Handling
-    // --------------------------------------------------------------------------------------------
-
-    @Override
-    public void computeUnclosedBranchStack() {
-        if (this.openBranches != null) {
-            return;
-        }
-
-        // we need to track open branches even in the sinks, because they get "closed" when
-        // we build a single "root" for the data flow plan
-        addClosedBranches(getPredecessorNode().closedBranchingNodes);
-        this.openBranches = getPredecessorNode().getBranchesForParent(this.input);
-    }
-
-    @Override
-    protected List<UnclosedBranchDescriptor> getBranchesForParent(DagConnection parent) {
-        // return our own stack of open branches, because nothing is added
-        return this.openBranches;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    //                                   Recursive Optimization
-    // --------------------------------------------------------------------------------------------
-
-    @Override
-    public List<PlanNode> getAlternativePlans(CostEstimator estimator) {
-        // check if we have a cached version
-        if (this.cachedPlans != null) {
-            return this.cachedPlans;
-        }
-
-        // calculate alternative sub-plans for predecessor
-        List<? extends PlanNode> subPlans = getPredecessorNode().getAlternativePlans(estimator);
-        List<PlanNode> outputPlans = new ArrayList<PlanNode>();
-
-        final int parallelism = getParallelism();
-        final int inDop = getPredecessorNode().getParallelism();
-
-        final ExecutionMode executionMode = this.input.getDataExchangeMode();
-        final boolean dopChange = parallelism != inDop;
-        final boolean breakPipeline = this.input.isBreakingPipeline();
-
-        InterestingProperties ips = this.input.getInterestingProperties();
-        for (PlanNode p : subPlans) {
-            for (RequestedGlobalProperties gp : ips.getGlobalProperties()) {
-                for (RequestedLocalProperties lp : ips.getLocalProperties()) {
-                    Channel c = new Channel(p);
-                    gp.parameterizeChannel(c, dopChange, executionMode, breakPipeline);
-                    lp.parameterizeChannel(c);
-                    c.setRequiredLocalProps(lp);
-                    c.setRequiredGlobalProps(gp);
-
-                    // no need to check whether the created properties meet what we need in case
-                    // of ordering or global ordering, because the only interesting properties we
-                    // have
-                    // are what we require
-                    outputPlans.add(
-                            new SinkPlanNode(
-                                    this, "DataSink (" + this.getOperator().getName() + ")", c));
-                }
-            }
-        }
-
-        // cost and prune the plans
-        for (PlanNode node : outputPlans) {
-            estimator.costOperator(node);
-        }
-        prunePlanAlternatives(outputPlans);
-
-        this.cachedPlans = outputPlans;
-        return outputPlans;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    //                                   Function Annotation Handling
-    // --------------------------------------------------------------------------------------------
-
-    @Override
-    public SemanticProperties getSemanticProperties() {
-        return new EmptySemanticProperties();
-    }
-
-    // --------------------------------------------------------------------------------------------
-    //                                     Miscellaneous
-    // --------------------------------------------------------------------------------------------
-
-    @Override
-    public void accept(Visitor<OptimizerNode> visitor) {
-        if (visitor.preVisit(this)) {
-            if (getPredecessorNode() != null) {
-                getPredecessorNode().accept(visitor);
-            } else {
-                throw new CompilerException();
-            }
-            visitor.postVisit(this);
-        }
-    }
+	@Override
+	public SemanticProperties getSemanticProperties() {
+		return new EmptySemanticProperties();
+	}
+		
+	// --------------------------------------------------------------------------------------------
+	//                                     Miscellaneous
+	// --------------------------------------------------------------------------------------------
+	
+	@Override
+	public void accept(Visitor<OptimizerNode> visitor) {
+		if (visitor.preVisit(this)) {
+			if (getPredecessorNode() != null) {
+				getPredecessorNode().accept(visitor);
+			} else {
+				throw new CompilerException();
+			}
+			visitor.postVisit(this);
+		}
+	}
 }

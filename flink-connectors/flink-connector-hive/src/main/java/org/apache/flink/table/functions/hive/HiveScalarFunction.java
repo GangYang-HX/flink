@@ -19,12 +19,12 @@
 package org.apache.flink.table.functions.hive;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.table.catalog.DataTypeFactory;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.table.functions.FunctionContext;
 import org.apache.flink.table.functions.ScalarFunction;
 import org.apache.flink.table.functions.hive.util.HiveFunctionUtil;
-import org.apache.flink.table.types.inference.CallContext;
-import org.apache.flink.table.types.inference.TypeInference;
+import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
+import org.apache.flink.table.types.DataType;
 
 import org.apache.hadoop.hive.ql.exec.UDF;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDF;
@@ -34,71 +34,74 @@ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
  * Abstract class to provide more information for Hive {@link UDF} and {@link GenericUDF} functions.
  */
 @Internal
-public abstract class HiveScalarFunction<UDFType> extends ScalarFunction
-        implements HiveFunction<UDFType> {
+public abstract class HiveScalarFunction<UDFType> extends ScalarFunction implements HiveFunction {
 
-    protected final HiveFunctionWrapper<UDFType> hiveFunctionWrapper;
+	protected final HiveFunctionWrapper<UDFType> hiveFunctionWrapper;
 
-    protected HiveFunctionArguments arguments;
+	protected Object[] constantArguments;
+	protected DataType[] argTypes;
 
-    protected transient UDFType function;
-    protected transient ObjectInspector returnInspector;
+	protected transient UDFType function;
+	protected transient ObjectInspector returnInspector;
 
-    private transient boolean isArgsSingleArray;
+	private transient boolean isArgsSingleArray;
 
-    HiveScalarFunction(HiveFunctionWrapper<UDFType> hiveFunctionWrapper) {
-        this.hiveFunctionWrapper = hiveFunctionWrapper;
-    }
+	HiveScalarFunction(HiveFunctionWrapper<UDFType> hiveFunctionWrapper) {
+		this.hiveFunctionWrapper = hiveFunctionWrapper;
+	}
 
-    @Override
-    public boolean isDeterministic() {
-        org.apache.hadoop.hive.ql.udf.UDFType udfType =
-                hiveFunctionWrapper
-                        .getUDFClass()
-                        .getAnnotation(org.apache.hadoop.hive.ql.udf.UDFType.class);
+	@Override
+	public void setArgumentTypesAndConstants(Object[] constantArguments, DataType[] argTypes) {
+		this.constantArguments = constantArguments;
+		this.argTypes = argTypes;
+	}
 
-        return udfType != null && udfType.deterministic() && !udfType.stateful();
-    }
+	@Override
+	public boolean isDeterministic() {
+		try {
+			org.apache.hadoop.hive.ql.udf.UDFType udfType =
+				hiveFunctionWrapper.getUDFClass()
+					.getAnnotation(org.apache.hadoop.hive.ql.udf.UDFType.class);
 
-    @Override
-    public void open(FunctionContext context) {
-        openInternal();
+			return udfType != null && udfType.deterministic() && !udfType.stateful();
+		} catch (ClassNotFoundException e) {
+			throw new FlinkHiveUDFException(e);
+		}
+	}
 
-        isArgsSingleArray = HiveFunctionUtil.isSingleBoxedArray(arguments);
-    }
+	@Override
+	public TypeInformation getResultType(Class[] signature) {
+		return TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(
+			getHiveResultType(this.constantArguments, this.argTypes));
+	}
 
-    @Override
-    public TypeInference getTypeInference(DataTypeFactory typeFactory) {
-        return createTypeInference();
-    }
+	@Override
+	public void open(FunctionContext context) {
+		openInternal();
 
-    /** See {@link ScalarFunction#open(FunctionContext)}. */
-    protected abstract void openInternal();
+		isArgsSingleArray = HiveFunctionUtil.isSingleBoxedArray(argTypes);
+	}
 
-    public Object eval(Object... args) {
+	/**
+	 * See {@link ScalarFunction#open(FunctionContext)}.
+	 */
+	protected abstract void openInternal();
 
-        // When the parameter is (Integer, Array[Double]), Flink calls udf.eval(Integer,
-        // Array[Double]), which is not a problem.
-        // But when the parameter is a single array, Flink calls udf.eval(Array[Double]),
-        // at this point java's var-args will cast Array[Double] to Array[Object] and let it be
-        // Object... args, So we need wrap it.
-        if (isArgsSingleArray) {
-            args = new Object[] {args};
-        }
+	public Object eval(Object... args) {
 
-        return evalInternal(args);
-    }
+		// When the parameter is (Integer, Array[Double]), Flink calls udf.eval(Integer, Array[Double]), which is not a problem.
+		// But when the parameter is an single array, Flink calls udf.eval(Array[Double]),
+		// at this point java's var-args will cast Array[Double] to Array[Object] and let it be
+		// Object... args, So we need wrap it.
+		if (isArgsSingleArray) {
+			args = new Object[] {args};
+		}
 
-    /** Evaluation logical, args will be wrapped when is a single array. */
-    protected abstract Object evalInternal(Object[] args);
+		return evalInternal(args);
+	}
 
-    @Override
-    public void setArguments(CallContext callContext) {
-        arguments = HiveFunctionArguments.create(callContext);
-    }
-
-    @Override
-    public HiveFunctionWrapper<UDFType> getFunctionWrapper() {
-        return hiveFunctionWrapper;
-    }
+	/**
+	 * Evaluation logical, args will be wrapped when is a single array.
+	 */
+	protected abstract Object evalInternal(Object[] args);
 }

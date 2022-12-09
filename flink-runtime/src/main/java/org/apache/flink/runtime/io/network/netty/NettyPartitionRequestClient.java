@@ -25,7 +25,7 @@ import org.apache.flink.runtime.io.network.PartitionRequestClient;
 import org.apache.flink.runtime.io.network.netty.exception.LocalTransportException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
-import org.apache.flink.util.Preconditions;
+import org.apache.flink.runtime.util.AtomicDisposableReferenceCounter;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
@@ -37,8 +37,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.flink.runtime.io.network.netty.NettyMessage.PartitionRequest;
 import static org.apache.flink.runtime.io.network.netty.NettyMessage.TaskEventRequest;
@@ -47,288 +45,212 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 /**
  * Partition request client for remote partition requests.
  *
- * <p>This client is shared by all remote input channels, which request a partition from the same
- * {@link ConnectionID}.
+ * <p>This client is shared by all remote input channels, which request a partition
+ * from the same {@link ConnectionID}.
  */
 public class NettyPartitionRequestClient implements PartitionRequestClient {
 
-    private static final Logger LOG = LoggerFactory.getLogger(NettyPartitionRequestClient.class);
+	private static final Logger LOG = LoggerFactory.getLogger(NettyPartitionRequestClient.class);
 
-    private final Channel tcpChannel;
+	private final Channel tcpChannel;
 
-    private final NetworkClientHandler clientHandler;
+	private final NetworkClientHandler clientHandler;
 
-    private final ConnectionID connectionId;
+	private final ConnectionID connectionId;
 
-    private final PartitionRequestClientFactory clientFactory;
+	private final PartitionRequestClientFactory clientFactory;
 
-    /** If zero, the underlying TCP channel can be safely closed. */
-    private final AtomicInteger closeReferenceCounter = new AtomicInteger(0);
+	/** If zero, the underlying TCP channel can be safely closed. */
+	private final AtomicDisposableReferenceCounter closeReferenceCounter = new AtomicDisposableReferenceCounter();
 
-    private final AtomicBoolean closed = new AtomicBoolean(false);
+	NettyPartitionRequestClient(
+			Channel tcpChannel,
+			NetworkClientHandler clientHandler,
+			ConnectionID connectionId,
+			PartitionRequestClientFactory clientFactory) {
 
-    NettyPartitionRequestClient(
-            Channel tcpChannel,
-            NetworkClientHandler clientHandler,
-            ConnectionID connectionId,
-            PartitionRequestClientFactory clientFactory) {
+		this.tcpChannel = checkNotNull(tcpChannel);
+		this.clientHandler = checkNotNull(clientHandler);
+		this.connectionId = checkNotNull(connectionId);
+		this.clientFactory = checkNotNull(clientFactory);
+	}
 
-        this.tcpChannel = checkNotNull(tcpChannel);
-        this.clientHandler = checkNotNull(clientHandler);
-        this.connectionId = checkNotNull(connectionId);
-        this.clientFactory = checkNotNull(clientFactory);
-    }
+	boolean disposeIfNotUsed() {
+		return closeReferenceCounter.disposeIfNotUsed();
+	}
 
-    boolean canBeDisposed() {
-        return closeReferenceCounter.get() == 0 && !canBeReused();
-    }
+	/**
+	 * Increments the reference counter.
+	 *
+	 * <p>Note: the reference counter has to be incremented before returning the
+	 * instance of this client to ensure correct closing logic.
+	 */
+	boolean incrementReferenceCounter() {
+		return closeReferenceCounter.increment();
+	}
 
-    /**
-     * Validate the client and increment the reference counter.
-     *
-     * <p>Note: the reference counter has to be incremented before returning the instance of this
-     * client to ensure correct closing logic.
-     *
-     * @return whether this client can be used.
-     */
-    boolean validateClientAndIncrementReferenceCounter() {
-        if (!clientHandler.hasChannelError()) {
-            return closeReferenceCounter.incrementAndGet() > 0;
-        }
-        return false;
-    }
+	public void reRequestSubpartition(
+			final ResultPartitionID partitionId,
+			final int subpartitionIndex,
+			final RemoteInputChannel inputChannel) throws IOException {
 
-    /**
-     * Requests a remote intermediate result partition queue.
-     *
-     * <p>The request goes to the remote producer, for which this partition request client instance
-     * has been created.
-     */
-    @Override
-    public void requestSubpartition(
-            final ResultPartitionID partitionId,
-            final int subpartitionIndex,
-            final RemoteInputChannel inputChannel,
-            int delayMs)
-            throws IOException {
+		checkNotClosed();
 
-        checkNotClosed();
+		LOG.info("Requesting subpartition {} of partition {} again.",
+			subpartitionIndex,
+			partitionId);
 
-        LOG.debug(
-                "Requesting subpartition {} of partition {} with {} ms delay.",
-                subpartitionIndex,
-                partitionId,
-                delayMs);
+		clientHandler.addInputChannel(inputChannel);
 
-        clientHandler.addInputChannel(inputChannel);
+		final PartitionRequest request = new PartitionRequest(
+				partitionId,
+				subpartitionIndex,
+				inputChannel.getInputChannelId(),
+			// Take the actual number of buffers owned by the channel as the initial credit
+			// when resend the request to the producer.
+				inputChannel.getNumberOfAvailableBuffers(),
+				true);
 
-        final PartitionRequest request =
-                new PartitionRequest(
-                        partitionId,
-                        subpartitionIndex,
-                        inputChannel.getInputChannelId(),
-                        inputChannel.getInitialCredit());
+		LOG.info("The available buffer is {} in the channel {}.",
+			inputChannel.getNumberOfAvailableBuffers(), inputChannel.getInputChannelId());
 
-        final ChannelFutureListener listener =
-                new ChannelFutureListener() {
-                    @Override
-                    public void operationComplete(ChannelFuture future) throws Exception {
-                        if (!future.isSuccess()) {
-                            clientHandler.removeInputChannel(inputChannel);
-                            inputChannel.onError(
-                                    new LocalTransportException(
-                                            String.format(
-                                                    "Sending the partition request to '%s (#%d)' failed.",
-                                                    connectionId.getAddress(),
-                                                    connectionId.getConnectionIndex()),
-                                            future.channel().localAddress(),
-                                            future.cause()));
-                            sendToChannel(
-                                    new ConnectionErrorMessage(
-                                            future.cause() == null
-                                                    ? new RuntimeException(
-                                                            "Cannot send partition request.")
-                                                    : future.cause()));
-                        }
-                    }
-                };
+		final ChannelFutureListener listener = future -> {
+			if (!future.isSuccess()) {
+				clientHandler.removeInputChannel(inputChannel);
+				SocketAddress remoteAddr = future.channel().remoteAddress();
+				inputChannel.onError(
+						new LocalTransportException(
+								String.format("Sending the partition request to '%s' failed when reconnecting.", remoteAddr),
+								future.channel().localAddress(), future.cause()
+						));
+			}
+		};
 
-        if (delayMs == 0) {
-            ChannelFuture f = tcpChannel.writeAndFlush(request);
-            f.addListener(listener);
-        } else {
-            final ChannelFuture[] f = new ChannelFuture[1];
-            tcpChannel
-                    .eventLoop()
-                    .schedule(
-                            new Runnable() {
-                                @Override
-                                public void run() {
-                                    f[0] = tcpChannel.writeAndFlush(request);
-                                    f[0].addListener(listener);
-                                }
-                            },
-                            delayMs,
-                            TimeUnit.MILLISECONDS);
-        }
-    }
+		ChannelFuture f = tcpChannel.writeAndFlush(request);
+		f.addListener(listener);
+	}
 
-    /**
-     * Sends a task event backwards to an intermediate result partition producer.
-     *
-     * <p>Backwards task events flow between readers and writers and therefore will only work when
-     * both are running at the same time, which is only guaranteed to be the case when both the
-     * respective producer and consumer task run pipelined.
-     */
-    @Override
-    public void sendTaskEvent(
-            ResultPartitionID partitionId, TaskEvent event, final RemoteInputChannel inputChannel)
-            throws IOException {
-        checkNotClosed();
+	/**
+	 * Requests a remote intermediate result partition queue.
+	 *
+	 * <p>The request goes to the remote producer, for which this partition
+	 * request client instance has been created.
+	 */
+	@Override
+	public void requestSubpartition(
+			final ResultPartitionID partitionId,
+			final int subpartitionIndex,
+			final RemoteInputChannel inputChannel,
+			int delayMs) throws IOException {
 
-        tcpChannel
-                .writeAndFlush(
-                        new TaskEventRequest(event, partitionId, inputChannel.getInputChannelId()))
-                .addListener(
-                        new ChannelFutureListener() {
-                            @Override
-                            public void operationComplete(ChannelFuture future) throws Exception {
-                                if (!future.isSuccess()) {
-                                    inputChannel.onError(
-                                            new LocalTransportException(
-                                                    String.format(
-                                                            "Sending the task event to '%s (#%d)' failed.",
-                                                            connectionId.getAddress(),
-                                                            connectionId.getConnectionIndex()),
-                                                    future.channel().localAddress(),
-                                                    future.cause()));
-                                    sendToChannel(
-                                            new ConnectionErrorMessage(
-                                                    future.cause() == null
-                                                            ? new RuntimeException(
-                                                                    "Cannot send task event.")
-                                                            : future.cause()));
-                                }
-                            }
-                        });
-    }
+		checkNotClosed();
 
-    @Override
-    public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
-        sendToChannel(new AddCreditMessage(inputChannel));
-    }
+		LOG.debug("Requesting subpartition {} of partition {} with {} ms delay.",
+				subpartitionIndex, partitionId, delayMs);
 
-    @Override
-    public void notifyNewBufferSize(RemoteInputChannel inputChannel, int bufferSize) {
-        sendToChannel(new NewBufferSizeMessage(inputChannel, bufferSize));
-    }
+		clientHandler.addInputChannel(inputChannel);
 
-    @Override
-    public void resumeConsumption(RemoteInputChannel inputChannel) {
-        sendToChannel(new ResumeConsumptionMessage(inputChannel));
-    }
+		final PartitionRequest request = new PartitionRequest(
+				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
 
-    @Override
-    public void acknowledgeAllRecordsProcessed(RemoteInputChannel inputChannel) {
-        sendToChannel(new AcknowledgeAllRecordsProcessedMessage(inputChannel));
-    }
+		final ChannelFutureListener listener = new ChannelFutureListener() {
+			@Override
+			public void operationComplete(ChannelFuture future) throws Exception {
+				if (!future.isSuccess()) {
+					clientHandler.removeInputChannel(inputChannel);
+					inputChannel.onError(
+							new LocalTransportException(
+								String.format("Sending the partition request to '%s (#%d)' failed.",
+									connectionId.getAddress(),
+									connectionId.getConnectionIndex()),
+								future.channel().localAddress(), future.cause()
+							));
+				}
+			}
+		};
 
-    private void sendToChannel(Object message) {
-        tcpChannel.eventLoop().execute(() -> tcpChannel.pipeline().fireUserEventTriggered(message));
-    }
+		if (delayMs == 0) {
+			ChannelFuture f = tcpChannel.writeAndFlush(request);
+			f.addListener(listener);
+		} else {
+			final ChannelFuture[] f = new ChannelFuture[1];
+			tcpChannel.eventLoop().schedule(new Runnable() {
+				@Override
+				public void run() {
+					f[0] = tcpChannel.writeAndFlush(request);
+					f[0].addListener(listener);
+				}
+			}, delayMs, TimeUnit.MILLISECONDS);
+		}
+	}
 
-    @Override
-    public void close(RemoteInputChannel inputChannel) throws IOException {
+	/**
+	 * Sends a task event backwards to an intermediate result partition producer.
+	 *
+	 * <p>Backwards task events flow between readers and writers and therefore
+	 * will only work when both are running at the same time, which is only
+	 * guaranteed to be the case when both the respective producer and
+	 * consumer task run pipelined.
+	 */
+	@Override
+	public void sendTaskEvent(ResultPartitionID partitionId, TaskEvent event, final RemoteInputChannel inputChannel) throws IOException {
+		checkNotClosed();
 
-        clientHandler.removeInputChannel(inputChannel);
+		tcpChannel.writeAndFlush(new TaskEventRequest(event, partitionId, inputChannel.getInputChannelId()))
+				.addListener(
+						new ChannelFutureListener() {
+							@Override
+							public void operationComplete(ChannelFuture future) throws Exception {
+								if (!future.isSuccess()) {
+									inputChannel.onError(new LocalTransportException(
+										String.format( "Sending the task event to '%s (#%d)' failed.",
+											connectionId.getAddress(),
+											connectionId.getConnectionIndex()),
+										future.channel().localAddress(), future.cause()
+									));
+								}
+							}
+						});
+	}
 
-        if (closeReferenceCounter.updateAndGet(count -> Math.max(count - 1, 0)) == 0
-                && !canBeReused()) {
-            closeConnection();
-        } else {
-            clientHandler.cancelRequestFor(inputChannel.getInputChannelId());
-        }
-    }
+	@Override
+	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
+		clientHandler.notifyCreditAvailable(inputChannel);
+	}
 
-    public void closeConnection() {
-        Preconditions.checkState(
-                canBeDisposed(), "The connection should not be closed before disposed.");
-        if (closed.getAndSet(true)) {
-            // Do not close connection repeatedly
-            return;
-        }
-        // Close the TCP connection. Send a close request msg to ensure
-        // that outstanding backwards task events are not discarded.
-        tcpChannel
-                .writeAndFlush(new NettyMessage.CloseRequest())
-                .addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
-        // Make sure to remove the client from the factory
-        clientFactory.destroyPartitionRequestClient(connectionId, this);
-    }
+	@Override
+	public void notifyNewBufferSize(RemoteInputChannel inputChannel, int bufferSize) {
+		clientHandler.notifyNewBufferSize(inputChannel, bufferSize);
+	}
 
-    private boolean canBeReused() {
-        return clientFactory.isConnectionReuseEnabled() && !clientHandler.hasChannelError();
-    }
+	@Override
+	public void resumeConsumption(RemoteInputChannel inputChannel) {
+		clientHandler.resumeConsumption(inputChannel);
+	}
 
-    private void checkNotClosed() throws IOException {
-        if (closed.get()) {
-            final SocketAddress localAddr = tcpChannel.localAddress();
-            final SocketAddress remoteAddr = tcpChannel.remoteAddress();
-            throw new LocalTransportException(
-                    String.format("Channel to '%s' closed.", remoteAddr), localAddr);
-        }
-    }
+	@Override
+	public void close(RemoteInputChannel inputChannel) throws IOException {
 
-    private static class AddCreditMessage extends ClientOutboundMessage {
+		clientHandler.removeInputChannel(inputChannel);
 
-        private AddCreditMessage(RemoteInputChannel inputChannel) {
-            super(checkNotNull(inputChannel));
-        }
+		if (closeReferenceCounter.decrement()) {
+			// Close the TCP connection. Send a close request msg to ensure
+			// that outstanding backwards task events are not discarded.
+			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest())
+					.addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
 
-        @Override
-        Object buildMessage() {
-            int credits = inputChannel.getAndResetUnannouncedCredit();
-            return credits > 0
-                    ? new NettyMessage.AddCredit(credits, inputChannel.getInputChannelId())
-                    : null;
-        }
-    }
+			// Make sure to remove the client from the factory
+			clientFactory.destroyPartitionRequestClient(connectionId, this);
+		} else {
+			clientHandler.cancelRequestFor(inputChannel.getInputChannelId());
+		}
+	}
 
-    private static class NewBufferSizeMessage extends ClientOutboundMessage {
-        private final int bufferSize;
-
-        private NewBufferSizeMessage(RemoteInputChannel inputChannel, int bufferSize) {
-            super(checkNotNull(inputChannel));
-            this.bufferSize = bufferSize;
-        }
-
-        @Override
-        Object buildMessage() {
-            return new NettyMessage.NewBufferSize(bufferSize, inputChannel.getInputChannelId());
-        }
-    }
-
-    private static class ResumeConsumptionMessage extends ClientOutboundMessage {
-
-        private ResumeConsumptionMessage(RemoteInputChannel inputChannel) {
-            super(checkNotNull(inputChannel));
-        }
-
-        @Override
-        Object buildMessage() {
-            return new NettyMessage.ResumeConsumption(inputChannel.getInputChannelId());
-        }
-    }
-
-    private static class AcknowledgeAllRecordsProcessedMessage extends ClientOutboundMessage {
-
-        private AcknowledgeAllRecordsProcessedMessage(RemoteInputChannel inputChannel) {
-            super(checkNotNull(inputChannel));
-        }
-
-        @Override
-        Object buildMessage() {
-            return new NettyMessage.AckAllUserRecordsProcessed(inputChannel.getInputChannelId());
-        }
-    }
+	private void checkNotClosed() throws IOException {
+		if (closeReferenceCounter.isDisposed()) {
+			final SocketAddress localAddr = tcpChannel.localAddress();
+			final SocketAddress remoteAddr = tcpChannel.remoteAddress();
+			throw new LocalTransportException(String.format("Channel to '%s' closed.", remoteAddr), localAddr);
+		}
+	}
 }

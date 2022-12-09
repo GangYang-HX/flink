@@ -29,114 +29,52 @@ import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.client.api.async.NMClientAsync;
 import org.apache.hadoop.yarn.client.api.async.impl.NMClientAsyncImpl;
 
-/** A Yarn {@link NMClientAsync} implementation for testing. */
+/**
+ * A Yarn {@link NMClientAsync} implementation for testing.
+ */
 class TestingYarnNMClientAsync extends NMClientAsyncImpl {
 
-    private final TriConsumer<Container, ContainerLaunchContext, CallbackHandler>
-            startContainerAsyncConsumer;
-    private final TriConsumer<ContainerId, NodeId, CallbackHandler> stopContainerAsyncConsumer;
-    private final Runnable clientInitRunnable;
-    private final Runnable clientStartRunnable;
-    private final Runnable clientStopRunnable;
+	private volatile TriConsumer<Container, ContainerLaunchContext, CallbackHandler> startContainerAsyncConsumer = (ignored1, ignored2, ignored3) -> {};
+	private volatile TriConsumer<ContainerId, NodeId, CallbackHandler> stopContainerAsyncConsumer = (ignored1, ignored2, ignored3) -> {};
 
-    private TestingYarnNMClientAsync(
-            final CallbackHandler callbackHandler,
-            TriConsumer<Container, ContainerLaunchContext, CallbackHandler>
-                    startContainerAsyncConsumer,
-            TriConsumer<ContainerId, NodeId, CallbackHandler> stopContainerAsyncConsumer,
-            Runnable clientInitRunnable,
-            Runnable clientStartRunnable,
-            Runnable clientStopRunnable) {
-        super(callbackHandler);
-        this.startContainerAsyncConsumer = Preconditions.checkNotNull(startContainerAsyncConsumer);
-        this.stopContainerAsyncConsumer = Preconditions.checkNotNull(stopContainerAsyncConsumer);
-        this.clientInitRunnable = Preconditions.checkNotNull(clientInitRunnable);
-        this.clientStartRunnable = Preconditions.checkNotNull(clientStartRunnable);
-        this.clientStopRunnable = Preconditions.checkNotNull(clientStopRunnable);
-    }
+	TestingYarnNMClientAsync(final CallbackHandler callbackHandler) {
+		super(callbackHandler);
+	}
 
-    @Override
-    public void startContainerAsync(
-            Container container, ContainerLaunchContext containerLaunchContext) {
-        this.startContainerAsyncConsumer.accept(container, containerLaunchContext, callbackHandler);
-    }
+	@Override
+	public void startContainerAsync(Container container, ContainerLaunchContext containerLaunchContext) {
+		this.startContainerAsyncConsumer.accept(container, containerLaunchContext, callbackHandler);
+	}
 
-    @Override
-    public void stopContainerAsync(ContainerId containerId, NodeId nodeId) {
-        this.stopContainerAsyncConsumer.accept(containerId, nodeId, callbackHandler);
-    }
+	@Override
+	public void stopContainerAsync(ContainerId containerId, NodeId nodeId) {
+		this.stopContainerAsyncConsumer.accept(containerId, nodeId, callbackHandler);
+	}
 
-    static Builder builder() {
-        return new Builder();
-    }
+	void setStartContainerAsyncConsumer(TriConsumer<Container, ContainerLaunchContext, CallbackHandler> startContainerAsyncConsumer) {
+		this.startContainerAsyncConsumer = Preconditions.checkNotNull(startContainerAsyncConsumer);
+	}
 
-    // ------------------------------------------------------------------------
-    //  Override lifecycle methods to avoid actually starting the service
-    // ------------------------------------------------------------------------
+	void setStopContainerAsyncConsumer(TriConsumer<ContainerId, NodeId, CallbackHandler> stopContainerAsyncConsumer) {
+		this.stopContainerAsyncConsumer = Preconditions.checkNotNull(stopContainerAsyncConsumer);
+	}
 
-    @Override
-    public void init(Configuration conf) {
-        clientInitRunnable.run();
-    }
+	// ------------------------------------------------------------------------
+	//  Override lifecycle methods to avoid actually starting the service
+	// ------------------------------------------------------------------------
 
-    @Override
-    public void start() {
-        clientStartRunnable.run();
-    }
+	@Override
+	protected void serviceInit(Configuration conf) throws Exception {
+		// noop
+	}
 
-    @Override
-    public void stop() {
-        clientStopRunnable.run();
-    }
+	@Override
+	protected void serviceStart() throws Exception {
+		// noop
+	}
 
-    /** Builder class for {@link TestingYarnAMRMClientAsync}. */
-    public static class Builder {
-        private TriConsumer<Container, ContainerLaunchContext, CallbackHandler>
-                startContainerAsyncConsumer = (ignored1, ignored2, ignored3) -> {};
-        private TriConsumer<ContainerId, NodeId, CallbackHandler> stopContainerAsyncConsumer =
-                (ignored1, ignored2, ignored3) -> {};
-        private Runnable clientInitRunnable = () -> {};
-        private Runnable clientStartRunnable = () -> {};
-        private Runnable clientStopRunnable = () -> {};
-
-        private Builder() {}
-
-        Builder setStartContainerAsyncConsumer(
-                TriConsumer<Container, ContainerLaunchContext, CallbackHandler>
-                        startContainerAsyncConsumer) {
-            this.startContainerAsyncConsumer = startContainerAsyncConsumer;
-            return this;
-        }
-
-        Builder setStopContainerAsyncConsumer(
-                TriConsumer<ContainerId, NodeId, CallbackHandler> stopContainerAsyncConsumer) {
-            this.stopContainerAsyncConsumer = stopContainerAsyncConsumer;
-            return this;
-        }
-
-        Builder setClientInitRunnable(Runnable clientInitRunnable) {
-            this.clientInitRunnable = clientInitRunnable;
-            return this;
-        }
-
-        Builder setClientStartRunnable(Runnable clientStartRunnable) {
-            this.clientStartRunnable = clientStartRunnable;
-            return this;
-        }
-
-        Builder setClientStopRunnable(Runnable clientStopRunnable) {
-            this.clientStopRunnable = clientStopRunnable;
-            return this;
-        }
-
-        public TestingYarnNMClientAsync build(CallbackHandler callbackHandler) {
-            return new TestingYarnNMClientAsync(
-                    callbackHandler,
-                    startContainerAsyncConsumer,
-                    stopContainerAsyncConsumer,
-                    clientInitRunnable,
-                    clientStartRunnable,
-                    clientStopRunnable);
-        }
-    }
+	@Override
+	protected void serviceStop() throws Exception {
+		// noop
+	}
 }

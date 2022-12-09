@@ -26,61 +26,61 @@ import org.apache.flink.api.java.typeutils.PojoTypeInfo;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.core.fs.Path;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+/**
+ * Tests for the type extraction of the {@link AvroInputFormat}.
+ */
+public class AvroInputFormatTypeExtractionTest {
 
-/** Tests for the type extraction of the {@link AvroInputFormat}. */
-class AvroInputFormatTypeExtractionTest {
+	@Test
+	public void testTypeExtraction() {
+		try {
+			InputFormat<MyAvroType, ?> format = new AvroInputFormat<MyAvroType>(new Path("file:///ignore/this/file"), MyAvroType.class);
 
-    @Test
-    void testTypeExtraction() {
-        try {
-            InputFormat<MyAvroType, ?> format =
-                    new AvroInputFormat<MyAvroType>(
-                            new Path("file:///ignore/this/file"), MyAvroType.class);
+			TypeInformation<?> typeInfoDirect = TypeExtractor.getInputFormatTypes(format);
 
-            TypeInformation<?> typeInfoDirect = TypeExtractor.getInputFormatTypes(format);
+			ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+			DataSet<MyAvroType> input = env.createInput(format);
+			TypeInformation<?> typeInfoDataSet = input.getType();
 
-            ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-            DataSet<MyAvroType> input = env.createInput(format);
-            TypeInformation<?> typeInfoDataSet = input.getType();
+			Assert.assertTrue(typeInfoDirect instanceof PojoTypeInfo);
+			Assert.assertTrue(typeInfoDataSet instanceof PojoTypeInfo);
 
-            assertThat(typeInfoDirect).isInstanceOf(PojoTypeInfo.class);
-            assertThat(typeInfoDataSet).isInstanceOf(PojoTypeInfo.class);
+			Assert.assertEquals(MyAvroType.class, typeInfoDirect.getTypeClass());
+			Assert.assertEquals(MyAvroType.class, typeInfoDataSet.getTypeClass());
+		} catch (Exception e) {
+			e.printStackTrace();
+			Assert.fail(e.getMessage());
+		}
+	}
 
-            assertThat(typeInfoDirect.getTypeClass()).isEqualTo(MyAvroType.class);
-            assertThat(typeInfoDataSet.getTypeClass()).isEqualTo(MyAvroType.class);
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
-        }
-    }
+	/**
+	 * Test type.
+	 */
+	public static final class MyAvroType {
 
-    /** Test type. */
-    public static final class MyAvroType {
+		public String theString;
 
-        public String theString;
+		public MyAvroType recursive;
 
-        public MyAvroType recursive;
+		private double aDouble;
 
-        private double aDouble;
+		public double getaDouble() {
+			return aDouble;
+		}
 
-        public double getaDouble() {
-            return aDouble;
-        }
+		public void setaDouble(double aDouble) {
+			this.aDouble = aDouble;
+		}
 
-        public void setaDouble(double aDouble) {
-            this.aDouble = aDouble;
-        }
+		public void setTheString(String theString) {
+			this.theString = theString;
+		}
 
-        public void setTheString(String theString) {
-            this.theString = theString;
-        }
-
-        public String getTheString() {
-            return theString;
-        }
-    }
+		public String getTheString() {
+			return theString;
+		}
+	}
 }

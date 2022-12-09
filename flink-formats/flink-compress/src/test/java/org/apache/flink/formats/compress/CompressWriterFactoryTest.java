@@ -19,19 +19,23 @@
 package org.apache.flink.formats.compress;
 
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.formats.compress.extractor.DefaultExtractor;
+import org.apache.flink.streaming.api.functions.sink.filesystem.BucketAssigner;
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
-import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.UniqueBucketAssigner;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.api.operators.StreamSink;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -42,155 +46,160 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
-/** Tests for {@link CompressWriterFactory}. */
-class CompressWriterFactoryTest {
+/**
+ * Tests for {@link CompressWriterFactory}.
+ */
+public class CompressWriterFactoryTest extends TestLogger {
 
-    @TempDir public static java.nio.file.Path tmpDir;
+	@ClassRule
+	public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
+	private static Configuration confWithCustomCodec;
 
-    private static Configuration confWithCustomCodec;
+	@BeforeClass
+	public static void before() {
+		confWithCustomCodec = new Configuration();
+		confWithCustomCodec.set("io.compression.codecs", "org.apache.flink.formats.compress.CustomCompressionCodec");
+	}
 
-    @BeforeAll
-    static void before() {
-        confWithCustomCodec = new Configuration();
-        confWithCustomCodec.set(
-                "io.compression.codecs",
-                "org.apache.flink.formats.compress.CustomCompressionCodec");
-    }
+	@Test
+	public void testBzip2CompressByAlias() throws Exception {
+		testCompressByName("Bzip2");
+	}
 
-    @Test
-    void testBzip2CompressByAlias() throws Exception {
-        testCompressByName("Bzip2");
-    }
+	@Test
+	public void testBzip2CompressByName() throws Exception {
+		testCompressByName("Bzip2Codec");
+	}
 
-    @Test
-    void testBzip2CompressByName() throws Exception {
-        testCompressByName("Bzip2Codec");
-    }
+	@Test
+	public void testGzipCompressByAlias() throws Exception {
+		testCompressByName("Gzip");
+	}
 
-    @Test
-    void testGzipCompressByAlias() throws Exception {
-        testCompressByName("Gzip");
-    }
+	@Test
+	public void testGzipCompressByName() throws Exception {
+		testCompressByName("GzipCodec");
+	}
 
-    @Test
-    void testGzipCompressByName() throws Exception {
-        testCompressByName("GzipCodec");
-    }
+	@Test
+	public void testDeflateCompressByAlias() throws Exception {
+		testCompressByName("deflate");
+	}
 
-    @Test
-    void testDeflateCompressByAlias() throws Exception {
-        testCompressByName("deflate");
-    }
+	@Test
+	public void testDeflateCompressByClassName() throws Exception {
+		testCompressByName("org.apache.hadoop.io.compress.DeflateCodec");
+	}
 
-    @Test
-    void testDeflateCompressByClassName() throws Exception {
-        testCompressByName("org.apache.hadoop.io.compress.DeflateCodec");
-    }
+	@Test
+	public void testDefaultCompressByName() throws Exception {
+		testCompressByName("DefaultCodec");
+	}
 
-    @Test
-    void testDefaultCompressByName() throws Exception {
-        testCompressByName("DefaultCodec");
-    }
+	@Test
+	public void testDefaultCompressByClassName() throws Exception {
+		testCompressByName("org.apache.hadoop.io.compress.DefaultCodec");
+	}
 
-    @Test
-    void testDefaultCompressByClassName() throws Exception {
-        testCompressByName("org.apache.hadoop.io.compress.DefaultCodec");
-    }
+	@Test(expected = IOException.class)
+	public void testCompressFailureWithUnknownCodec() throws Exception {
+		testCompressByName("com.bla.bla.UnknownCodec");
+	}
 
-    @Test
-    void testCompressFailureWithUnknownCodec() {
-        assertThatThrownBy(() -> testCompressByName("com.bla.bla.UnknownCodec"))
-                .isInstanceOf(IOException.class);
-    }
+	@Test
+	public void testCustomCompressionCodecByClassName() throws Exception {
+		testCompressByName("org.apache.flink.formats.compress.CustomCompressionCodec", confWithCustomCodec);
+	}
 
-    @Test
-    void testCustomCompressionCodecByClassName() throws Exception {
-        testCompressByName(
-                "org.apache.flink.formats.compress.CustomCompressionCodec", confWithCustomCodec);
-    }
+	@Test
+	public void testCustomCompressionCodecByAlias() throws Exception {
+		testCompressByName("CustomCompressionCodec", confWithCustomCodec);
+	}
 
-    @Test
-    void testCustomCompressionCodecByAlias() throws Exception {
-        testCompressByName("CustomCompressionCodec", confWithCustomCodec);
-    }
+	@Test
+	public void testCustomCompressionCodecByName() throws Exception {
+		testCompressByName("CustomCompression", confWithCustomCodec);
+	}
 
-    @Test
-    void testCustomCompressionCodecByName() throws Exception {
-        testCompressByName("CustomCompression", confWithCustomCodec);
-    }
+	private void testCompressByName(String codec) throws Exception {
+		testCompressByName(codec, new Configuration());
+	}
 
-    private void testCompressByName(String codec) throws Exception {
-        testCompressByName(codec, new Configuration());
-    }
+	private void testCompressByName(String codec, Configuration conf) throws Exception {
+		CompressWriterFactory<String> writer = CompressWriters.forExtractor(new DefaultExtractor<String>())
+			.withHadoopCompression(codec, conf);
+		List<String> lines = Arrays.asList("line1", "line2", "line3");
 
-    private void testCompressByName(String codec, Configuration conf) throws Exception {
-        CompressWriterFactory<String> writer =
-                CompressWriters.forExtractor(new DefaultExtractor<String>())
-                        .withHadoopCompression(codec, conf);
-        List<String> lines = Arrays.asList("line1", "line2", "line3");
+		File directory = prepareCompressedFile(writer, lines);
 
-        File directory = prepareCompressedFile(codec, writer, lines);
+		validateResults(directory, lines, new CompressionCodecFactory(conf).getCodecByName(codec));
+	}
 
-        validateResults(directory, lines, new CompressionCodecFactory(conf).getCodecByName(codec));
-    }
+	private File prepareCompressedFile(CompressWriterFactory<String> writer, List<String> lines) throws Exception {
+		final File outDir = TEMPORARY_FOLDER.newFolder();
 
-    private File prepareCompressedFile(
-            String codec, CompressWriterFactory<String> writer, List<String> lines)
-            throws Exception {
-        final File outDir = tmpDir.resolve(codec).toFile();
-        assertThat(outDir.mkdirs()).isTrue();
+		final BucketAssigner<String, String> assigner = new BucketAssigner<String, String> () {
+			@Override
+			public String getBucketId(String element, BucketAssigner.Context context) {
+				return "bucket";
+			}
 
-        StreamingFileSink<String> sink =
-                StreamingFileSink.forBulkFormat(new Path(outDir.toURI()), writer)
-                        .withBucketAssigner(new UniqueBucketAssigner<>("test"))
-                        .build();
+			@Override
+			public SimpleVersionedSerializer<String> getSerializer() {
+				return SimpleVersionedStringSerializer.INSTANCE;
+			}
+		};
 
-        try (OneInputStreamOperatorTestHarness<String, Object> testHarness =
-                new OneInputStreamOperatorTestHarness<>(new StreamSink<>(sink), 1, 1, 0)) {
-            testHarness.setup();
-            testHarness.open();
+		StreamingFileSink<String> sink = StreamingFileSink
+			.forBulkFormat(new Path(outDir.toURI()), writer)
+			.withBucketAssigner(assigner)
+			.build();
 
-            int time = 0;
-            for (String line : lines) {
-                testHarness.processElement(new StreamRecord<>(line, ++time));
-            }
+		try (
+			OneInputStreamOperatorTestHarness<String, Object> testHarness = new OneInputStreamOperatorTestHarness<>(new StreamSink<>(sink), 1, 1, 0)
+		) {
+			testHarness.setup();
+			testHarness.open();
 
-            testHarness.snapshot(1, ++time);
-            testHarness.notifyOfCompletedCheckpoint(1);
-        }
+			int time = 0;
+			for (String line: lines) {
+				testHarness.processElement(new StreamRecord<>(line, ++time));
+			}
 
-        return outDir;
-    }
+			testHarness.snapshot(1, ++time);
+			testHarness.notifyOfCompletedCheckpoint(1);
+		}
 
-    private void validateResults(File folder, List<String> expected, CompressionCodec codec)
-            throws Exception {
-        File[] buckets = folder.listFiles();
-        assertThat(buckets).isNotNull();
-        assertThat(buckets).hasSize(1);
+		return outDir;
+	}
 
-        final File[] partFiles = buckets[0].listFiles();
-        assertThat(partFiles).isNotNull();
-        assertThat(partFiles).hasSize(1);
+	private void validateResults(File folder, List<String> expected, CompressionCodec codec) throws Exception {
+		File[] buckets = folder.listFiles();
+		assertNotNull(buckets);
+		assertEquals(1, buckets.length);
 
-        for (File partFile : partFiles) {
-            assertThat(partFile.length()).isGreaterThan(0);
-            final List<String> fileContent = readFile(partFile, codec);
-            assertThat(fileContent).isEqualTo(expected);
-        }
-    }
+		final File[] partFiles = buckets[0].listFiles();
+		assertNotNull(partFiles);
+		assertEquals(1, partFiles.length);
 
-    private List<String> readFile(File file, CompressionCodec codec) throws Exception {
-        try (FileInputStream inputStream = new FileInputStream(file)) {
-            try (InputStreamReader readerStream =
-                    new InputStreamReader(
-                            (codec == null) ? inputStream : codec.createInputStream(inputStream))) {
-                try (BufferedReader reader = new BufferedReader(readerStream)) {
-                    return reader.lines().collect(Collectors.toList());
-                }
-            }
-        }
-    }
+		for (File partFile : partFiles) {
+			assertTrue(partFile.length() > 0);
+			final List<String> fileContent = readFile(partFile, codec);
+			assertEquals(expected, fileContent);
+		}
+	}
+
+	private List<String> readFile(File file, CompressionCodec codec) throws Exception {
+		try (FileInputStream inputStream = new FileInputStream(file)) {
+			try (InputStreamReader readerStream = new InputStreamReader((codec == null) ? inputStream : codec.createInputStream(inputStream))) {
+				try (BufferedReader reader = new BufferedReader(readerStream)) {
+					return reader.lines().collect(Collectors.toList());
+				}
+			}
+		}
+	}
 }

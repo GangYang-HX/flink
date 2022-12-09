@@ -18,5 +18,8 @@
 
 package org.apache.flink.tests.util.flink;
 
-/** Controller for interacting with a job. */
-public interface JobController {}
+/**
+ * Controller for interacting with a job.
+ */
+public interface JobController {
+}

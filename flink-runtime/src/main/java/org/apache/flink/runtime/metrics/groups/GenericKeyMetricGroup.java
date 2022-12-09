@@ -20,6 +20,7 @@ package org.apache.flink.runtime.metrics.groups;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 
 /**
@@ -31,22 +32,30 @@ import org.apache.flink.runtime.metrics.MetricRegistry;
 @Internal
 public class GenericKeyMetricGroup extends GenericMetricGroup {
 
-    GenericKeyMetricGroup(MetricRegistry registry, AbstractMetricGroup parent, String name) {
-        super(registry, parent, name);
-    }
+	GenericKeyMetricGroup(
+			MetricRegistry registry,
+			AbstractMetricGroup parent,
+			String name,
+			QueryServiceMode mode) {
+		super(registry, parent, name, mode);
+	}
 
-    @Override
-    public MetricGroup addGroup(String key, String value) {
-        return addGroup(key).addGroup(value);
-    }
+	GenericKeyMetricGroup(MetricRegistry registry, AbstractMetricGroup parent, String name) {
+		super(registry, parent, name);
+	}
 
-    @Override
-    protected GenericMetricGroup createChildGroup(String name, ChildType childType) {
-        switch (childType) {
-            case VALUE:
-                return new GenericValueMetricGroup(registry, this, name);
-            default:
-                return new GenericMetricGroup(registry, this, name);
-        }
-    }
+	@Override
+	public MetricGroup addGroup(String key, String value) {
+		return addGroup(key).addGroup(value);
+	}
+
+	@Override
+	protected GenericMetricGroup createChildGroup(String name, ChildType childType, QueryServiceMode childMode) {
+		switch (childType) {
+			case VALUE:
+				return new GenericValueMetricGroup(registry, this, name, childMode);
+			default:
+				return new GenericMetricGroup(registry, this, name, childMode);
+		}
+	}
 }

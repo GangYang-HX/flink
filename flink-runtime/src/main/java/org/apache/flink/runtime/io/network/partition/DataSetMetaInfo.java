@@ -18,63 +18,41 @@
 package org.apache.flink.runtime.io.network.partition;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.util.Preconditions;
 
-import java.io.Serializable;
-import java.util.Comparator;
-import java.util.Map;
-import java.util.OptionalInt;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.function.ToIntFunction;
+import java.util.Optional;
 
-/** Container for meta-data of a data set. */
-public final class DataSetMetaInfo implements Serializable {
-    private static final int UNKNOWN = -1;
+/**
+ * Container for meta-data of a data set.
+ */
+public final class DataSetMetaInfo {
+	private static final int UNKNOWN = -1;
 
-    private final int numRegisteredPartitions;
-    private final int numTotalPartitions;
-    private final SortedMap<ResultPartitionID, ShuffleDescriptor>
-            shuffleDescriptorsOrderByPartitionId =
-                    new TreeMap<>(
-                            Comparator.comparingInt(
-                                    (ToIntFunction<? super ResultPartitionID> & Serializable)
-                                            o -> o.getPartitionId().getPartitionNumber()));
+	private final int numRegisteredPartitions;
+	private final int numTotalPartitions;
 
-    private DataSetMetaInfo(int numRegisteredPartitions, int numTotalPartitions) {
-        this.numRegisteredPartitions = numRegisteredPartitions;
-        this.numTotalPartitions = numTotalPartitions;
-    }
+	private DataSetMetaInfo(int numRegisteredPartitions, int numTotalPartitions) {
+		this.numRegisteredPartitions = numRegisteredPartitions;
+		this.numTotalPartitions = numTotalPartitions;
+	}
 
-    public OptionalInt getNumRegisteredPartitions() {
-        return numRegisteredPartitions == UNKNOWN
-                ? OptionalInt.empty()
-                : OptionalInt.of(numRegisteredPartitions);
-    }
+	public Optional<Integer> getNumRegisteredPartitions() {
+		return numRegisteredPartitions == UNKNOWN
+			? Optional.empty()
+			: Optional.of(numRegisteredPartitions);
+	}
 
-    public int getNumTotalPartitions() {
-        return numTotalPartitions;
-    }
+	public int getNumTotalPartitions() {
+		return numTotalPartitions;
+	}
 
-    public DataSetMetaInfo addShuffleDescriptors(
-            Map<ResultPartitionID, ShuffleDescriptor> shuffleDescriptors) {
-        this.shuffleDescriptorsOrderByPartitionId.putAll(shuffleDescriptors);
-        return this;
-    }
+	static DataSetMetaInfo withoutNumRegisteredPartitions(int numTotalPartitions) {
+		return new DataSetMetaInfo(UNKNOWN, numTotalPartitions);
+	}
 
-    public Map<ResultPartitionID, ShuffleDescriptor> getShuffleDescriptors() {
-        return this.shuffleDescriptorsOrderByPartitionId;
-    }
-
-    static DataSetMetaInfo withoutNumRegisteredPartitions(int numTotalPartitions) {
-        return new DataSetMetaInfo(UNKNOWN, numTotalPartitions);
-    }
-
-    @VisibleForTesting
-    public static DataSetMetaInfo withNumRegisteredPartitions(
-            int numRegisteredPartitions, int numTotalPartitions) {
-        Preconditions.checkArgument(numRegisteredPartitions > 0);
-        return new DataSetMetaInfo(numRegisteredPartitions, numTotalPartitions);
-    }
+	@VisibleForTesting
+	public static DataSetMetaInfo withNumRegisteredPartitions(int numRegisteredPartitions, int numTotalPartitions) {
+		Preconditions.checkArgument(numRegisteredPartitions > 0);
+		return new DataSetMetaInfo(numRegisteredPartitions, numTotalPartitions);
+	}
 }

@@ -24,12 +24,6 @@ import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.ThrowingConsumer;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
@@ -43,25 +37,17 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 interface ChannelStateWriteRequest {
+	long getCheckpointId();
 
-    Logger LOG = LoggerFactory.getLogger(ChannelStateWriteRequest.class);
+	void cancel(Throwable cause) throws Exception;
 
-    long getCheckpointId();
+	static CheckpointInProgressRequest completeInput(long checkpointId) {
+		return new CheckpointInProgressRequest("completeInput", checkpointId, ChannelStateCheckpointWriter::completeInput, false);
+	}
 
-    void cancel(Throwable cause) throws Exception;
-
-    static CheckpointInProgressRequest completeInput(long checkpointId) {
-        return new CheckpointInProgressRequest(
-                "completeInput", checkpointId, ChannelStateCheckpointWriter::completeInput, false);
-    }
-
-    static CheckpointInProgressRequest completeOutput(long checkpointId) {
-        return new CheckpointInProgressRequest(
-                "completeOutput",
-                checkpointId,
-                ChannelStateCheckpointWriter::completeOutput,
-                false);
-    }
+	static CheckpointInProgressRequest completeOutput(long checkpointId) {
+		return new CheckpointInProgressRequest("completeOutput", checkpointId, ChannelStateCheckpointWriter::completeOutput, false);
+	}
 
     static ChannelStateWriteRequest write(
             long checkpointId, InputChannelInfo info, CloseableIterator<Buffer> iterator) {
@@ -70,7 +56,7 @@ interface ChannelStateWriteRequest {
                 "writeInput",
                 iterator,
                 (writer, buffer) -> writer.writeInput(info, buffer));
-    }
+	}
 
     static ChannelStateWriteRequest write(
             long checkpointId, ResultSubpartitionInfo info, Buffer... buffers) {
@@ -79,213 +65,141 @@ interface ChannelStateWriteRequest {
                 "writeOutput",
                 ofElements(Buffer::recycleBuffer, buffers),
                 (writer, buffer) -> writer.writeOutput(info, buffer));
-    }
+	}
 
-    static ChannelStateWriteRequest write(
-            long checkpointId,
-            ResultSubpartitionInfo info,
-            CompletableFuture<List<Buffer>> dataFuture) {
-        return buildFutureWriteRequest(
-                checkpointId,
-                "writeOutputFuture",
-                dataFuture,
-                (writer, buffer) -> writer.writeOutput(info, buffer));
-    }
-
-    static ChannelStateWriteRequest buildFutureWriteRequest(
-            long checkpointId,
-            String name,
-            CompletableFuture<List<Buffer>> dataFuture,
+	static ChannelStateWriteRequest buildWriteRequest(
+			long checkpointId,
+			String name,
+			CloseableIterator<Buffer> iterator,
             BiConsumer<ChannelStateCheckpointWriter, Buffer> bufferConsumer) {
-        return new CheckpointInProgressRequest(
-                name,
-                checkpointId,
-                writer -> {
-                    List<Buffer> buffers;
-                    try {
-                        buffers = dataFuture.get();
-                    } catch (ExecutionException e) {
-                        // If dataFuture fails, fail only the single related writer
-                        writer.fail(e);
-                        return;
-                    }
-                    for (Buffer buffer : buffers) {
-                        checkBufferIsBuffer(buffer);
-                        bufferConsumer.accept(writer, buffer);
-                    }
-                },
-                throwable ->
-                        dataFuture.thenAccept(
-                                buffers -> {
-                                    try {
-                                        CloseableIterator.fromList(buffers, Buffer::recycleBuffer)
-                                                .close();
-                                    } catch (Exception e) {
-                                        LOG.error(
-                                                "Failed to recycle the output buffer of channel state.",
-                                                e);
-                                    }
-                                }),
-                false);
-    }
+		return new CheckpointInProgressRequest(
+			name,
+			checkpointId,
+			writer -> {
+				while (iterator.hasNext()) {
+					Buffer buffer = iterator.next();
+					try {
+						checkArgument(buffer.isBuffer());
+					} catch (Exception e) {
+						buffer.recycleBuffer();
+						throw e;
+					}
+					bufferConsumer.accept(writer, buffer);
+				}
+			},
+			throwable -> iterator.close(),
+			false);
+	}
 
-    static ChannelStateWriteRequest buildWriteRequest(
-            long checkpointId,
-            String name,
-            CloseableIterator<Buffer> iterator,
-            BiConsumer<ChannelStateCheckpointWriter, Buffer> bufferConsumer) {
-        return new CheckpointInProgressRequest(
-                name,
-                checkpointId,
-                writer -> {
-                    while (iterator.hasNext()) {
-                        Buffer buffer = iterator.next();
-                        checkBufferIsBuffer(buffer);
-                        bufferConsumer.accept(writer, buffer);
-                    }
-                },
-                throwable -> iterator.close(),
-                false);
-    }
+	static ChannelStateWriteRequest start(long checkpointId, ChannelStateWriteResult targetResult, CheckpointStorageLocationReference locationReference) {
+		return new CheckpointStartRequest(checkpointId, targetResult, locationReference);
+	}
 
-    static void checkBufferIsBuffer(Buffer buffer) {
-        try {
-            checkArgument(buffer.isBuffer());
-        } catch (Exception e) {
-            buffer.recycleBuffer();
-            throw e;
-        }
-    }
+	static ChannelStateWriteRequest abort(long checkpointId, Throwable cause) {
+		return new CheckpointInProgressRequest("abort", checkpointId, writer -> writer.fail(cause), true);
+	}
 
-    static ChannelStateWriteRequest start(
-            long checkpointId,
-            ChannelStateWriteResult targetResult,
-            CheckpointStorageLocationReference locationReference) {
-        return new CheckpointStartRequest(checkpointId, targetResult, locationReference);
-    }
-
-    static ChannelStateWriteRequest abort(long checkpointId, Throwable cause) {
-        return new CheckpointInProgressRequest(
-                "abort", checkpointId, writer -> writer.fail(cause), true);
-    }
-
-    static ThrowingConsumer<Throwable, Exception> recycle(Buffer[] flinkBuffers) {
-        return unused -> {
-            for (Buffer b : flinkBuffers) {
-                b.recycleBuffer();
-            }
-        };
-    }
+	static ThrowingConsumer<Throwable, Exception> recycle(Buffer[] flinkBuffers) {
+		return unused -> {
+			for (Buffer b : flinkBuffers) {
+				b.recycleBuffer();
+			}
+		};
+	}
 }
 
 final class CheckpointStartRequest implements ChannelStateWriteRequest {
-    private final ChannelStateWriteResult targetResult;
-    private final CheckpointStorageLocationReference locationReference;
-    private final long checkpointId;
+	private final ChannelStateWriteResult targetResult;
+	private final CheckpointStorageLocationReference locationReference;
+	private final long checkpointId;
 
-    CheckpointStartRequest(
-            long checkpointId,
-            ChannelStateWriteResult targetResult,
-            CheckpointStorageLocationReference locationReference) {
-        this.checkpointId = checkpointId;
-        this.targetResult = checkNotNull(targetResult);
-        this.locationReference = checkNotNull(locationReference);
-    }
+	CheckpointStartRequest(long checkpointId, ChannelStateWriteResult targetResult, CheckpointStorageLocationReference locationReference) {
+		this.checkpointId = checkpointId;
+		this.targetResult = checkNotNull(targetResult);
+		this.locationReference = checkNotNull(locationReference);
+	}
 
-    @Override
-    public long getCheckpointId() {
-        return checkpointId;
-    }
+	@Override
+	public long getCheckpointId() {
+		return checkpointId;
+	}
 
-    ChannelStateWriteResult getTargetResult() {
-        return targetResult;
-    }
+	ChannelStateWriteResult getTargetResult() {
+		return targetResult;
+	}
 
-    public CheckpointStorageLocationReference getLocationReference() {
-        return locationReference;
-    }
+	public CheckpointStorageLocationReference getLocationReference() {
+		return locationReference;
+	}
 
-    @Override
-    public void cancel(Throwable cause) {
-        targetResult.fail(cause);
-    }
+	@Override
+	public void cancel(Throwable cause) {
+		targetResult.fail(cause);
+	}
 
-    @Override
-    public String toString() {
-        return "start " + checkpointId;
-    }
+	@Override
+	public String toString() {
+		return "start " + checkpointId;
+	}
 }
 
 enum CheckpointInProgressRequestState {
-    NEW,
-    EXECUTING,
-    COMPLETED,
-    FAILED,
-    CANCELLED
+	NEW, EXECUTING, COMPLETED, FAILED, CANCELLED
 }
 
 final class CheckpointInProgressRequest implements ChannelStateWriteRequest {
-    private final ThrowingConsumer<ChannelStateCheckpointWriter, Exception> action;
-    private final ThrowingConsumer<Throwable, Exception> discardAction;
-    private final long checkpointId;
-    private final String name;
-    private final boolean ignoreMissingWriter;
-    private final AtomicReference<CheckpointInProgressRequestState> state =
-            new AtomicReference<>(NEW);
+	private final ThrowingConsumer<ChannelStateCheckpointWriter, Exception> action;
+	private final ThrowingConsumer<Throwable, Exception> discardAction;
+	private final long checkpointId;
+	private final String name;
+	private final boolean ignoreMissingWriter;
+	private final AtomicReference<CheckpointInProgressRequestState> state = new AtomicReference<>(NEW);
 
-    CheckpointInProgressRequest(
-            String name,
-            long checkpointId,
-            ThrowingConsumer<ChannelStateCheckpointWriter, Exception> action,
-            boolean ignoreMissingWriter) {
-        this(name, checkpointId, action, unused -> {}, ignoreMissingWriter);
-    }
+	CheckpointInProgressRequest(String name, long checkpointId, ThrowingConsumer<ChannelStateCheckpointWriter, Exception> action, boolean ignoreMissingWriter) {
+		this(name, checkpointId, action, unused -> {
+		}, ignoreMissingWriter);
+	}
 
-    CheckpointInProgressRequest(
-            String name,
-            long checkpointId,
-            ThrowingConsumer<ChannelStateCheckpointWriter, Exception> action,
-            ThrowingConsumer<Throwable, Exception> discardAction,
-            boolean ignoreMissingWriter) {
-        this.checkpointId = checkpointId;
-        this.action = checkNotNull(action);
-        this.discardAction = checkNotNull(discardAction);
-        this.name = checkNotNull(name);
-        this.ignoreMissingWriter = ignoreMissingWriter;
-    }
+	CheckpointInProgressRequest(String name, long checkpointId, ThrowingConsumer<ChannelStateCheckpointWriter, Exception> action, ThrowingConsumer<Throwable, Exception> discardAction, boolean ignoreMissingWriter) {
+		this.checkpointId = checkpointId;
+		this.action = checkNotNull(action);
+		this.discardAction = checkNotNull(discardAction);
+		this.name = checkNotNull(name);
+		this.ignoreMissingWriter = ignoreMissingWriter;
+	}
 
-    @Override
-    public long getCheckpointId() {
-        return checkpointId;
-    }
+	@Override
+	public long getCheckpointId() {
+		return checkpointId;
+	}
 
-    @Override
-    public void cancel(Throwable cause) throws Exception {
-        if (state.compareAndSet(NEW, CANCELLED) || state.compareAndSet(FAILED, CANCELLED)) {
-            discardAction.accept(cause);
-        }
-    }
+	@Override
+	public void cancel(Throwable cause) throws Exception {
+		if (state.compareAndSet(NEW, CANCELLED) || state.compareAndSet(FAILED, CANCELLED)) {
+			discardAction.accept(cause);
+		}
+	}
 
-    void execute(ChannelStateCheckpointWriter channelStateCheckpointWriter) throws Exception {
-        Preconditions.checkState(state.compareAndSet(NEW, EXECUTING));
-        try {
-            action.accept(channelStateCheckpointWriter);
-            state.set(COMPLETED);
-        } catch (Exception e) {
-            state.set(FAILED);
-            throw e;
-        }
-    }
+	void execute(ChannelStateCheckpointWriter channelStateCheckpointWriter) throws Exception {
+		Preconditions.checkState(state.compareAndSet(NEW, EXECUTING));
+		try {
+			action.accept(channelStateCheckpointWriter);
+			state.set(COMPLETED);
+		} catch (Exception e) {
+			state.set(FAILED);
+			throw e;
+		}
+	}
 
-    void onWriterMissing() {
-        if (!ignoreMissingWriter) {
-            throw new IllegalArgumentException(
-                    "writer not found while processing request: " + toString());
-        }
-    }
+	void onWriterMissing() {
+		if (!ignoreMissingWriter) {
+			throw new IllegalArgumentException("writer not found while processing request: " + toString());
+		}
+	}
 
-    @Override
-    public String toString() {
-        return name + " " + checkpointId;
-    }
+	@Override
+	public String toString() {
+		return name + " " + checkpointId;
+	}
+
 }

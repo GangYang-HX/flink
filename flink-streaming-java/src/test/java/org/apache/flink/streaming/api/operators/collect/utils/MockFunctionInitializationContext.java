@@ -20,34 +20,29 @@ package org.apache.flink.streaming.api.operators.collect.utils;
 import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 
-import java.util.OptionalLong;
-
-/** A {@link FunctionInitializationContext} for testing purpose. */
+/**
+ * A {@link FunctionInitializationContext} for testing purpose.
+ */
 public class MockFunctionInitializationContext implements FunctionInitializationContext {
 
-    private final MockOperatorStateStore operatorStateStore;
+	private final MockOperatorStateStore operatorStateStore;
 
-    public MockFunctionInitializationContext() {
-        operatorStateStore = new MockOperatorStateStore();
-    }
+	public MockFunctionInitializationContext() {
+		operatorStateStore = new MockOperatorStateStore();
+	}
 
-    @Override
-    public boolean isRestored() {
-        throw new UnsupportedOperationException();
-    }
+	@Override
+	public boolean isRestored() {
+		throw new UnsupportedOperationException();
+	}
 
-    @Override
-    public OptionalLong getRestoredCheckpointId() {
-        throw new UnsupportedOperationException();
-    }
+	@Override
+	public MockOperatorStateStore getOperatorStateStore() {
+		return operatorStateStore;
+	}
 
-    @Override
-    public MockOperatorStateStore getOperatorStateStore() {
-        return operatorStateStore;
-    }
-
-    @Override
-    public KeyedStateStore getKeyedStateStore() {
-        throw new UnsupportedOperationException();
-    }
+	@Override
+	public KeyedStateStore getKeyedStateStore() {
+		throw new UnsupportedOperationException();
+	}
 }

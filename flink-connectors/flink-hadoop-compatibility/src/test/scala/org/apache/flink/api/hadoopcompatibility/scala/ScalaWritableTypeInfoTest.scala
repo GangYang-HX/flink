@@ -20,7 +20,6 @@ package org.apache.flink.api.hadoopcompatibility.scala
 import org.apache.flink.api.java.typeutils.WritableTypeInfo
 import org.apache.flink.api.scala._
 import org.apache.flink.util.TestLogger
-
 import org.apache.hadoop.io.Text
 import org.junit.Assert._
 import org.junit.Test

@@ -16,19 +16,10 @@
  * limitations under the License.
  */
 
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
-import { of, Subject } from 'rxjs';
-import { catchError, map, mergeMap, takeUntil } from 'rxjs/operators';
-
-import { MetricsService } from '@flink-runtime-web/services';
-import { typeDefinition } from '@flink-runtime-web/utils/strong-type';
-
-import { JobLocalService } from '../../job-local.service';
-
-interface WatermarkData {
-  subTaskIndex: number;
-  watermark: number;
-}
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Subject } from 'rxjs';
+import { flatMap, takeUntil } from 'rxjs/operators';
+import { JobService, MetricsService } from 'services';
 
 @Component({
   selector: 'flink-job-overview-drawer-watermarks',
@@ -37,53 +28,43 @@ interface WatermarkData {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class JobOverviewDrawerWatermarksComponent implements OnInit, OnDestroy {
-  public readonly trackBySubtaskIndex = (_: number, node: { subTaskIndex: number; watermark: number }): number =>
-    node.subTaskIndex;
+  destroy$ = new Subject();
+  listOfWaterMark: Array<{ subTaskIndex: number; watermark: number }> = [];
+  isLoading = true;
 
-  public listOfWaterMark: WatermarkData[] = [];
-  public isLoading = true;
-  public virtualItemSize = 36;
-  public readonly narrowLogData = typeDefinition<WatermarkData>();
-
-  private readonly destroy$ = new Subject<void>();
-
-  constructor(
-    private readonly jobLocalService: JobLocalService,
-    private readonly metricsService: MetricsService,
-    private readonly cdr: ChangeDetectorRef
-  ) {}
-
-  public ngOnInit(): void {
-    this.jobLocalService
-      .jobWithVertexChanges()
-      .pipe(
-        mergeMap(data =>
-          this.metricsService.loadWatermarks(data.job.jid, data.vertex!.id).pipe(
-            map(data => {
-              const list = [];
-              for (const key in data.watermarks) {
-                list.push({
-                  subTaskIndex: +key,
-                  watermark: data.watermarks[key]
-                } as WatermarkData);
-              }
-              return list;
-            }),
-            catchError(() => {
-              return of([] as WatermarkData[]);
-            })
-          )
-        ),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(list => {
-        this.isLoading = false;
-        this.listOfWaterMark = list;
-        this.cdr.markForCheck();
-      });
+  trackWatermarkBy(_: number, node: { subTaskIndex: string; watermark: number }) {
+    return node.subTaskIndex;
   }
 
-  public ngOnDestroy(): void {
+  constructor(private jobService: JobService, private metricsService: MetricsService, private cdr: ChangeDetectorRef) {}
+
+  ngOnInit() {
+    this.jobService.jobWithVertex$
+      .pipe(
+        takeUntil(this.destroy$),
+        flatMap(data => this.metricsService.getWatermarks(data.job.jid, data.vertex!.id))
+      )
+      .subscribe(
+        data => {
+          const list = [];
+          this.isLoading = false;
+          for (const key in data.watermarks) {
+            list.push({
+              subTaskIndex: +key + 1,
+              watermark: data.watermarks[key]
+            });
+          }
+          this.listOfWaterMark = list;
+          this.cdr.markForCheck();
+        },
+        () => {
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        }
+      );
+  }
+
+  ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
   }

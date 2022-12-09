@@ -18,35 +18,96 @@
 package org.apache.flink.streaming.runtime.io.checkpointing;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.runtime.io.network.partition.consumer.CheckpointableInput;
 import org.apache.flink.runtime.io.network.partition.consumer.IndexedInputGate;
 import org.apache.flink.runtime.io.network.partition.consumer.InputGate;
-import org.apache.flink.runtime.jobgraph.tasks.CheckpointableTask;
+import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.runtime.metrics.MetricNames;
 import org.apache.flink.runtime.metrics.groups.TaskIOMetricGroup;
-import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 import org.apache.flink.streaming.api.graph.StreamConfig;
+import org.apache.flink.streaming.api.operators.MailboxExecutor;
 import org.apache.flink.streaming.runtime.io.InputGateUtil;
 import org.apache.flink.streaming.runtime.io.StreamOneInputProcessor;
 import org.apache.flink.streaming.runtime.io.StreamTaskSourceInput;
+import org.apache.flink.streaming.runtime.io.StreamTwoInputProcessor;
+import org.apache.flink.streaming.runtime.io.checkpointing.CheckpointBarrierHandler.Cancellable;
 import org.apache.flink.streaming.runtime.tasks.SubtaskCheckpointCoordinator;
 import org.apache.flink.streaming.runtime.tasks.TimerService;
 import org.apache.flink.util.clock.Clock;
 import org.apache.flink.util.clock.SystemClock;
 
+import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
+
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledFuture;
+import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
 /**
- * Utility for creating {@link CheckpointedInputGate} based on checkpoint mode for {@link
- * StreamOneInputProcessor}.
+ * Utility for creating {@link CheckpointedInputGate} based on checkpoint mode
+ * for {@link StreamOneInputProcessor} and {@link StreamTwoInputProcessor}.
  */
 @Internal
 public class InputProcessorUtil {
+	@SuppressWarnings("unchecked")
+	public static CheckpointedInputGate createCheckpointedInputGate(
+			AbstractInvokable toNotifyOnCheckpoint,
+			StreamConfig config,
+			SubtaskCheckpointCoordinator checkpointCoordinator,
+			IndexedInputGate[] inputGates,
+			TaskIOMetricGroup taskIOMetricGroup,
+			String taskName,
+            MailboxExecutor mailboxExecutor,
+            TimerService timerService) {
+        CheckpointedInputGate[] checkpointedInputGates =
+                createCheckpointedMultipleInputGate(
+					toNotifyOnCheckpoint,
+					config,
+					checkpointCoordinator,
+					taskIOMetricGroup,
+					taskName,
+					mailboxExecutor,
+					new List[] {Arrays.asList(inputGates)},
+					timerService);
+		return Iterables.getOnlyElement(Arrays.asList(checkpointedInputGates));
+	}
+
+	/**
+	 * @return a pair of {@link CheckpointedInputGate} created for two corresponding
+	 * {@link InputGate}s supplied as parameters.
+	 */
+	public static CheckpointedInputGate[] createCheckpointedMultipleInputGate(
+			AbstractInvokable toNotifyOnCheckpoint,
+			StreamConfig config,
+			SubtaskCheckpointCoordinator checkpointCoordinator,
+			TaskIOMetricGroup taskIOMetricGroup,
+			String taskName,
+			MailboxExecutor mailboxExecutor,
+            List<IndexedInputGate>[] inputGates,
+            TimerService timerService) {
+
+		CheckpointableInput[] sortedInputs = Arrays.stream(inputGates)
+			.flatMap(Collection::stream)
+			.sorted(Comparator.comparing(IndexedInputGate::getGateIndex))
+			.toArray(CheckpointableInput[]::new);
+
+        CheckpointBarrierHandler barrierHandler =
+                createCheckpointBarrierHandler(
+						config,
+						sortedInputs,
+						checkpointCoordinator,
+						taskName,
+						toNotifyOnCheckpoint,
+                        mailboxExecutor,
+                        timerService);
+        return createCheckpointedMultipleInputGate(
+                mailboxExecutor, inputGates, taskIOMetricGroup, barrierHandler, config);
+    }
 
     public static CheckpointedInputGate[] createCheckpointedMultipleInputGate(
             MailboxExecutor mailboxExecutor,
@@ -55,52 +116,37 @@ public class InputProcessorUtil {
             CheckpointBarrierHandler barrierHandler,
             StreamConfig config) {
 
-        registerCheckpointMetrics(taskIOMetricGroup, barrierHandler);
+		registerCheckpointMetrics(taskIOMetricGroup, barrierHandler);
 
-        InputGate[] unionedInputGates =
-                Arrays.stream(inputGates)
-                        .map(InputGateUtil::createInputGate)
-                        .toArray(InputGate[]::new);
+		InputGate[] unionedInputGates = Arrays.stream(inputGates)
+			.map(InputGateUtil::createInputGate)
+			.toArray(InputGate[]::new);
 
-        return Arrays.stream(unionedInputGates)
-                .map(
-                        unionedInputGate ->
-                                new CheckpointedInputGate(
-                                        unionedInputGate,
-                                        barrierHandler,
-                                        mailboxExecutor,
-                                        config.isGraphContainingLoops()
-                                                ? UpstreamRecoveryTracker.NO_OP
-                                                : UpstreamRecoveryTracker.forInputGate(
-                                                        unionedInputGate)))
-                .toArray(CheckpointedInputGate[]::new);
-    }
+		return Arrays.stream(unionedInputGates)
+			.map(unionedInputGate -> new CheckpointedInputGate(
+				unionedInputGate,
+				barrierHandler,
+				mailboxExecutor,
+				config.isGraphContainingLoops() ? UpstreamRecoveryTracker.NO_OP : UpstreamRecoveryTracker.forInputGate(unionedInputGate)))
+			.toArray(CheckpointedInputGate[]::new);
+	}
 
-    public static CheckpointBarrierHandler createCheckpointBarrierHandler(
-            CheckpointableTask toNotifyOnCheckpoint,
-            StreamConfig config,
-            SubtaskCheckpointCoordinator checkpointCoordinator,
-            String taskName,
-            List<IndexedInputGate>[] inputGates,
-            List<StreamTaskSourceInput<?>> sourceInputs,
+	private static CheckpointBarrierHandler createCheckpointBarrierHandler(
+			StreamConfig config,
+			CheckpointableInput[] inputs,
+			SubtaskCheckpointCoordinator checkpointCoordinator,
+			String taskName,
+			AbstractInvokable toNotifyOnCheckpoint,
             MailboxExecutor mailboxExecutor,
             TimerService timerService) {
 
-        CheckpointableInput[] inputs =
-                Stream.<CheckpointableInput>concat(
-                                Arrays.stream(inputGates).flatMap(Collection::stream),
-                                sourceInputs.stream())
-                        .sorted(Comparator.comparing(CheckpointableInput::getInputGateIndex))
-                        .toArray(CheckpointableInput[]::new);
-
         Clock clock = SystemClock.getInstance();
-        switch (config.getCheckpointMode()) {
-            case EXACTLY_ONCE:
+		switch (config.getCheckpointMode()) {
+			case EXACTLY_ONCE:
                 int numberOfChannels =
-                        (int)
-                                Arrays.stream(inputs)
-                                        .mapToLong(gate -> gate.getChannelInfos().size())
-                                        .sum();
+                        (int) Arrays.stream(inputs)
+								.mapToLong(gate -> gate.getChannelInfos().size())
+								.sum();
                 return createBarrierHandler(
                         toNotifyOnCheckpoint,
                         config,
@@ -111,32 +157,23 @@ public class InputProcessorUtil {
                         inputs,
                         clock,
                         numberOfChannels);
-            case AT_LEAST_ONCE:
-                if (config.isUnalignedCheckpointsEnabled()) {
-                    throw new IllegalStateException(
-                            "Cannot use unaligned checkpoints with AT_LEAST_ONCE "
-                                    + "checkpointing mode");
-                }
+			case AT_LEAST_ONCE:
+				if (config.isUnalignedCheckpointsEnabled()) {
+					throw new IllegalStateException("Cannot use unaligned checkpoints with AT_LEAST_ONCE " +
+						"checkpointing mode");
+				}
                 int numInputChannels =
                         Arrays.stream(inputs)
                                 .mapToInt(CheckpointableInput::getNumberOfInputChannels)
                                 .sum();
-                return new CheckpointBarrierTracker(
-                        numInputChannels,
-                        toNotifyOnCheckpoint,
-                        clock,
-                        config.getConfiguration()
-                                .get(
-                                        ExecutionCheckpointingOptions
-                                                .ENABLE_CHECKPOINTS_AFTER_TASKS_FINISH));
-            default:
-                throw new UnsupportedOperationException(
-                        "Unrecognized Checkpointing Mode: " + config.getCheckpointMode());
-        }
-    }
+                return new CheckpointBarrierTracker(numInputChannels, toNotifyOnCheckpoint, clock);
+			default:
+				throw new UnsupportedOperationException("Unrecognized Checkpointing Mode: " + config.getCheckpointMode());
+		}
+	}
 
     private static SingleCheckpointBarrierHandler createBarrierHandler(
-            CheckpointableTask toNotifyOnCheckpoint,
+            AbstractInvokable toNotifyOnCheckpoint,
             StreamConfig config,
             SubtaskCheckpointCoordinator checkpointCoordinator,
             String taskName,
@@ -145,9 +182,6 @@ public class InputProcessorUtil {
             CheckpointableInput[] inputs,
             Clock clock,
             int numberOfChannels) {
-        boolean enableCheckpointAfterTasksFinished =
-                config.getConfiguration()
-                        .get(ExecutionCheckpointingOptions.ENABLE_CHECKPOINTS_AFTER_TASKS_FINISH);
         if (config.isUnalignedCheckpointsEnabled()) {
             return SingleCheckpointBarrierHandler.alternating(
                     taskName,
@@ -155,8 +189,7 @@ public class InputProcessorUtil {
                     checkpointCoordinator,
                     clock,
                     numberOfChannels,
-                    BarrierAlignmentUtil.createRegisterTimerCallback(mailboxExecutor, timerService),
-                    enableCheckpointAfterTasksFinished,
+                    createRegisterTimerCallback(mailboxExecutor, timerService),
                     inputs);
         } else {
             return SingleCheckpointBarrierHandler.aligned(
@@ -164,10 +197,23 @@ public class InputProcessorUtil {
                     toNotifyOnCheckpoint,
                     clock,
                     numberOfChannels,
-                    BarrierAlignmentUtil.createRegisterTimerCallback(mailboxExecutor, timerService),
-                    enableCheckpointAfterTasksFinished,
+                    createRegisterTimerCallback(mailboxExecutor, timerService),
                     inputs);
         }
+    }
+
+    private static BiFunction<Callable<?>, Duration, Cancellable> createRegisterTimerCallback(
+            MailboxExecutor mailboxExecutor, TimerService timerService) {
+        return (callable, delay) -> {
+            ScheduledFuture<?> scheduledFuture =
+                    timerService.registerTimer(
+                            timerService.getCurrentProcessingTime() + delay.toMillis(),
+                            timestamp ->
+                                    mailboxExecutor.submit(
+                                            callable,
+                                            "Execute checkpoint barrier handler delayed action"));
+            return () -> scheduledFuture.cancel(false);
+        };
     }
 
     private static void registerCheckpointMetrics(
@@ -177,5 +223,5 @@ public class InputProcessorUtil {
         taskIOMetricGroup.gauge(
                 MetricNames.CHECKPOINT_START_DELAY_TIME,
                 barrierHandler::getCheckpointStartDelayNanos);
-    }
+	}
 }

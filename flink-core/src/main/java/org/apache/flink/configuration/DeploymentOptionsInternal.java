@@ -22,13 +22,24 @@ import org.apache.flink.annotation.Internal;
 
 import static org.apache.flink.configuration.ConfigOptions.key;
 
-/** Internal options used during deployment. */
+/**
+ * Internal options used during deployment.
+ */
 @Internal
 public class DeploymentOptionsInternal {
 
-    public static final ConfigOption<String> CONF_DIR =
-            key("$internal.deployment.config-dir")
-                    .stringType()
-                    .noDefaultValue()
-                    .withDescription("**DO NOT USE** The path to the configuration directory.");
+	public static final ConfigOption<String> CONF_DIR =
+			key("$internal.deployment.config-dir")
+					.stringType()
+					.noDefaultValue()
+					.withDescription("**DO NOT USE** The path to the configuration directory.");
+
+    public static final ConfigOption<Boolean> SYSTEM_CLASSPATH_INCLUDES_USER_JAR =
+            key("$internal.deployment.system-classpath-includes-user-jar")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "**DO NOT USE** Defines whether user-jars are included in the system class path." +
+								"Because YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR is only used in flink-yarn," +
+								"we use a new internal option here to check whether system classpath includes user jar.");
 }

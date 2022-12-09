@@ -30,15 +30,16 @@ import org.apache.flink.streaming.api.operators.Triggerable;
  */
 @Internal
 public final class VoidTriggerable<K, N> implements Triggerable<K, N> {
-    public static <K, N> VoidTriggerable<K, N> instance() {
-        return new VoidTriggerable<>();
-    }
+	public static <K, N> VoidTriggerable<K, N> instance() {
+		return new VoidTriggerable<>();
+	}
 
-    private VoidTriggerable() {}
+	private VoidTriggerable() {}
 
-    @Override
-    public void onEventTime(InternalTimer<K, N> timer) {}
+	@Override
+	public void onEventTime(InternalTimer<K, N> timer) {}
 
-    @Override
-    public void onProcessingTime(InternalTimer<K, N> timer) {}
+	@Override
+	public void onProcessingTime(InternalTimer<K, N> timer) {}
 }
+

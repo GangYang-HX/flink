@@ -18,24 +18,21 @@
 
 package org.apache.flink.runtime.rest.handler.legacy.metrics;
 
-/** No-op implementation of the {@link MetricFetcher}. */
+/**
+ * No-op implementation of the {@link MetricFetcher}.
+ */
 public enum VoidMetricFetcher implements MetricFetcher {
-    INSTANCE;
+	INSTANCE;
 
-    private static final MetricStore METRIC_STORE = new MetricStore();
+	private static final MetricStore METRIC_STORE = new MetricStore();
 
-    @Override
-    public MetricStore getMetricStore() {
-        return METRIC_STORE;
-    }
+	@Override
+	public MetricStore getMetricStore() {
+		return METRIC_STORE;
+	}
 
-    @Override
-    public void update() {
-        // noop
-    }
-
-    @Override
-    public long getLastUpdateTime() {
-        return 0;
-    }
+	@Override
+	public void update() {
+		// noop
+	}
 }

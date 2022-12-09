@@ -19,14 +19,17 @@
 package org.apache.flink.metrics.graphite;
 
 import org.apache.flink.metrics.util.MetricReporterTestUtils;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-/** Tests for loading {@link GraphiteReporterFactory}. */
-class GraphiteReporterFactoryTest {
+/**
+ * Tests for loading {@link GraphiteReporterFactory}.
+ */
+public class GraphiteReporterFactoryTest extends TestLogger {
 
-    @Test
-    void testMetricReporterSetupViaSPI() {
-        MetricReporterTestUtils.testMetricReporterSetupViaSPI(GraphiteReporterFactory.class);
-    }
+	@Test
+	public void testMetricReporterSetupViaSPI() {
+		MetricReporterTestUtils.testMetricReporterSetupViaSPI(GraphiteReporterFactory.class);
+	}
 }

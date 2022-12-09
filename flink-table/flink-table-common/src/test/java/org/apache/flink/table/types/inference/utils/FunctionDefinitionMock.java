@@ -23,29 +23,22 @@ import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.functions.FunctionKind;
 import org.apache.flink.table.types.inference.TypeInference;
 
-/** {@link FunctionDefinition} mock for testing purposes. */
+/**
+ * {@link FunctionDefinition} mock for testing purposes.
+ */
 public class FunctionDefinitionMock implements FunctionDefinition {
 
-    public FunctionKind functionKind;
+	public FunctionKind functionKind;
 
-    public TypeInference typeInference;
+	public TypeInference typeInference;
 
-    public FunctionDefinitionMock(FunctionKind functionKind, TypeInference typeInference) {
-        this.functionKind = functionKind;
-        this.typeInference = typeInference;
-    }
+	@Override
+	public FunctionKind getKind() {
+		return functionKind;
+	}
 
-    public FunctionDefinitionMock() {
-        this(null, null);
-    }
-
-    @Override
-    public FunctionKind getKind() {
-        return functionKind;
-    }
-
-    @Override
-    public TypeInference getTypeInference(DataTypeFactory typeFactory) {
-        return typeInference;
-    }
+	@Override
+	public TypeInference getTypeInference(DataTypeFactory typeFactory) {
+		return typeInference;
+	}
 }

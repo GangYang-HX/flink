@@ -24,56 +24,59 @@ import org.apache.flink.util.ExceptionUtils;
 
 import java.io.IOException;
 
-public class AsynchronousBufferFileWriter extends AsynchronousFileIOChannel<Buffer, WriteRequest>
-        implements BufferFileWriter {
+public class AsynchronousBufferFileWriter extends AsynchronousFileIOChannel<Buffer, WriteRequest> implements BufferFileWriter {
 
-    private static final RecyclingCallback CALLBACK = new RecyclingCallback();
+	private static final RecyclingCallback CALLBACK = new RecyclingCallback();
 
-    protected AsynchronousBufferFileWriter(ID channelID, RequestQueue<WriteRequest> requestQueue)
-            throws IOException {
-        super(channelID, requestQueue, CALLBACK, true);
-    }
+	protected AsynchronousBufferFileWriter(ID channelID, RequestQueue<WriteRequest> requestQueue) throws IOException {
+		super(channelID, requestQueue, CALLBACK, true);
+	}
 
-    /**
-     * Writes the given block asynchronously.
-     *
-     * @param buffer the buffer to be written (will be recycled when done)
-     * @throws IOException thrown if adding the write operation fails
-     */
-    @Override
-    public void writeBlock(Buffer buffer) throws IOException {
-        try {
-            // if successfully added, the buffer will be recycled after the write operation
-            addRequest(new BufferWriteRequest(this, buffer));
-        } catch (Throwable e) {
-            // if not added, we need to recycle here
-            buffer.recycleBuffer();
-            ExceptionUtils.rethrowIOException(e);
-        }
-    }
+	/**
+	 * Writes the given block asynchronously.
+	 *
+	 * @param buffer
+	 * 		the buffer to be written (will be recycled when done)
+	 *
+	 * @throws IOException
+	 * 		thrown if adding the write operation fails
+	 */
+	@Override
+	public void writeBlock(Buffer buffer) throws IOException {
+		try {
+			// if successfully added, the buffer will be recycled after the write operation
+			addRequest(new BufferWriteRequest(this, buffer));
+		} catch (Throwable e) {
+			// if not added, we need to recycle here
+			buffer.recycleBuffer();
+			ExceptionUtils.rethrowIOException(e);
+		}
 
-    @Override
-    public int getNumberOfOutstandingRequests() {
-        return requestsNotReturned.get();
-    }
+	}
 
-    @Override
-    public boolean registerAllRequestsProcessedListener(NotificationListener listener)
-            throws IOException {
-        return super.registerAllRequestsProcessedListener(listener);
-    }
+	@Override
+	public int getNumberOfOutstandingRequests() {
+		return requestsNotReturned.get();
+	}
 
-    /** Recycles the buffer after the I/O request. */
-    private static class RecyclingCallback implements RequestDoneCallback<Buffer> {
+	@Override
+	public boolean registerAllRequestsProcessedListener(NotificationListener listener) throws IOException {
+		return super.registerAllRequestsProcessedListener(listener);
+	}
 
-        @Override
-        public void requestSuccessful(Buffer buffer) {
-            buffer.recycleBuffer();
-        }
+	/**
+	 * Recycles the buffer after the I/O request.
+	 */
+	private static class RecyclingCallback implements RequestDoneCallback<Buffer> {
 
-        @Override
-        public void requestFailed(Buffer buffer, IOException e) {
-            buffer.recycleBuffer();
-        }
-    }
+		@Override
+		public void requestSuccessful(Buffer buffer) {
+			buffer.recycleBuffer();
+		}
+
+		@Override
+		public void requestFailed(Buffer buffer, IOException e) {
+			buffer.recycleBuffer();
+		}
+	}
 }

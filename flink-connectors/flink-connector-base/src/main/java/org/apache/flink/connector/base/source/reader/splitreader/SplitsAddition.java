@@ -18,8 +18,6 @@
 
 package org.apache.flink.connector.base.source.reader.splitreader;
 
-import org.apache.flink.annotation.PublicEvolving;
-
 import java.util.List;
 
 /**
@@ -27,15 +25,9 @@ import java.util.List;
  *
  * @param <SplitT> the split type.
  */
-@PublicEvolving
 public class SplitsAddition<SplitT> extends SplitsChange<SplitT> {
 
-    public SplitsAddition(List<SplitT> splits) {
-        super(splits);
-    }
-
-    @Override
-    public String toString() {
-        return String.format("SplitAddition:[%s]", splits());
-    }
+	public SplitsAddition(List<SplitT> splits) {
+		super(splits);
+	}
 }

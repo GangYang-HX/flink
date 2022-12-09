@@ -21,15 +21,16 @@ package org.apache.flink.runtime.scheduler;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
-import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.queryablestate.KvStateID;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.execution.ExecutionState;
+import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
-import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
+import org.apache.flink.runtime.executiongraph.ExecutionGraph;
+import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
@@ -39,6 +40,7 @@ import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmaster.SerializedInputSplit;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
+import org.apache.flink.runtime.messages.checkpoint.AcknowledgeTriggerSnapshot;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
@@ -46,15 +48,16 @@ import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
+import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
-import org.apache.flink.util.AutoCloseableAsync;
 import org.apache.flink.util.FlinkException;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -63,124 +66,124 @@ import java.util.concurrent.CompletableFuture;
  * <p>Instances are created via {@link SchedulerNGFactory}, and receive a {@link JobGraph} when
  * instantiated.
  *
- * <p>Implementations can expect that methods will not be invoked concurrently. In fact, all
- * invocations will originate from a thread in the {@link ComponentMainThreadExecutor}.
+ * <p>Implementations can expect that methods will not be invoked concurrently. In fact,
+ * all invocations will originate from a thread in the {@link ComponentMainThreadExecutor}, which
+ * will be passed via {@link #setMainThreadExecutor(ComponentMainThreadExecutor)}.
  */
-public interface SchedulerNG extends GlobalFailureHandler, AutoCloseableAsync {
+public interface SchedulerNG {
 
-    void startScheduling();
+	void setMainThreadExecutor(ComponentMainThreadExecutor mainThreadExecutor);
 
-    void cancel();
+	void registerJobStatusListener(JobStatusListener jobStatusListener);
 
-    CompletableFuture<JobStatus> getJobTerminationFuture();
+	void startScheduling();
 
-    default boolean updateTaskExecutionState(TaskExecutionState taskExecutionState) {
-        return updateTaskExecutionState(new TaskExecutionStateTransition(taskExecutionState));
-    }
+	void suspend(Throwable cause);
 
-    boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState);
+	void cancel();
 
-    SerializedInputSplit requestNextInputSplit(
-            JobVertexID vertexID, ExecutionAttemptID executionAttempt) throws IOException;
+	CompletableFuture<Void> getTerminationFuture();
 
-    ExecutionState requestPartitionState(
-            IntermediateDataSetID intermediateResultId, ResultPartitionID resultPartitionId)
-            throws PartitionProducerDisposedException;
+	void handleGlobalFailure(Throwable cause);
 
-    ExecutionGraphInfo requestJob();
+	boolean updateTaskExecutionState(TaskExecutionState taskExecutionState);
 
-    JobStatus requestJobStatus();
+	SerializedInputSplit requestNextInputSplit(JobVertexID vertexID, ExecutionAttemptID executionAttempt) throws IOException;
 
-    JobDetails requestJobDetails();
+	ExecutionState requestPartitionState(IntermediateDataSetID intermediateResultId, ResultPartitionID resultPartitionId) throws PartitionProducerDisposedException;
 
-    // ------------------------------------------------------------------------------------
-    // Methods below do not belong to Scheduler but are included due to historical reasons
-    // ------------------------------------------------------------------------------------
+	void scheduleOrUpdateConsumers(ResultPartitionID partitionID);
 
-    KvStateLocation requestKvStateLocation(JobID jobId, String registrationName)
-            throws UnknownKvStateLocation, FlinkJobNotFoundException;
+	ArchivedExecutionGraph requestJob();
 
-    void notifyKvStateRegistered(
-            JobID jobId,
-            JobVertexID jobVertexId,
-            KeyGroupRange keyGroupRange,
-            String registrationName,
-            KvStateID kvStateId,
-            InetSocketAddress kvStateServerAddress)
-            throws FlinkJobNotFoundException;
+	JobStatus requestJobStatus();
 
-    void notifyKvStateUnregistered(
-            JobID jobId,
-            JobVertexID jobVertexId,
-            KeyGroupRange keyGroupRange,
-            String registrationName)
-            throws FlinkJobNotFoundException;
+	JobDetails requestJobDetails();
 
-    // ------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------
+	// Methods below do not belong to Scheduler but are included due to historical reasons
+	// ------------------------------------------------------------------------------------
 
-    void updateAccumulators(AccumulatorSnapshot accumulatorSnapshot);
+	KvStateLocation requestKvStateLocation(JobID jobId, String registrationName) throws UnknownKvStateLocation, FlinkJobNotFoundException;
 
-    // ------------------------------------------------------------------------
+	void notifyKvStateRegistered(JobID jobId, JobVertexID jobVertexId, KeyGroupRange keyGroupRange, String registrationName, KvStateID kvStateId, InetSocketAddress kvStateServerAddress) throws FlinkJobNotFoundException;
 
-    CompletableFuture<String> triggerSavepoint(
-            @Nullable String targetDirectory, boolean cancelJob, SavepointFormatType formatType);
+	void notifyKvStateUnregistered(JobID jobId, JobVertexID jobVertexId, KeyGroupRange keyGroupRange, String registrationName) throws FlinkJobNotFoundException;
 
-    CompletableFuture<String> triggerCheckpoint();
+	// ------------------------------------------------------------------------
 
-    void acknowledgeCheckpoint(
-            JobID jobID,
-            ExecutionAttemptID executionAttemptID,
-            long checkpointId,
-            CheckpointMetrics checkpointMetrics,
-            TaskStateSnapshot checkpointState);
+	void updateAccumulators(AccumulatorSnapshot accumulatorSnapshot);
 
-    void reportCheckpointMetrics(
-            JobID jobID,
-            ExecutionAttemptID executionAttemptID,
-            long checkpointId,
-            CheckpointMetrics checkpointMetrics);
+	// ------------------------------------------------------------------------
 
-    void declineCheckpoint(DeclineCheckpoint decline);
+	Optional<OperatorBackPressureStats> requestOperatorBackPressureStats(JobVertexID jobVertexId) throws FlinkException;
 
-    CompletableFuture<String> stopWithSavepoint(
-            String targetDirectory, boolean terminate, SavepointFormatType formatType);
+	// ------------------------------------------------------------------------
 
-    // ------------------------------------------------------------------------
-    //  Operator Coordinator related methods
-    //
-    //  These are necessary as long as the Operator Coordinators are part of the
-    //  scheduler. There are good reasons to pull them out of the Scheduler and
-    //  make them directly a part of the JobMaster. However, we would need to
-    //  rework the complete CheckpointCoordinator initialization before we can
-    //  do that, because the CheckpointCoordinator is initialized (and restores
-    //  savepoint) in the scheduler constructor, which requires the coordinators
-    //  to be there as well.
-    // ------------------------------------------------------------------------
+	CompletableFuture<String> triggerSavepoint(@Nullable String targetDirectory, boolean cancelJob);
 
-    /**
-     * Delivers the given OperatorEvent to the {@link OperatorCoordinator} with the given {@link
-     * OperatorID}.
-     *
-     * <p>Failure semantics: If the task manager sends an event for a non-running task or a
-     * non-existing operator coordinator, then respond with an exception to the call. If task and
-     * coordinator exist, then we assume that the call from the TaskManager was valid, and any
-     * bubbling exception needs to cause a job failure
-     *
-     * @throws FlinkException Thrown, if the task is not running or no operator/coordinator exists
-     *     for the given ID.
-     */
-    void deliverOperatorEventToCoordinator(
-            ExecutionAttemptID taskExecution, OperatorID operator, OperatorEvent evt)
-            throws FlinkException;
+	CompletableFuture<Long> triggerFullCheckpoint(final boolean incremental, @Nullable final String targetDirectory);
 
-    /**
-     * Delivers a coordination request to the {@link OperatorCoordinator} with the given {@link
-     * OperatorID} and returns the coordinator's response.
-     *
-     * @return A future containing the response.
-     * @throws FlinkException Thrown, if the task is not running, or no operator/coordinator exists
-     *     for the given ID, or the coordinator cannot handle client events.
-     */
-    CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
-            OperatorID operator, CoordinationRequest request) throws FlinkException;
+	void acknowledgeCheckpoint(JobID jobID, ExecutionAttemptID executionAttemptID, long checkpointId, CheckpointMetrics checkpointMetrics, TaskStateSnapshot checkpointState);
+
+	void declineCheckpoint(DeclineCheckpoint decline);
+
+	CompletableFuture<String> stopWithSavepoint(String targetDirectory, boolean advanceToEndOfEventTime);
+
+	// ------------------------------------------------------------------------
+	//  Operator Coordinator related methods
+	//
+	//  These are necessary as long as the Operator Coordinators are part of the
+	//  scheduler. There are good reasons to pull them out of the Scheduler and
+	//  make them directly a part of the JobMaster. However, we would need to
+	//  rework the complete CheckpointCoordinator initialization before we can
+	//  do that, because the CheckpointCoordinator is initialized (and restores
+	//  savepoint) in the scheduler constructor, which requires the coordinators
+	//  to be there as well.
+	// ------------------------------------------------------------------------
+
+	/**
+	 * Delivers the given OperatorEvent to the {@link OperatorCoordinator} with the given {@link OperatorID}.
+	 *
+	 * <p>Failure semantics: If the task manager sends an event for a non-running task or a
+	 * non-existing operator coordinator, then respond with an exception to the call.
+	 * If task and coordinator exist, then we assume that the call from the TaskManager was
+	 * valid, and any bubbling exception needs to cause a job failure
+	 *
+	 * @throws FlinkException Thrown, if the task is not running or no operator/coordinator exists
+	 *                        for the given ID.
+	 */
+	void deliverOperatorEventToCoordinator(ExecutionAttemptID taskExecution, OperatorID operator, OperatorEvent evt) throws FlinkException;
+
+	/**
+	 * Delivers a coordination request to the {@link OperatorCoordinator} with the given {@link OperatorID}
+	 * and returns the coordinator's response.
+	 *
+	 * @return A future containing the response.
+	 * @throws FlinkException Thrown, if the task is not running, or no operator/coordinator exists
+	 *                        for the given ID, or the coordinator cannot handle client events.
+	 */
+	CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(OperatorID operator, CoordinationRequest request) throws FlinkException;
+
+	/**
+	 * Restart this job.
+	 */
+	CompletableFuture<Boolean> restart();
+
+	/**
+	 * Stop checkpoint scheduling.
+	 */
+	void stopCheckpointScheduler();
+
+	ExecutionGraph getExecutionGraph();
+
+	/**
+	 * Restore Execution's {@link ExecutionState} when job is in {@link JobStatus#RECONCILING} state.
+	 *
+	 * @param taskExecutionState sent from TaskExecutor
+	 */
+	void restoreTaskExecutionState(TaskExecutionState taskExecutionState);
+
+	void acknowledgeTriggerSnapshot(AcknowledgeTriggerSnapshot acknowledgeTriggerSnapshot);
+
 }

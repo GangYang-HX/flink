@@ -29,45 +29,44 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
  */
 @Internal
 public class BroadcastPartitioner<T> extends StreamPartitioner<T> {
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    /**
-     * Note: Broadcast mode could be handled directly for all the output channels in record writer,
-     * so it is no need to select channels via this method.
-     */
-    @Override
-    public int selectChannel(SerializationDelegate<StreamRecord<T>> record) {
-        throw new UnsupportedOperationException(
-                "Broadcast partitioner does not support select channels.");
-    }
+	/**
+	 * Note: Broadcast mode could be handled directly for all the output channels
+	 * in record writer, so it is no need to select channels via this method.
+	 */
+	@Override
+	public int selectChannel(SerializationDelegate<StreamRecord<T>> record) {
+		throw new UnsupportedOperationException("Broadcast partitioner does not support select channels.");
+	}
 
-    @Override
-    public SubtaskStateMapper getUpstreamSubtaskStateMapper() {
+	@Override
+	public SubtaskStateMapper getUpstreamSubtaskStateMapper() {
         return SubtaskStateMapper.UNSUPPORTED;
-    }
+	}
 
-    @Override
-    public SubtaskStateMapper getDownstreamSubtaskStateMapper() {
+	@Override
+	public SubtaskStateMapper getDownstreamSubtaskStateMapper() {
         return SubtaskStateMapper.UNSUPPORTED;
-    }
+	}
 
-    @Override
-    public boolean isBroadcast() {
-        return true;
-    }
+	@Override
+	public boolean isBroadcast() {
+		return true;
+	}
 
-    @Override
-    public StreamPartitioner<T> copy() {
-        return this;
-    }
+	@Override
+	public StreamPartitioner<T> copy() {
+		return this;
+	}
 
     @Override
     public boolean isPointwise() {
         return false;
     }
 
-    @Override
-    public String toString() {
-        return "BROADCAST";
-    }
+	@Override
+	public String toString() {
+		return "BROADCAST";
+	}
 }

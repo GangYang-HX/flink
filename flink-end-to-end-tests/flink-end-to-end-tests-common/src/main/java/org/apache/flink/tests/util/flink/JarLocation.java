@@ -17,9 +17,11 @@
 
 package org.apache.flink.tests.util.flink;
 
-/** Enum for specifying jar locations. */
+/**
+ * Enum for specifying jar locations.
+ */
 public enum JarLocation {
-    LIB,
-    OPT,
-    PLUGINS
+	LIB,
+	OPT,
+	PLUGINS
 }

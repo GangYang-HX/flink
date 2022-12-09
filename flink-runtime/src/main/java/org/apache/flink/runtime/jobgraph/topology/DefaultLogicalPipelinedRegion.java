@@ -21,48 +21,34 @@ package org.apache.flink.runtime.jobgraph.topology;
 
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 
-import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
-/** Set of {@link LogicalVertex} that are connected through pipelined {@link LogicalResult}. */
-public class DefaultLogicalPipelinedRegion implements LogicalPipelinedRegion {
+/**
+ * Set of {@link LogicalVertex} that are connected through pipelined {@link LogicalResult}.
+ */
+public class DefaultLogicalPipelinedRegion {
 
-    private final Map<JobVertexID, LogicalVertex> vertexById;
+	private final Set<JobVertexID> vertexIDs;
 
-    public DefaultLogicalPipelinedRegion(final Set<? extends LogicalVertex> logicalVertices) {
-        checkNotNull(logicalVertices);
+	public DefaultLogicalPipelinedRegion(final Set<? extends LogicalVertex<?, ?>> logicalVertices) {
+		checkNotNull(logicalVertices);
 
-        this.vertexById =
-                logicalVertices.stream()
-                        .collect(Collectors.toMap(LogicalVertex::getId, Function.identity()));
-    }
+		this.vertexIDs = logicalVertices.stream()
+			.map(LogicalVertex::getId)
+			.collect(Collectors.toSet());
+	}
 
-    @Override
-    public Iterable<? extends LogicalVertex> getVertices() {
-        return vertexById.values();
-    }
+	public Set<JobVertexID> getVertexIDs() {
+		return vertexIDs;
+	}
 
-    @Override
-    public LogicalVertex getVertex(JobVertexID vertexId) {
-        return vertexById.get(vertexId);
-    }
-
-    @Override
-    public boolean contains(JobVertexID vertexId) {
-        return vertexById.containsKey(vertexId);
-    }
-
-    @Override
-    public String toString() {
-        return "DefaultLogicalPipelinedRegion{"
-                + "vertexIDs="
-                + vertexById.values().stream()
-                        .map(LogicalVertex::getId)
-                        .collect(Collectors.toList())
-                + '}';
-    }
+	@Override
+	public String toString() {
+		return "DefaultLogicalPipelinedRegion{" +
+			"vertexIDs=" + vertexIDs +
+			'}';
+	}
 }

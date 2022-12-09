@@ -18,64 +18,53 @@
 
 package org.apache.flink.runtime.checkpoint;
 
-import java.util.Objects;
+/**
+ * The type of checkpoint to perform.
+ */
+public enum CheckpointType {
 
-/** The type of checkpoint to perform. */
-public final class CheckpointType implements SnapshotType {
+	/** A checkpoint, full or incremental. */
+	CHECKPOINT(false, false, false),
 
-    /** A checkpoint, full or incremental. */
-    public static final CheckpointType CHECKPOINT =
-            new CheckpointType("Checkpoint", SharingFilesStrategy.FORWARD_BACKWARD);
+	FULL_CHECKPOINT(false, false, true),
 
-    public static final CheckpointType FULL_CHECKPOINT =
-            new CheckpointType("Full Checkpoint", SharingFilesStrategy.FORWARD);
+	/**
+	 * @deprecated Use NO CLAIM restore mode {@link org.apache.flink.runtime.jobgraph.RestoreMode} instead
+	 */
+	@Deprecated
+	INCREMENTAL_FULL_CHECKPOINT(false, false, true),
 
-    private final String name;
+	/** A regular savepoint. */
+	SAVEPOINT(true, false, false),
 
-    private final SharingFilesStrategy sharingFilesStrategy;
+	/** A savepoint taken while suspending/terminating the job. */
+	SYNC_SAVEPOINT(true, true, false);
 
-    private CheckpointType(final String name, SharingFilesStrategy sharingFilesStrategy) {
-        this.name = name;
-        this.sharingFilesStrategy = sharingFilesStrategy;
-    }
+	private final boolean isSavepoint;
 
-    public boolean isSavepoint() {
-        return false;
-    }
+	private final boolean isSynchronous;
 
-    public String getName() {
-        return name;
-    }
+	private final boolean isFull;
 
-    public SharingFilesStrategy getSharingFilesStrategy() {
-        return sharingFilesStrategy;
-    }
+	CheckpointType(
+			final boolean isSavepoint,
+			final boolean isSynchronous,
+			final boolean isFull) {
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        CheckpointType type = (CheckpointType) o;
-        return name.equals(type.name) && sharingFilesStrategy == type.sharingFilesStrategy;
-    }
+		this.isSavepoint = isSavepoint;
+		this.isSynchronous = isSynchronous;
+		this.isFull = isFull;
+	}
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, sharingFilesStrategy);
-    }
+	public boolean isSavepoint() {
+		return isSavepoint;
+	}
 
-    @Override
-    public String toString() {
-        return "CheckpointType{"
-                + "name='"
-                + name
-                + '\''
-                + ", sharingFilesStrategy="
-                + sharingFilesStrategy
-                + '}';
-    }
+	public boolean isSynchronous() {
+		return isSynchronous;
+	}
+
+	public boolean isFull() {
+		return isFull;
+	}
 }

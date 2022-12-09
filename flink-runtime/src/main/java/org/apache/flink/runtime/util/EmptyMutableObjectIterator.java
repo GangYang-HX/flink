@@ -20,42 +20,45 @@ package org.apache.flink.runtime.util;
 
 import org.apache.flink.util.MutableObjectIterator;
 
-/** An empty mutable object iterator that never returns anything. */
+/**
+ * An empty mutable object iterator that never returns anything.
+ */
 public final class EmptyMutableObjectIterator<E> implements MutableObjectIterator<E> {
 
-    /** The singleton instance. */
-    private static final EmptyMutableObjectIterator<Object> INSTANCE =
-            new EmptyMutableObjectIterator<Object>();
+	/**
+	 * The singleton instance.
+	 */
+	private static final EmptyMutableObjectIterator<Object> INSTANCE = new EmptyMutableObjectIterator<Object>();
+	
+	/**
+	 * Gets a singleton instance of the empty iterator.
+	 *  
+	 * @param <E> The type of the objects (not) returned by the iterator.
+	 * @return An instance of the iterator.
+	 */
+	public static <E> MutableObjectIterator<E> get() {
+		@SuppressWarnings("unchecked")
+		MutableObjectIterator<E> iter = (MutableObjectIterator<E>) INSTANCE;
+		return iter;
+	}
+	
+	/**
+	 * Always returns null.
+	 *  
+	 * @see MutableObjectIterator#next(Object)
+	 */
+	@Override
+	public E next(E target) {
+		return null;
+	}
 
-    /**
-     * Gets a singleton instance of the empty iterator.
-     *
-     * @param <E> The type of the objects (not) returned by the iterator.
-     * @return An instance of the iterator.
-     */
-    public static <E> MutableObjectIterator<E> get() {
-        @SuppressWarnings("unchecked")
-        MutableObjectIterator<E> iter = (MutableObjectIterator<E>) INSTANCE;
-        return iter;
-    }
-
-    /**
-     * Always returns null.
-     *
-     * @see MutableObjectIterator#next(Object)
-     */
-    @Override
-    public E next(E target) {
-        return null;
-    }
-
-    /**
-     * Always returns null.
-     *
-     * @see MutableObjectIterator#next()
-     */
-    @Override
-    public E next() {
-        return null;
-    }
+	/**
+	 * Always returns null.
+	 *
+	 * @see MutableObjectIterator#next()
+	 */
+	@Override
+	public E next() {
+		return null;
+	}
 }

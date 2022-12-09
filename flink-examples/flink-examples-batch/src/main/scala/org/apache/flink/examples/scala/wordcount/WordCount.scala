@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.examples.scala.wordcount
 
 import org.apache.flink.api.java.utils.ParameterTool
@@ -22,8 +23,8 @@ import org.apache.flink.api.scala._
 import org.apache.flink.examples.java.wordcount.util.WordCountData
 
 /**
- * Implements the "WordCount" program that computes a simple word occurrence histogram over text
- * files.
+ * Implements the "WordCount" program that computes a simple word occurrence histogram
+ * over text files. 
  *
  * The input is a plain text file with lines separated by newline characters.
  *
@@ -40,6 +41,7 @@ import org.apache.flink.examples.java.wordcount.util.WordCountData
  *   - write a simple Flink program.
  *   - use Tuple data types.
  *   - write and use user-defined functions.
+ *
  */
 object WordCount {
 
@@ -61,9 +63,8 @@ object WordCount {
         env.fromCollection(WordCountData.WORDS)
       }
 
-    val counts = text
-      .flatMap(_.toLowerCase.split("\\W+").filter(_.nonEmpty))
-      .map((_, 1))
+    val counts = text.flatMap { _.toLowerCase.split("\\W+") filter { _.nonEmpty } }
+      .map { (_, 1) }
       .groupBy(0)
       .sum(1)
 
@@ -77,3 +78,5 @@ object WordCount {
 
   }
 }
+
+

@@ -20,6 +20,7 @@ package org.apache.flink.state.api.functions;
 
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.functions.AbstractRichFunction;
+import org.apache.flink.api.common.state.BatchWriter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.TimerService;
 
@@ -42,29 +43,32 @@ import org.apache.flink.streaming.api.TimerService;
 @PublicEvolving
 public abstract class KeyedStateBootstrapFunction<K, IN> extends AbstractRichFunction {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    /**
-     * Process one element from the input stream.
-     *
-     * <p>This function can update internal state or set timers using the {@link Context} parameter.
-     *
-     * @param value The input value.
-     * @param ctx A {@link Context} that allows querying the timestamp of the element and getting a
-     *     {@link TimerService} for registering timers and querying the time. The context is only
-     *     valid during the invocation of this method, do not store it.
-     * @throws Exception This method may throw exceptions. Throwing an exception will cause the
-     *     operation to fail and may trigger recovery.
-     */
-    public abstract void processElement(IN value, Context ctx) throws Exception;
+	/**
+	 * Process one element from the input stream.
+	 *
+	 * <p>This function can update internal state or set timers using the {@link Context} parameter.
+	 *
+	 * @param value The input value.
+	 * @param ctx A {@link Context} that allows querying the timestamp of the element and getting a
+	 *     {@link TimerService} for registering timers and querying the time. The context is only
+	 *     valid during the invocation of this method, do not store it.
+	 * @throws Exception This method may throw exceptions. Throwing an exception will cause the
+	 *     operation to fail and may trigger recovery.
+	 */
+	public abstract void processElement(IN value, Context ctx) throws Exception;
 
-    /** Information available in an invocation of {@link #processElement(Object, Context)}. */
-    public abstract class Context {
+	/** Information available in an invocation of {@link #processElement(Object, Context)}. */
+	public abstract class Context {
 
-        /** A {@link TimerService} for querying time and registering timers. */
-        public abstract TimerService timerService();
+		/** A {@link TimerService} for querying time and registering timers. */
+		public abstract TimerService timerService();
 
-        /** Get key of the element being processed. */
-        public abstract K getCurrentKey();
-    }
+		public abstract BatchWriter batchWriter();
+
+		/** Get key of the element being processed. */
+		public abstract K getCurrentKey();
+	}
 }
+

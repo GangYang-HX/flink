@@ -18,37 +18,211 @@
 
 package org.apache.flink.runtime.io.network.api.writer;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.io.IOReadableWritable;
+import org.apache.flink.runtime.io.network.api.serialization.RecordSerializer;
+import org.apache.flink.runtime.io.network.buffer.BufferBuilder;
+import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
+
+import static org.apache.flink.util.Preconditions.checkState;
 
 /**
  * A special record-oriented runtime result writer only for broadcast mode.
  *
- * <p>The BroadcastRecordWriter extends the {@link RecordWriter} and emits records to all channels
- * for regular {@link #emit(IOReadableWritable)}.
+ * <p>The BroadcastRecordWriter extends the {@link RecordWriter} and maintain a single {@link BufferBuilder}
+ * for all the channels. Then the serialization results need be copied only once to this buffer which would be
+ * shared for all the channels in a more efficient way.
  *
  * @param <T> the type of the record that can be emitted with this record writer
  */
 public final class BroadcastRecordWriter<T extends IOReadableWritable> extends RecordWriter<T> {
 
-    BroadcastRecordWriter(ResultPartitionWriter writer, long timeout, String taskName) {
-        super(writer, timeout, taskName);
-    }
+	/** The current buffer builder shared for all the channels. */
+	@Nullable
+	private BufferBuilder bufferBuilder;
 
-    @Override
-    public void emit(T record) throws IOException {
-        broadcastEmit(record);
-    }
+	/**
+	 * The flag for judging whether {@link #requestNewBufferBuilder(int)} and {@link #flushTargetPartition(int)}
+	 * is triggered by {@link #randomEmit(IOReadableWritable)} or not.
+	 */
+	private boolean randomTriggered;
 
-    @Override
-    public void broadcastEmit(T record) throws IOException {
-        checkErroneous();
+	private BufferConsumer randomTriggeredConsumer;
 
-        targetPartition.broadcastRecord(serializeRecord(serializer, record));
+	BroadcastRecordWriter(
+			ResultPartitionWriter writer,
+			long timeout,
+			String taskName) {
+		super(writer, timeout, taskName);
+	}
 
-        if (flushAlways) {
-            flushAll();
-        }
-    }
+	@Override
+	public void emit(T record) throws IOException, InterruptedException {
+		broadcastEmit(record);
+	}
+
+	@Override
+	public void randomEmit(T record) throws IOException, InterruptedException {
+		randomEmit(record, rng.nextInt(numberOfChannels));
+	}
+
+	/**
+	 * For non-broadcast emit, we try to finish the current {@link BufferBuilder} first, and then request
+	 * a new {@link BufferBuilder} for the random channel. If this new {@link BufferBuilder} is not full,
+	 * it can be shared for all the other channels via initializing readable position in created
+	 * {@link BufferConsumer}.
+	 */
+	@VisibleForTesting
+	void randomEmit(T record, int targetChannelIndex) throws IOException, InterruptedException {
+		tryFinishCurrentBufferBuilder(targetChannelIndex);
+
+		randomTriggered = true;
+		emit(record, targetChannelIndex);
+		randomTriggered = false;
+
+		if (bufferBuilder != null) {
+			for (int index = 0; index < numberOfChannels; index++) {
+				if (index != targetChannelIndex) {
+					addBufferConsumer(randomTriggeredConsumer.copyWithReaderPosition(bufferBuilder.getCommittedBytes()), index);
+				}
+			}
+		}
+	}
+
+	@Override
+	public void broadcastEmit(T record) throws IOException, InterruptedException {
+		// We could actually select any target channel here because all the channels
+		// are sharing the same BufferBuilder in broadcast mode.
+		emit(record, 0);
+	}
+
+	/**
+	 * The flush could be triggered by {@link #randomEmit(IOReadableWritable)}, {@link #emit(IOReadableWritable)}
+	 * or {@link #broadcastEmit(IOReadableWritable)}. Only random emit should flush a single target channel,
+	 * otherwise we should flush all the channels.
+	 */
+	@Override
+	public void flushTargetPartition(int targetChannel) {
+		if (randomTriggered) {
+			super.flushTargetPartition(targetChannel);
+		} else {
+			flushAll();
+		}
+	}
+
+	@Override
+	public BufferBuilder getBufferBuilder(int targetChannel) throws IOException, InterruptedException {
+		return bufferBuilder != null ? bufferBuilder : requestNewBufferBuilder(targetChannel);
+	}
+
+	/**
+	 * The request could be from broadcast or non-broadcast modes like {@link #randomEmit(IOReadableWritable)}.
+	 *
+	 * <p>For non-broadcast, the created {@link BufferConsumer} is only for the target channel.
+	 *
+	 * <p>For broadcast, all the channels share the same requested {@link BufferBuilder} and the created
+	 * {@link BufferConsumer} is copied for every channel.
+	 */
+	@Override
+	public BufferBuilder requestNewBufferBuilder(int targetChannel) throws IOException, InterruptedException {
+		checkState(bufferBuilder == null || bufferBuilder.isFinished());
+
+		BufferBuilder builder = super.requestNewBufferBuilder(targetChannel);
+		if (builder == null) {
+			return null;
+		}
+
+		if (randomTriggered) {
+			addBufferConsumer(randomTriggeredConsumer = builder.createBufferConsumer(), targetChannel);
+		} else {
+			try (BufferConsumer bufferConsumer = builder.createBufferConsumer()) {
+				for (int channel = 0; channel < numberOfChannels; channel++) {
+					addBufferConsumer(bufferConsumer.copy(), channel);
+				}
+			}
+		}
+
+		bufferBuilder = builder;
+		return builder;
+	}
+
+	@Override
+	BufferBuilder requestNewBufferBuilderForRecordContinuation(
+			int targetChannel,
+			RecordSerializer<T> serializer) throws IOException, InterruptedException {
+		checkState(bufferBuilder == null || bufferBuilder.isFinished());
+
+		BufferBuilder builder = super.requestNewBufferBuilder(targetChannel);
+		if (bufferBuilder == null) {
+			return null;
+		}
+
+		serializer.copyToBufferBuilder(bufferBuilder);
+		int partialRecordLength = bufferBuilder.getCommittedBytes();
+		int bufferSize = Integer.MAX_VALUE;
+		if (randomTriggered) {
+			bufferSize = addBufferConsumer(
+					randomTriggeredConsumer = builder.createBufferConsumerFromBeginning(),
+					targetChannel,
+					partialRecordLength);
+		} else {
+			try (BufferConsumer bufferConsumer = builder.createBufferConsumerFromBeginning()) {
+				for (int channel = 0; channel < numberOfChannels; channel++) {
+					int tmpBufferSize = addBufferConsumer(bufferConsumer.copy(), channel, partialRecordLength);
+					if (tmpBufferSize != -1 && tmpBufferSize < bufferSize) {
+						bufferSize = tmpBufferSize;
+					}
+				}
+			}
+		}
+		bufferBuilder.trim(bufferSize);
+
+		bufferBuilder = builder;
+		return bufferBuilder;
+	}
+
+	@Override
+	public void tryFinishCurrentBufferBuilder(int targetChannel) {
+		if (bufferBuilder == null) {
+			return;
+		}
+
+		BufferBuilder builder = bufferBuilder;
+		bufferBuilder = null;
+
+		finishBufferBuilder(targetChannel, builder);
+	}
+
+	@Override
+	public void finishBufferBuilder(int targetChannel, BufferBuilder bufferBuilder) {
+		numBytesOut.inc(bufferBuilder.finish());
+		numBuffersOut.inc();
+		closeBufferBuilder(targetChannel);
+	}
+
+	@Override
+	public void emptyCurrentBufferBuilder(int targetChannel) {
+		bufferBuilder = null;
+	}
+
+	@Override
+	public void closeBufferBuilder(int targetChannel) {
+		closeBufferBuilder();
+	}
+
+	@Override
+	public void clearBuffers() {
+		closeBufferBuilder();
+	}
+
+	private void closeBufferBuilder() {
+		if (bufferBuilder != null) {
+			bufferBuilder.finish();
+			bufferBuilder = null;
+		}
+	}
 }

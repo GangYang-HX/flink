@@ -16,18 +16,11 @@
  * limitations under the License.
  */
 
-import { Component, ChangeDetectionStrategy, OnInit, OnDestroy, ChangeDetectorRef, Inject, Type } from '@angular/core';
+import { Component, ChangeDetectionStrategy, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { NodesItemCorrectInterface } from 'interfaces';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-
-import { NodesItemCorrect } from '@flink-runtime-web/interfaces';
-import {
-  JOB_OVERVIEW_MODULE_CONFIG,
-  JOB_OVERVIEW_MODULE_DEFAULT_CONFIG,
-  JobOverviewModuleConfig
-} from '@flink-runtime-web/pages/job/overview/job-overview.config';
-
-import { JobLocalService } from '../../job-local.service';
+import { JobService } from 'services';
 
 @Component({
   selector: 'flink-job-overview-drawer-detail',
@@ -36,41 +29,19 @@ import { JobLocalService } from '../../job-local.service';
   styleUrls: ['./job-overview-drawer-detail.component.less']
 })
 export class JobOverviewDrawerDetailComponent implements OnInit, OnDestroy {
-  public node: NodesItemCorrect | null;
-  public stateBadgeComponent: Type<unknown>;
-  public taskCountComponent: Type<unknown>;
+  destroy$ = new Subject();
+  node: NodesItemCorrectInterface | null;
 
-  private readonly destroy$ = new Subject<void>();
+  constructor(private jobService: JobService, private cdr: ChangeDetectorRef) {}
 
-  constructor(
-    private readonly jobLocalService: JobLocalService,
-    private readonly cdr: ChangeDetectorRef,
-    @Inject(JOB_OVERVIEW_MODULE_CONFIG) readonly moduleConfig: JobOverviewModuleConfig
-  ) {
-    this.stateBadgeComponent =
-      moduleConfig.customComponents?.stateBadgeComponent ||
-      JOB_OVERVIEW_MODULE_DEFAULT_CONFIG.customComponents.stateBadgeComponent;
-    this.taskCountComponent =
-      moduleConfig.customComponents?.taskCountBadgeComponent ||
-      JOB_OVERVIEW_MODULE_DEFAULT_CONFIG.customComponents.taskCountBadgeComponent;
+  ngOnInit() {
+    this.jobService.selectedVertex$.pipe(takeUntil(this.destroy$)).subscribe(node => {
+      this.node = node;
+      this.cdr.markForCheck();
+    });
   }
 
-  public ngOnInit(): void {
-    this.jobLocalService
-      .selectedVertexChanges()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(node => {
-        this.node = node;
-        if (this.node != null && this.node.description != null) {
-          if (this.node.description.indexOf('<br/>') > 0) {
-            this.node.description = this.node.description.replace(/<br\/>/g, '\n');
-          }
-        }
-        this.cdr.markForCheck();
-      });
-  }
-
-  public ngOnDestroy(): void {
+  ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
   }

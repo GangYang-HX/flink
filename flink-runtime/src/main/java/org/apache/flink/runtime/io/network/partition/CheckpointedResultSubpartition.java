@@ -25,17 +25,15 @@ import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
 import java.io.IOException;
 
 /**
- * Interface for subpartitions that are checkpointed, meaning they store data as part of unaligned
- * checkpoints.
+ * Interface for subpartitions that are checkpointed, meaning they store data as part of unaligned checkpoints.
  */
 public interface CheckpointedResultSubpartition {
 
-    ResultSubpartitionInfo getSubpartitionInfo();
+	ResultSubpartitionInfo getSubpartitionInfo();
 
-    BufferBuilder requestBufferBuilderBlocking()
-            throws IOException, RuntimeException, InterruptedException;
+	BufferBuilder requestBufferBuilderBlocking() throws IOException, RuntimeException, InterruptedException;
 
-    void addRecovered(BufferConsumer bufferConsumer) throws IOException;
+	int addBufferConsumer(BufferConsumer bufferConsumer);
 
-    void finishReadRecoveredState(boolean notifyAndBlockOnCompletion) throws IOException;
+	void finishReadRecoveredState(boolean notifyAndBlockOnCompletion) throws IOException;
 }

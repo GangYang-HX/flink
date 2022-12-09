@@ -20,80 +20,96 @@ package org.apache.flink.runtime.state;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.core.fs.CloseableRegistry;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.util.IOUtils;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.flink.runtime.state.SnapshotExecutionType.ASYNCHRONOUS;
-import static org.apache.flink.runtime.state.SnapshotExecutionType.SYNCHRONOUS;
-
 /**
- * Builder class for {@link DefaultOperatorStateBackend} which handles all necessary initializations
- * and clean ups.
+ * Builder class for {@link DefaultOperatorStateBackend} which handles all necessary initializations and clean ups.
  */
-public class DefaultOperatorStateBackendBuilder
-        implements StateBackendBuilder<DefaultOperatorStateBackend, BackendBuildingException> {
-    /** The user code classloader. */
-    @VisibleForTesting protected final ClassLoader userClassloader;
-    /** The execution configuration. */
-    @VisibleForTesting protected final ExecutionConfig executionConfig;
-    /** Flag to de/activate asynchronous snapshots. */
-    @VisibleForTesting protected final boolean asynchronousSnapshots;
-    /** State handles for restore. */
-    @VisibleForTesting protected final Collection<OperatorStateHandle> restoreStateHandles;
+public class DefaultOperatorStateBackendBuilder implements
+	StateBackendBuilder<DefaultOperatorStateBackend, BackendBuildingException> {
+	/** The user code classloader. */
+	@VisibleForTesting
+	protected final ClassLoader userClassloader;
+	/** The execution configuration. */
+	@VisibleForTesting
+	protected final ExecutionConfig executionConfig;
+	/** Flag to de/activate asynchronous snapshots. */
+	@VisibleForTesting
+	protected final boolean asynchronousSnapshots;
+	/** State handles for restore. */
+	@VisibleForTesting
+	protected final Collection<OperatorStateHandle> restoreStateHandles;
+	@VisibleForTesting
+	protected final CloseableRegistry cancelStreamRegistry;
 
-    @VisibleForTesting protected final CloseableRegistry cancelStreamRegistry;
+	protected OperatorID operatorID;
 
-    public DefaultOperatorStateBackendBuilder(
-            ClassLoader userClassloader,
-            ExecutionConfig executionConfig,
-            boolean asynchronousSnapshots,
-            Collection<OperatorStateHandle> stateHandles,
-            CloseableRegistry cancelStreamRegistry) {
-        this.userClassloader = userClassloader;
-        this.executionConfig = executionConfig;
-        this.asynchronousSnapshots = asynchronousSnapshots;
-        this.restoreStateHandles = stateHandles;
-        this.cancelStreamRegistry = cancelStreamRegistry;
-    }
+	protected int subTaskIndex;
 
-    @Override
-    public DefaultOperatorStateBackend build() throws BackendBuildingException {
-        Map<String, PartitionableListState<?>> registeredOperatorStates = new HashMap<>();
-        Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStates =
-                new HashMap<>();
-        CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
 
-        DefaultOperatorStateBackendSnapshotStrategy snapshotStrategy =
-                new DefaultOperatorStateBackendSnapshotStrategy(
-                        userClassloader, registeredOperatorStates, registeredBroadcastStates);
-        OperatorStateRestoreOperation restoreOperation =
-                new OperatorStateRestoreOperation(
-                        cancelStreamRegistry,
-                        userClassloader,
-                        registeredOperatorStates,
-                        registeredBroadcastStates,
-                        restoreStateHandles);
-        try {
-            restoreOperation.restore();
-        } catch (Exception e) {
-            IOUtils.closeQuietly(cancelStreamRegistryForBackend);
-            throw new BackendBuildingException(
-                    "Failed when trying to restore operator state backend", e);
-        }
-        return new DefaultOperatorStateBackend(
-                executionConfig,
-                cancelStreamRegistryForBackend,
-                registeredOperatorStates,
-                registeredBroadcastStates,
-                new HashMap<>(),
-                new HashMap<>(),
-                new SnapshotStrategyRunner<>(
-                        "DefaultOperatorStateBackend snapshot",
-                        snapshotStrategy,
-                        cancelStreamRegistryForBackend,
-                        asynchronousSnapshots ? ASYNCHRONOUS : SYNCHRONOUS));
-    }
+	public DefaultOperatorStateBackendBuilder(
+		ClassLoader userClassloader,
+		ExecutionConfig executionConfig,
+		boolean asynchronousSnapshots,
+		Collection<OperatorStateHandle> stateHandles,
+		CloseableRegistry cancelStreamRegistry) {
+		this.userClassloader = userClassloader;
+		this.executionConfig = executionConfig;
+		this.asynchronousSnapshots = asynchronousSnapshots;
+		this.restoreStateHandles = stateHandles;
+		this.cancelStreamRegistry = cancelStreamRegistry;
+	}
+
+	@Override
+	public DefaultOperatorStateBackend build() throws BackendBuildingException {
+		Map<String, PartitionableListState<?>> registeredOperatorStates = new HashMap<>();
+		Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStates = new HashMap<>();
+		CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
+		AbstractSnapshotStrategy<OperatorStateHandle> snapshotStrategy =
+			new DefaultOperatorStateBackendSnapshotStrategy(
+				userClassloader,
+				asynchronousSnapshots,
+				registeredOperatorStates,
+				registeredBroadcastStates,
+				cancelStreamRegistryForBackend);
+		OperatorStateRestoreOperation restoreOperation = new OperatorStateRestoreOperation(
+			cancelStreamRegistry,
+			userClassloader,
+			registeredOperatorStates,
+			registeredBroadcastStates,
+			restoreStateHandles
+		);
+		try {
+			restoreOperation.restore();
+		} catch (Exception e) {
+			IOUtils.closeQuietly(cancelStreamRegistryForBackend);
+			throw new BackendBuildingException("Failed when trying to restore operator state backend", e);
+		}
+		return new DefaultOperatorStateBackend(
+			executionConfig,
+			cancelStreamRegistryForBackend,
+			registeredOperatorStates,
+			registeredBroadcastStates,
+			new HashMap<>(),
+			new HashMap<>(),
+			snapshotStrategy,
+			operatorID,
+			subTaskIndex
+		);
+	}
+
+	public DefaultOperatorStateBackendBuilder setOperatorID(OperatorID operatorID) {
+		this.operatorID = operatorID;
+		return this;
+	}
+
+	public DefaultOperatorStateBackendBuilder setSubTaskIndex(int subTaskIndex) {
+		this.subTaskIndex = subTaskIndex;
+		return this;
+	}
 }

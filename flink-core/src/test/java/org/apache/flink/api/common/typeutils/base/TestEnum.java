@@ -19,10 +19,6 @@
 package org.apache.flink.api.common.typeutils.base;
 
 public enum TestEnum {
-    FOO,
-    BAR,
-    PETER,
-    PAULA,
-    NATHANIEL,
-    EMMA
+	FOO, BAR, PETER, PAULA, NATHANIEL, EMMA
 }
+

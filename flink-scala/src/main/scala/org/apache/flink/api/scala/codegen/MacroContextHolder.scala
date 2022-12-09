@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.api.scala.codegen
 
 import org.apache.flink.annotation.Internal
@@ -27,8 +28,8 @@ private[flink] class MacroContextHolder[C <: Context](val c: C)
 @Internal
 private[flink] object MacroContextHolder {
   def newMacroHelper[C <: Context](c: C) = new MacroContextHolder[c.type](c)
-    with TypeDescriptors[c.type]
-    with TypeAnalyzer[c.type]
-    with TreeGen[c.type]
-    with TypeInformationGen[c.type]
+      with TypeDescriptors[c.type]
+      with TypeAnalyzer[c.type]
+      with TreeGen[c.type]
+      with TypeInformationGen[c.type]
 }

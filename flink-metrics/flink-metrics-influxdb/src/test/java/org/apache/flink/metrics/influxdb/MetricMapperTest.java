@@ -25,96 +25,101 @@ import org.apache.flink.metrics.Meter;
 import org.apache.flink.metrics.SimpleCounter;
 import org.apache.flink.metrics.util.TestHistogram;
 import org.apache.flink.metrics.util.TestMeter;
+import org.apache.flink.util.TestLogger;
 
 import org.influxdb.dto.Point;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
- * Test for {@link MetricMapper} checking that metrics are converted to InfluxDB client objects as
- * expected.
+ * Test for {@link MetricMapper} checking that metrics are converted to InfluxDB client objects as expected.
  */
-class MetricMapperTest {
+public class MetricMapperTest extends TestLogger {
 
-    private static final String NAME = "a-metric-name";
-    private static final MeasurementInfo INFO = getMeasurementInfo(NAME);
-    private static final Instant TIMESTAMP = Instant.now();
+	private static final String NAME = "a-metric-name";
+	private static final MeasurementInfo INFO = getMeasurementInfo(NAME);
+	private static final Instant TIMESTAMP = Instant.now();
 
-    @Test
-    void testMapGauge() {
-        verifyPoint(MetricMapper.map(INFO, TIMESTAMP, (Gauge<Number>) () -> 42), "value=42");
+	@Test
+	public void testMapGauge() {
+		verifyPoint(
+			MetricMapper.map(INFO, TIMESTAMP, (Gauge<Number>) () -> 42),
+			"value=42");
 
-        verifyPoint(MetricMapper.map(INFO, TIMESTAMP, (Gauge<Number>) () -> null), "value=null");
+		verifyPoint(
+			MetricMapper.map(INFO, TIMESTAMP, (Gauge<Number>) () -> null),
+			"value=null");
 
-        verifyPoint(
-                MetricMapper.map(INFO, TIMESTAMP, (Gauge<String>) () -> "hello"), "value=hello");
+		verifyPoint(
+			MetricMapper.map(INFO, TIMESTAMP, (Gauge<String>) () -> "hello"),
+			"value=hello");
 
-        verifyPoint(MetricMapper.map(INFO, TIMESTAMP, (Gauge<Long>) () -> 42L), "value=42");
-    }
+		verifyPoint(
+			MetricMapper.map(INFO, TIMESTAMP, (Gauge<Long>) () -> 42L),
+			"value=42");
+	}
 
-    @Test
-    void testMapCounter() {
-        Counter counter = new SimpleCounter();
-        counter.inc(42L);
+	@Test
+	public void testMapCounter() {
+		Counter counter = new SimpleCounter();
+		counter.inc(42L);
 
-        verifyPoint(MetricMapper.map(INFO, TIMESTAMP, counter), "count=42");
-    }
+		verifyPoint(
+			MetricMapper.map(INFO, TIMESTAMP, counter),
+			"count=42");
+	}
 
-    @Test
-    void testMapHistogram() {
-        Histogram histogram = new TestHistogram();
+	@Test
+	public void testMapHistogram() {
+		Histogram histogram = new TestHistogram();
 
-        verifyPoint(
-                MetricMapper.map(INFO, TIMESTAMP, histogram),
-                "count=3",
-                "max=6",
-                "mean=4.0",
-                "min=7",
-                "p50=0.5",
-                "p75=0.75",
-                "p95=0.95",
-                "p98=0.98",
-                "p99=0.99",
-                "p999=0.999",
-                "stddev=5.0");
-    }
+		verifyPoint(
+			MetricMapper.map(INFO, TIMESTAMP, histogram),
+			"count=3",
+			"max=6",
+			"mean=4.0",
+			"min=7",
+			"p50=0.5",
+			"p75=0.75",
+			"p95=0.95",
+			"p98=0.98",
+			"p99=0.99",
+			"p999=0.999",
+			"stddev=5.0");
+	}
 
-    @Test
-    void testMapMeter() {
-        Meter meter = new TestMeter();
+	@Test
+	public void testMapMeter() {
+		Meter meter = new TestMeter();
 
-        verifyPoint(MetricMapper.map(INFO, TIMESTAMP, meter), "count=100", "rate=5.0");
-    }
+		verifyPoint(
+			MetricMapper.map(INFO, TIMESTAMP, meter),
+			"count=100",
+			"rate=5.0");
+	}
 
-    private void verifyPoint(Point point, String... expectedFields) {
-        // Most methods of Point are package private. We use toString() method to check that values
-        // are as expected.
-        // An alternative can be to call lineProtocol() method, which additionally escapes values
-        // for InfluxDB format.
-        assertThat(point.toString())
-                .isEqualTo(
-                        "Point [name="
-                                + NAME
-                                + ", time="
-                                + TIMESTAMP.toEpochMilli()
-                                + ", tags={tag-1=42, tag-2=green}"
-                                + ", precision=MILLISECONDS"
-                                + ", fields={"
-                                + String.join(", ", expectedFields)
-                                + "}"
-                                + "]",
-                        point.toString());
-    }
+	private void verifyPoint(Point point, String... expectedFields) {
+		// Most methods of Point are package private. We use toString() method to check that values are as expected.
+		// An alternative can be to call lineProtocol() method, which additionally escapes values for InfluxDB format.
+		assertEquals(
+			"Point [name=" + NAME
+			+ ", time=" + TIMESTAMP.toEpochMilli()
+			+ ", tags={tag-1=42, tag-2=green}"
+			+ ", precision=MILLISECONDS"
+			+ ", fields={" + String.join(", ", expectedFields) + "}"
+			+ "]",
+			point.toString());
+	}
 
-    private static MeasurementInfo getMeasurementInfo(String name) {
-        Map<String, String> tags = new HashMap<>();
-        tags.put("tag-1", "42");
-        tags.put("tag-2", "green");
-        return new MeasurementInfo(name, tags);
-    }
+	private static MeasurementInfo getMeasurementInfo(String name) {
+		Map<String, String> tags = new HashMap<>();
+		tags.put("tag-1", "42");
+		tags.put("tag-2", "green");
+		return new MeasurementInfo(name, tags);
+	}
 }

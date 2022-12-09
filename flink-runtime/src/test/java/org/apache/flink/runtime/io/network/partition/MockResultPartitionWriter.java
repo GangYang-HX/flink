@@ -18,106 +18,91 @@
 
 package org.apache.flink.runtime.io.network.partition;
 
-import org.apache.flink.runtime.checkpoint.CheckpointException;
-import org.apache.flink.runtime.event.AbstractEvent;
-import org.apache.flink.runtime.io.network.api.StopMode;
 import org.apache.flink.runtime.io.network.api.writer.ResultPartitionWriter;
-import org.apache.flink.runtime.metrics.groups.TaskIOMetricGroup;
+import org.apache.flink.runtime.io.network.buffer.BufferBuilder;
+import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
-/** Dummy behaviours of {@link ResultPartitionWriter} for test purpose. */
+/**
+ * Dummy behaviours of {@link ResultPartitionWriter} for test purpose.
+ */
 public class MockResultPartitionWriter implements ResultPartitionWriter {
 
-    private final ResultPartitionID partitionId = new ResultPartitionID();
+	private final ResultPartitionID partitionId = new ResultPartitionID();
 
-    @Override
-    public void setup() {}
+	@Override
+	public void setup() {
+	}
 
-    @Override
-    public ResultPartitionID getPartitionId() {
-        return partitionId;
-    }
+	@Override
+	public ResultPartitionID getPartitionId() {
+		return partitionId;
+	}
 
-    @Override
-    public int getNumberOfSubpartitions() {
-        return 1;
-    }
+	@Override
+	public int getNumberOfSubpartitions() {
+		return 1;
+	}
 
-    @Override
-    public int getNumTargetKeyGroups() {
-        return 1;
-    }
+	@Override
+	public int getNumTargetKeyGroups() {
+		return 1;
+	}
 
-    @Override
-    public void setMaxOverdraftBuffersPerGate(int maxOverdraftBuffersPerGate) {}
+	@Override
+	public int addBufferConsumer(BufferConsumer bufferConsumer, int subpartitionIndex) throws IOException {
+		return addBufferConsumer(bufferConsumer, subpartitionIndex, 0);
+	}
 
-    @Override
-    public void emitRecord(ByteBuffer record, int targetSubpartition) throws IOException {}
+	@Override
+	public int addBufferConsumer(
+			BufferConsumer bufferConsumer,
+			int targetChannel,
+			int partialRecordLength) throws IOException {
+		bufferConsumer.close();
+		return Integer.MAX_VALUE;
+	}
 
-    @Override
-    public void broadcastRecord(ByteBuffer record) throws IOException {}
+	@Override
+	public BufferBuilder getBufferBuilder(int targetChannel) throws IOException, InterruptedException {
+		throw new UnsupportedOperationException();
+	}
 
-    @Override
-    public void broadcastEvent(AbstractEvent event, boolean isPriorityEvent) throws IOException {}
+	@Override
+	public ResultSubpartition getSubpartition(int subpartitionIndex) {
+		throw new UnsupportedOperationException();
+	}
 
-    @Override
-    public void alignedBarrierTimeout(long checkpointId) throws IOException {}
+	public BufferBuilder tryGetBufferBuilder(int targetChannel) throws IOException {
+		throw new UnsupportedOperationException();
+	}
 
-    @Override
-    public void abortCheckpoint(long checkpointId, CheckpointException cause) {}
+	@Override
+	public void flushAll() {
+	}
 
-    @Override
-    public void notifyEndOfData(StopMode mode) throws IOException {}
+	@Override
+	public void flush(int subpartitionIndex) {
+	}
 
-    @Override
-    public CompletableFuture<Void> getAllDataProcessedFuture() {
-        return CompletableFuture.completedFuture(null);
-    }
+	@Override
+	public void fail(@Nullable Throwable throwable) {
+	}
 
-    @Override
-    public ResultSubpartitionView createSubpartitionView(
-            int index, BufferAvailabilityListener availabilityListener) throws IOException {
-        throw new UnsupportedOperationException();
-    }
+	@Override
+	public void finish() {
+	}
 
-    @Override
-    public void setMetricGroup(TaskIOMetricGroup metrics) {}
+	@Override
+	public CompletableFuture<?> getAvailableFuture() {
+		return AVAILABLE;
+	}
 
-    @Override
-    public void flushAll() {}
-
-    @Override
-    public void flush(int subpartitionIndex) {}
-
-    @Override
-    public void fail(@Nullable Throwable throwable) {}
-
-    @Override
-    public void finish() {}
-
-    @Override
-    public boolean isFinished() {
-        return false;
-    }
-
-    @Override
-    public void release(Throwable cause) {}
-
-    @Override
-    public boolean isReleased() {
-        return false;
-    }
-
-    @Override
-    public CompletableFuture<?> getAvailableFuture() {
-        return AVAILABLE;
-    }
-
-    @Override
-    public void close() {}
+	@Override
+	public void close() {
+	}
 }

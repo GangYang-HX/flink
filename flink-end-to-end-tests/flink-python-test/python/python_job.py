@@ -21,8 +21,9 @@ import shutil
 import sys
 import tempfile
 
-from pyflink.table import EnvironmentSettings, TableEnvironment
-from pyflink.table.expressions import col, call, lit
+from pyflink.dataset import ExecutionEnvironment
+from pyflink.table import BatchTableEnvironment, TableConfig
+
 
 def word_count():
     content = "line Licensed to the Apache Software Foundation ASF under one " \
@@ -33,12 +34,9 @@ def word_count():
               "License you may not use this file except in compliance " \
               "with the License"
 
-    t_env = TableEnvironment.create(EnvironmentSettings.in_batch_mode())
-
-    # used to test pipeline.jars and pipeline.classpaths
-    config_key = sys.argv[1]
-    config_value = sys.argv[2]
-    t_env.get_config().set(config_key, config_value)
+    t_config = TableConfig()
+    env = ExecutionEnvironment.get_execution_environment()
+    t_env = BatchTableEnvironment.create(env, t_config)
 
     # register Results table in table environment
     tmp_dir = tempfile.gettempdir()
@@ -57,29 +55,25 @@ def word_count():
     sink_ddl = """
         create table Results(
             word VARCHAR,
-            `count` BIGINT,
-            `count_java` BIGINT
+            `count` BIGINT
         ) with (
             'connector.type' = 'filesystem',
             'format.type' = 'csv',
             'connector.path' = '{}'
         )
         """.format(result_path)
-    t_env.execute_sql(sink_ddl)
+    t_env.sql_update(sink_ddl)
 
-    t_env.execute_sql("create temporary system function add_one as 'add_one.add_one' language python")
-    t_env.register_java_function("add_one_java", "org.apache.flink.python.tests.util.AddOne")
+    t_env.sql_update("create temporary system function add_one as 'add_one.add_one' language python")
 
     elements = [(word, 0) for word in content.split(" ")]
-    t = t_env.from_elements(elements, ["word", "count"])
-    t.select(t.word,
-             call("add_one", t.count).alias("count"),
-             call("add_one_java", t.count).alias("count_java")) \
-        .group_by(t.word) \
-        .select(t.word,
-                col("count").count.alias("count"),
-                col("count_java").count.alias("count_java")) \
-        .execute_insert("Results")
+    t_env.from_elements(elements, ["word", "count"]) \
+        .select("word, add_one(count) as count") \
+        .group_by("word") \
+        .select("word, count(count) as count") \
+        .insert_into("Results")
+
+    t_env.execute("word_count")
 
 
 if __name__ == '__main__':

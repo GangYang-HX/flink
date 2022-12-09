@@ -18,84 +18,67 @@
 
 package org.apache.flink.kubernetes.kubeclient.factory;
 
-import org.apache.flink.configuration.SecurityOptions;
 import org.apache.flink.kubernetes.KubernetesTestUtils;
-import org.apache.flink.kubernetes.kubeclient.FlinkPod;
 import org.apache.flink.kubernetes.kubeclient.KubernetesTaskManagerTestBase;
-import org.apache.flink.kubernetes.utils.Constants;
+import org.apache.flink.kubernetes.kubeclient.parameters.KubernetesTaskManagerParameters;
 
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.Pod;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.List;
 
-import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOG4J_NAME;
-import static org.apache.flink.kubernetes.utils.Constants.CONFIG_FILE_LOGBACK_NAME;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-/** General tests for the {@link KubernetesTaskManagerFactory}. */
-class KubernetesTaskManagerFactoryTest extends KubernetesTaskManagerTestBase {
+/**
+ * General tests for the {@link KubernetesTaskManagerFactory}.
+ */
+public class KubernetesTaskManagerFactoryTest extends KubernetesTaskManagerTestBase {
 
-    private Pod resultPod;
+	private Pod resultPod;
 
-    @Override
-    protected void setupFlinkConfig() {
-        super.setupFlinkConfig();
+	@Override
+	protected void onSetup() throws Exception {
+		super.onSetup();
 
-        flinkConfig.set(
-                SecurityOptions.KERBEROS_LOGIN_KEYTAB, kerberosDir.toString() + "/" + KEYTAB_FILE);
-        flinkConfig.set(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL, "test");
-        flinkConfig.set(
-                SecurityOptions.KERBEROS_KRB5_PATH, kerberosDir.toString() + "/" + KRB5_CONF_FILE);
-    }
+		KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, "logback.xml");
+		KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, "log4j.properties");
 
-    @Override
-    protected void onSetup() throws Exception {
-        super.onSetup();
+		setHadoopConfDirEnv();
+		generateHadoopConfFileItems();
 
-        KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOGBACK_NAME);
-        KubernetesTestUtils.createTemporyFile("some data", flinkConfDir, CONFIG_FILE_LOG4J_NAME);
+		this.resultPod =
+			KubernetesTaskManagerFactory.buildTaskManagerKubernetesPod(kubernetesTaskManagerParameters).getInternalResource();
+	}
 
-        setHadoopConfDirEnv();
-        generateHadoopConfFileItems();
+	@Test
+	public void testPod() {
+		assertEquals(POD_NAME, this.resultPod.getMetadata().getName());
+		assertEquals(5, this.resultPod.getMetadata().getLabels().size());
+		assertEquals(2, this.resultPod.getSpec().getVolumes().size());
+	}
 
-        generateKerberosFileItems();
+	@Test
+	public void testContainer() {
+		final List<Container> resultContainers = this.resultPod.getSpec().getContainers();
+		assertEquals(1, resultContainers.size());
 
-        this.resultPod =
-                KubernetesTaskManagerFactory.buildTaskManagerKubernetesPod(
-                                new FlinkPod.Builder().build(), kubernetesTaskManagerParameters)
-                        .getInternalResource();
-    }
+		final Container resultMainContainer = resultContainers.get(0);
+		assertEquals(
+			KubernetesTaskManagerParameters.TASK_MANAGER_MAIN_CONTAINER_NAME,
+			resultMainContainer.getName());
+		assertEquals(CONTAINER_IMAGE, resultMainContainer.getImage());
+		assertEquals(CONTAINER_IMAGE_PULL_POLICY.name(), resultMainContainer.getImagePullPolicy());
 
-    @Test
-    void testPod() {
-        assertThat(this.resultPod.getMetadata().getName()).isEqualTo(POD_NAME);
-        assertThat(this.resultPod.getMetadata().getLabels()).hasSize(5);
-        assertThat(this.resultPod.getSpec().getVolumes()).hasSize(4);
-    }
+		assertEquals(4, resultMainContainer.getEnv().size());
+		assertTrue(resultMainContainer.getEnv()
+			.stream()
+			.anyMatch(envVar -> envVar.getName().equals("key1")));
 
-    @Test
-    void testContainer() {
-        final List<Container> resultContainers = this.resultPod.getSpec().getContainers();
-        assertThat(resultContainers).hasSize(1);
-
-        final Container resultMainContainer = resultContainers.get(0);
-        assertThat(resultMainContainer.getName()).isEqualTo(Constants.MAIN_CONTAINER_NAME);
-        assertThat(resultMainContainer.getImage()).isEqualTo(CONTAINER_IMAGE);
-        assertThat(resultMainContainer.getImagePullPolicy())
-                .isEqualTo(CONTAINER_IMAGE_PULL_POLICY.name());
-
-        assertThat(resultMainContainer.getEnv()).hasSize(5);
-        assertThat(
-                        resultMainContainer.getEnv().stream()
-                                .anyMatch(envVar -> envVar.getName().equals("key1")))
-                .isTrue();
-
-        assertThat(resultMainContainer.getPorts()).hasSize(1);
-        assertThat(resultMainContainer.getCommand()).hasSize(1);
-        // The args list is [bash, -c, 'java -classpath $FLINK_CLASSPATH ...'].
-        assertThat(resultMainContainer.getArgs()).hasSize(3);
-        assertThat(resultMainContainer.getVolumeMounts()).hasSize(4);
-    }
+		assertEquals(1, resultMainContainer.getPorts().size());
+		assertEquals(1, resultMainContainer.getCommand().size());
+		assertEquals(3, resultMainContainer.getArgs().size());
+		assertEquals(2, resultMainContainer.getVolumeMounts().size());
+	}
 }

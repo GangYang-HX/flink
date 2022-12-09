@@ -26,7 +26,7 @@ WHERE
           AND l_suppkey = ps_suppkey
           -- AND l_shipdate >= date('1994-01-01')
           -- AND l_shipdate < date('1994-01-01') + interval '1' YEAR
-          -- we don't support the above format
+          -- Blink does not support the above format
           AND l_shipdate >= date '1994-01-01'
           AND l_shipdate < date '1994-01-01' + interval '1' YEAR
 )

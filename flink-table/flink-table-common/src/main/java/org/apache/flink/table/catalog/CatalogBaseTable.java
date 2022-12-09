@@ -18,8 +18,6 @@
 
 package org.apache.flink.table.catalog;
 
-import org.apache.flink.annotation.PublicEvolving;
-import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.factories.DynamicTableFactory;
 
@@ -27,87 +25,60 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * A common parent that describes the <i>unresolved</i> metadata of a table or view in a catalog.
- *
- * @see CatalogTable
- * @see CatalogView
+ * CatalogBaseTable is the common parent of table and view. It has a map of
+ * key-value pairs defining the properties of the table.
  */
-@PublicEvolving
 public interface CatalogBaseTable {
 
-    /** The kind of {@link CatalogBaseTable}. */
-    @PublicEvolving
-    enum TableKind {
-        TABLE,
-        VIEW
-    }
+	/**
+	 * @deprecated Use {@link #getOptions()}.
+	 */
+	@Deprecated
+	Map<String, String> getProperties();
 
-    /** The kind of table this {@link CatalogBaseTable} describes. */
-    TableKind getTableKind();
+	/**
+	 * Returns a map of string-based options.
+	 *
+	 * <p>In case of {@link CatalogTable}, these options may determine the kind of connector and its
+	 * configuration for accessing the data in the external system. See {@link DynamicTableFactory}
+	 * for more information.
+	 */
+	default Map<String, String> getOptions() {
+		return getProperties();
+	}
 
-    /**
-     * Returns a map of string-based options.
-     *
-     * <p>In case of {@link CatalogTable}, these options may determine the kind of connector and its
-     * configuration for accessing the data in the external system. See {@link DynamicTableFactory}
-     * for more information. If a {@link CatalogTable} should not be serializable, an implementation
-     * can simply throw a runtime exception in this method.
-     */
-    Map<String, String> getOptions();
+	/**
+	 * Get the schema of the table.
+	 *
+	 * @return schema of the table/view.
+	 */
+	TableSchema getSchema();
 
-    /**
-     * @deprecated This method returns the deprecated {@link TableSchema} class. The old class was a
-     *     hybrid of resolved and unresolved schema information. It has been replaced by the new
-     *     {@link Schema} which is always unresolved and will be resolved by the framework later.
-     */
-    @Deprecated
-    default TableSchema getSchema() {
-        return null;
-    }
+	/**
+	 * Get comment of the table or view.
+	 *
+	 * @return comment of the table/view.
+	 */
+	String getComment();
 
-    /**
-     * Returns the schema of the table or view.
-     *
-     * <p>The schema can reference objects from other catalogs and will be resolved and validated by
-     * the framework when accessing the table or view.
-     *
-     * @see ResolvedCatalogTable
-     * @see ResolvedCatalogView
-     */
-    default Schema getUnresolvedSchema() {
-        final TableSchema oldSchema = getSchema();
-        if (oldSchema == null) {
-            throw new UnsupportedOperationException(
-                    "A CatalogBaseTable must implement getUnresolvedSchema().");
-        }
-        return oldSchema.toSchema();
-    }
+	/**
+	 * Get a deep copy of the CatalogBaseTable instance.
+	 *
+	 * @return a copy of the CatalogBaseTable instance
+	 */
+	CatalogBaseTable copy();
 
-    /**
-     * Get comment of the table or view.
-     *
-     * @return comment of the table/view.
-     */
-    String getComment();
+	/**
+	 * Get a brief description of the table or view.
+	 *
+	 * @return an optional short description of the table/view
+	 */
+	Optional<String> getDescription();
 
-    /**
-     * Get a deep copy of the CatalogBaseTable instance.
-     *
-     * @return a copy of the CatalogBaseTable instance
-     */
-    CatalogBaseTable copy();
-
-    /**
-     * Get a brief description of the table or view.
-     *
-     * @return an optional short description of the table/view
-     */
-    Optional<String> getDescription();
-
-    /**
-     * Get a detailed description of the table or view.
-     *
-     * @return an optional long description of the table/view
-     */
-    Optional<String> getDetailedDescription();
+	/**
+	 * Get a detailed description of the table or view.
+	 *
+	 * @return an optional long description of the table/view
+	 */
+	Optional<String> getDetailedDescription();
 }

@@ -1,0 +1,59 @@
+syntax = "proto3";
+package org.apache.flink.formats.protobuf.proto;
+option java_package = "org.apache.flink.formats.protobuf.testproto";
+option java_multiple_files = false;
+
+message MyTest {
+    int32 a1 = 1;
+    int64 b1 = 2;
+    string c1 = 3;
+    float d1 = 4;
+    double e1 = 5;
+    bool g1 =7;
+
+    int32 a2 = 8;
+    int64 b2 = 9;
+    string c2 = 10;
+    float d2 = 11;
+    double e2 = 12;
+    bool g2 =14;
+
+    int32 a3 = 15;
+    int64 b3 = 16;
+    string c3 = 17;
+    float d3 = 18;
+    double e3 = 19;
+    bool g3 =21;
+
+        int32 a4 = 22;
+        int64 b4 = 23;
+        string c4 = 24;
+        float d4 = 25;
+        double e4 = 26;
+        bool g4 =28;
+
+            int32 a5 = 29;
+            int64 b5 = 30;
+            string c5 = 31;
+            float d5 = 32;
+            double e5 = 33;
+            bool g5 =35;
+
+                int32 a6 = 36;
+                int64 b6 = 37;
+                string c6 = 38;
+                float d6 = 39;
+                double e6 = 40;
+                bool g6 =42;
+
+                    int32 a7 = 43;
+                    int64 b7 =44;
+                    string c7 = 45;
+                    float d7 = 46;
+                    double e7 = 47;
+                    bool g7 =49;
+
+
+}
+
+

@@ -36,7 +36,7 @@ public class PbFormatOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription(
-                            "Optional read flag to skip rows with parse errors instead of failing; false by default.");
+                            "Optional flag to skip rows with parse errors instead of failing; false by default.");
 
     public static final ConfigOption<Boolean> READ_DEFAULT_VALUES =
             ConfigOptions.key("read-default-values")
@@ -52,4 +52,16 @@ public class PbFormatOptions {
                     .withDescription(
                             "When serializing to protobuf data, this is the optional config to specify the string literal in protobuf's array/map in case of null values."
                                     + "By default empty string is used.");
+	public static final ConfigOption<Boolean> IGNORE_NULL_ROWS =
+		ConfigOptions.key("ignore-null-rows")
+			.booleanType()
+			.defaultValue(true)
+			.withDescription(
+				"Optional flag to read as default values instead of null when row does not exist in deserialization; default to true.");
+	public static final ConfigOption<Boolean> ADD_DEFAULT_VALUE =
+		ConfigOptions.key("add-default-value")
+			.booleanType()
+			.defaultValue(false)
+			.withDescription(
+				"Optional flag to add  default values instead of null when row does not exist in deserialization; default to false.");
 }

@@ -24,19 +24,17 @@ import org.elasticsearch.client.RestClientBuilder;
 import java.io.Serializable;
 
 /**
- * A factory that is used to configure the {@link org.elasticsearch.client.RestHighLevelClient}
- * internally used in the {@link ElasticsearchSink}.
- *
- * @deprecated This has been deprecated and will be removed in the future.
+ * A factory that is used to configure the {@link org.elasticsearch.client.RestHighLevelClient} internally
+ * used in the {@link ElasticsearchSink}.
  */
-@Deprecated
 @PublicEvolving
 public interface RestClientFactory extends Serializable {
 
-    /**
-     * Configures the rest client builder.
-     *
-     * @param restClientBuilder the configured rest client builder.
-     */
-    void configureRestClientBuilder(RestClientBuilder restClientBuilder);
+	/**
+	 * Configures the rest client builder.
+	 *
+	 * @param restClientBuilder the configured rest client builder.
+	 */
+	void configureRestClientBuilder(RestClientBuilder restClientBuilder);
+
 }

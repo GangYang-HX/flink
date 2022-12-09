@@ -30,6 +30,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 
+import org.apache.commons.io.FileUtils;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
@@ -40,197 +41,201 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Test for streaming program behaviour in case of TaskManager failure based on {@link
- * AbstractTaskManagerProcessFailureRecoveryTest}.
+ * Test for streaming program behaviour in case of TaskManager failure
+ * based on {@link AbstractTaskManagerProcessFailureRecoveryTest}.
  *
- * <p>The logic in this test is as follows: - The source slowly emits records (every 10 msecs) until
- * the test driver gives the "go" for regular execution - The "go" is given after the first
- * taskmanager has been killed, so it can only happen in the recovery run - The mapper must not be
- * slow, because otherwise the checkpoint barrier cannot pass the mapper and no checkpoint will be
- * completed before the killing of the first TaskManager.
+ * <p>The logic in this test is as follows:
+ *  - The source slowly emits records (every 10 msecs) until the test driver
+ *    gives the "go" for regular execution
+ *  - The "go" is given after the first taskmanager has been killed, so it can only
+ *    happen in the recovery run
+ *  - The mapper must not be slow, because otherwise the checkpoint barrier cannot pass
+ *    the mapper and no checkpoint will be completed before the killing of the first
+ *    TaskManager.
  */
 @SuppressWarnings("serial")
-public class TaskManagerProcessFailureStreamingRecoveryITCase
-        extends AbstractTaskManagerProcessFailureRecoveryTest {
-    @Rule public TemporaryFolder tempFolder = new TemporaryFolder();
+public class TaskManagerProcessFailureStreamingRecoveryITCase extends AbstractTaskManagerProcessFailureRecoveryTest {
+	@Rule
+	public TemporaryFolder tempFolder = new TemporaryFolder();
 
-    private static final int DATA_COUNT = 10000;
+	private static final int DATA_COUNT = 10000;
 
-    @Override
-    public void testTaskManagerFailure(Configuration configuration, final File coordinateDir)
-            throws Exception {
+	@Override
+	public void testTaskManagerFailure(Configuration configuration, final File coordinateDir) throws Exception {
 
-        final File tempCheckpointDir = tempFolder.newFolder();
+		final File tempCheckpointDir = tempFolder.newFolder();
 
-        StreamExecutionEnvironment env =
-                StreamExecutionEnvironment.createRemoteEnvironment(
-                        "localhost",
-                        1337, // not needed since we use ZooKeeper
-                        configuration);
-        env.setParallelism(PARALLELISM);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 1000));
-        env.enableCheckpointing(200);
+		StreamExecutionEnvironment env = StreamExecutionEnvironment.createRemoteEnvironment(
+			"localhost",
+			1337, // not needed since we use ZooKeeper
+			configuration);
+		env.setParallelism(PARALLELISM);
+				env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 1000));
+		env.enableCheckpointing(200);
 
-        env.setStateBackend(new FsStateBackend(tempCheckpointDir.getAbsoluteFile().toURI()));
+		env.setStateBackend(new FsStateBackend(tempCheckpointDir.getAbsoluteFile().toURI()));
 
-        DataStream<Long> result =
-                env.addSource(new SleepyDurableGenerateSequence(coordinateDir, DATA_COUNT))
-                        // add a non-chained no-op map to test the chain state restore logic
-                        .map(
-                                new MapFunction<Long, Long>() {
-                                    @Override
-                                    public Long map(Long value) throws Exception {
-                                        return value;
-                                    }
-                                })
-                        .startNewChain()
-                        // populate the coordinate directory so we can proceed to TaskManager
-                        // failure
-                        .map(new Mapper(coordinateDir));
+		DataStream<Long> result = env.addSource(new SleepyDurableGenerateSequence(coordinateDir, DATA_COUNT))
+				// add a non-chained no-op map to test the chain state restore logic
+				.map(new MapFunction<Long, Long>() {
+					@Override
+					public Long map(Long value) throws Exception {
+						return value;
+					}
+				}).startNewChain()
+						// populate the coordinate directory so we can proceed to TaskManager failure
+				.map(new Mapper(coordinateDir));
 
-        // write result to temporary file
-        result.addSink(new CheckpointedSink(DATA_COUNT));
+		//write result to temporary file
+		result.addSink(new CheckpointedSink(DATA_COUNT));
 
-        // blocking call until execution is done
-        env.execute();
-    }
+		try {
+			// blocking call until execution is done
+			env.execute();
 
-    private static class SleepyDurableGenerateSequence extends RichParallelSourceFunction<Long>
-            implements ListCheckpointed<Long> {
+			// TODO: Figure out why this fails when ran with other tests
+			// Check whether checkpoints have been cleaned up properly
+			// assertDirectoryEmpty(tempCheckpointDir);
+		}
+		finally {
+			// clean up
+			if (tempCheckpointDir.exists()) {
+				FileUtils.deleteDirectory(tempCheckpointDir);
+			}
+		}
+	}
 
-        private static final long SLEEP_TIME = 50;
+	private static class SleepyDurableGenerateSequence extends RichParallelSourceFunction<Long>
+			implements ListCheckpointed<Long> {
 
-        private final File coordinateDir;
-        private final long end;
+		private static final long SLEEP_TIME = 50;
 
-        private volatile boolean isRunning = true;
+		private final File coordinateDir;
+		private final long end;
 
-        private long collected;
+		private volatile boolean isRunning = true;
 
-        public SleepyDurableGenerateSequence(File coordinateDir, long end) {
-            this.coordinateDir = coordinateDir;
-            this.end = end;
-        }
+		private long collected;
 
-        @Override
-        public void run(SourceContext<Long> sourceCtx) throws Exception {
-            final Object checkpointLock = sourceCtx.getCheckpointLock();
+		public SleepyDurableGenerateSequence(File coordinateDir, long end) {
+			this.coordinateDir = coordinateDir;
+			this.end = end;
+		}
 
-            RuntimeContext runtimeCtx = getRuntimeContext();
+		@Override
+		public void run(SourceContext<Long> sourceCtx) throws Exception {
+			final Object checkpointLock = sourceCtx.getCheckpointLock();
 
-            final long stepSize = runtimeCtx.getNumberOfParallelSubtasks();
-            final long congruence = runtimeCtx.getIndexOfThisSubtask();
-            final long toCollect =
-                    (end % stepSize > congruence) ? (end / stepSize + 1) : (end / stepSize);
+			RuntimeContext runtimeCtx = getRuntimeContext();
 
-            final File proceedFile = new File(coordinateDir, PROCEED_MARKER_FILE);
-            boolean checkForProceedFile = true;
+			final long stepSize = runtimeCtx.getNumberOfParallelSubtasks();
+			final long congruence = runtimeCtx.getIndexOfThisSubtask();
+			final long toCollect = (end % stepSize > congruence) ? (end / stepSize + 1) : (end / stepSize);
 
-            while (isRunning && collected < toCollect) {
-                // check if the proceed file exists (then we go full speed)
-                // if not, we always recheck and sleep
-                if (checkForProceedFile) {
-                    if (proceedFile.exists()) {
-                        checkForProceedFile = false;
-                    } else {
-                        // otherwise wait so that we make slow progress
-                        Thread.sleep(SLEEP_TIME);
-                    }
-                }
+			final File proceedFile = new File(coordinateDir, PROCEED_MARKER_FILE);
+			boolean checkForProceedFile = true;
 
-                synchronized (checkpointLock) {
-                    sourceCtx.collect(collected * stepSize + congruence);
-                    collected++;
-                }
-            }
-        }
+			while (isRunning && collected < toCollect) {
+				// check if the proceed file exists (then we go full speed)
+				// if not, we always recheck and sleep
+				if (checkForProceedFile) {
+					if (proceedFile.exists()) {
+						checkForProceedFile = false;
+					} else {
+						// otherwise wait so that we make slow progress
+						Thread.sleep(SLEEP_TIME);
+					}
+				}
 
-        @Override
-        public void cancel() {
-            isRunning = false;
-        }
+				synchronized (checkpointLock) {
+					sourceCtx.collect(collected * stepSize + congruence);
+					collected++;
+				}
+			}
+		}
 
-        @Override
-        public List<Long> snapshotState(long checkpointId, long timestamp) throws Exception {
-            return Collections.singletonList(this.collected);
-        }
+		@Override
+		public void cancel() {
+			isRunning = false;
+		}
 
-        @Override
-        public void restoreState(List<Long> state) throws Exception {
-            if (state.isEmpty() || state.size() > 1) {
-                throw new RuntimeException(
-                        "Test failed due to unexpected recovered state size " + state.size());
-            }
-            this.collected = state.get(0);
-        }
-    }
+		@Override
+		public List<Long> snapshotState(long checkpointId, long timestamp) throws Exception {
+			return Collections.singletonList(this.collected);
+		}
 
-    private static class Mapper extends RichMapFunction<Long, Long> {
-        private boolean markerCreated = false;
-        private File coordinateDir;
+		@Override
+		public void restoreState(List<Long> state) throws Exception {
+			if (state.isEmpty() || state.size() > 1) {
+				throw new RuntimeException("Test failed due to unexpected recovered state size " + state.size());
+			}
+			this.collected = state.get(0);
+		}
+	}
 
-        public Mapper(File coordinateDir) {
-            this.coordinateDir = coordinateDir;
-        }
+	private static class Mapper extends RichMapFunction<Long, Long> {
+		private boolean markerCreated = false;
+		private File coordinateDir;
 
-        @Override
-        public Long map(Long value) throws Exception {
-            if (!markerCreated) {
-                int taskIndex = getRuntimeContext().getIndexOfThisSubtask();
-                touchFile(new File(coordinateDir, READY_MARKER_FILE_PREFIX + taskIndex));
-                markerCreated = true;
-            }
-            return value;
-        }
-    }
+		public Mapper(File coordinateDir) {
+			this.coordinateDir = coordinateDir;
+		}
 
-    private static class CheckpointedSink extends RichSinkFunction<Long>
-            implements ListCheckpointed<Long> {
+		@Override
+		public Long map(Long value) throws Exception {
+			if (!markerCreated) {
+				int taskIndex = getRuntimeContext().getIndexOfThisSubtask();
+				touchFile(new File(coordinateDir, READY_MARKER_FILE_PREFIX + taskIndex));
+				markerCreated = true;
+			}
+			return value;
+		}
+	}
 
-        private long stepSize;
-        private long congruence;
-        private long toCollect;
-        private Long collected = 0L;
-        private long end;
+	private static class CheckpointedSink extends RichSinkFunction<Long> implements ListCheckpointed<Long> {
 
-        public CheckpointedSink(long end) {
-            this.end = end;
-        }
+		private long stepSize;
+		private long congruence;
+		private long toCollect;
+		private Long collected = 0L;
+		private long end;
 
-        @Override
-        public void open(Configuration parameters) throws IOException {
-            stepSize = getRuntimeContext().getNumberOfParallelSubtasks();
-            congruence = getRuntimeContext().getIndexOfThisSubtask();
-            toCollect = (end % stepSize > congruence) ? (end / stepSize + 1) : (end / stepSize);
-        }
+		public CheckpointedSink(long end) {
+			this.end = end;
+		}
 
-        @Override
-        public void invoke(Long value) throws Exception {
-            long expected = collected * stepSize + congruence;
+		@Override
+		public void open(Configuration parameters) throws IOException {
+			stepSize = getRuntimeContext().getNumberOfParallelSubtasks();
+			congruence = getRuntimeContext().getIndexOfThisSubtask();
+			toCollect = (end % stepSize > congruence) ? (end / stepSize + 1) : (end / stepSize);
+		}
 
-            Assert.assertTrue(
-                    "Value did not match expected value. " + expected + " != " + value,
-                    value.equals(expected));
+		@Override
+		public void invoke(Long value) throws Exception {
+			long expected = collected * stepSize + congruence;
 
-            collected++;
+			Assert.assertTrue("Value did not match expected value. " + expected + " != " + value, value.equals(expected));
 
-            if (collected > toCollect) {
-                Assert.fail("Collected <= toCollect: " + collected + " > " + toCollect);
-            }
-        }
+			collected++;
 
-        @Override
-        public List<Long> snapshotState(long checkpointId, long timestamp) throws Exception {
-            return Collections.singletonList(this.collected);
-        }
+			if (collected > toCollect) {
+				Assert.fail("Collected <= toCollect: " + collected + " > " + toCollect);
+			}
 
-        @Override
-        public void restoreState(List<Long> state) throws Exception {
-            if (state.isEmpty() || state.size() > 1) {
-                throw new RuntimeException(
-                        "Test failed due to unexpected recovered state size " + state.size());
-            }
-            this.collected = state.get(0);
-        }
-    }
+		}
+
+		@Override
+		public List<Long> snapshotState(long checkpointId, long timestamp) throws Exception {
+			return Collections.singletonList(this.collected);
+		}
+
+		@Override
+		public void restoreState(List<Long> state) throws Exception {
+			if (state.isEmpty() || state.size() > 1) {
+				throw new RuntimeException("Test failed due to unexpected recovered state size " + state.size());
+			}
+			this.collected = state.get(0);
+		}
+	}
 }

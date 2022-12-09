@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.streaming.api.scala.testutils
 
 import org.apache.flink.api.common.functions.RuntimeContext
@@ -23,14 +24,16 @@ import org.apache.flink.streaming.api.scala.function.RichWindowFunction
 import org.apache.flink.streaming.api.windowing.windows.Window
 import org.apache.flink.util.Collector
 
-class CheckingIdentityRichWindowFunction[T, K, W <: Window] extends RichWindowFunction[T, T, K, W] {
 
+class CheckingIdentityRichWindowFunction[T, K, W <: Window]
+  extends RichWindowFunction[T, T, K, W] {
+  
   override def apply(key: K, window: W, input: scala.Iterable[T], out: Collector[T]): Unit = {
     for (value <- input) {
       out.collect(value)
     }
   }
-
+  
   override def open(conf: Configuration): Unit = {
     super.open(conf)
     CheckingIdentityRichWindowFunction.openCalled = true
@@ -48,7 +51,7 @@ class CheckingIdentityRichWindowFunction[T, K, W <: Window] extends RichWindowFu
 }
 
 object CheckingIdentityRichWindowFunction {
-
+  
   @volatile
   private[CheckingIdentityRichWindowFunction] var closeCalled = false
 
@@ -57,13 +60,13 @@ object CheckingIdentityRichWindowFunction {
 
   @volatile
   private[CheckingIdentityRichWindowFunction] var contextSet = false
-
+  
   def reset(): Unit = {
     closeCalled = false
     openCalled = false
     contextSet = false
   }
-
+  
   def checkRichMethodCalls(): Unit = {
     if (!contextSet) {
       throw new AssertionError("context not set")

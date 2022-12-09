@@ -21,56 +21,57 @@ package org.apache.flink.runtime.operators.testutils;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.util.MutableObjectIterator;
 
-public class UniformIntStringTupleGenerator
-        implements MutableObjectIterator<Tuple2<Integer, String>> {
+public class UniformIntStringTupleGenerator implements MutableObjectIterator<Tuple2<Integer, String>> {
 
-    private final int numKeys;
-    private final int numVals;
+	private final int numKeys;
+	private final int numVals;
+	
+	private int keyCnt;
+	private int valCnt;
+	
+	private boolean repeatKey;
+	
+	
+	public UniformIntStringTupleGenerator(int numKeys, int numVals, boolean repeatKey) {
+		this.numKeys = numKeys;
+		this.numVals = numVals;
+		this.repeatKey = repeatKey;
+	}
+	
+	@Override
+	public Tuple2<Integer, String> next(Tuple2<Integer, String> target) {
+		if (!repeatKey) {
+			if(valCnt >= numVals) {
+				return null;
+			}
+			
+			target.f0 = keyCnt++;
+			target.f1 = Integer.toBinaryString(valCnt);
+			
+			if(keyCnt == numKeys) {
+				keyCnt = 0;
+				valCnt++;
+			}
+		}
+		else {
+			if (keyCnt >= numKeys) {
+				return null;
+			}
+			
+			target.f0 = keyCnt;
+			target.f1 = Integer.toBinaryString(valCnt++);
+			
+			if (valCnt == numVals) {
+				valCnt = 0;
+				keyCnt++;
+			}
+		}
+		
+		return target;
+	}
 
-    private int keyCnt;
-    private int valCnt;
-
-    private boolean repeatKey;
-
-    public UniformIntStringTupleGenerator(int numKeys, int numVals, boolean repeatKey) {
-        this.numKeys = numKeys;
-        this.numVals = numVals;
-        this.repeatKey = repeatKey;
-    }
-
-    @Override
-    public Tuple2<Integer, String> next(Tuple2<Integer, String> target) {
-        if (!repeatKey) {
-            if (valCnt >= numVals) {
-                return null;
-            }
-
-            target.f0 = keyCnt++;
-            target.f1 = Integer.toBinaryString(valCnt);
-
-            if (keyCnt == numKeys) {
-                keyCnt = 0;
-                valCnt++;
-            }
-        } else {
-            if (keyCnt >= numKeys) {
-                return null;
-            }
-
-            target.f0 = keyCnt;
-            target.f1 = Integer.toBinaryString(valCnt++);
-
-            if (valCnt == numVals) {
-                valCnt = 0;
-                keyCnt++;
-            }
-        }
-
-        return target;
-    }
-
-    @Override
-    public Tuple2<Integer, String> next() {
-        return next(new Tuple2<Integer, String>());
-    }
+	@Override
+	public Tuple2<Integer, String> next() {
+		return next(new Tuple2<Integer, String>());
+	}
 }

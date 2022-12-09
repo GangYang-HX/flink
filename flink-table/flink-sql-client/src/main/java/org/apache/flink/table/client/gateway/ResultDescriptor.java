@@ -18,63 +18,45 @@
 
 package org.apache.flink.table.client.gateway;
 
-import org.apache.flink.api.common.RuntimeExecutionMode;
-import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.table.catalog.ResolvedSchema;
-import org.apache.flink.table.client.config.ResultMode;
-import org.apache.flink.table.utils.print.RowDataToStringConverter;
+import org.apache.flink.table.api.TableSchema;
 
-import static org.apache.flink.configuration.ExecutionOptions.RUNTIME_MODE;
-import static org.apache.flink.table.client.config.SqlClientOptions.DISPLAY_MAX_COLUMN_WIDTH;
-import static org.apache.flink.table.client.config.SqlClientOptions.EXECUTION_RESULT_MODE;
-
-/** Describes a result to be expected from a table program. */
+/**
+ * Describes a result to be expected from a table program.
+ */
 public class ResultDescriptor {
 
-    private final String resultId;
-    private final ResolvedSchema resultSchema;
-    private final boolean isMaterialized;
-    private final ReadableConfig config;
-    private final RowDataToStringConverter rowDataToStringConverter;
+	private final String resultId;
 
-    public ResultDescriptor(
-            String resultId,
-            ResolvedSchema resultSchema,
-            boolean isMaterialized,
-            ReadableConfig config,
-            RowDataToStringConverter rowDataToStringConverter) {
-        this.resultId = resultId;
-        this.resultSchema = resultSchema;
-        this.isMaterialized = isMaterialized;
-        this.config = config;
-        this.rowDataToStringConverter = rowDataToStringConverter;
-    }
+	private final TableSchema resultSchema;
 
-    public String getResultId() {
-        return resultId;
-    }
+	private final boolean isMaterialized;
 
-    public ResolvedSchema getResultSchema() {
-        return resultSchema;
-    }
+	private final boolean isTableauMode;
 
-    public boolean isMaterialized() {
-        return isMaterialized;
-    }
+	public ResultDescriptor(
+			String resultId,
+			TableSchema resultSchema,
+			boolean isMaterialized,
+			boolean isTableauMode) {
+		this.resultId = resultId;
+		this.resultSchema = resultSchema;
+		this.isMaterialized = isMaterialized;
+		this.isTableauMode = isTableauMode;
+	}
 
-    public boolean isTableauMode() {
-        return config.get(EXECUTION_RESULT_MODE).equals(ResultMode.TABLEAU);
-    }
+	public String getResultId() {
+		return resultId;
+	}
 
-    public boolean isStreamingMode() {
-        return config.get(RUNTIME_MODE).equals(RuntimeExecutionMode.STREAMING);
-    }
+	public TableSchema getResultSchema() {
+		return resultSchema;
+	}
 
-    public int maxColumnWidth() {
-        return config.get(DISPLAY_MAX_COLUMN_WIDTH);
-    }
+	public boolean isMaterialized() {
+		return isMaterialized;
+	}
 
-    public RowDataToStringConverter getRowDataStringConverter() {
-        return rowDataToStringConverter;
-    }
+	public boolean isTableauMode() {
+		return isTableauMode;
+	}
 }

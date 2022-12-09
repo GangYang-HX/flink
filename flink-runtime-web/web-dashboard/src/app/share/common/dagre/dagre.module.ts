@@ -16,18 +16,16 @@
  * limitations under the License.
  */
 
-import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
-import { NzSliderModule } from 'ng-zorro-antd/slider';
-
-import { DagreComponent } from './dagre.component';
+import { NgZorroAntdModule } from 'ng-zorro-antd';
 import { NodeComponent } from './node.component';
+import { DagreComponent } from './dagre.component';
 import { SvgContainerComponent } from './svg-container.component';
 
 @NgModule({
-  imports: [CommonModule, FormsModule, NzSliderModule],
+  imports: [CommonModule, FormsModule, NgZorroAntdModule],
   declarations: [DagreComponent, SvgContainerComponent, NodeComponent],
   exports: [DagreComponent, SvgContainerComponent, NodeComponent]
 })

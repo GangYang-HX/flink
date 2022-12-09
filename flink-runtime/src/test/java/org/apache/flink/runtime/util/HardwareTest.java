@@ -18,30 +18,32 @@
 
 package org.apache.flink.runtime.util;
 
-import org.junit.Test;
-
 import static org.junit.Assert.*;
+
+import org.junit.Test;
 
 public class HardwareTest {
 
-    @Test
-    public void testCpuCores() {
-        try {
-            assertTrue(Hardware.getNumberCPUCores() >= 0);
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
-        }
-    }
+	@Test
+	public void testCpuCores() {
+		try {
+			assertTrue(Hardware.getNumberCPUCores() >= 0);
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+	}
 
-    @Test
-    public void testPhysicalMemory() {
-        try {
-            long physMem = Hardware.getSizeOfPhysicalMemory();
-            assertTrue(physMem >= -1);
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
-        }
-    }
+	@Test
+	public void testPhysicalMemory() {
+		try {
+			long physMem = Hardware.getSizeOfPhysicalMemory();
+			assertTrue(physMem >= -1);
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			fail(e.getMessage());
+		}
+	}
 }

@@ -23,61 +23,75 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.state.CheckpointMetadataOutputStream;
 import org.apache.flink.runtime.state.CheckpointStorageLocation;
 import org.apache.flink.runtime.state.CheckpointStorageLocationReference;
-import org.apache.flink.runtime.state.filesystem.AbstractFsCheckpointStorageAccess;
+import org.apache.flink.runtime.state.filesystem.AbstractFsCheckpointStorage;
 import org.apache.flink.runtime.state.filesystem.FsCheckpointMetadataOutputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * A checkpoint storage location for the {@link MemoryStateBackend} when it durably persists the
- * metadata in a file system.
+ * A checkpoint storage location for the {@link MemoryStateBackend} when it durably
+ * persists the metadata in a file system.
  */
-public class PersistentMetadataCheckpointStorageLocation extends MemCheckpointStreamFactory
-        implements CheckpointStorageLocation {
+public class PersistentMetadataCheckpointStorageLocation
+		extends MemCheckpointStreamFactory
+		implements CheckpointStorageLocation {
 
-    private final FileSystem fileSystem;
+	private static final Logger LOG = LoggerFactory.getLogger(PersistentMetadataCheckpointStorageLocation.class);
 
-    private final Path checkpointDirectory;
+	private final FileSystem fileSystem;
 
-    private final Path metadataFilePath;
+	private final Path checkpointDirectory;
 
-    /**
-     * Creates a checkpoint storage persists metadata to a file system and stores state in line in
-     * state handles with the metadata.
-     *
-     * @param fileSystem The file system to which the metadata will be written.
-     * @param checkpointDir The directory where the checkpoint metadata will be written.
-     */
-    public PersistentMetadataCheckpointStorageLocation(
-            FileSystem fileSystem, Path checkpointDir, int maxStateSize) {
+	private final Path metadataFilePath;
 
-        super(maxStateSize);
+	private final Path metadataInProgressFilePath;
 
-        this.fileSystem = checkNotNull(fileSystem);
-        this.checkpointDirectory = checkNotNull(checkpointDir);
-        this.metadataFilePath =
-                new Path(checkpointDir, AbstractFsCheckpointStorageAccess.METADATA_FILE_NAME);
-    }
+	/**
+	 * Creates a checkpoint storage persists metadata to a file system and stores state
+	 * in line in state handles with the metadata.
+	 *
+	 * @param fileSystem The file system to which the metadata will be written.
+	 * @param checkpointDir The directory where the checkpoint metadata will be written.
+	 */
+	public PersistentMetadataCheckpointStorageLocation(
+			FileSystem fileSystem,
+			Path checkpointDir,
+			int maxStateSize) {
 
-    // ------------------------------------------------------------------------
+		super(maxStateSize);
 
-    @Override
-    public CheckpointMetadataOutputStream createMetadataOutputStream() throws IOException {
-        return new FsCheckpointMetadataOutputStream(
-                fileSystem, metadataFilePath, checkpointDirectory);
-    }
+		this.fileSystem = checkNotNull(fileSystem);
+		this.checkpointDirectory = checkNotNull(checkpointDir);
+		this.metadataFilePath = new Path(checkpointDir, AbstractFsCheckpointStorage.METADATA_FILE_NAME);
+		this.metadataInProgressFilePath = new Path(checkpointDir, AbstractFsCheckpointStorage.METADATA_INPROGRESS_FILE_NAME);
+	}
 
-    @Override
-    public void disposeOnFailure() throws IOException {
-        // on a failure, no chunk in the checkpoint directory needs to be saved, so
-        // we can drop it as a whole
-        fileSystem.delete(checkpointDirectory, true);
-    }
+	// ------------------------------------------------------------------------
 
-    @Override
-    public CheckpointStorageLocationReference getLocationReference() {
-        return CheckpointStorageLocationReference.getDefault();
-    }
+	@Override
+	public CheckpointMetadataOutputStream createMetadataOutputStream() throws IOException {
+		LOG.info("createMetadataOutputStream:"+ metadataInProgressFilePath);
+		return new FsCheckpointMetadataOutputStream(fileSystem, metadataInProgressFilePath, metadataFilePath, checkpointDirectory);
+	}
+
+	@Override
+	public void disposeOnFailure() throws IOException {
+		// on a failure, no chunk in the checkpoint directory needs to be saved, so
+		// we can drop it as a whole
+		fileSystem.delete(checkpointDirectory, true);
+	}
+
+	@Override
+	public CheckpointStorageLocationReference getLocationReference() {
+		return CheckpointStorageLocationReference.getDefault();
+	}
+
+	@Override
+	public String getMetadataFileFullPath() {
+		return metadataFilePath.getPath();
+	}
 }

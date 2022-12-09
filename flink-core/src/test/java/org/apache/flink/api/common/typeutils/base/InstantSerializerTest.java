@@ -24,45 +24,44 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import java.time.Instant;
 import java.util.Random;
 
-/** A test for the {@link InstantSerializer}. */
-class InstantSerializerTest extends SerializerTestBase<Instant> {
-    @Override
-    protected TypeSerializer<Instant> createSerializer() {
-        return new InstantSerializer();
-    }
+/**
+ * A test for the {@link InstantSerializer}.
+ */
+public class InstantSerializerTest extends SerializerTestBase<Instant> {
+	@Override
+	protected TypeSerializer<Instant> createSerializer() {
+		return new InstantSerializer();
+	}
 
-    @Override
-    protected int getLength() {
-        return 12;
-    }
+	@Override
+	protected int getLength() {
+		return 12;
+	}
 
-    @Override
-    protected Class<Instant> getTypeClass() {
-        return Instant.class;
-    }
+	@Override
+	protected Class<Instant> getTypeClass() {
+		return Instant.class;
+	}
 
-    private static long rndSeconds(Random rnd) {
-        return (long)
-                (Instant.MIN.getEpochSecond()
-                        + rnd.nextDouble()
-                                * (Instant.MAX.getEpochSecond() - Instant.MIN.getEpochSecond()));
-    }
 
-    private static int rndNanos(Random rnd) {
-        return (int) (rnd.nextDouble() * 999999999);
-    }
+	private static long rndSeconds(Random rnd) {
+		return (long) (Instant.MIN.getEpochSecond()
+			+ rnd.nextDouble() * (Instant.MAX.getEpochSecond() - Instant.MIN.getEpochSecond()));
+	}
 
-    @Override
-    protected Instant[] getTestData() {
-        final Random rnd = new Random(874597969123412341L);
+	private static int rndNanos(Random rnd) {
+		return (int) (rnd.nextDouble() * 999999999);
+	}
 
-        return new Instant[] {
-            Instant.EPOCH,
-            Instant.MIN,
-            Instant.MAX,
-            Instant.ofEpochSecond(rndSeconds(rnd), rndNanos(rnd)),
-            Instant.ofEpochSecond(1534135584, 949495),
-            Instant.ofEpochSecond(56090783)
-        };
-    }
+	@Override
+	protected Instant[] getTestData() {
+		final Random rnd = new Random(874597969123412341L);
+
+		return new Instant[] {
+			Instant.EPOCH, Instant.MIN, Instant.MAX,
+			Instant.ofEpochSecond(rndSeconds(rnd),	rndNanos(rnd)),
+			Instant.ofEpochSecond(1534135584,949495),
+			Instant.ofEpochSecond(56090783)
+		};
+	}
 }

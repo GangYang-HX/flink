@@ -32,7 +32,6 @@ import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.runtime.checkpoint.OperatorState;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.StateBackend;
-import org.apache.flink.state.api.functions.Timestamper;
 import org.apache.flink.state.api.output.BoundedOneInputStreamTaskRunner;
 import org.apache.flink.state.api.output.OperatorSubtaskStateReducer;
 import org.apache.flink.state.api.output.TaggedOperatorSubtaskState;
@@ -49,200 +48,185 @@ import javax.annotation.Nullable;
 import java.util.OptionalInt;
 
 /**
- * A {@code BootstrapTransformation} represents a procedure of writing new operator state into a
- * {@code Savepoint}. It is defined by a {@code DataSet} containing the data to bootstrap with, a
- * factory for a stream operator that consumes the elements of the {@code DataSet} and generates
- * state to be snapshotted, as well as an optional key selector if the new operator state is
- * partitioned.
+ * A {@code BootstrapTransformation} represents a procedure of writing new operator state into a {@code Savepoint}.
+ * It is defined by a {@code DataSet} containing the data to bootstrap with, a factory for a stream operator
+ * that consumes the elements of the {@code DataSet} and generates state to be snapshotted, as well as an optional
+ * key selector if the new operator state is partitioned.
  *
  * @see OperatorTransformation
  * @see OneInputOperatorTransformation
+ *
  * @param <T> The input type of the transformation.
- * @deprecated Use {@link StateBootstrapTransformation} instead.
  */
 @PublicEvolving
-@Deprecated
 @SuppressWarnings("WeakerAccess")
 public class BootstrapTransformation<T> {
 
-    /** The data set containing the data to bootstrap the operator state with. */
-    private final DataSet<T> dataSet;
+	/** The data set containing the data to bootstrap the operator state with. */
+	private final DataSet<T> dataSet;
 
-    /**
-     * Factory for the {@link StreamOperator} to consume and snapshot the bootstrapping data set.
-     */
-    private final SavepointWriterOperatorFactory factory;
+	/** Factory for the {@link StreamOperator} to consume and snapshot the bootstrapping data set. */
+	private final SavepointWriterOperatorFactory factory;
 
-    /**
-     * Partitioner for the bootstrapping data set. Only relevant if this bootstraps partitioned
-     * state.
-     */
-    @Nullable private final KeySelector<T, ?> originalKeySelector;
+	/** Partitioner for the bootstrapping data set. Only relevant if this bootstraps partitioned state. */
+	@Nullable
+	private final KeySelector<T, ?> originalKeySelector;
 
-    /**
-     * Partitioner for distributing data by key group. Only relevant if this bootstraps partitioned
-     * state.
-     */
-    @Nullable private final HashSelector<T> hashKeySelector;
+	/** Partitioner for distributing data by key group. Only relevant if this bootstraps partitioned state. */
+	@Nullable
+	private final HashSelector<T> hashKeySelector;
 
-    /**
-     * Type information for the key of the bootstrapped state. Only relevant if this bootstraps
-     * partitioned state.
-     */
-    @Nullable private final TypeInformation<?> keyType;
+	/** Type information for the key of the bootstrapped state. Only relevant if this bootstraps partitioned state. */
+	@Nullable
+	private final TypeInformation<?> keyType;
 
-    /** Local max parallelism for the bootstrapped operator. */
-    private final OptionalInt operatorMaxParallelism;
+	private TypeSerializer keySerializer;
 
-    @Nullable private final Timestamper<T> timestamper;
+	/** Local max parallelism for the bootstrapped operator. */
+	private final OptionalInt operatorMaxParallelism;
 
-    BootstrapTransformation(
-            DataSet<T> dataSet,
-            OptionalInt operatorMaxParallelism,
-            @Nullable Timestamper<T> timestamper,
-            SavepointWriterOperatorFactory factory) {
-        this.dataSet = dataSet;
-        this.operatorMaxParallelism = operatorMaxParallelism;
-        this.factory = factory;
-        this.timestamper = timestamper;
-        this.originalKeySelector = null;
-        this.hashKeySelector = null;
-        this.keyType = null;
-    }
+	BootstrapTransformation(
+		DataSet<T> dataSet,
+		OptionalInt operatorMaxParallelism,
+		SavepointWriterOperatorFactory factory) {
+		this.dataSet = dataSet;
+		this.operatorMaxParallelism = operatorMaxParallelism;
+		this.factory = factory;
+		this.originalKeySelector = null;
+		this.hashKeySelector = null;
+		this.keyType = null;
+	}
 
-    <K> BootstrapTransformation(
-            DataSet<T> dataSet,
-            OptionalInt operatorMaxParallelism,
-            @Nullable Timestamper<T> timestamper,
-            SavepointWriterOperatorFactory factory,
-            @Nonnull KeySelector<T, K> keySelector,
-            @Nonnull TypeInformation<K> keyType) {
-        this.dataSet = dataSet;
-        this.operatorMaxParallelism = operatorMaxParallelism;
-        this.factory = factory;
-        this.timestamper = timestamper;
-        this.originalKeySelector = keySelector;
-        this.hashKeySelector = new HashSelector<>(keySelector);
-        this.keyType = keyType;
-    }
+	<K> BootstrapTransformation(
+		DataSet<T> dataSet,
+		OptionalInt operatorMaxParallelism,
+		SavepointWriterOperatorFactory factory,
+		@Nonnull KeySelector<T, K> keySelector,
+		@Nonnull TypeInformation<K> keyType) {
+		this.dataSet = dataSet;
+		this.operatorMaxParallelism = operatorMaxParallelism;
+		this.factory = factory;
+		this.originalKeySelector = keySelector;
+		this.hashKeySelector = new HashSelector<>(keySelector);
+		this.keyType = keyType;
+	}
 
-    /** @return The max parallelism for this operator. */
-    int getMaxParallelism(int globalMaxParallelism) {
-        return operatorMaxParallelism.orElse(globalMaxParallelism);
-    }
+	<K> BootstrapTransformation(
+		DataSet<T> dataSet,
+		OptionalInt operatorMaxParallelism,
+		SavepointWriterOperatorFactory factory,
+		@Nonnull KeySelector<T, K> keySelector,
+		@Nonnull TypeSerializer keySerializer) {
+		this.dataSet = dataSet;
+		this.operatorMaxParallelism = operatorMaxParallelism;
+		this.factory = factory;
+		this.originalKeySelector = keySelector;
+		this.hashKeySelector = new HashSelector<>(keySelector);
+		this.keySerializer = keySerializer;
+		this.keyType = null;
+	}
 
-    /**
-     * @param operatorID The operator id for the stream operator.
-     * @param stateBackend The state backend for the job.
-     * @param config Additional configurations applied to the bootstrap stream tasks.
-     * @param globalMaxParallelism Global max parallelism set for the savepoint.
-     * @param savepointPath The path where the savepoint will be written.
-     * @return The operator subtask states for this bootstrap transformation.
-     */
-    DataSet<OperatorState> writeOperatorState(
-            OperatorID operatorID,
-            @Nullable StateBackend stateBackend,
-            Configuration config,
-            int globalMaxParallelism,
-            Path savepointPath) {
-        int localMaxParallelism = getMaxParallelism(globalMaxParallelism);
+	/**
+	 * @return The max parallelism for this operator.
+	 */
+	int getMaxParallelism(int globalMaxParallelism) {
+		return operatorMaxParallelism.orElse(globalMaxParallelism);
+	}
 
-        return writeOperatorSubtaskStates(
-                        operatorID, stateBackend, config, savepointPath, localMaxParallelism)
-                .reduceGroup(new OperatorSubtaskStateReducer(operatorID, localMaxParallelism))
-                .name("reduce(OperatorSubtaskState)");
-    }
+	/**
+	 * @param operatorID The operator id for the stream operator.
+	 * @param stateBackend The state backend for the job.
+	 * @param globalMaxParallelism Global max parallelism set for the savepoint.
+	 * @param savepointPath The path where the savepoint will be written.
+	 * @return The operator subtask states for this bootstrap transformation.
+	 */
+	DataSet<OperatorState> writeOperatorState(
+		OperatorID operatorID,
+		StateBackend stateBackend,
+		int globalMaxParallelism,
+		Path savepointPath) {
+		int localMaxParallelism = getMaxParallelism(globalMaxParallelism);
 
-    @VisibleForTesting
-    MapPartitionOperator<T, TaggedOperatorSubtaskState> writeOperatorSubtaskStates(
-            OperatorID operatorID,
-            @Nullable StateBackend stateBackend,
-            Path savepointPath,
-            int localMaxParallelism) {
-        return writeOperatorSubtaskStates(
-                operatorID, stateBackend, new Configuration(), savepointPath, localMaxParallelism);
-    }
+		return writeOperatorSubtaskStates(operatorID, stateBackend, savepointPath, localMaxParallelism)
+			.reduceGroup(new OperatorSubtaskStateReducer(operatorID, localMaxParallelism))
+			.name("reduce(OperatorSubtaskState)");
+	}
 
-    private MapPartitionOperator<T, TaggedOperatorSubtaskState> writeOperatorSubtaskStates(
-            OperatorID operatorID,
-            @Nullable StateBackend stateBackend,
-            Configuration additionalConfig,
-            Path savepointPath,
-            int localMaxParallelism) {
+	@VisibleForTesting
+	MapPartitionOperator<T, TaggedOperatorSubtaskState> writeOperatorSubtaskStates(
+		OperatorID operatorID,
+		StateBackend stateBackend,
+		Path savepointPath,
+		int localMaxParallelism) {
 
-        DataSet<T> input = dataSet;
-        if (originalKeySelector != null) {
-            input =
-                    dataSet.partitionCustom(
-                            new KeyGroupRangePartitioner(localMaxParallelism), hashKeySelector);
-        }
+		DataSet<T> input = dataSet;
+		if (originalKeySelector != null) {
+			input = dataSet.partitionCustom(new KeyGroupRangePartitioner(localMaxParallelism), hashKeySelector);
+		}
 
-        StreamOperator<TaggedOperatorSubtaskState> operator =
-                factory.createOperator(System.currentTimeMillis(), savepointPath);
+		StreamOperator<TaggedOperatorSubtaskState> operator = factory.createOperator(
+			System.currentTimeMillis(),
+			savepointPath);
 
-        operator = dataSet.clean(operator);
+		operator = dataSet.clean(operator);
 
-        final StreamConfig config = getConfig(operatorID, stateBackend, additionalConfig, operator);
+		final StreamConfig config = getConfig(operatorID, stateBackend, operator);
 
-        BoundedOneInputStreamTaskRunner<T> operatorRunner =
-                new BoundedOneInputStreamTaskRunner<>(config, localMaxParallelism, timestamper);
+		BoundedOneInputStreamTaskRunner<T> operatorRunner = new BoundedOneInputStreamTaskRunner<>(
+			config,
+			localMaxParallelism);
 
-        MapPartitionOperator<T, TaggedOperatorSubtaskState> subtaskStates =
-                input.mapPartition(operatorRunner).name(operatorID.toHexString());
+		MapPartitionOperator<T, TaggedOperatorSubtaskState> subtaskStates = input
+			.mapPartition(operatorRunner)
+			.name(operatorID.toHexString());
 
-        if (operator instanceof BroadcastStateBootstrapOperator) {
-            subtaskStates = subtaskStates.setParallelism(1);
-        } else {
-            int currentParallelism = getParallelism(subtaskStates);
-            if (currentParallelism > localMaxParallelism) {
-                subtaskStates.setParallelism(localMaxParallelism);
-            }
-        }
-        return subtaskStates;
-    }
+		if (operator instanceof BroadcastStateBootstrapOperator) {
+			subtaskStates = subtaskStates.setParallelism(1);
+		} else {
+			int currentParallelism = getParallelism(subtaskStates);
+			if (currentParallelism > localMaxParallelism) {
+				subtaskStates.setParallelism(localMaxParallelism);
+			}
+		}
+		return subtaskStates;
+	}
 
-    @VisibleForTesting
-    StreamConfig getConfig(
-            OperatorID operatorID,
-            @Nullable StateBackend stateBackend,
-            Configuration additionalConfig,
-            StreamOperator<TaggedOperatorSubtaskState> operator) {
-        // Eagerly perform a deep copy of the configuration, otherwise it will result in undefined
-        // behavior
-        // when deploying with multiple bootstrap transformations.
-        Configuration deepCopy =
-                new Configuration(dataSet.getExecutionEnvironment().getConfiguration());
-        deepCopy.addAll(additionalConfig);
+	@VisibleForTesting
+	StreamConfig getConfig(OperatorID operatorID, StateBackend stateBackend, StreamOperator<TaggedOperatorSubtaskState> operator) {
+		// Eagerly perform a deep copy of the configuration, otherwise it will result in undefined behavior
+		// when deploying with multiple bootstrap transformations.
+		Configuration deepCopy = new Configuration(dataSet.getExecutionEnvironment().getConfiguration());
+		final StreamConfig config = new StreamConfig(deepCopy);
+		config.setChainStart();
+		config.setCheckpointingEnabled(true);
+		config.setCheckpointMode(CheckpointingMode.EXACTLY_ONCE);
 
-        final StreamConfig config = new StreamConfig(deepCopy);
-        config.setChainStart();
-        config.setCheckpointingEnabled(true);
-        config.setCheckpointMode(CheckpointingMode.EXACTLY_ONCE);
+		if (keyType != null) {
+			TypeSerializer<?> keySerializer = keyType.createSerializer(dataSet.getExecutionEnvironment().getConfig());
 
-        if (keyType != null) {
-            TypeSerializer<?> keySerializer =
-                    keyType.createSerializer(dataSet.getExecutionEnvironment().getConfig());
+			config.setStateKeySerializer(keySerializer);
+			config.setStatePartitioner(0, originalKeySelector);
+		}
 
-            config.setStateKeySerializer(keySerializer);
-            config.setStatePartitioner(0, originalKeySelector);
-        }
+		if (keySerializer != null) {
+			config.setStateKeySerializer(keySerializer);
+			config.setStatePartitioner(0, originalKeySelector);
+		}
 
-        config.setStreamOperator(operator);
-        config.setOperatorName(operatorID.toHexString());
-        config.setOperatorID(operatorID);
-        config.setStateBackend(stateBackend);
+		config.setStreamOperator(operator);
+		config.setOperatorName(operatorID.toHexString());
+		config.setOperatorID(operatorID);
+		config.setStateBackend(stateBackend);
         config.setManagedMemoryFractionOperatorOfUseCase(ManagedMemoryUseCase.STATE_BACKEND, 1.0);
-        config.serializeAllConfigs();
-        return config;
-    }
+		return config;
+	}
 
-    private static <T> int getParallelism(
-            MapPartitionOperator<T, TaggedOperatorSubtaskState> subtaskStates) {
-        int parallelism = subtaskStates.getParallelism();
-        if (parallelism == ExecutionConfig.PARALLELISM_DEFAULT) {
-            parallelism = subtaskStates.getExecutionEnvironment().getParallelism();
-        }
+	private static <T> int getParallelism(MapPartitionOperator<T, TaggedOperatorSubtaskState> subtaskStates) {
+		int parallelism = subtaskStates.getParallelism();
+		if (parallelism == ExecutionConfig.PARALLELISM_DEFAULT) {
+			parallelism = subtaskStates.getExecutionEnvironment().getParallelism();
+		}
 
-        return parallelism;
-    }
+		return parallelism;
+	}
 }

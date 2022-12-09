@@ -25,88 +25,100 @@ import org.apache.flink.api.java.typeutils.PojoTypeInfo;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.table.expressions.Expression;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.experimental.runners.Enclosed;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.sql.Timestamp;
 import java.util.Arrays;
-import java.util.stream.Stream;
+import java.util.Collection;
 
 import static org.apache.flink.table.api.Expressions.$;
-import static org.assertj.core.api.Assertions.assertThat;
 
-/** Test suite for {@link FieldInfoUtils}. */
-class FieldInfoUtilsTest {
+/**
+ * Test suite for {@link FieldInfoUtils}.
+ */
+@RunWith(Enclosed.class)
+public class FieldInfoUtilsTest {
 
-    private static Stream<TypeInformation> parameters() throws Exception {
-        return Stream.of(
-                new RowTypeInfo(
-                        new TypeInformation[] {Types.INT, Types.LONG, Types.SQL_TIMESTAMP},
-                        new String[] {"f0", "f1", "f2"}),
-                new PojoTypeInfo(
-                        MyPojo.class,
-                        Arrays.asList(
-                                new PojoField(MyPojo.class.getDeclaredField("f0"), Types.INT),
-                                new PojoField(MyPojo.class.getDeclaredField("f1"), Types.LONG),
-                                new PojoField(
-                                        MyPojo.class.getDeclaredField("f2"),
-                                        Types.SQL_TIMESTAMP))));
-    }
+	/**
+	 * Test for ByNameMode.
+	 */
+	@RunWith(Parameterized.class)
+	public static final class TestByNameMode {
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("parameters")
-    void testByNameModeReorder(TypeInformation typeInfo) {
-        FieldInfoUtils.TypeInfoSchema schema =
-                FieldInfoUtils.getFieldsInfo(
-                        typeInfo, new Expression[] {$("f2"), $("f1"), $("f0")});
+		@Parameterized.Parameters(name = "{0}")
+		public static Collection<TypeInformation> parameters() throws Exception {
+			return Arrays.asList(
+				new RowTypeInfo(
+					new TypeInformation[]{Types.INT, Types.LONG, Types.SQL_TIMESTAMP},
+					new String[]{"f0", "f1", "f2"}),
+				new PojoTypeInfo(MyPojo.class, Arrays.asList(
+					new PojoField(MyPojo.class.getDeclaredField("f0"), Types.INT),
+					new PojoField(MyPojo.class.getDeclaredField("f1"), Types.LONG),
+					new PojoField(MyPojo.class.getDeclaredField("f2"), Types.SQL_TIMESTAMP))));
+		}
 
-        assertThat(schema.getFieldNames()).isEqualTo(new String[] {"f2", "f1", "f0"});
-    }
+		@Parameterized.Parameter
+		public TypeInformation typeInfo;
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("parameters")
-    void testByNameModeReorderAndRename(TypeInformation typeInfo) {
-        FieldInfoUtils.TypeInfoSchema schema =
-                FieldInfoUtils.getFieldsInfo(
-                        typeInfo,
-                        new Expression[] {$("f1").as("aa"), $("f0").as("bb"), $("f2").as("cc")});
+		@Test
+		public void testByNameModeReorder() {
+			FieldInfoUtils.TypeInfoSchema schema = FieldInfoUtils.getFieldsInfo(
+				typeInfo,
+				new Expression[]{$("f2"), $("f1"), $("f0")});
 
-        assertThat(schema.getFieldNames()).isEqualTo(new String[] {"aa", "bb", "cc"});
-    }
+			Assert.assertArrayEquals(new String[]{"f2", "f1", "f0"}, schema.getFieldNames());
+		}
 
-    /** Test Pojo class. */
-    public static class MyPojo {
-        public int f0;
-        public long f1;
-        public Timestamp f2;
+		@Test
+		public void testByNameModeReorderAndRename() {
+			FieldInfoUtils.TypeInfoSchema schema = FieldInfoUtils.getFieldsInfo(
+				typeInfo,
+				new Expression[]{$("f1").as("aa"), $("f0").as("bb"), $("f2").as("cc")});
 
-        public MyPojo() {}
-    }
+			Assert.assertArrayEquals(new String[]{"aa", "bb", "cc"}, schema.getFieldNames());
+		}
 
-    private final RowTypeInfo rowTypeInfo =
-            new RowTypeInfo(
-                    new TypeInformation[] {Types.INT, Types.LONG, Types.SQL_TIMESTAMP},
-                    new String[] {"f0", "f1", "f2"});
+		/**
+		 * Test Pojo class.
+		 */
+		public static class MyPojo {
+			public int f0;
+			public long f1;
+			public Timestamp f2;
 
-    @Test
-    void testByPositionMode() {
-        FieldInfoUtils.TypeInfoSchema schema =
-                FieldInfoUtils.getFieldsInfo(
-                        rowTypeInfo, new Expression[] {$("aa"), $("bb"), $("cc")});
+			public MyPojo() {
+			}
+		}
+	}
 
-        assertThat(schema.getFieldNames()).isEqualTo(new String[] {"aa", "bb", "cc"});
-    }
+	/**
+	 * Test for ByPositionMode.
+	 */
+	public static final class TestByPositionMode {
+		private static final RowTypeInfo rowTypeInfo = new RowTypeInfo(
+			new TypeInformation[]{Types.INT, Types.LONG, Types.SQL_TIMESTAMP},
+			new String[]{"f0", "f1", "f2"});
 
-    @Test
-    void testByPositionModeProcTime() {
-        FieldInfoUtils.TypeInfoSchema schema =
-                FieldInfoUtils.getFieldsInfo(
-                        rowTypeInfo,
-                        new Expression[] {
-                            $("aa"), $("bb"), $("cc"), $("cc").proctime().as("proctime")
-                        });
+		@Test
+		public void testByPositionMode() {
+			FieldInfoUtils.TypeInfoSchema schema = FieldInfoUtils.getFieldsInfo(
+				rowTypeInfo,
+				new Expression[]{$("aa"), $("bb"), $("cc")});
 
-        assertThat(schema.getFieldNames()).isEqualTo(new String[] {"aa", "bb", "cc", "proctime"});
-    }
+			Assert.assertArrayEquals(new String[]{"aa", "bb", "cc"}, schema.getFieldNames());
+		}
+
+		@Test
+		public void testByPositionModeProcTime() {
+			FieldInfoUtils.TypeInfoSchema schema = FieldInfoUtils.getFieldsInfo(
+				rowTypeInfo,
+				new Expression[]{$("aa"), $("bb"), $("cc"), $("cc").proctime().as("proctime")});
+
+			Assert.assertArrayEquals(new String[]{"aa", "bb", "cc", "proctime"}, schema.getFieldNames());
+		}
+	}
 }

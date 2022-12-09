@@ -16,24 +16,13 @@
  * limitations under the License.
  */
 
-import {
-  ChangeDetectionStrategy,
-  ChangeDetectorRef,
-  Component,
-  EventEmitter,
-  Input,
-  OnChanges,
-  OnDestroy,
-  OnInit,
-  Output,
-  SimpleChanges
-} from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { JobsItemInterface } from 'interfaces';
 import { Observable, Subject } from 'rxjs';
-import { mergeMap, takeUntil } from 'rxjs/operators';
-
-import { JobsItem } from '@flink-runtime-web/interfaces';
-import { JobService, StatusService } from '@flink-runtime-web/services';
-import { NzMessageService } from 'ng-zorro-antd/message';
+import { flatMap, takeUntil } from 'rxjs/operators';
+import { JobService, StatusService } from 'services';
+import { deepFind, isNil } from 'utils';
 
 @Component({
   selector: 'flink-job-list',
@@ -41,63 +30,77 @@ import { NzMessageService } from 'ng-zorro-antd/message';
   styleUrls: ['./job-list.component.less'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class JobListComponent implements OnInit, OnDestroy, OnChanges {
-  listOfJob: JobsItem[] = [];
+export class JobListComponent implements OnInit, OnDestroy {
+  listOfJob: JobsItemInterface[] = [];
   isLoading = true;
   destroy$ = new Subject();
+  sortName = 'start-time';
+  sortValue = 'descend';
   @Input() completed = false;
   @Input() title: string;
-  @Input() jobData$: Observable<JobsItem[]>;
-  @Output() navigate = new EventEmitter<JobsItem>();
+  @Input() jobData$: Observable<JobsItemInterface[]>;
 
-  sortStartTimeFn = (pre: JobsItem, next: JobsItem): number => pre['start-time'] - next['start-time'];
-  sortDurationFn = (pre: JobsItem, next: JobsItem): number => pre.duration - next.duration;
-  sortEndTimeFn = (pre: JobsItem, next: JobsItem): number => pre['end-time'] - next['end-time'];
-  sortStateFn = (pre: JobsItem, next: JobsItem): number => pre.state.localeCompare(next.state);
+  sort(sort: { key: string; value: string }) {
+    this.sortName = sort.key;
+    this.sortValue = sort.value;
+    this.search();
+  }
 
-  trackJobBy(_: number, node: JobsItem): string {
+  search() {
+    if (this.sortName) {
+      this.listOfJob = [
+        ...this.listOfJob.sort((pre, next) => {
+          if (this.sortValue === 'ascend') {
+            return deepFind(pre, this.sortName) > deepFind(next, this.sortName) ? 1 : -1;
+          } else {
+            return deepFind(next, this.sortName) > deepFind(pre, this.sortName) ? 1 : -1;
+          }
+        })
+      ];
+    }
+  }
+
+  trackJobBy(_: number, node: JobsItemInterface) {
     return node.jid;
   }
 
-  navigateToJob(job: JobsItem): void {
-    if (job.state === 'INITIALIZING') {
-      this.nzMessageService.info('Job detail page is not available while it is in state INITIALIZING.');
-    } else {
-      this.navigate.emit(job);
-    }
+  navigateToJob(jid: string) {
+    this.router.navigate(['job', jid]).then();
   }
 
   constructor(
     private statusService: StatusService,
     private jobService: JobService,
-    private nzMessageService: NzMessageService,
-    private cdr: ChangeDetectorRef
+    private activatedRoute: ActivatedRoute,
+    private cdr: ChangeDetectorRef,
+    private router: Router
   ) {}
 
-  ngOnInit(): void {
+  ngOnInit() {
+    if (this.activatedRoute.snapshot.data) {
+      this.completed = isNil(this.activatedRoute.snapshot.data.completed)
+        ? this.completed
+        : this.activatedRoute.snapshot.data.completed;
+      this.title = isNil(this.activatedRoute.snapshot.data.title)
+        ? this.title
+        : this.activatedRoute.snapshot.data.title;
+    }
     this.jobData$ =
       this.jobData$ ||
       this.statusService.refresh$.pipe(
         takeUntil(this.destroy$),
-        mergeMap(() => this.jobService.loadJobs())
+        flatMap(() => this.jobService.loadJobs())
       );
     this.jobData$.subscribe(data => {
       this.isLoading = false;
       this.listOfJob = data.filter(item => item.completed === this.completed);
+      this.search();
       this.cdr.markForCheck();
     });
   }
 
-  ngOnDestroy(): void {
+  ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    const { completed } = changes;
-    if (completed) {
-      this.isLoading = true;
-      this.cdr.markForCheck();
-    }
   }
 }

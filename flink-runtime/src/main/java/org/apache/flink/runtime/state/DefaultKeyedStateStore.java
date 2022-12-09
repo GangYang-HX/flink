@@ -22,6 +22,9 @@ import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.AggregatingState;
 import org.apache.flink.api.common.state.AggregatingStateDescriptor;
+import org.apache.flink.api.common.state.BatchWriter;
+import org.apache.flink.api.common.state.FoldingState;
+import org.apache.flink.api.common.state.FoldingStateDescriptor;
 import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -38,81 +41,108 @@ import org.apache.flink.util.Preconditions;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Default implementation of KeyedStateStore that currently forwards state registration to a {@link
- * RuntimeContext}.
+ * Default implementation of KeyedStateStore that currently forwards state registration to a {@link RuntimeContext}.
  */
-public class DefaultKeyedStateStore implements KeyedStateStore {
+public class DefaultKeyedStateStore implements KeyedStateStore, BatchWriter {
 
-    protected final KeyedStateBackend<?> keyedStateBackend;
-    protected final ExecutionConfig executionConfig;
+	protected final KeyedStateBackend<?> keyedStateBackend;
+	protected final ExecutionConfig executionConfig;
 
-    public DefaultKeyedStateStore(
-            KeyedStateBackend<?> keyedStateBackend, ExecutionConfig executionConfig) {
-        this.keyedStateBackend = Preconditions.checkNotNull(keyedStateBackend);
-        this.executionConfig = Preconditions.checkNotNull(executionConfig);
-    }
+	public DefaultKeyedStateStore(KeyedStateBackend<?> keyedStateBackend, ExecutionConfig executionConfig) {
+		this.keyedStateBackend = Preconditions.checkNotNull(keyedStateBackend);
+		this.executionConfig = Preconditions.checkNotNull(executionConfig);
+	}
 
-    @Override
-    public <T> ValueState<T> getState(ValueStateDescriptor<T> stateProperties) {
-        requireNonNull(stateProperties, "The state properties must not be null");
-        try {
-            stateProperties.initializeSerializerUnlessSet(executionConfig);
-            return getPartitionedState(stateProperties);
-        } catch (Exception e) {
-            throw new RuntimeException("Error while getting state", e);
-        }
-    }
+	@Override
+	public <T> ValueState<T> getState(ValueStateDescriptor<T> stateProperties) {
+		requireNonNull(stateProperties, "The state properties must not be null");
+		try {
+			stateProperties.initializeSerializerUnlessSet(executionConfig);
+			return getPartitionedState(stateProperties);
+		} catch (Exception e) {
+			throw new RuntimeException("Error while getting state", e);
+		}
+	}
 
-    @Override
-    public <T> ListState<T> getListState(ListStateDescriptor<T> stateProperties) {
-        requireNonNull(stateProperties, "The state properties must not be null");
-        try {
-            stateProperties.initializeSerializerUnlessSet(executionConfig);
-            ListState<T> originalState = getPartitionedState(stateProperties);
-            return new UserFacingListState<>(originalState);
-        } catch (Exception e) {
-            throw new RuntimeException("Error while getting state", e);
-        }
-    }
+	@Override
+	public <T> ListState<T> getListState(ListStateDescriptor<T> stateProperties) {
+		requireNonNull(stateProperties, "The state properties must not be null");
+		try {
+			stateProperties.initializeSerializerUnlessSet(executionConfig);
+			ListState<T> originalState = getPartitionedState(stateProperties);
+			return new UserFacingListState<>(originalState);
+		} catch (Exception e) {
+			throw new RuntimeException("Error while getting state", e);
+		}
+	}
 
-    @Override
-    public <T> ReducingState<T> getReducingState(ReducingStateDescriptor<T> stateProperties) {
-        requireNonNull(stateProperties, "The state properties must not be null");
-        try {
-            stateProperties.initializeSerializerUnlessSet(executionConfig);
-            return getPartitionedState(stateProperties);
-        } catch (Exception e) {
-            throw new RuntimeException("Error while getting state", e);
-        }
-    }
+	@Override
+	public <T> ReducingState<T> getReducingState(ReducingStateDescriptor<T> stateProperties) {
+		requireNonNull(stateProperties, "The state properties must not be null");
+		try {
+			stateProperties.initializeSerializerUnlessSet(executionConfig);
+			return getPartitionedState(stateProperties);
+		} catch (Exception e) {
+			throw new RuntimeException("Error while getting state", e);
+		}
+	}
 
-    @Override
-    public <IN, ACC, OUT> AggregatingState<IN, OUT> getAggregatingState(
-            AggregatingStateDescriptor<IN, ACC, OUT> stateProperties) {
-        requireNonNull(stateProperties, "The state properties must not be null");
-        try {
-            stateProperties.initializeSerializerUnlessSet(executionConfig);
-            return getPartitionedState(stateProperties);
-        } catch (Exception e) {
-            throw new RuntimeException("Error while getting state", e);
-        }
-    }
+	@Override
+	public <IN, ACC, OUT> AggregatingState<IN, OUT> getAggregatingState(AggregatingStateDescriptor<IN, ACC, OUT> stateProperties) {
+		requireNonNull(stateProperties, "The state properties must not be null");
+		try {
+			stateProperties.initializeSerializerUnlessSet(executionConfig);
+			return getPartitionedState(stateProperties);
+		} catch (Exception e) {
+			throw new RuntimeException("Error while getting state", e);
+		}
+	}
 
-    @Override
-    public <UK, UV> MapState<UK, UV> getMapState(MapStateDescriptor<UK, UV> stateProperties) {
-        requireNonNull(stateProperties, "The state properties must not be null");
-        try {
-            stateProperties.initializeSerializerUnlessSet(executionConfig);
-            MapState<UK, UV> originalState = getPartitionedState(stateProperties);
-            return new UserFacingMapState<>(originalState);
-        } catch (Exception e) {
-            throw new RuntimeException("Error while getting state", e);
-        }
-    }
+	@Override
+	public <T, ACC> FoldingState<T, ACC> getFoldingState(FoldingStateDescriptor<T, ACC> stateProperties) {
+		requireNonNull(stateProperties, "The state properties must not be null");
+		try {
+			stateProperties.initializeSerializerUnlessSet(executionConfig);
+			return getPartitionedState(stateProperties);
+		} catch (Exception e) {
+			throw new RuntimeException("Error while getting state", e);
+		}
+	}
 
-    protected <S extends State> S getPartitionedState(StateDescriptor<S, ?> stateDescriptor)
-            throws Exception {
-        return keyedStateBackend.getPartitionedState(
-                VoidNamespace.INSTANCE, VoidNamespaceSerializer.INSTANCE, stateDescriptor);
-    }
+	@Override
+	public <UK, UV> MapState<UK, UV> getMapState(MapStateDescriptor<UK, UV> stateProperties) {
+		requireNonNull(stateProperties, "The state properties must not be null");
+		try {
+			stateProperties.initializeSerializerUnlessSet(executionConfig);
+			MapState<UK, UV> originalState = getPartitionedState(stateProperties);
+			return new UserFacingMapState<>(originalState);
+		} catch (Exception e) {
+			throw new RuntimeException("Error while getting state", e);
+		}
+	}
+
+	protected  <S extends State> S getPartitionedState(StateDescriptor<S, ?> stateDescriptor) throws Exception {
+		return keyedStateBackend.getPartitionedState(
+				VoidNamespace.INSTANCE,
+				VoidNamespaceSerializer.INSTANCE,
+				stateDescriptor);
+	}
+
+	@Override
+	public void add(String state, byte[] key, byte[] value) throws Exception {
+		try {
+			((BatchWriter) keyedStateBackend).add(state, key, value);
+		} catch (Exception e) {
+			throw new IllegalStateException("keyed state backend do not support batch write.");
+		}
+	}
+
+	@Override
+	public void closeBatchWriter() throws Exception {
+		try {
+			((BatchWriter) keyedStateBackend).closeBatchWriter();
+		} catch (Exception e) {
+			throw new IllegalStateException("keyed state backend do not support batch write.");
+		}
+	}
 }

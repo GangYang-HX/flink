@@ -18,224 +18,157 @@
 package org.apache.flink.streaming.api.graph;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
-import org.apache.flink.streaming.api.transformations.StreamExchangeMode;
+import org.apache.flink.streaming.api.transformations.ShuffleMode;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.util.OutputTag;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Objects;
 
-import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * An edge in the streaming topology. One edge like this does not necessarily gets converted to a
- * connection between two job vertices (due to chaining/optimization).
+ * An edge in the streaming topology. One edge like this does not necessarily
+ * gets converted to a connection between two job vertices (due to
+ * chaining/optimization).
  */
 @Internal
 public class StreamEdge implements Serializable {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private static final long ALWAYS_FLUSH_BUFFER_TIMEOUT = 0L;
+	private final String edgeId;
 
-    private final String edgeId;
+	private final int sourceId;
+	private final int targetId;
 
-    private final int sourceId;
-    private final int targetId;
+	/**
+	 * The type number of the input for co-tasks.
+	 */
+	private final int typeNumber;
 
-    /**
-     * Note that this field doesn't have to be unique among all {@link StreamEdge}s. It's enough if
-     * this field ensures that all logical instances of {@link StreamEdge} are unique, and {@link
-     * #hashCode()} are different and {@link #equals(Object)} returns false, for every possible pair
-     * of {@link StreamEdge}. Especially among two different {@link StreamEdge}s that are connecting
-     * the same pair of nodes.
-     */
-    private final int uniqueId;
+	/**
+	 * A list of output names that the target vertex listens to (if there is
+	 * output selection).
+	 */
+	private final List<String> selectedNames;
 
-    /** The type number of the input for co-tasks. */
-    private final int typeNumber;
-    /** The side-output tag (if any) of this {@link StreamEdge}. */
-    private final OutputTag outputTag;
+	/**
+	 * The side-output tag (if any) of this {@link StreamEdge}.
+	 */
+	private final OutputTag outputTag;
 
-    /** The {@link StreamPartitioner} on this {@link StreamEdge}. */
-    private StreamPartitioner<?> outputPartitioner;
+	/**
+	 * The {@link StreamPartitioner} on this {@link StreamEdge}.
+	 */
+	private StreamPartitioner<?> outputPartitioner;
 
-    /** The name of the operator in the source vertex. */
-    private final String sourceOperatorName;
+	/**
+	 * The name of the operator in the source vertex.
+	 */
+	private final String sourceOperatorName;
 
-    /** The name of the operator in the target vertex. */
-    private final String targetOperatorName;
+	/**
+	 * The name of the operator in the target vertex.
+	 */
+	private final String targetOperatorName;
 
-    private final StreamExchangeMode exchangeMode;
+	private final ShuffleMode shuffleMode;
 
-    private long bufferTimeout;
+	private boolean supportsUnalignedCheckpoints = true;
 
-    private boolean supportsUnalignedCheckpoints = true;
+	public StreamEdge(StreamNode sourceVertex, StreamNode targetVertex, int typeNumber,
+			List<String> selectedNames, StreamPartitioner<?> outputPartitioner, OutputTag outputTag) {
+		this(sourceVertex,
+				targetVertex,
+				typeNumber,
+				selectedNames,
+				outputPartitioner,
+				outputTag,
+				ShuffleMode.UNDEFINED);
+	}
 
-    private final IntermediateDataSetID intermediateDatasetIdToProduce;
+	public StreamEdge(StreamNode sourceVertex, StreamNode targetVertex, int typeNumber,
+			List<String> selectedNames, StreamPartitioner<?> outputPartitioner, OutputTag outputTag,
+			ShuffleMode shuffleMode) {
+		this.sourceId = sourceVertex.getId();
+		this.targetId = targetVertex.getId();
+		this.typeNumber = typeNumber;
+		this.selectedNames = selectedNames;
+		this.outputPartitioner = outputPartitioner;
+		this.outputTag = outputTag;
+		this.sourceOperatorName = sourceVertex.getOperatorName();
+		this.targetOperatorName = targetVertex.getOperatorName();
+		this.shuffleMode = checkNotNull(shuffleMode);
 
-    public StreamEdge(
-            StreamNode sourceVertex,
-            StreamNode targetVertex,
-            int typeNumber,
-            StreamPartitioner<?> outputPartitioner,
-            OutputTag outputTag) {
+		this.edgeId = sourceVertex + "_" + targetVertex + "_" + typeNumber + "_" + selectedNames
+				+ "_" + outputPartitioner;
+	}
 
-        this(
-                sourceVertex,
-                targetVertex,
-                typeNumber,
-                ALWAYS_FLUSH_BUFFER_TIMEOUT,
-                outputPartitioner,
-                outputTag,
-                StreamExchangeMode.UNDEFINED,
-                0,
-                null);
-    }
+	public int getSourceId() {
+		return sourceId;
+	}
 
-    public StreamEdge(
-            StreamNode sourceVertex,
-            StreamNode targetVertex,
-            int typeNumber,
-            StreamPartitioner<?> outputPartitioner,
-            OutputTag outputTag,
-            StreamExchangeMode exchangeMode,
-            int uniqueId,
-            IntermediateDataSetID intermediateDatasetId) {
+	public int getTargetId() {
+		return targetId;
+	}
 
-        this(
-                sourceVertex,
-                targetVertex,
-                typeNumber,
-                sourceVertex.getBufferTimeout(),
-                outputPartitioner,
-                outputTag,
-                exchangeMode,
-                uniqueId,
-                intermediateDatasetId);
-    }
+	public int getTypeNumber() {
+		return typeNumber;
+	}
 
-    public StreamEdge(
-            StreamNode sourceVertex,
-            StreamNode targetVertex,
-            int typeNumber,
-            long bufferTimeout,
-            StreamPartitioner<?> outputPartitioner,
-            OutputTag outputTag,
-            StreamExchangeMode exchangeMode,
-            int uniqueId,
-            IntermediateDataSetID intermediateDatasetId) {
+	public List<String> getSelectedNames() {
+		return selectedNames;
+	}
 
-        this.sourceId = sourceVertex.getId();
-        this.targetId = targetVertex.getId();
-        this.uniqueId = uniqueId;
-        this.typeNumber = typeNumber;
-        this.bufferTimeout = bufferTimeout;
-        this.outputPartitioner = outputPartitioner;
-        this.outputTag = outputTag;
-        this.sourceOperatorName = sourceVertex.getOperatorName();
-        this.targetOperatorName = targetVertex.getOperatorName();
-        this.exchangeMode = checkNotNull(exchangeMode);
-        this.intermediateDatasetIdToProduce = intermediateDatasetId;
-        this.edgeId =
-                sourceVertex
-                        + "_"
-                        + targetVertex
-                        + "_"
-                        + typeNumber
-                        + "_"
-                        + outputPartitioner
-                        + "_"
-                        + uniqueId;
-    }
+	public OutputTag getOutputTag() {
+		return this.outputTag;
+	}
 
-    public int getSourceId() {
-        return sourceId;
-    }
+	public StreamPartitioner<?> getPartitioner() {
+		return outputPartitioner;
+	}
 
-    public int getTargetId() {
-        return targetId;
-    }
+	public ShuffleMode getShuffleMode() {
+		return shuffleMode;
+	}
 
-    public int getTypeNumber() {
-        return typeNumber;
-    }
+	public void setPartitioner(StreamPartitioner<?> partitioner) {
+		this.outputPartitioner = partitioner;
+	}
 
-    public OutputTag getOutputTag() {
-        return this.outputTag;
-    }
+	public void setSupportsUnalignedCheckpoints(boolean supportsUnalignedCheckpoints) {
+		this.supportsUnalignedCheckpoints = supportsUnalignedCheckpoints;
+	}
 
-    public StreamPartitioner<?> getPartitioner() {
-        return outputPartitioner;
-    }
+	public boolean supportsUnalignedCheckpoints() {
+		return supportsUnalignedCheckpoints;
+	}
 
-    public StreamExchangeMode getExchangeMode() {
-        return exchangeMode;
-    }
+	@Override
+	public int hashCode() {
+		return Objects.hash(edgeId, outputTag);
+	}
 
-    public void setPartitioner(StreamPartitioner<?> partitioner) {
-        this.outputPartitioner = partitioner;
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
 
-    public void setBufferTimeout(long bufferTimeout) {
-        checkArgument(bufferTimeout >= -1);
-        this.bufferTimeout = bufferTimeout;
-    }
+		StreamEdge that = (StreamEdge) o;
+		return Objects.equals(edgeId, that.edgeId) &&
+			Objects.equals(outputTag, that.outputTag);
+	}
 
-    public long getBufferTimeout() {
-        return bufferTimeout;
-    }
-
-    public void setSupportsUnalignedCheckpoints(boolean supportsUnalignedCheckpoints) {
-        this.supportsUnalignedCheckpoints = supportsUnalignedCheckpoints;
-    }
-
-    public boolean supportsUnalignedCheckpoints() {
-        return supportsUnalignedCheckpoints;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(edgeId, outputTag);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-
-        StreamEdge that = (StreamEdge) o;
-        return Objects.equals(edgeId, that.edgeId) && Objects.equals(outputTag, that.outputTag);
-    }
-
-    @Override
-    public String toString() {
-        return "("
-                + (sourceOperatorName + "-" + sourceId)
-                + " -> "
-                + (targetOperatorName + "-" + targetId)
-                + ", typeNumber="
-                + typeNumber
-                + ", outputPartitioner="
-                + outputPartitioner
-                + ", exchangeMode="
-                + exchangeMode
-                + ", bufferTimeout="
-                + bufferTimeout
-                + ", outputTag="
-                + outputTag
-                + ", uniqueId="
-                + uniqueId
-                + ')';
-    }
-
-    public IntermediateDataSetID getIntermediateDatasetIdToProduce() {
-        return intermediateDatasetIdToProduce;
-    }
+	@Override
+	public String toString() {
+		return "(" + (sourceOperatorName + "-" + sourceId) + " -> " + (targetOperatorName + "-" + targetId)
+			+ ", typeNumber=" + typeNumber + ", selectedNames=" + selectedNames + ", outputPartitioner=" + outputPartitioner
+			+ ", outputTag=" + outputTag + ')';
+	}
 }

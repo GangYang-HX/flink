@@ -47,32 +47,22 @@ abstract class AbstractAlternatingAlignedBarrierHandlerState implements BarrierH
     public final BarrierHandlerState barrierReceived(
             Controller controller,
             InputChannelInfo channelInfo,
-            CheckpointBarrier checkpointBarrier,
-            boolean markChannelBlocked)
+            CheckpointBarrier checkpointBarrier)
             throws IOException, CheckpointException {
         if (checkpointBarrier.getCheckpointOptions().isUnalignedCheckpoint()) {
             BarrierHandlerState unalignedState = alignmentTimeout(controller, checkpointBarrier);
-            return unalignedState.barrierReceived(
-                    controller, channelInfo, checkpointBarrier, markChannelBlocked);
+            return unalignedState.barrierReceived(controller, channelInfo, checkpointBarrier);
         }
 
         state.removeSeenAnnouncement(channelInfo);
-
-        if (markChannelBlocked) {
-            state.blockChannel(channelInfo);
-        }
-
+        state.blockChannel(channelInfo);
         if (controller.allBarriersReceived()) {
-            controller.initInputsCheckpoint(checkpointBarrier);
             controller.triggerGlobalCheckpoint(checkpointBarrier);
-            return finishCheckpoint();
+            state.unblockAllChannels();
+            return new AlternatingWaitingForFirstBarrier(state.getInputs());
         } else if (controller.isTimedOut(checkpointBarrier)) {
             return alignmentTimeout(controller, checkpointBarrier)
-                    .barrierReceived(
-                            controller,
-                            channelInfo,
-                            checkpointBarrier.asUnaligned(),
-                            markChannelBlocked);
+                    .barrierReceived(controller, channelInfo, checkpointBarrier.asUnaligned());
         }
 
         return transitionAfterBarrierReceived(state);
@@ -82,11 +72,14 @@ abstract class AbstractAlternatingAlignedBarrierHandlerState implements BarrierH
 
     @Override
     public final BarrierHandlerState abort(long cancelledId) throws IOException {
-        return finishCheckpoint();
+        state.unblockAllChannels();
+        return new AlternatingWaitingForFirstBarrier(state.getInputs());
     }
 
-    protected BarrierHandlerState finishCheckpoint() throws IOException {
-        state.unblockAllChannels();
-        return new AlternatingWaitingForFirstBarrier(state.emptyState());
-    }
+	@Override
+	public void processChannelUnavailable(InputChannelInfo channelInfo) {
+		throw new IllegalStateException(
+			"The method processChannelUnavailable used for approximate task local recovery and runtime network retry " +
+				"should not be used together with unaligned checkpoint.");
+	}
 }

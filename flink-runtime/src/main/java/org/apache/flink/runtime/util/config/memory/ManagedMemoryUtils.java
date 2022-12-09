@@ -24,20 +24,13 @@ import org.apache.flink.configuration.IllegalConfigurationException;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.runtime.state.StateBackendLoader;
-
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
-
+import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableList;
+import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import static org.apache.flink.util.Preconditions.checkState;
 
@@ -55,12 +48,10 @@ public enum ManagedMemoryUtils {
             ImmutableMap.of(
                     ManagedMemoryUseCase.OPERATOR,
                     ImmutableList.of(
-                            TaskManagerOptions.MANAGED_MEMORY_CONSUMER_NAME_OPERATOR,
-                            TaskManagerOptions.MANAGED_MEMORY_CONSUMER_NAME_DATAPROC),
+                            TaskManagerOptions.MANAGED_MEMORY_CONSUMER_NAME_OPERATOR),
                     ManagedMemoryUseCase.STATE_BACKEND,
                     ImmutableList.of(
-                            TaskManagerOptions.MANAGED_MEMORY_CONSUMER_NAME_STATE_BACKEND,
-                            TaskManagerOptions.MANAGED_MEMORY_CONSUMER_NAME_DATAPROC),
+                            TaskManagerOptions.MANAGED_MEMORY_CONSUMER_NAME_STATE_BACKEND),
                     ManagedMemoryUseCase.PYTHON,
                     ImmutableList.of(TaskManagerOptions.MANAGED_MEMORY_CONSUMER_NAME_PYTHON));
 

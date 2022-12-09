@@ -27,108 +27,110 @@ import org.apache.flink.table.sources.CsvTableSource;
 import org.apache.flink.table.sources.TableSource;
 import org.apache.flink.util.TernaryBoolean;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import static org.apache.flink.table.descriptors.OldCsvValidator.FORMAT_FIELDS;
 import static org.apache.flink.table.descriptors.Schema.SCHEMA;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-/** Tests for CsvTableSourceFactory and CsvTableSinkFactory. */
-class CsvTableSinkFactoryTest {
+/**
+ * Tests for CsvTableSourceFactory and CsvTableSinkFactory.
+ */
+@RunWith(Parameterized.class)
+public class CsvTableSinkFactoryTest {
 
-    private static TableSchema testingSchema =
-            TableSchema.builder()
-                    .field("myfield", DataTypes.STRING())
-                    .field("myfield2", DataTypes.INT())
-                    .field("myfield3", DataTypes.MAP(DataTypes.STRING(), DataTypes.INT()))
-                    .field(
-                            "myfield4",
-                            DataTypes.ROW(DataTypes.FIELD("nested_f1", DataTypes.BIGINT())))
-                    // TODO: we can't declare the TINYINT as NOT NULL, because CSV connector will
-                    // ignore the information
-                    .field("myfield5", DataTypes.ARRAY(DataTypes.TINYINT()))
-                    .build();
+	private static TableSchema testingSchema = TableSchema.builder()
+		.field("myfield", DataTypes.STRING())
+		.field("myfield2", DataTypes.INT())
+		.field("myfield3", DataTypes.MAP(DataTypes.STRING(), DataTypes.INT()))
+		.field("myfield4", DataTypes.ROW(DataTypes.FIELD("nested_f1", DataTypes.BIGINT())))
+		// TODO: we can't declare the TINYINT as NOT NULL, because CSV connector will ignore the information
+		.field("myfield5", DataTypes.ARRAY(DataTypes.TINYINT()))
+		.build();
 
-    private static Stream<TernaryBoolean> getDeriveSchema() {
-        return Stream.of(TernaryBoolean.TRUE, TernaryBoolean.FALSE, TernaryBoolean.UNDEFINED);
-    }
+	@Parameterized.Parameter
+	public TernaryBoolean deriveSchema;
 
-    @ParameterizedTest(name = "deriveSchema = {0}")
-    @MethodSource("getDeriveSchema")
-    void testAppendTableSinkFactory(TernaryBoolean deriveSchema) {
-        DescriptorProperties descriptor = createDescriptor(testingSchema, deriveSchema);
-        descriptor.putString("update-mode", "append");
-        TableSink sink = createTableSink(descriptor);
+	@Parameterized.Parameters(name = "deriveSchema = {0}")
+	public static TernaryBoolean[] getDeriveSchema() {
+		return new TernaryBoolean[]{TernaryBoolean.TRUE, TernaryBoolean.FALSE, TernaryBoolean.UNDEFINED};
+	}
 
-        assertThat(sink).isInstanceOf(CsvTableSink.class);
-        assertThat(sink.getConsumedDataType()).isEqualTo(testingSchema.toRowDataType());
-    }
+	@Test
+	public void testAppendTableSinkFactory() {
+		DescriptorProperties descriptor = createDescriptor(testingSchema);
+		descriptor.putString("update-mode", "append");
+		TableSink sink = createTableSink(descriptor);
 
-    @ParameterizedTest(name = "deriveSchema = {0}")
-    @MethodSource("getDeriveSchema")
-    void testBatchTableSinkFactory(TernaryBoolean deriveSchema) {
-        DescriptorProperties descriptor = createDescriptor(testingSchema, deriveSchema);
-        TableSink sink = createTableSink(descriptor);
+		assertTrue(sink instanceof CsvTableSink);
+		assertEquals(testingSchema.toRowDataType(), sink.getConsumedDataType());
+	}
 
-        assertThat(sink).isInstanceOf(CsvTableSink.class);
-        assertThat(sink.getConsumedDataType()).isEqualTo(testingSchema.toRowDataType());
-    }
+	@Test
+	public void testBatchTableSinkFactory() {
+		DescriptorProperties descriptor = createDescriptor(testingSchema);
+		TableSink sink = createTableSink(descriptor);
 
-    @ParameterizedTest(name = "deriveSchema = {0}")
-    @MethodSource("getDeriveSchema")
-    void testAppendTableSourceFactory(TernaryBoolean deriveSchema) {
-        DescriptorProperties descriptor = createDescriptor(testingSchema, deriveSchema);
-        descriptor.putString("update-mode", "append");
-        TableSource sink = createTableSource(descriptor);
+		assertTrue(sink instanceof CsvTableSink);
+		assertEquals(testingSchema.toRowDataType(), sink.getConsumedDataType());
+	}
 
-        assertThat(sink).isInstanceOf(CsvTableSource.class);
-        assertThat(sink.getProducedDataType()).isEqualTo(testingSchema.toRowDataType());
-    }
+	@Test
+	public void testAppendTableSourceFactory() {
+		DescriptorProperties descriptor = createDescriptor(testingSchema);
+		descriptor.putString("update-mode", "append");
+		TableSource sink = createTableSource(descriptor);
 
-    @ParameterizedTest(name = "deriveSchema = {0}")
-    @MethodSource("getDeriveSchema")
-    void testBatchTableSourceFactory(TernaryBoolean deriveSchema) {
-        DescriptorProperties descriptor = createDescriptor(testingSchema, deriveSchema);
-        TableSource sink = createTableSource(descriptor);
+		assertTrue(sink instanceof CsvTableSource);
+		assertEquals(testingSchema.toRowDataType(), sink.getProducedDataType());
+	}
 
-        assertThat(sink).isInstanceOf(CsvTableSource.class);
-        assertThat(sink.getProducedDataType()).isEqualTo(testingSchema.toRowDataType());
-    }
+	@Test
+	public void testBatchTableSourceFactory() {
+		DescriptorProperties descriptor = createDescriptor(testingSchema);
+		TableSource sink = createTableSource(descriptor);
 
-    private DescriptorProperties createDescriptor(TableSchema schema, TernaryBoolean deriveSchema) {
-        Map<String, String> properties = new HashMap<>();
-        properties.put("connector.type", "filesystem");
-        properties.put("connector.property-version", "1");
-        properties.put("connector.path", "/path/to/csv");
+		assertTrue(sink instanceof CsvTableSource);
+		assertEquals(testingSchema.toRowDataType(), sink.getProducedDataType());
+	}
 
-        // schema
-        properties.put("format.type", "csv");
-        properties.put("format.property-version", "1");
-        properties.put("format.field-delimiter", ";");
+	private DescriptorProperties createDescriptor(TableSchema schema) {
+		Map<String, String> properties = new HashMap<>();
+		properties.put("connector.type", "filesystem");
+		properties.put("connector.property-version", "1");
+		properties.put("connector.path", "/path/to/csv");
 
-        DescriptorProperties descriptor = new DescriptorProperties(true);
-        descriptor.putProperties(properties);
-        descriptor.putTableSchema(SCHEMA, schema);
-        if (deriveSchema == TernaryBoolean.TRUE) {
-            descriptor.putBoolean("format.derive-schema", true);
-        } else if (deriveSchema == TernaryBoolean.FALSE) {
-            descriptor.putTableSchema(FORMAT_FIELDS, testingSchema);
-        } // nothing to put for UNDEFINED
-        return descriptor;
-    }
+		// schema
+		properties.put("format.type", "csv");
+		properties.put("format.property-version", "1");
+		properties.put("format.field-delimiter", ";");
 
-    private static TableSource<?> createTableSource(DescriptorProperties descriptor) {
-        return TableFactoryService.find(TableSourceFactory.class, descriptor.asMap())
-                .createTableSource(descriptor.asMap());
-    }
+		DescriptorProperties descriptor = new DescriptorProperties(true);
+		descriptor.putProperties(properties);
+		descriptor.putTableSchema(SCHEMA, schema);
+		if (deriveSchema == TernaryBoolean.TRUE) {
+			descriptor.putBoolean("format.derive-schema", true);
+		} else if (deriveSchema == TernaryBoolean.FALSE) {
+			descriptor.putTableSchema(FORMAT_FIELDS, testingSchema);
+		} // nothing to put for UNDEFINED
+		return descriptor;
+	}
 
-    private static TableSink<?> createTableSink(DescriptorProperties descriptor) {
-        return TableFactoryService.find(TableSinkFactory.class, descriptor.asMap())
-                .createTableSink(descriptor.asMap());
-    }
+	private static TableSource<?> createTableSource(DescriptorProperties descriptor) {
+		return TableFactoryService
+			.find(TableSourceFactory.class, descriptor.asMap())
+			.createTableSource(descriptor.asMap());
+	}
+
+	private static TableSink<?> createTableSink(DescriptorProperties descriptor) {
+		return TableFactoryService
+			.find(TableSinkFactory.class, descriptor.asMap())
+			.createTableSink(descriptor.asMap());
+	}
 }

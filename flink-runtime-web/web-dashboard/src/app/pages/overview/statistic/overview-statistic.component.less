@@ -17,56 +17,50 @@
  */
 @import "theme";
 
-:host {
-  nz-card {
-    ::ng-deep {
-      .ant-card-head {
-        border-bottom: 0;
-      }
+nz-card {
+  ::ng-deep {
+    .ant-card-head {
+      border-bottom: 0;
+    }
 
-      .ant-card-body {
-        padding: 0 @padding-lg @padding-xs;
-      }
+    .ant-card-body {
+      padding: 0 24px 8px;
     }
   }
+}
 
-  .total {
-    color: @success-color;
-    font-size: 36px;
-    line-height: 38px;
-  }
+.total {
+  color: @success-color;
+  font-size: 36px;
+  line-height: 38px;
+}
 
-  .footer {
-    margin-top: @margin-md;
-    padding-top: @padding-sm;
-    border-top: @border-width-base @border-style-base @border-color-split;
+.footer {
+  padding-top: 9px;
+  margin-top: 16px;
+  border-top: 1px solid @border-color-split;
 
-    .field {
-      display: inline-block;
-      font-size: @font-size-base;
+  .field {
+    display: inline-block;
+    font-size: 14px;
+    line-height: 22px;
+
+    span {
       line-height: 22px;
 
-      span {
-        line-height: 22px;
-
-        &:last-child {
-          margin-left: @margin-xs;
-          color: @text-color;
-          font-weight: 600;
-        }
-
-        &.warning {
-          color: @warning-color;
-        }
+      &:last-child {
+        margin-left: 8px;
+        font-weight: 600;
+        color: @heading-color;
       }
     }
   }
+}
 
-  .col {
-    margin-bottom: @margin-lg;
-  }
+.col {
+  margin-bottom: 24px;
+}
 
-  nz-divider {
-    margin: 0 @margin-sm;
-  }
+nz-divider {
+  margin: 0 12px;
 }

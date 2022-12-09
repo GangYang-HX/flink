@@ -15,21 +15,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.api.scala.operators.translation
 
 import org.apache.flink.api.common.Plan
 import org.apache.flink.api.common.operators.GenericDataSourceBase
 import org.apache.flink.api.common.operators.base.GroupReduceOperatorBase
+
 import org.apache.flink.api.java.aggregation.Aggregations
 import org.apache.flink.api.java.io.DiscardingOutputFormat
 import org.apache.flink.api.scala._
-
 import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.Test
 
 class AggregateTranslationTest {
   @Test
-  def translateAggregate(): Unit = {
+  def translateAggregate(): Unit =  {
     try {
       val parallelism = 8
 
@@ -37,23 +38,21 @@ class AggregateTranslationTest {
 
       val initialData = env.fromElements((3.141592, "foobar", 77L))
 
-      initialData
-        .groupBy(0)
-        .aggregate(Aggregations.MIN, 1)
-        .and(Aggregations.SUM, 2)
+      initialData.groupBy(0).aggregate(Aggregations.MIN, 1).and(Aggregations.SUM, 2)
         .output(new DiscardingOutputFormat[(Double, String, Long)])
 
       val p: Plan = env.createProgramPlan()
       val sink = p.getDataSinks.iterator.next
 
-      val reducer = sink.getInput.asInstanceOf[GroupReduceOperatorBase[_, _, _]]
+      val reducer= sink.getInput.asInstanceOf[GroupReduceOperatorBase[_, _, _]]
 
       assertEquals(1, reducer.getKeyColumns(0).length)
       assertEquals(0, reducer.getKeyColumns(0)(0))
       assertEquals(-1, reducer.getParallelism)
       assertTrue(reducer.isCombinable)
       assertTrue(reducer.getInput.isInstanceOf[GenericDataSourceBase[_, _]])
-    } catch {
+    }
+    catch {
       case e: Exception => {
         System.err.println(e.getMessage)
         e.printStackTrace()
@@ -63,3 +62,4 @@ class AggregateTranslationTest {
     }
   }
 }
+

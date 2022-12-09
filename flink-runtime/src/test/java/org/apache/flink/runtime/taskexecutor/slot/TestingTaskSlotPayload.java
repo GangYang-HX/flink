@@ -21,61 +21,66 @@ package org.apache.flink.runtime.taskexecutor.slot;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
+import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils.createExecutionAttemptId;
-
 class TestingTaskSlotPayload implements TaskSlotPayload {
-    private final JobID jobId;
-    private final ExecutionAttemptID executionAttemptID;
-    private final AllocationID allocationID;
-    private final CompletableFuture<Void> terminationFuture = new CompletableFuture<>();
-    private final OneShotLatch failLatch = new OneShotLatch();
+	private final JobID jobId;
+	private final ExecutionAttemptID executionAttemptID;
+	private final AllocationID allocationID;
+	private final CompletableFuture<Void> terminationFuture = new CompletableFuture<>();
+	private final ExecutionState executionState;
+	private final OneShotLatch failLatch = new OneShotLatch();
 
-    TestingTaskSlotPayload() {
-        this(new JobID(), createExecutionAttemptId(), new AllocationID());
-    }
+	TestingTaskSlotPayload() {
+		this(new JobID(), new ExecutionAttemptID(), new AllocationID(), ExecutionState.RUNNING);
+	}
 
-    TestingTaskSlotPayload(
-            JobID jobId, ExecutionAttemptID executionAttemptID, AllocationID allocationID) {
-        this.jobId = jobId;
-        this.executionAttemptID = executionAttemptID;
-        this.allocationID = allocationID;
-    }
+	TestingTaskSlotPayload(JobID jobId, ExecutionAttemptID executionAttemptID, AllocationID allocationID, ExecutionState executionState) {
+		this.jobId = jobId;
+		this.executionAttemptID = executionAttemptID;
+		this.allocationID = allocationID;
+		this.executionState = executionState;
+	}
 
-    @Override
-    public JobID getJobID() {
-        return jobId;
-    }
+	@Override
+	public JobID getJobID() {
+		return jobId;
+	}
 
-    @Override
-    public ExecutionAttemptID getExecutionId() {
-        return executionAttemptID;
-    }
+	@Override
+	public ExecutionAttemptID getExecutionId() {
+		return executionAttemptID;
+	}
 
-    @Override
-    public AllocationID getAllocationId() {
-        return allocationID;
-    }
+	@Override
+	public AllocationID getAllocationId() {
+		return allocationID;
+	}
 
-    @Override
-    public CompletableFuture<Void> getTerminationFuture() {
-        return terminationFuture;
-    }
+	@Override
+	public CompletableFuture<Void> getTerminationFuture() {
+		return terminationFuture;
+	}
 
-    @Override
-    public void failExternally(Throwable cause) {
-        failLatch.trigger();
-    }
+	@Override
+	public ExecutionState getExecutionState() {
+		return executionState;
+	}
 
-    void waitForFailure() throws InterruptedException {
-        failLatch.await();
-    }
+	@Override
+	public void failExternally(Throwable cause) {
+		failLatch.trigger();
+	}
 
-    TestingTaskSlotPayload terminate() {
-        terminationFuture.complete(null);
-        return this;
-    }
+	void waitForFailure() throws InterruptedException {
+		failLatch.await();
+	}
+
+	TestingTaskSlotPayload terminate() {
+		terminationFuture.complete(null);
+		return this;
+	}
 }

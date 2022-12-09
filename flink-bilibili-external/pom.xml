@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<parent>
+		<artifactId>flink-parent</artifactId>
+		<groupId>org.apache.flink</groupId>
+		<version>1.11.4-SNAPSHOT</version>
+	</parent>
+	<modelVersion>4.0.0</modelVersion>
+
+	<artifactId>flink-bilibili-external</artifactId>
+	<packaging>pom</packaging>
+	<modules>
+		<module>flink-bilibili-external-archer</module>
+		<module>flink-bilibili-external-trace</module>
+		<module>flink-bilibili-external-excalibur</module>
+		<module>flink-bilibili-external-keeper</module>
+	</modules>
+
+	<properties>
+		<net.dongliu.version>5.0.8</net.dongliu.version>
+		<fastjson.version>1.2.72</fastjson.version>
+		<lombok.version>1.16.22</lombok.version>
+		<guava-retrying.version>2.0.0</guava-retrying.version>
+		<excalibur-sdk.version>1.0.1-SNAPSHOT</excalibur-sdk.version>
+		<protobuf.version>3.12.2</protobuf.version>
+	</properties>
+	<dependencies>
+
+	</dependencies>
+
+</project>

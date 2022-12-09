@@ -24,73 +24,75 @@ import org.apache.flink.configuration.ResourceManagerOptions;
 import java.util.HashMap;
 import java.util.Map;
 
-/** This class describes the basic parameters for launching a TaskManager process. */
+/**
+ * This class describes the basic parameters for launching a TaskManager process.
+ */
 public class ContaineredTaskManagerParameters implements java.io.Serializable {
 
-    private static final long serialVersionUID = -3096987654278064670L;
+	private static final long serialVersionUID = -3096987654278064670L;
 
-    /** Environment variables to add to the Java process. */
-    private final HashMap<String, String> taskManagerEnv;
+	/** Environment variables to add to the Java process. */
+	private final HashMap<String, String> taskManagerEnv;
 
-    private final TaskExecutorProcessSpec taskExecutorProcessSpec;
+	private final TaskExecutorProcessSpec taskExecutorProcessSpec;
 
-    public ContaineredTaskManagerParameters(
-            TaskExecutorProcessSpec taskExecutorProcessSpec,
-            HashMap<String, String> taskManagerEnv) {
+	public ContaineredTaskManagerParameters(
+			TaskExecutorProcessSpec taskExecutorProcessSpec,
+			HashMap<String, String> taskManagerEnv) {
 
-        this.taskExecutorProcessSpec = taskExecutorProcessSpec;
-        this.taskManagerEnv = taskManagerEnv;
-    }
+		this.taskExecutorProcessSpec = taskExecutorProcessSpec;
+		this.taskManagerEnv = taskManagerEnv;
+	}
 
-    // ------------------------------------------------------------------------
+	// ------------------------------------------------------------------------
 
-    public TaskExecutorProcessSpec getTaskExecutorProcessSpec() {
-        return taskExecutorProcessSpec;
-    }
+	public TaskExecutorProcessSpec getTaskExecutorProcessSpec() {
+		return taskExecutorProcessSpec;
+	}
 
-    public Map<String, String> taskManagerEnv() {
-        return taskManagerEnv;
-    }
+	public Map<String, String> taskManagerEnv() {
+		return taskManagerEnv;
+	}
 
-    // ------------------------------------------------------------------------
 
-    @Override
-    public String toString() {
-        return "TaskManagerParameters {"
-                + "taskExecutorProcessSpec="
-                + taskExecutorProcessSpec
-                + ", taskManagerEnv="
-                + taskManagerEnv
-                + '}';
-    }
+	// ------------------------------------------------------------------------
 
-    // ------------------------------------------------------------------------
-    //  Factory
-    // ------------------------------------------------------------------------
+	@Override
+	public String toString() {
+		return "TaskManagerParameters {" +
+			"taskExecutorProcessSpec=" + taskExecutorProcessSpec +
+			", taskManagerEnv=" + taskManagerEnv +
+			'}';
+	}
 
-    /**
-     * Computes the parameters to be used to start a TaskManager Java process.
-     *
-     * @param config The Flink configuration.
-     * @param taskExecutorProcessSpec The resource specifics of the task executor.
-     * @return The parameters to start the TaskManager processes with.
-     */
-    public static ContaineredTaskManagerParameters create(
-            Configuration config, TaskExecutorProcessSpec taskExecutorProcessSpec) {
+	// ------------------------------------------------------------------------
+	//  Factory
+	// ------------------------------------------------------------------------
 
-        // obtain the additional environment variables from the configuration
-        final HashMap<String, String> envVars = new HashMap<>();
-        final String prefix = ResourceManagerOptions.CONTAINERIZED_TASK_MANAGER_ENV_PREFIX;
+	/**
+	 * Computes the parameters to be used to start a TaskManager Java process.
+	 *
+	 * @param config The Flink configuration.
+	 * @param taskExecutorProcessSpec The resource specifics of the task executor.
+	 * @return The parameters to start the TaskManager processes with.
+	 */
+	public static ContaineredTaskManagerParameters create(
+			Configuration config,
+			TaskExecutorProcessSpec taskExecutorProcessSpec) {
 
-        for (String key : config.keySet()) {
-            if (key.startsWith(prefix) && key.length() > prefix.length()) {
-                // remove prefix
-                String envVarKey = key.substring(prefix.length());
-                envVars.put(envVarKey, config.getString(key, null));
-            }
-        }
+		// obtain the additional environment variables from the configuration
+		final HashMap<String, String> envVars = new HashMap<>();
+		final String prefix = ResourceManagerOptions.CONTAINERIZED_TASK_MANAGER_ENV_PREFIX;
 
-        // done
-        return new ContaineredTaskManagerParameters(taskExecutorProcessSpec, envVars);
-    }
+		for (String key : config.keySet()) {
+			if (key.startsWith(prefix) && key.length() > prefix.length()) {
+				// remove prefix
+				String envVarKey = key.substring(prefix.length());
+				envVars.put(envVarKey, config.getString(key, null));
+			}
+		}
+
+		// done
+		return new ContaineredTaskManagerParameters(taskExecutorProcessSpec, envVars);
+	}
 }

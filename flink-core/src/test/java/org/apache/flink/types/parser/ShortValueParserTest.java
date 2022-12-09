@@ -16,65 +16,50 @@
  * limitations under the License.
  */
 
+
 package org.apache.flink.types.parser;
 
 import org.apache.flink.types.ShortValue;
 
+
 public class ShortValueParserTest extends ParserTestBase<ShortValue> {
 
-    @Override
-    public String[] getValidTestValues() {
-        return new String[] {
-            "0",
-            "1",
-            "576",
-            "-8778",
-            String.valueOf(Short.MAX_VALUE),
-            String.valueOf(Short.MIN_VALUE),
-            "1239"
-        };
-    }
+	@Override
+	public String[] getValidTestValues() {
+		return new String[] {
+			"0", "1", "576", "-8778", String.valueOf(Short.MAX_VALUE), String.valueOf(Short.MIN_VALUE), "1239"
+		};
+	}
+	
+	@Override
+	public ShortValue[] getValidTestResults() {
+		return new ShortValue[] {
+			new ShortValue((short) 0), new ShortValue((short) 1), new ShortValue((short) 576),
+			new ShortValue((short) -8778), new ShortValue(Short.MAX_VALUE), new ShortValue(Short.MIN_VALUE),
+			new ShortValue((short)1239)
+		};
+	}
 
-    @Override
-    public ShortValue[] getValidTestResults() {
-        return new ShortValue[] {
-            new ShortValue((short) 0), new ShortValue((short) 1), new ShortValue((short) 576),
-            new ShortValue((short) -8778), new ShortValue(Short.MAX_VALUE),
-                    new ShortValue(Short.MIN_VALUE),
-            new ShortValue((short) 1239)
-        };
-    }
+	@Override
+	public String[] getInvalidTestValues() {
+		return new String[] {
+			"a", "1569a86", "-57-6", "7-877678", String.valueOf(Short.MAX_VALUE) + "0", String.valueOf(Integer.MIN_VALUE),
+			String.valueOf(Short.MAX_VALUE + 1), String.valueOf(Short.MIN_VALUE - 1), " 1", "2 ", " ", "\t"
+		};
+	}
 
-    @Override
-    public String[] getInvalidTestValues() {
-        return new String[] {
-            "a",
-            "1569a86",
-            "-57-6",
-            "7-877678",
-            String.valueOf(Short.MAX_VALUE) + "0",
-            String.valueOf(Integer.MIN_VALUE),
-            String.valueOf(Short.MAX_VALUE + 1),
-            String.valueOf(Short.MIN_VALUE - 1),
-            " 1",
-            "2 ",
-            " ",
-            "\t"
-        };
-    }
+	@Override
+	public boolean allowsEmptyField() {
+		return false;
+	}
 
-    @Override
-    public boolean allowsEmptyField() {
-        return false;
-    }
+	@Override
+	public FieldParser<ShortValue> getParser() {
+		return new ShortValueParser();
+	}
 
-    @Override
-    public FieldParser<ShortValue> getParser() {
-        return new ShortValueParser();
-    }
-
-    @Override
-    public Class<ShortValue> getTypeClass() {
-        return ShortValue.class;
-    }
+	@Override
+	public Class<ShortValue> getTypeClass() {
+		return ShortValue.class;
+	}
 }

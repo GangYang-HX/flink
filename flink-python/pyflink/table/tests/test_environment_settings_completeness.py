@@ -15,12 +15,13 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 ################################################################################
+import unittest
 
 from pyflink.table import EnvironmentSettings
-from pyflink.testing.test_case_utils import PythonAPICompletenessTestCase, PyFlinkTestCase
+from pyflink.testing.test_case_utils import PythonAPICompletenessTestCase
 
 
-class EnvironmentSettingsCompletenessTests(PythonAPICompletenessTestCase, PyFlinkTestCase):
+class EnvironmentSettingsCompletenessTests(PythonAPICompletenessTestCase, unittest.TestCase):
     """
     Tests whether the Python :class:`EnvironmentSettings` is consistent with
     Java `org.apache.flink.table.api.EnvironmentSettings`.
@@ -37,10 +38,10 @@ class EnvironmentSettingsCompletenessTests(PythonAPICompletenessTestCase, PyFlin
     @classmethod
     def excluded_methods(cls):
         # internal interfaces, no need to expose to users.
-        return {'getPlanner', 'getExecutor', 'getUserClassLoader'}
+        return {'toPlannerProperties', 'toExecutorProperties'}
 
 
-class EnvironmentSettingsBuilderCompletenessTests(PythonAPICompletenessTestCase, PyFlinkTestCase):
+class EnvironmentSettingsBuilderCompletenessTests(PythonAPICompletenessTestCase, unittest.TestCase):
     """
     Tests whether the Python :class:`EnvironmentSettings.Builder` is consistent with
     Java `org.apache.flink.table.api.EnvironmentSettings$Builder`.
@@ -54,10 +55,6 @@ class EnvironmentSettingsBuilderCompletenessTests(PythonAPICompletenessTestCase,
     def java_class(cls):
         return "org.apache.flink.table.api.EnvironmentSettings$Builder"
 
-    @classmethod
-    def excluded_methods(cls):
-        # internal interfaces, no need to expose to users.
-        return {'withClassLoader'}
 
 if __name__ == '__main__':
     import unittest

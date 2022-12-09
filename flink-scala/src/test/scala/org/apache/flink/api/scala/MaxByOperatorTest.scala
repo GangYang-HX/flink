@@ -19,8 +19,8 @@ package org.apache.flink.api.scala
 
 import org.apache.flink.api.common.InvalidProgramException
 
-import org.junit.Assert
 import org.junit.Test
+import org.junit.Assert
 
 class MaxByOperatorTest {
 
@@ -34,13 +34,14 @@ class MaxByOperatorTest {
     try {
       collection.maxBy(0, 1, 2, 3, 4)
     } catch {
-      case e: Exception => Assert.fail();
+      case e : Exception => Assert.fail();
     }
   }
 
   /**
-   * This test validates that an index which is out of bounds throws an IndexOutOfBoundsException.
-   */
+    * This test validates that an index which is out of bounds throws an
+    * IndexOutOfBoundsException.
+    */
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testOutOfTupleBoundsDataset1() {
 
@@ -52,8 +53,9 @@ class MaxByOperatorTest {
   }
 
   /**
-   * This test validates that an index which is out of bounds throws an IndexOutOfBoundsException.
-   */
+    * This test validates that an index which is out of bounds throws an
+    * IndexOutOfBoundsException.
+    */
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testOutOfTupleBoundsDataset2() {
     val env = ExecutionEnvironment.getExecutionEnvironment
@@ -64,8 +66,9 @@ class MaxByOperatorTest {
   }
 
   /**
-   * This test validates that an index which is out of bounds throws an IndexOutOfBoundsException.
-   */
+    * This test validates that an index which is out of bounds throws an
+    * IndexOutOfBoundsException.
+    */
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testOutOfTupleBoundsDataset3() {
     val env = ExecutionEnvironment.getExecutionEnvironment
@@ -75,7 +78,10 @@ class MaxByOperatorTest {
     collection.maxBy(1, 2, 3, 4, -1)
   }
 
-  /** This test validates that no exceptions is thrown when an empty grouping calls maxBy(). */
+  /**
+    * This test validates that no exceptions is thrown when an empty grouping
+    * calls maxBy().
+    */
   @Test
   def testMaxByKeyFieldsGrouping() {
 
@@ -85,14 +91,14 @@ class MaxByOperatorTest {
     try {
       groupDs.maxBy(4, 0, 1, 2, 3)
     } catch {
-      case e: Exception => Assert.fail();
+      case e : Exception => Assert.fail();
     }
   }
 
   /**
-   * This test validates that an InvalidProgramException is thrown when maxBy is used on a custom
-   * data type.
-   */
+    * This test validates that an InvalidProgramException is thrown when maxBy
+    * is used on a custom data type.
+    */
   @Test(expected = classOf[InvalidProgramException])
   def testCustomKeyFieldsDataset() {
 
@@ -104,9 +110,9 @@ class MaxByOperatorTest {
   }
 
   /**
-   * This test validates that an InvalidProgramException is thrown when maxBy is used on a custom
-   * data type.
-   */
+    * This test validates that an InvalidProgramException is thrown when maxBy
+    * is used on a custom data type.
+    */
   @Test(expected = classOf[InvalidProgramException])
   def testCustomKeyFieldsGrouping() {
 
@@ -115,10 +121,10 @@ class MaxByOperatorTest {
 
     groupDs.maxBy(0)
   }
-
   /**
-   * This test validates that an index which is out of bounds throws an IndexOutOfBoundsException.
-   */
+    * This test validates that an index which is out of bounds throws an
+    * IndexOutOfBoundsException.
+    */
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testOutOfTupleBoundsGrouping1() {
 
@@ -128,8 +134,9 @@ class MaxByOperatorTest {
   }
 
   /**
-   * This test validates that an index which is out of bounds throws an IndexOutOfBoundsException.
-   */
+    * This test validates that an index which is out of bounds throws an
+    * IndexOutOfBoundsException.
+    */
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testOutOfTupleBoundsGrouping2() {
 
@@ -139,8 +146,9 @@ class MaxByOperatorTest {
   }
 
   /**
-   * This test validates that an index which is out of bounds throws an IndexOutOfBoundsException.
-   */
+    * This test validates that an index which is out of bounds throws an
+    * IndexOutOfBoundsException.
+    */
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testOutOfTupleBoundsGrouping3() {
 

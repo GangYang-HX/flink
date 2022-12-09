@@ -19,6 +19,7 @@
 package org.apache.flink.state.api.output.operators;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.state.BatchWriter;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.state.VoidNamespace;
 import org.apache.flink.runtime.state.VoidNamespaceSerializer;
@@ -42,81 +43,94 @@ import java.util.function.Supplier;
  */
 @Internal
 public class KeyedStateBootstrapOperator<K, IN>
-        extends AbstractUdfStreamOperator<
-                TaggedOperatorSubtaskState, KeyedStateBootstrapFunction<K, IN>>
-        implements OneInputStreamOperator<IN, TaggedOperatorSubtaskState>, BoundedOneInput {
+	extends AbstractUdfStreamOperator<TaggedOperatorSubtaskState, KeyedStateBootstrapFunction<K, IN>>
+	implements OneInputStreamOperator<IN, TaggedOperatorSubtaskState>,
+	BoundedOneInput {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private final long timestamp;
+	private final long timestamp;
 
-    private final Path savepointPath;
+	private final Path savepointPath;
 
-    private transient KeyedStateBootstrapOperator<K, IN>.ContextImpl context;
+	private transient BatchWriter batchWriter;
 
-    public KeyedStateBootstrapOperator(
-            long timestamp, Path savepointPath, KeyedStateBootstrapFunction<K, IN> function) {
-        super(function);
+	private transient KeyedStateBootstrapOperator<K, IN>.ContextImpl context;
 
-        this.timestamp = timestamp;
-        this.savepointPath = savepointPath;
-    }
+	public KeyedStateBootstrapOperator(long timestamp, Path savepointPath, KeyedStateBootstrapFunction<K, IN> function) {
+		super(function);
 
-    @Override
-    public void open() throws Exception {
-        super.open();
+		this.timestamp = timestamp;
+		this.savepointPath = savepointPath;
+	}
 
-        Supplier<InternalTimerService<VoidNamespace>> internalTimerService =
-                () ->
-                        getInternalTimerService(
-                                "user-timers",
-                                VoidNamespaceSerializer.INSTANCE,
-                                VoidTriggerable.instance());
+	@Override
+	public void open() throws Exception {
+		super.open();
 
-        TimerService timerService =
-                new LazyTimerService(internalTimerService, getProcessingTimeService());
+		Supplier<InternalTimerService<VoidNamespace>> internalTimerService = () -> getInternalTimerService(
+			"user-timers",
+			VoidNamespaceSerializer.INSTANCE,
+			VoidTriggerable.instance());
 
-        context = new KeyedStateBootstrapOperator<K, IN>.ContextImpl(userFunction, timerService);
-    }
+		TimerService timerService = new LazyTimerService(internalTimerService, getProcessingTimeService());
 
-    @Override
-    public void processElement(StreamRecord<IN> element) throws Exception {
-        userFunction.processElement(element.getValue(), context);
-    }
 
-    @Override
-    public void endInput() throws Exception {
-        TaggedOperatorSubtaskState state =
-                SnapshotUtils.snapshot(
-                        this,
-                        getRuntimeContext().getIndexOfThisSubtask(),
-                        timestamp,
-                        getContainingTask().getConfiguration().isExactlyOnceCheckpointMode(),
-                        getContainingTask().getConfiguration().isUnalignedCheckpointsEnabled(),
-                        getContainingTask().getConfiguration().getConfiguration(),
-                        savepointPath);
+		try {
+			batchWriter = getRuntimeContext().getBatchWriteableBackend();
+		} catch (Exception e) {
+			LOG.warn("can not load the state batch writer!");
+		}
+		context = new KeyedStateBootstrapOperator<K, IN>.ContextImpl(userFunction, timerService, batchWriter);
+	}
 
-        output.collect(new StreamRecord<>(state));
-    }
+	@Override
+	public void processElement(StreamRecord<IN> element) throws Exception {
+		userFunction.processElement(element.getValue(), context);
+	}
 
-    private class ContextImpl extends KeyedStateBootstrapFunction<K, IN>.Context {
+	@Override
+	public void endInput() throws Exception {
 
-        private final TimerService timerService;
+		batchWriter.closeBatchWriter();
+		TaggedOperatorSubtaskState state = SnapshotUtils.snapshot(
+			this,
+			getRuntimeContext().getIndexOfThisSubtask(),
+			timestamp,
+			getContainingTask().getConfiguration().isExactlyOnceCheckpointMode(),
+			getContainingTask().getConfiguration().isUnalignedCheckpointsEnabled(),
+			getContainingTask().getCheckpointStorage(),
+			savepointPath);
 
-        ContextImpl(KeyedStateBootstrapFunction<K, IN> function, TimerService timerService) {
-            function.super();
-            this.timerService = Preconditions.checkNotNull(timerService);
-        }
+		output.collect(new StreamRecord<>(state));
+	}
 
-        @Override
-        public TimerService timerService() {
-            return timerService;
-        }
+	private class ContextImpl extends KeyedStateBootstrapFunction<K, IN>.Context {
 
-        @Override
-        @SuppressWarnings("unchecked")
-        public K getCurrentKey() {
-            return (K) KeyedStateBootstrapOperator.this.getCurrentKey();
-        }
-    }
+		private final TimerService timerService;
+		private final BatchWriter batchWriter;
+
+		ContextImpl(KeyedStateBootstrapFunction<K, IN> function, TimerService timerService,
+					BatchWriter batchWriter) {
+			function.super();
+			this.timerService = Preconditions.checkNotNull(timerService);
+			this.batchWriter = Preconditions.checkNotNull(batchWriter);
+		}
+
+		@Override
+		public TimerService timerService() {
+			return timerService;
+		}
+
+		@Override
+		public BatchWriter batchWriter() {
+			return batchWriter;
+		}
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public K getCurrentKey() {
+			return (K) KeyedStateBootstrapOperator.this.getCurrentKey();
+		}
+	}
 }

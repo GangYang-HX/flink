@@ -15,13 +15,14 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 ################################################################################
+import unittest
 
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.testing.test_case_utils import PythonAPICompletenessTestCase, PyFlinkTestCase
+from pyflink.testing.test_case_utils import PythonAPICompletenessTestCase
 
 
 class StreamExecutionEnvironmentCompletenessTests(PythonAPICompletenessTestCase,
-                                                  PyFlinkTestCase):
+                                                  unittest.TestCase):
 
     @classmethod
     def python_class(cls):
@@ -34,24 +35,21 @@ class StreamExecutionEnvironmentCompletenessTests(PythonAPICompletenessTestCase,
     @classmethod
     def excluded_methods(cls):
         # Exclude these methods for the time being, because current
-        # StreamExecutionEnvironment do not apply to the
-        # DataStream API, but to the Table API configuration.
+        # ExecutionEnvironment/StreamExecutionEnvironment do not apply to the
+        # DataSet/DataStream API, but to the Table API configuration.
         # Currently only the methods for configuration is added.
         # 'isForceCheckpointing', 'getNumberOfExecutionRetries', 'setNumberOfExecutionRetries'
         # is deprecated, exclude them.
         return {'getLastJobExecutionResult', 'getId', 'getIdString',
-                'createCollectionsEnvironment', 'createLocalEnvironment',
+                'registerCachedFile', 'createCollectionsEnvironment', 'createLocalEnvironment',
                 'createRemoteEnvironment', 'addOperator', 'fromElements',
                 'resetContextEnvironment', 'getCachedFiles', 'generateSequence',
                 'getNumberOfExecutionRetries', 'getStreamGraph', 'fromParallelCollection',
                 'readFileStream', 'isForceCheckpointing', 'readFile', 'clean',
                 'createInput', 'createLocalEnvironmentWithWebUI', 'fromCollection',
-                'socketTextStream', 'initializeContextEnvironment', 'readTextFile',
-                'setNumberOfExecutionRetries', 'executeAsync', 'registerJobListener',
-                'clearJobListeners', 'getJobListeners', 'fromSequence', 'getConfiguration',
-                'generateStreamGraph', 'getTransformations', 'areExplicitEnvironmentsAllowed',
-                'registerCollectIterator', 'listCompletedClusterDatasets',
-                'invalidateClusterDataset', 'registerCacheTransformation', 'close'}
+                'socketTextStream', 'initializeContextEnvironment', 'readTextFile', 'addSource',
+                'setNumberOfExecutionRetries', 'configure', 'executeAsync', 'registerJobListener',
+                'clearJobListeners', 'getJobListeners', "fromSource"}
 
 
 if __name__ == '__main__':

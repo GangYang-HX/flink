@@ -18,27 +18,29 @@
 
 package org.apache.flink.table.catalog.exceptions;
 
-import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.ObjectPath;
 
-/** Exception for trying to create a partition that already exists. */
-@PublicEvolving
+/**
+ * Exception for trying to create a partition that already exists.
+ */
 public class PartitionAlreadyExistsException extends Exception {
-    private static final String MSG = "Partition %s of table %s in catalog %s already exists.";
+	private static final String MSG = "Partition %s of table %s in catalog %s already exists.";
 
-    public PartitionAlreadyExistsException(
-            String catalogName, ObjectPath tablePath, CatalogPartitionSpec partitionSpec) {
+	public PartitionAlreadyExistsException(
+		String catalogName,
+		ObjectPath tablePath,
+		CatalogPartitionSpec partitionSpec) {
 
-        super(String.format(MSG, partitionSpec, tablePath.getFullName(), catalogName));
-    }
+		super(String.format(MSG, partitionSpec, tablePath.getFullName(), catalogName));
+	}
 
-    public PartitionAlreadyExistsException(
-            String catalogName,
-            ObjectPath tablePath,
-            CatalogPartitionSpec partitionSpec,
-            Throwable cause) {
+	public PartitionAlreadyExistsException(
+		String catalogName,
+		ObjectPath tablePath,
+		CatalogPartitionSpec partitionSpec,
+		Throwable cause) {
 
-        super(String.format(MSG, partitionSpec, tablePath.getFullName(), catalogName), cause);
-    }
+		super(String.format(MSG, partitionSpec, tablePath.getFullName(), catalogName), cause);
+	}
 }

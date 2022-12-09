@@ -21,13 +21,14 @@ package org.apache.flink.client.program;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.streaming.api.datastream.DataStream;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.File;
 import java.net.URISyntaxException;
 
 import static org.apache.flink.client.program.PackagedProgramUtils.resolveURI;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
 
 /**
  * Tests {@link PackagedProgramUtils}.
@@ -35,24 +36,26 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>See also {@link PackagedProgramUtilsPipelineTest} for tests that need to test behaviour of
  * {@link DataStream} and {@link DataSet} programs.
  */
-class PackagedProgramUtilsTest {
+public class PackagedProgramUtilsTest {
 
-    @Test
-    void testResolveURI() throws URISyntaxException {
-        final String relativeFile = "path/of/user.jar";
-        assertThat(resolveURI(relativeFile))
-                .hasScheme("file")
-                .hasPath(new File(System.getProperty("user.dir"), relativeFile).getAbsolutePath());
+	@Test
+	public void testResolveURI() throws URISyntaxException {
+		final String relativeFile = "path/of/user.jar";
+		assertThat(resolveURI(relativeFile).getScheme(), is("file"));
+		assertThat(
+			resolveURI(relativeFile).getPath(),
+			is(new File(System.getProperty("user.dir"), relativeFile).getAbsolutePath()));
 
-        final String absoluteFile = "/path/of/user.jar";
-        assertThat(resolveURI(absoluteFile)).hasScheme("file").hasPath(absoluteFile);
+		final String absoluteFile = "/path/of/user.jar";
+		assertThat(resolveURI(relativeFile).getScheme(), is("file"));
+		assertThat(resolveURI(absoluteFile).getPath(), is(absoluteFile));
 
-        final String fileSchemaFile = "file:///path/of/user.jar";
-        assertThat(resolveURI(fileSchemaFile).getScheme()).isEqualTo("file");
-        assertThat(resolveURI(fileSchemaFile)).hasToString(fileSchemaFile);
+		final String fileSchemaFile = "file:///path/of/user.jar";
+		assertThat(resolveURI(fileSchemaFile).getScheme(), is("file"));
+		assertThat(resolveURI(fileSchemaFile).toString(), is(fileSchemaFile));
 
-        final String localSchemaFile = "local:///path/of/user.jar";
-        assertThat(resolveURI(localSchemaFile).getScheme()).isEqualTo("local");
-        assertThat(resolveURI(localSchemaFile)).hasToString(localSchemaFile);
-    }
+		final String localSchemaFile = "local:///path/of/user.jar";
+		assertThat(resolveURI(localSchemaFile).getScheme(), is("local"));
+		assertThat(resolveURI(localSchemaFile).toString(), is(localSchemaFile));
+	}
 }

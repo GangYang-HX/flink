@@ -17,7 +17,6 @@
 
 package org.apache.flink.streaming.runtime.operators;
 
-import org.apache.flink.api.common.eventtime.NoWatermarksGenerator;
 import org.apache.flink.api.common.eventtime.TimestampAssigner;
 import org.apache.flink.api.common.eventtime.Watermark;
 import org.apache.flink.api.common.eventtime.WatermarkGenerator;
@@ -28,162 +27,156 @@ import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus;
+import org.apache.flink.streaming.runtime.streamstatus.StreamStatus;
+import org.apache.flink.streaming.runtime.streamstatus.StreamStatusMaintainer;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeCallback;
 
-import static org.apache.flink.api.common.operators.ProcessingTimeService.ProcessingTimeCallback;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * A stream operator that may do one or both of the following: extract timestamps from events and
- * generate watermarks.
+ * A stream operator that may do one or both of the following: extract timestamps from
+ * events and generate watermarks.
  *
- * <p>These two responsibilities run in the same operator rather than in two different ones, because
- * the implementation of the timestamp assigner and the watermark generator is frequently in the
- * same class (and should be run in the same instance), even though the separate interfaces support
- * the use of different classes.
+ * <p>These two responsibilities run in the same operator rather than in two different ones,
+ * because the implementation of the timestamp assigner and the watermark generator is
+ * frequently in the same class (and should be run in the same instance), even though the
+ * separate interfaces support the use of different classes.
  *
  * @param <T> The type of the input elements
  */
-public class TimestampsAndWatermarksOperator<T> extends AbstractStreamOperator<T>
-        implements OneInputStreamOperator<T, T>, ProcessingTimeCallback {
+public class TimestampsAndWatermarksOperator<T>
+		extends AbstractStreamOperator<T>
+		implements OneInputStreamOperator<T, T>, ProcessingTimeCallback {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private final WatermarkStrategy<T> watermarkStrategy;
+	private final WatermarkStrategy<T> watermarkStrategy;
 
-    /** The timestamp assigner. */
-    private transient TimestampAssigner<T> timestampAssigner;
+	/** The timestamp assigner. */
+	private transient TimestampAssigner<T> timestampAssigner;
 
-    /** The watermark generator, initialized during runtime. */
-    private transient WatermarkGenerator<T> watermarkGenerator;
+	/** The watermark generator, initialized during runtime. */
+	private transient WatermarkGenerator<T> watermarkGenerator;
 
-    /** The watermark output gateway, initialized during runtime. */
-    private transient WatermarkOutput wmOutput;
+	/** The watermark output gateway, initialized during runtime. */
+	private transient WatermarkOutput wmOutput;
 
-    /** The interval (in milliseconds) for periodic watermark probes. Initialized during runtime. */
-    private transient long watermarkInterval;
+	/** The interval (in milliseconds) for periodic watermark probes. Initialized during runtime. */
+	private transient long watermarkInterval;
 
-    /** Whether to emit intermediate watermarks or only one final watermark at the end of input. */
-    private final boolean emitProgressiveWatermarks;
+	public TimestampsAndWatermarksOperator(
+			WatermarkStrategy<T> watermarkStrategy) {
 
-    public TimestampsAndWatermarksOperator(
-            WatermarkStrategy<T> watermarkStrategy, boolean emitProgressiveWatermarks) {
-        this.watermarkStrategy = checkNotNull(watermarkStrategy);
-        this.emitProgressiveWatermarks = emitProgressiveWatermarks;
-        this.chainingStrategy = ChainingStrategy.DEFAULT_CHAINING_STRATEGY;
-    }
+		this.watermarkStrategy = checkNotNull(watermarkStrategy);
+		this.chainingStrategy = ChainingStrategy.ALWAYS;
+	}
 
-    @Override
-    public void open() throws Exception {
-        super.open();
+	@Override
+	public void open() throws Exception {
+		super.open();
 
-        timestampAssigner = watermarkStrategy.createTimestampAssigner(this::getMetricGroup);
-        watermarkGenerator =
-                emitProgressiveWatermarks
-                        ? watermarkStrategy.createWatermarkGenerator(this::getMetricGroup)
-                        : new NoWatermarksGenerator<>();
+		timestampAssigner = watermarkStrategy.createTimestampAssigner(this::getMetricGroup);
+		watermarkGenerator = watermarkStrategy.createWatermarkGenerator(this::getMetricGroup);
 
-        wmOutput = new WatermarkEmitter(output);
+		wmOutput = new WatermarkEmitter(output, getContainingTask().getStreamStatusMaintainer());
 
-        watermarkInterval = getExecutionConfig().getAutoWatermarkInterval();
-        if (watermarkInterval > 0 && emitProgressiveWatermarks) {
-            final long now = getProcessingTimeService().getCurrentProcessingTime();
-            getProcessingTimeService().registerTimer(now + watermarkInterval, this);
-        }
-    }
+		watermarkInterval = getExecutionConfig().getAutoWatermarkInterval();
+		if (watermarkInterval > 0) {
+			final long now = getProcessingTimeService().getCurrentProcessingTime();
+			getProcessingTimeService().registerTimer(now + watermarkInterval, this);
+		}
+	}
 
-    @Override
-    public void processElement(final StreamRecord<T> element) throws Exception {
-        final T event = element.getValue();
-        final long previousTimestamp =
-                element.hasTimestamp() ? element.getTimestamp() : Long.MIN_VALUE;
-        final long newTimestamp = timestampAssigner.extractTimestamp(event, previousTimestamp);
+	@Override
+	public void processElement(final StreamRecord<T> element) throws Exception {
+		final T event = element.getValue();
+		final long previousTimestamp = element.hasTimestamp() ? element.getTimestamp() : Long.MIN_VALUE;
+		final long newTimestamp = timestampAssigner.extractTimestamp(event, previousTimestamp);
 
-        element.setTimestamp(newTimestamp);
-        output.collect(element);
-        watermarkGenerator.onEvent(event, newTimestamp, wmOutput);
-    }
+		element.setTimestamp(newTimestamp);
+		output.collect(element);
+		watermarkGenerator.onEvent(event, newTimestamp, wmOutput);
+	}
 
-    @Override
-    public void onProcessingTime(long timestamp) throws Exception {
-        watermarkGenerator.onPeriodicEmit(wmOutput);
+	@Override
+	public void onProcessingTime(long timestamp) throws Exception {
+		watermarkGenerator.onPeriodicEmit(wmOutput);
 
-        final long now = getProcessingTimeService().getCurrentProcessingTime();
-        getProcessingTimeService().registerTimer(now + watermarkInterval, this);
-    }
+		final long now = getProcessingTimeService().getCurrentProcessingTime();
+		getProcessingTimeService().registerTimer(now + watermarkInterval, this);
+	}
 
-    /**
-     * Override the base implementation to completely ignore watermarks propagated from upstream,
-     * except for the "end of time" watermark.
-     */
-    @Override
-    public void processWatermark(org.apache.flink.streaming.api.watermark.Watermark mark)
-            throws Exception {
-        // if we receive a Long.MAX_VALUE watermark we forward it since it is used
-        // to signal the end of input and to not block watermark progress downstream
-        if (mark.getTimestamp() == Long.MAX_VALUE) {
-            wmOutput.emitWatermark(Watermark.MAX_WATERMARK);
-        }
-    }
+	/**
+	 * Override the base implementation to completely ignore watermarks propagated from
+	 * upstream, except for the "end of time" watermark.
+	 */
+	@Override
+	public void processWatermark(org.apache.flink.streaming.api.watermark.Watermark mark) throws Exception {
+		// if we receive a Long.MAX_VALUE watermark we forward it since it is used
+		// to signal the end of input and to not block watermark progress downstream
+		if (mark.getTimestamp() == Long.MAX_VALUE) {
+			wmOutput.emitWatermark(Watermark.MAX_WATERMARK);
+		}
+	}
 
-    /** Override the base implementation to completely ignore statuses propagated from upstream. */
-    @Override
-    public void processWatermarkStatus(WatermarkStatus watermarkStatus) throws Exception {}
+	public long getCurrentWatermark() {
+		return ((WatermarkEmitter) wmOutput).getCurrentWatermark();
+	}
 
-    @Override
-    public void finish() throws Exception {
-        super.finish();
-        watermarkGenerator.onPeriodicEmit(wmOutput);
-    }
+	@Override
+	public void close() throws Exception {
+		super.close();
+		watermarkGenerator.onPeriodicEmit(wmOutput);
+	}
 
-    // ------------------------------------------------------------------------
+	// ------------------------------------------------------------------------
 
-    /**
-     * Implementation of the {@code WatermarkEmitter}, based on the components that are available
-     * inside a stream operator.
-     */
-    public static final class WatermarkEmitter implements WatermarkOutput {
+	/**
+	 * Implementation of the {@code WatermarkEmitter}, based on the components
+	 * that are available inside a stream operator.
+	 */
+	private static final class WatermarkEmitter implements WatermarkOutput {
 
-        private final Output<?> output;
+		private final Output<?> output;
 
-        private long currentWatermark;
+		private final StreamStatusMaintainer statusMaintainer;
 
-        private boolean idle;
+		private long currentWatermark;
 
-        public WatermarkEmitter(Output<?> output) {
-            this.output = output;
-            this.currentWatermark = Long.MIN_VALUE;
-        }
+		private boolean idle;
 
-        @Override
-        public void emitWatermark(Watermark watermark) {
-            final long ts = watermark.getTimestamp();
+		WatermarkEmitter(Output<?> output, StreamStatusMaintainer statusMaintainer) {
+			this.output = output;
+			this.statusMaintainer = statusMaintainer;
+			this.currentWatermark = Long.MIN_VALUE;
+		}
 
-            if (ts <= currentWatermark) {
-                return;
-            }
+		@Override
+		public void emitWatermark(Watermark watermark) {
+			final long ts = watermark.getTimestamp();
 
-            currentWatermark = ts;
+			if (ts <= currentWatermark) {
+				return;
+			}
 
-            markActive();
+			currentWatermark = ts;
 
-            output.emitWatermark(new org.apache.flink.streaming.api.watermark.Watermark(ts));
-        }
+			if (idle) {
+				idle = false;
+				statusMaintainer.toggleStreamStatus(StreamStatus.ACTIVE);
+			}
 
-        @Override
-        public void markIdle() {
-            if (!idle) {
-                idle = true;
-                output.emitWatermarkStatus(WatermarkStatus.IDLE);
-            }
-        }
+			output.emitWatermark(new org.apache.flink.streaming.api.watermark.Watermark(ts));
+		}
 
-        @Override
-        public void markActive() {
-            if (idle) {
-                idle = false;
-                output.emitWatermarkStatus(WatermarkStatus.ACTIVE);
-            }
-        }
-    }
+		@Override
+		public void markIdle() {
+			idle = true;
+			statusMaintainer.toggleStreamStatus(StreamStatus.IDLE);
+		}
+
+		public long getCurrentWatermark() {
+			return currentWatermark;
+		}
+	}
 }

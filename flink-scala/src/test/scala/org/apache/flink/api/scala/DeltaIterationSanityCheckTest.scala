@@ -15,12 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.api.scala
 
-import org.apache.flink.api.common.InvalidProgramException
 import org.apache.flink.api.java.io.DiscardingOutputFormat
-
 import org.junit.Test
+import org.apache.flink.api.common.InvalidProgramException
 
 // Verify that the sanity checking in delta iterations works. We just
 // have a dummy job that is not meant to be executed. Only verify that
@@ -33,10 +33,9 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = s.join(ws).where("_1").equalTo("_1")((l, r) => l)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = s.join(ws).where("_1").equalTo("_1") { (l, r) => l }
+      (result, ws)
     }
 
     iteration.output(new DiscardingOutputFormat[(Int, String)])
@@ -48,13 +47,12 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = ws.join(s).where("_1").equalTo("_1")((l, r) => l)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = ws.join(s).where("_1").equalTo("_1") { (l, r) => l }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])
   }
 
   @Test(expected = classOf[InvalidProgramException])
@@ -63,13 +61,12 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = s.join(ws).where("_2").equalTo("_2")((l, r) => l)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = s.join(ws).where("_2").equalTo("_2") { (l, r) => l }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])
   }
 
   @Test(expected = classOf[InvalidProgramException])
@@ -78,13 +75,12 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = ws.join(s).where("_2").equalTo("_2")((l, r) => l)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = ws.join(s).where("_2").equalTo("_2") { (l, r) => l }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])  
   }
 
   @Test(expected = classOf[InvalidProgramException])
@@ -93,14 +89,13 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_2")) {
-      (s, ws) =>
-        val result = ws.join(s).where("_1").equalTo("_1")((l, r) => l)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_2")) { (s, ws) =>
+      val result = ws.join(s).where("_1").equalTo("_1") { (l, r) => l }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
-  }
+    iteration.output(new DiscardingOutputFormat[(Int,String)])
+   }
 
   @Test
   def testCorrectCoGroupWithSolution1(): Unit = {
@@ -108,13 +103,12 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = s.coGroup(ws).where("_1").equalTo("_1")((l, r) => l.min)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = s.coGroup(ws).where("_1").equalTo("_1") { (l, r) => l.min }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])
   }
 
   @Test
@@ -123,13 +117,12 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = ws.coGroup(s).where("_1").equalTo("_1")((l, r) => l.min)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = ws.coGroup(s).where("_1").equalTo("_1") { (l, r) => l.min }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])
   }
 
   @Test(expected = classOf[InvalidProgramException])
@@ -138,13 +131,12 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = s.coGroup(ws).where("_2").equalTo("_2")((l, r) => l.min)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = s.coGroup(ws).where("_2").equalTo("_2") { (l, r) => l.min }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])
   }
 
   @Test(expected = classOf[InvalidProgramException])
@@ -153,13 +145,12 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) {
-      (s, ws) =>
-        val result = ws.coGroup(s).where("_2").equalTo("_2")((l, r) => l.min)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_1")) { (s, ws) =>
+      val result = ws.coGroup(s).where("_2").equalTo("_2") { (l, r) => l.min }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])  
   }
 
   @Test(expected = classOf[InvalidProgramException])
@@ -168,12 +159,11 @@ class DeltaIterationSanityCheckTest extends Serializable {
     val solutionInput = env.fromElements((1, "1"))
     val worksetInput = env.fromElements((2, "2"))
 
-    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_2")) {
-      (s, ws) =>
-        val result = ws.coGroup(s).where("_1").equalTo("_1")((l, r) => l.min)
-        (result, ws)
+    val iteration = solutionInput.iterateDelta(worksetInput, 10, Array("_2")) { (s, ws) =>
+      val result = ws.coGroup(s).where("_1").equalTo("_1") { (l, r) => l.min }
+      (result, ws)
     }
 
-    iteration.output(new DiscardingOutputFormat[(Int, String)])
+    iteration.output(new DiscardingOutputFormat[(Int,String)])
   }
 }

@@ -26,16 +26,16 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-formats</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-protobuf</artifactId>
-	<name>Flink : Formats : Protobuf</name>
+	<name>flink-protobuf</name>
 
 	<packaging>jar</packaging>
 
 	<properties>
-		<!-- the same with flink-table/pom.xml -->
 		<janino.version>3.0.11</janino.version>
 	</properties>
 
@@ -71,28 +71,32 @@ under the License.
 		</dependency>
 
 		<!-- test dependencies -->
+		<!-- JSON RowData schema test dependency -->
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-table-planner_${scala.binary.version}</artifactId>
+			<artifactId>flink-table-planner-blink_${scala.binary.version}</artifactId>
 			<version>${project.version}</version>
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Json filesystem format factory ITCase test dependency -->
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-table-planner_${scala.binary.version}</artifactId>
+			<artifactId>flink-table-planner-blink_${scala.binary.version}</artifactId>
 			<version>${project.version}</version>
 			<scope>test</scope>
 			<type>test-jar</type>
 		</dependency>
 
-		<!-- test utils dependency -->
-		<dependency>
+
+
+		<!-- just for test, a cyclic reference happend if you uncomment this -->
+		<!--<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-test-utils</artifactId>
+			<artifactId>flink-bsql-kafka</artifactId>
 			<version>${project.version}</version>
 			<scope>test</scope>
-		</dependency>
+		</dependency>-->
 	</dependencies>
 
 	<build>
@@ -100,7 +104,7 @@ under the License.
 			<plugin>
 				<groupId>com.github.os72</groupId>
 				<artifactId>protoc-jar-maven-plugin</artifactId>
-				<version>3.11.4</version>
+				<version>${protoc.version}</version>
 				<executions>
 					<execution>
 						<phase>generate-sources</phase>
@@ -108,35 +112,10 @@ under the License.
 							<goal>run</goal>
 						</goals>
 						<configuration>
-							<protocArtifact>com.google.protobuf:protoc:${protoc.version}</protocArtifact>
+							<protocVersion>${protoc.version}</protocVersion>
 							<inputDirectories>
 								<include>src/test/proto</include>
 							</inputDirectories>
-							<outputTargets>
-								<outputTarget>
-									<type>java</type>
-									<addSources>none</addSources>
-									<outputDirectory>target/test-proto-sources</outputDirectory>
-								</outputTarget>
-							</outputTargets>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>build-helper-maven-plugin</artifactId>
-				<version>3.0.0</version>
-				<executions>
-					<execution>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>add-test-source</goal>
-						</goals>
-						<configuration>
-							<sources>
-								<source>target/test-proto-sources</source>
-							</sources>
 						</configuration>
 					</execution>
 				</executions>

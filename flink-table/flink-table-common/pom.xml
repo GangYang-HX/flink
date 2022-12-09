@@ -23,11 +23,12 @@ under the License.
 	<parent>
 		<groupId>org.apache.flink</groupId>
 		<artifactId>flink-table</artifactId>
-		<version>1.16-SNAPSHOT</version>
+		<version>1.11.4-SNAPSHOT</version>
+		<relativePath>..</relativePath>
 	</parent>
 
 	<artifactId>flink-table-common</artifactId>
-	<name>Flink : Table : Common</name>
+	<name>flink-table-common</name>
 	<description>
 		This module contains extension points of the Table/SQL API.
 		It allows for implementing user-defined functions, custom
@@ -46,7 +47,7 @@ under the License.
 		<!-- Used for structured types extraction. -->
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-shaded-asm-9</artifactId>
+			<artifactId>flink-shaded-asm-7</artifactId>
 			<!-- managed version -->
 		</dependency>
 
@@ -54,7 +55,9 @@ under the License.
 		<dependency>
 			<groupId>com.ibm.icu</groupId>
 			<artifactId>icu4j</artifactId>
-			<version>67.1</version>
+			<version>60.1</version>
+			<!-- set provided here, and will package it into planner jar -->
+			<scope>provided</scope>
 		</dependency>
 
 		<dependency>
@@ -68,11 +71,6 @@ under the License.
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-test-utils-junit</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-shaded-jackson</artifactId>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 
 	<build>
@@ -85,12 +83,6 @@ under the License.
 						<goals>
 							<goal>test-jar</goal>
 						</goals>
-						<configuration>
-							<excludes>
-								<!-- test-jar is still used by JUnit4 modules -->
-								<exclude>META-INF/services/org.junit.jupiter.api.extension.Extension</exclude>
-							</excludes>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>

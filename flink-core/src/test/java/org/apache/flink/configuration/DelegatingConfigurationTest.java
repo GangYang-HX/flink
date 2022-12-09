@@ -20,121 +20,110 @@ package org.apache.flink.configuration;
 
 import org.junit.Test;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** Tests for the {@link DelegatingConfiguration}. */
+/**
+ * Tests for the {@link DelegatingConfiguration}.
+ */
 public class DelegatingConfigurationTest {
 
-    @Test
-    public void testIfDelegatesImplementAllMethods() throws IllegalArgumentException {
+	@Test
+	public void testIfDelegatesImplementAllMethods() throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
 
-        // For each method in the Configuration class...
-        Method[] confMethods = Configuration.class.getDeclaredMethods();
-        Method[] delegateMethods = DelegatingConfiguration.class.getDeclaredMethods();
+		// For each method in the Configuration class...
+		Method[] confMethods = Configuration.class.getDeclaredMethods();
+		Method[] delegateMethods = DelegatingConfiguration.class.getDeclaredMethods();
 
-        for (Method configurationMethod : confMethods) {
-            final int mod = configurationMethod.getModifiers();
-            if (!Modifier.isPublic(mod) || Modifier.isStatic(mod)) {
-                continue;
-            }
+		for (Method configurationMethod : confMethods) {
+			if (!Modifier.isPublic(configurationMethod.getModifiers())) {
+				continue;
+			}
 
-            boolean hasMethod = false;
+			boolean hasMethod = false;
 
-            // Find matching method in wrapper class and call it
-            lookForWrapper:
-            for (Method wrapperMethod : delegateMethods) {
-                if (configurationMethod.getName().equals(wrapperMethod.getName())) {
+			// Find matching method in wrapper class and call it
+			lookForWrapper: for (Method wrapperMethod : delegateMethods) {
+				if (configurationMethod.getName().equals(wrapperMethod.getName())) {
 
-                    // Get parameters for method
-                    Class<?>[] wrapperMethodParams = wrapperMethod.getParameterTypes();
-                    Class<?>[] configMethodParams = configurationMethod.getParameterTypes();
-                    if (wrapperMethodParams.length != configMethodParams.length) {
-                        continue;
-                    }
+					// Get parameters for method
+					Class<?>[] wrapperMethodParams = wrapperMethod.getParameterTypes();
+					Class<?>[] configMethodParams = configurationMethod.getParameterTypes();
+					if (wrapperMethodParams.length != configMethodParams.length) {
+						continue;
+					}
 
-                    for (int i = 0; i < wrapperMethodParams.length; i++) {
-                        if (wrapperMethodParams[i] != configMethodParams[i]) {
-                            continue lookForWrapper;
-                        }
-                    }
-                    hasMethod = true;
-                    break;
-                }
-            }
+					for (int i = 0; i < wrapperMethodParams.length; i++) {
+						if (wrapperMethodParams[i] != configMethodParams[i]) {
+							continue lookForWrapper;
+						}
+					}
+					hasMethod = true;
+					break;
+				}
+			}
 
-            assertTrue(
-                    "Configuration method '"
-                            + configurationMethod.getName()
-                            + "' has not been wrapped correctly in DelegatingConfiguration wrapper",
-                    hasMethod);
-        }
-    }
+			assertTrue("Configuration method '" + configurationMethod.getName() +
+				"' has not been wrapped correctly in DelegatingConfiguration wrapper", hasMethod);
+		}
+	}
 
-    @Test
-    public void testDelegationConfigurationWithNullPrefix() {
-        Configuration backingConf = new Configuration();
-        backingConf.setValueInternal("test-key", "value", false);
+	@Test
+	public void testDelegationConfigurationWithNullPrefix() {
+		Configuration backingConf = new Configuration();
+		backingConf.setValueInternal("test-key", "value");
 
-        DelegatingConfiguration configuration = new DelegatingConfiguration(backingConf, null);
-        Set<String> keySet = configuration.keySet();
+		DelegatingConfiguration configuration = new DelegatingConfiguration(
+			backingConf, null);
+		Set<String> keySet = configuration.keySet();
 
-        assertEquals(keySet, backingConf.keySet());
-    }
+		assertEquals(keySet, backingConf.keySet());
 
-    @Test
-    public void testDelegationConfigurationWithPrefix() {
-        String prefix = "pref-";
-        String expectedKey = "key";
+	}
 
-        /*
-         * Key matches the prefix
-         */
-        Configuration backingConf = new Configuration();
-        backingConf.setValueInternal(prefix + expectedKey, "value", false);
+	@Test
+	public void testDelegationConfigurationWithPrefix() {
+		String prefix = "pref-";
+		String expectedKey = "key";
 
-        DelegatingConfiguration configuration = new DelegatingConfiguration(backingConf, prefix);
-        Set<String> keySet = configuration.keySet();
+		/*
+		 * Key matches the prefix
+		 */
+		Configuration backingConf = new Configuration();
+		backingConf.setValueInternal(prefix + expectedKey, "value");
 
-        assertEquals(keySet.size(), 1);
-        assertEquals(keySet.iterator().next(), expectedKey);
+		DelegatingConfiguration configuration = new DelegatingConfiguration(backingConf, prefix);
+		Set<String> keySet = configuration.keySet();
 
-        /*
-         * Key does not match the prefix
-         */
-        backingConf = new Configuration();
-        backingConf.setValueInternal("test-key", "value", false);
+		assertEquals(keySet.size(), 1);
+		assertEquals(keySet.iterator().next(), expectedKey);
 
-        configuration = new DelegatingConfiguration(backingConf, prefix);
-        keySet = configuration.keySet();
+		/*
+		 * Key does not match the prefix
+		 */
+		backingConf = new Configuration();
+		backingConf.setValueInternal("test-key", "value");
 
-        assertTrue(keySet.isEmpty());
-    }
+		configuration = new DelegatingConfiguration(backingConf, prefix);
+		keySet = configuration.keySet();
 
-    @Test
-    public void testDelegationConfigurationToMapConsistentWithAddAllToProperties() {
-        Configuration conf = new Configuration();
-        conf.setString("k0", "v0");
-        conf.setString("prefix.k1", "v1");
-        conf.setString("prefix.prefix.k2", "v2");
-        conf.setString("k3.prefix.prefix.k3", "v3");
-        DelegatingConfiguration dc = new DelegatingConfiguration(conf, "prefix.");
-        // Collect all properties
-        Properties properties = new Properties();
-        dc.addAllToProperties(properties);
-        // Convert the Map<String, String> object into a Properties object
-        Map<String, String> map = dc.toMap();
-        Properties mapProperties = new Properties();
-        for (Map.Entry<String, String> entry : map.entrySet()) {
-            mapProperties.put(entry.getKey(), entry.getValue());
-        }
-        // Verification
-        assertEquals(properties, mapProperties);
-    }
+		assertTrue(keySet.isEmpty());
+	}
+
+	@Test
+	public void testAddGeneralLabelProperties() {
+		Configuration conf = new Configuration();
+		conf.setString("metrics.reporter.slf4j.labels", "a=b;c=d");
+		DelegatingConfiguration dc = new DelegatingConfiguration(conf, "metrics.reporter.kafkaReporter.");
+		Properties properties = new Properties();
+		dc.addGeneralLabelProperties(properties);
+		assertEquals(1, properties.size());
+		assertTrue(properties.containsKey("metrics.reporter.kafkaReporter.labels"));
+	}
 }

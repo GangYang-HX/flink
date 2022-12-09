@@ -100,8 +100,7 @@ class TableSchemaTests(PyFlinkTestCase):
 
         expected = DataTypes.ROW([DataTypes.FIELD("a", DataTypes.INT()),
                                   DataTypes.FIELD("b", DataTypes.BIGINT()),
-                                  DataTypes.FIELD("c", DataTypes.STRING())],
-                                 nullable=False)
+                                  DataTypes.FIELD("c", DataTypes.STRING())])
         self.assertEqual(expected, row_type)
 
     def test_hash(self):

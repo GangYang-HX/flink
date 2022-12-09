@@ -17,15 +17,14 @@
  */
 package org.apache.flink.api.scala.operators
 
+import java.util
+
 import org.apache.flink.api.common.InvalidProgramException
 import org.apache.flink.api.common.operators.Keys
+import Keys.IncompatibleKeysException
 import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.util.CollectionDataSets.CustomType
-
-import Keys.IncompatibleKeysException
 import org.junit.{Assert, Test}
-
-import java.util
 
 class JoinOperatorTest {
 
@@ -42,7 +41,8 @@ class JoinOperatorTest {
     // should work
     try {
       ds1.join(ds2).where(0).equalTo(0)
-    } catch {
+    }
+    catch {
       case e: Exception => Assert.fail()
     }
   }
@@ -106,7 +106,8 @@ class JoinOperatorTest {
     // should work
     try {
       ds1.join(ds2).where("_1").equalTo("_1")
-    } catch {
+    }
+    catch {
       case e: Exception => Assert.fail()
     }
   }
@@ -171,7 +172,8 @@ class JoinOperatorTest {
     // should work
     try {
       ds1.join(ds2).where("myInt").equalTo("myInt")
-    } catch {
+    }
+    catch {
       case e: Exception => Assert.fail()
     }
   }
@@ -214,8 +216,9 @@ class JoinOperatorTest {
 
     // should work
     try {
-      ds1.join(ds2).where(_.myLong).equalTo(_.myLong)
-    } catch {
+      ds1.join(ds2).where { _.myLong} equalTo { _.myLong }
+    }
+    catch {
       case e: Exception => Assert.fail()
     }
   }
@@ -228,8 +231,9 @@ class JoinOperatorTest {
 
     // should work
     try {
-      ds1.join(ds2).where(_.myLong).equalTo(3)
-    } catch {
+      ds1.join(ds2).where { _.myLong }.equalTo(3)
+    }
+    catch {
       case e: Exception => Assert.fail()
     }
   }
@@ -242,8 +246,9 @@ class JoinOperatorTest {
 
     // should work
     try {
-      ds1.join(ds2).where(3).equalTo(_.myLong)
-    } catch {
+      ds1.join(ds2).where(3).equalTo { _.myLong }
+    }
+    catch {
       case e: Exception => Assert.fail()
     }
   }
@@ -255,7 +260,7 @@ class JoinOperatorTest {
     val ds2 = env.fromCollection(customTypeData)
 
     // should not work, incompatible types
-    ds1.join(ds2).where(2).equalTo(_.myLong)
+    ds1.join(ds2).where(2).equalTo { _.myLong }
   }
 
   @Test(expected = classOf[IncompatibleKeysException])
@@ -265,7 +270,7 @@ class JoinOperatorTest {
     val ds2 = env.fromCollection(customTypeData)
 
     // should not work, more than one field position key
-    ds1.join(ds2).where(1, 3).equalTo(_.myLong)
+    ds1.join(ds2).where(1, 3) equalTo { _.myLong }
   }
 
   @Test
@@ -331,3 +336,4 @@ class JoinOperatorTest {
     ds1.join(ds2).where("*").equalTo("*")
   }
 }
+

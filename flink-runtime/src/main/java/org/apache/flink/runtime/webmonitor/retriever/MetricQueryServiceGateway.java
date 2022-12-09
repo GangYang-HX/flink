@@ -25,8 +25,10 @@ import org.apache.flink.runtime.rpc.RpcGateway;
 
 import java.util.concurrent.CompletableFuture;
 
-/** {@link MetricQueryService} rpc gateway interface. */
+/**
+ * {@link MetricQueryService} rpc gateway interface.
+ */
 public interface MetricQueryServiceGateway extends RpcGateway {
 
-    CompletableFuture<MetricDumpSerialization.MetricSerializationResult> queryMetrics(Time timeout);
+	CompletableFuture<MetricDumpSerialization.MetricSerializationResult> queryMetrics(Time timeout);
 }

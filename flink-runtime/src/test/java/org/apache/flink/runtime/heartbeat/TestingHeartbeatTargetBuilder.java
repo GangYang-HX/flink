@@ -19,30 +19,24 @@
 package org.apache.flink.runtime.heartbeat;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
-import org.apache.flink.util.concurrent.FutureUtils;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.function.BiFunction;
+import java.util.function.BiConsumer;
 
 class TestingHeartbeatTargetBuilder<T> {
-    private BiFunction<ResourceID, T, CompletableFuture<Void>> receiveHeartbeatFunction =
-            (ignoredA, ignoredB) -> FutureUtils.completedVoidFuture();
-    private BiFunction<ResourceID, T, CompletableFuture<Void>> requestHeartbeatFunction =
-            (ignoredA, ignoredB) -> FutureUtils.completedVoidFuture();
+	private BiConsumer<ResourceID, T> receiveHeartbeatConsumer = (ignoredA, ignoredB) -> {};
+	private BiConsumer<ResourceID, T> requestHeartbeatConsumer = (ignoredA, ignoredB) -> {};
 
-    public TestingHeartbeatTargetBuilder<T> setReceiveHeartbeatFunction(
-            BiFunction<ResourceID, T, CompletableFuture<Void>> receiveHeartbeatFunction) {
-        this.receiveHeartbeatFunction = receiveHeartbeatFunction;
-        return this;
-    }
+	public TestingHeartbeatTargetBuilder<T> setReceiveHeartbeatConsumer(BiConsumer<ResourceID, T> receiveHeartbeatConsumer) {
+		this.receiveHeartbeatConsumer = receiveHeartbeatConsumer;
+		return this;
+	}
 
-    public TestingHeartbeatTargetBuilder<T> setRequestHeartbeatFunction(
-            BiFunction<ResourceID, T, CompletableFuture<Void>> requestHeartbeatFunction) {
-        this.requestHeartbeatFunction = requestHeartbeatFunction;
-        return this;
-    }
+	public TestingHeartbeatTargetBuilder<T> setRequestHeartbeatConsumer(BiConsumer<ResourceID, T> requestHeartbeatConsumer) {
+		this.requestHeartbeatConsumer = requestHeartbeatConsumer;
+		return this;
+	}
 
-    public TestingHeartbeatTarget<T> createTestingHeartbeatTarget() {
-        return new TestingHeartbeatTarget<>(receiveHeartbeatFunction, requestHeartbeatFunction);
-    }
+	public TestingHeartbeatTarget<T> createTestingHeartbeatTarget() {
+		return new TestingHeartbeatTarget<>(receiveHeartbeatConsumer, requestHeartbeatConsumer);
+	}
 }

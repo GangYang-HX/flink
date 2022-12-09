@@ -18,11 +18,11 @@
 
 package org.apache.flink.formats.protobuf.serialize;
 
+import org.apache.flink.formats.protobuf.PbCodegenAppender;
 import org.apache.flink.formats.protobuf.PbCodegenException;
-import org.apache.flink.formats.protobuf.PbFormatContext;
-import org.apache.flink.formats.protobuf.util.PbCodegenAppender;
-import org.apache.flink.formats.protobuf.util.PbCodegenUtils;
-import org.apache.flink.formats.protobuf.util.PbCodegenVarId;
+import org.apache.flink.formats.protobuf.PbCodegenUtils;
+import org.apache.flink.formats.protobuf.PbCodegenVarId;
+import org.apache.flink.formats.protobuf.PbFormatConfig;
 import org.apache.flink.table.types.logical.LogicalType;
 
 import com.google.protobuf.Descriptors;
@@ -31,59 +31,55 @@ import com.google.protobuf.Descriptors;
 public class PbCodegenArraySerializer implements PbCodegenSerializer {
     private final Descriptors.FieldDescriptor fd;
     private final LogicalType elementType;
-    private final PbFormatContext formatContext;
+    private final PbFormatConfig formatConfig;
 
     public PbCodegenArraySerializer(
-            Descriptors.FieldDescriptor fd,
-            LogicalType elementType,
-            PbFormatContext formatContext) {
+            Descriptors.FieldDescriptor fd, LogicalType elementType, PbFormatConfig formatConfig) {
         this.fd = fd;
         this.elementType = elementType;
-        this.formatContext = formatContext;
+        this.formatConfig = formatConfig;
     }
 
     @Override
-    public String codegen(String resultVar, String flinkObjectCode, int indent)
+    public String codegen(String returnPbVarName, String internalDataGetStr)
             throws PbCodegenException {
-        // The type of flinkObjectCode is a ArrayData of flink,
-        // it should be converted to array of protobuf as resultVariable.
         PbCodegenVarId varUid = PbCodegenVarId.getInstance();
         int uid = varUid.getAndIncrement();
-        PbCodegenAppender appender = new PbCodegenAppender(indent);
-        String protoTypeStr =
-                PbCodegenUtils.getTypeStrFromProto(fd, false, formatContext.getOuterPrefix());
+        PbCodegenAppender appender = new PbCodegenAppender();
+        String protoTypeStr = PbCodegenUtils.getTypeStrFromProto(fd, false);
         String pbListVar = "pbList" + uid;
-        String flinkArrayDataVar = "arrData" + uid;
-        String pbElementVar = "elementPbVar" + uid;
+        String arrayDataVar = "arrData" + uid;
+        String elementDataVar = "eleData" + uid;
+        String elementPbVar = "elementPbVar" + uid;
         String iVar = "i" + uid;
 
-        appender.appendLine("ArrayData " + flinkArrayDataVar + " = " + flinkObjectCode);
+        appender.appendLine("ArrayData " + arrayDataVar + " = " + internalDataGetStr);
         appender.appendLine("List<" + protoTypeStr + "> " + pbListVar + "= new ArrayList()");
-        appender.begin(
+        appender.appendSegment(
                 "for(int "
                         + iVar
                         + "=0;"
                         + iVar
                         + " < "
-                        + flinkArrayDataVar
+                        + arrayDataVar
                         + ".size(); "
                         + iVar
                         + "++){");
-        String convertFlinkArrayElementToPbCode =
-                PbCodegenUtils.convertFlinkArrayElementToPbWithDefaultValueCode(
-                        flinkArrayDataVar,
+        String elementGenCode =
+                PbCodegenUtils.generateArrElementCodeWithDefaultValue(
+                        arrayDataVar,
                         iVar,
-                        pbElementVar,
+                        elementPbVar,
+                        elementDataVar,
                         fd,
                         elementType,
-                        formatContext,
-                        appender.currentIndent());
-        appender.appendSegment(convertFlinkArrayElementToPbCode);
+                        formatConfig);
+        appender.appendSegment(elementGenCode);
         // add pb element to result list
-        appender.appendLine(pbListVar + ".add( " + pbElementVar + ")");
+        appender.appendLine(pbListVar + ".add( " + elementPbVar + ")");
         // end for
-        appender.end("}");
-        appender.appendLine(resultVar + " = " + pbListVar);
+        appender.appendSegment("}");
+        appender.appendLine(returnPbVarName + " = " + pbListVar);
         return appender.code();
     }
 }

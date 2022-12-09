@@ -18,32 +18,36 @@
 
 package org.apache.flink.client.cli;
 
+import org.apache.flink.configuration.AkkaOptions;
 import org.apache.flink.configuration.Configuration;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.time.Duration;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
-/** unit test for ClientOptions. */
-class ClientOptionsTest {
+/**
+ * unit test for ClientOptions.
+ */
+@RunWith(JUnit4.class)
+public class ClientOptionsTest {
 
-    @Test
-    void testGetClientTimeout() {
-        Configuration configuration = new Configuration();
-        configuration.set(ClientOptions.CLIENT_TIMEOUT, Duration.ofSeconds(10));
+	@Test
+	public void testGetClientTimeout() {
+		Configuration configuration = new Configuration();
+		configuration.set(ClientOptions.CLIENT_TIMEOUT, Duration.ofSeconds(10));
 
-        assertThat(configuration.get(ClientOptions.CLIENT_TIMEOUT))
-                .isEqualTo(Duration.ofSeconds(10));
+		assertEquals(configuration.get(ClientOptions.CLIENT_TIMEOUT), Duration.ofSeconds(10));
 
-        configuration = new Configuration();
-        configuration.set(ClientOptions.CLIENT_TIMEOUT, Duration.ofSeconds(20));
-        assertThat(configuration.get(ClientOptions.CLIENT_TIMEOUT))
-                .isEqualTo(Duration.ofSeconds(20));
+		configuration = new Configuration();
+		configuration.set(AkkaOptions.CLIENT_TIMEOUT, "20 s");
+		assertEquals(configuration.get(ClientOptions.CLIENT_TIMEOUT), Duration.ofSeconds(20));
 
-        configuration = new Configuration();
-        assertThat(configuration.get(ClientOptions.CLIENT_TIMEOUT))
-                .isEqualTo(ClientOptions.CLIENT_TIMEOUT.defaultValue());
-    }
+		configuration = new Configuration();
+		assertEquals(configuration.get(ClientOptions.CLIENT_TIMEOUT), ClientOptions.CLIENT_TIMEOUT.defaultValue());
+	}
+
 }

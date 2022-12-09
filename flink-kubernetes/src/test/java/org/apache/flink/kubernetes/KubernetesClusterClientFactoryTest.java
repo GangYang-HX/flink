@@ -25,26 +25,27 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.kubernetes.executors.KubernetesSessionClusterExecutor;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertTrue;
 
-/** Test for the {@link KubernetesClusterClientFactory} discovery. */
-class KubernetesClusterClientFactoryTest {
+/**
+ * Test for the {@link KubernetesClusterClientFactory} discovery.
+ */
+public class KubernetesClusterClientFactoryTest {
 
-    @Test
-    void testKubernetesClusterClientFactoryDiscoveryWithSessionExecutor() {
-        testKubernetesClusterClientFactoryDiscoveryHelper(KubernetesSessionClusterExecutor.NAME);
-    }
+	@Test
+	public void testKubernetesClusterClientFactoryDiscoveryWithSessionExecutor() {
+		testKubernetesClusterClientFactoryDiscoveryHelper(KubernetesSessionClusterExecutor.NAME);
+	}
 
-    private void testKubernetesClusterClientFactoryDiscoveryHelper(final String targetName) {
-        final Configuration configuration = new Configuration();
-        configuration.setString(DeploymentOptions.TARGET, targetName);
+	private void testKubernetesClusterClientFactoryDiscoveryHelper(final String targetName) {
+		final Configuration configuration = new Configuration();
+		configuration.setString(DeploymentOptions.TARGET, targetName);
 
-        final ClusterClientServiceLoader serviceLoader = new DefaultClusterClientServiceLoader();
-        final ClusterClientFactory<String> factory =
-                serviceLoader.getClusterClientFactory(configuration);
+		final ClusterClientServiceLoader serviceLoader = new DefaultClusterClientServiceLoader();
+		final ClusterClientFactory<String> factory = serviceLoader.getClusterClientFactory(configuration);
 
-        assertThat(factory).isInstanceOf(KubernetesClusterClientFactory.class);
-    }
+		assertTrue(factory instanceof KubernetesClusterClientFactory);
+	}
 }

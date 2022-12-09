@@ -30,165 +30,168 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 /**
  * Statistics for a successfully completed checkpoint.
  *
- * <p>The reported statistics are immutable except for the discarded flag, which is updated via the
- * {@link DiscardCallback} and the {@link CompletedCheckpoint} after an instance of this class has
- * been created.
+ * <p>The reported statistics are immutable except for the discarded flag, which
+ * is updated via the {@link DiscardCallback} and the {@link CompletedCheckpoint}
+ * after an instance of this class has been created.
  */
 public class CompletedCheckpointStats extends AbstractCheckpointStats {
 
-    private static final long serialVersionUID = 138833868551861344L;
+	private static final long serialVersionUID = 138833868551861344L;
 
-    /** Total persisted data size over all subtasks of this checkpoint. */
-    private final long checkpointedSize;
+	/** Number of subtasks whose states are logically mapped from previously completed checkpoint. */
+	private final int numLogicallyMappedSubtasks;
 
-    /** Total checkpoint state size over all subtasks. */
-    private final long stateSize;
+	/** Total checkpoint state size over all subtasks. */
+	private final long stateSize;
 
-    private final long processedData;
+	// TODO Add a field for state size of subtasks whose states are logically mapped from a previously
+	//  completed checkpoint. This field should also added to all the related classes (PendingCheckpointStats etc.).
+	// private final long logicallyMappedStateSize;
 
-    private final long persistedData;
+	/** The latest acknowledged subtask stats. */
+	private final SubtaskStateStats latestAcknowledgedSubtask;
 
-    /** The latest acknowledged subtask stats. */
-    private final SubtaskStateStats latestAcknowledgedSubtask;
+	/** The external pointer of the checkpoint. */
+	private final String externalPointer;
 
-    /** The external pointer of the checkpoint. */
-    private final String externalPointer;
+	/** Flag indicating whether the checkpoint was discarded. */
+	private volatile boolean discarded;
 
-    /** Flag indicating whether the checkpoint was discarded. */
-    private volatile boolean discarded;
+	CompletedCheckpointStats(
+			long checkpointId,
+			long triggerTimestamp,
+			CheckpointProperties props,
+			int totalSubtaskCount,
+			Map<JobVertexID, TaskStateStats> taskStats,
+			int numAcknowledgedSubtasks,
+			long stateSize,
+			SubtaskStateStats latestAcknowledgedSubtask,
+			String externalPointer) {
+		this(
+				checkpointId,
+				triggerTimestamp,
+				props,
+				totalSubtaskCount,
+				taskStats,
+				numAcknowledgedSubtasks,
+				0,
+				stateSize,
+				latestAcknowledgedSubtask,
+				externalPointer);
+	}
 
-    CompletedCheckpointStats(
-            long checkpointId,
-            long triggerTimestamp,
-            CheckpointProperties props,
-            int totalSubtaskCount,
-            Map<JobVertexID, TaskStateStats> taskStats,
-            int numAcknowledgedSubtasks,
-            long stateSize,
-            long processedData,
-            long persistedData,
-            SubtaskStateStats latestAcknowledgedSubtask,
-            String externalPointer) {
-        this(
-                checkpointId,
-                triggerTimestamp,
-                props,
-                totalSubtaskCount,
-                taskStats,
-                numAcknowledgedSubtasks,
-                stateSize,
-                stateSize,
-                processedData,
-                persistedData,
-                latestAcknowledgedSubtask,
-                externalPointer);
-    }
+	/**
+	 * Creates a tracker for a {@link CompletedCheckpoint}.
+	 *
+	 * @param checkpointId ID of the checkpoint.
+	 * @param triggerTimestamp Timestamp when the checkpoint was triggered.
+	 * @param props Checkpoint properties of the checkpoint.
+	 * @param totalSubtaskCount Total number of subtasks for the checkpoint.
+	 * @param taskStats Task stats for each involved operator.
+	 * @param numAcknowledgedSubtasks Number of acknowledged subtasks.
+	 * @param numLogicallyMappedSubtasks Number of subtasks whose state is logically mapped
+	 *                                   from previously completed checkpoint when regional is enabled.
+	 * @param stateSize Total checkpoint state size over all subtasks.
+	 * @param latestAcknowledgedSubtask The latest acknowledged subtask stats.
+	 * @param externalPointer Optional external path if persisted externally.
+	 */
+	CompletedCheckpointStats(
+			long checkpointId,
+			long triggerTimestamp,
+			CheckpointProperties props,
+			int totalSubtaskCount,
+			Map<JobVertexID, TaskStateStats> taskStats,
+			int numAcknowledgedSubtasks,
+			int numLogicallyMappedSubtasks,
+			long stateSize,
+			SubtaskStateStats latestAcknowledgedSubtask,
+			String externalPointer) {
 
-    /**
-     * Creates a tracker for a {@link CompletedCheckpoint}.
-     *
-     * @param checkpointId ID of the checkpoint.
-     * @param triggerTimestamp Timestamp when the checkpoint was triggered.
-     * @param props Checkpoint properties of the checkpoint.
-     * @param totalSubtaskCount Total number of subtasks for the checkpoint.
-     * @param taskStats Task stats for each involved operator.
-     * @param numAcknowledgedSubtasks Number of acknowledged subtasks.
-     * @param checkpointedSize Total persisted data size over all subtasks during the sync and async
-     *     phases of this checkpoint.
-     * @param stateSize Total checkpoint state size over all subtasks.
-     * @param processedData Processed data during the checkpoint.
-     * @param persistedData Persisted data during the checkpoint.
-     * @param latestAcknowledgedSubtask The latest acknowledged subtask stats.
-     * @param externalPointer Optional external path if persisted externally.
-     */
-    CompletedCheckpointStats(
-            long checkpointId,
-            long triggerTimestamp,
-            CheckpointProperties props,
-            int totalSubtaskCount,
-            Map<JobVertexID, TaskStateStats> taskStats,
-            int numAcknowledgedSubtasks,
-            long checkpointedSize,
-            long stateSize,
-            long processedData,
-            long persistedData,
-            SubtaskStateStats latestAcknowledgedSubtask,
-            String externalPointer) {
+		super(checkpointId, triggerTimestamp, props, totalSubtaskCount, taskStats);
+		checkArgument(numAcknowledgedSubtasks + numLogicallyMappedSubtasks == totalSubtaskCount, "Did not acknowledge or logically map all subtasks.");
+		checkArgument(stateSize >= 0, "Negative state size");
+		this.numLogicallyMappedSubtasks = numLogicallyMappedSubtasks;
+		this.stateSize = stateSize;
+		this.latestAcknowledgedSubtask = checkNotNull(latestAcknowledgedSubtask);
+		this.externalPointer = externalPointer;
+	}
 
-        super(checkpointId, triggerTimestamp, props, totalSubtaskCount, taskStats);
-        checkArgument(
-                numAcknowledgedSubtasks == totalSubtaskCount, "Did not acknowledge all subtasks.");
-        checkArgument(checkpointedSize >= 0, "Negative checkpointed size");
-        this.checkpointedSize = checkpointedSize;
-        checkArgument(stateSize >= 0, "Negative state size");
-        this.stateSize = stateSize;
-        this.processedData = processedData;
-        this.persistedData = persistedData;
-        this.latestAcknowledgedSubtask = checkNotNull(latestAcknowledgedSubtask);
-        this.externalPointer = externalPointer;
-    }
+	@Override
+	public CheckpointStatsStatus getStatus() {
+		return CheckpointStatsStatus.COMPLETED;
+	}
 
-    @Override
-    public CheckpointStatsStatus getStatus() {
-        return CheckpointStatsStatus.COMPLETED;
-    }
+	@Override
+	public int getNumberOfAcknowledgedSubtasks() {
+		return numberOfSubtasks - numLogicallyMappedSubtasks;
+	}
 
-    @Override
-    public int getNumberOfAcknowledgedSubtasks() {
-        return numberOfSubtasks;
-    }
+	@Override
+	public int getNumberOfLogicallyMappedSubtasks() {
+		return numLogicallyMappedSubtasks;
+	}
 
-    @Override
-    public long getStateSize() {
-        return stateSize;
-    }
+	@Override
+	public long getStateSize() {
+		return stateSize;
+	}
 
-    @Override
-    public long getCheckpointedSize() {
-        return checkpointedSize;
-    }
+	@Override
+	@Nullable
+	public SubtaskStateStats getLatestAcknowledgedSubtaskStats() {
+		return latestAcknowledgedSubtask;
+	}
 
-    @Override
-    public long getProcessedData() {
-        return processedData;
-    }
+	// ------------------------------------------------------------------------
+	// Completed checkpoint specific methods
+	// ------------------------------------------------------------------------
 
-    @Override
-    public long getPersistedData() {
-        return persistedData;
-    }
+	/**
+	 * Returns the external pointer of this checkpoint.
+	 */
+	public String getExternalPath() {
+		return externalPointer;
+	}
 
-    @Override
-    @Nullable
-    public SubtaskStateStats getLatestAcknowledgedSubtaskStats() {
-        return latestAcknowledgedSubtask;
-    }
+	/**
+	 * Returns whether the checkpoint has been discarded.
+	 *
+	 * @return <code>true</code> if the checkpoint has been discarded, <code>false</code> otherwise.
+	 */
+	public boolean isDiscarded() {
+		return discarded;
+	}
 
-    // ------------------------------------------------------------------------
-    // Completed checkpoint specific methods
-    // ------------------------------------------------------------------------
+	/**
+	 * Returns the callback for the {@link CompletedCheckpoint}.
+	 *
+	 * @return Callback for the {@link CompletedCheckpoint}.
+	 */
+	DiscardCallback getDiscardCallback() {
+		return new DiscardCallback();
+	}
 
-    /** Returns the external pointer of this checkpoint. */
-    public String getExternalPath() {
-        return externalPointer;
-    }
+	/**
+	 * Callback for the {@link CompletedCheckpoint} instance to notify about
+	 * disposal of the checkpoint (most commonly when the checkpoint has been
+	 * subsumed by a newer one).
+	 */
+	class DiscardCallback {
 
-    /**
-     * Returns whether the checkpoint has been discarded.
-     *
-     * @return <code>true</code> if the checkpoint has been discarded, <code>false</code> otherwise.
-     */
-    public boolean isDiscarded() {
-        return discarded;
-    }
+		/**
+		 * Updates the discarded flag of the checkpoint stats.
+		 *
+		 * <p>After this notification, {@link #isDiscarded()} will return
+		 * <code>true</code>.
+		 */
+		void notifyDiscardedCheckpoint() {
+			discarded = true;
+		}
 
-    /** Mark the checkpoint has been discarded. */
-    void discard() {
-        discarded = true;
-    }
+	}
 
-    @Override
-    public String toString() {
-        return "CompletedCheckpoint(id=" + getCheckpointId() + ")";
-    }
+	@Override
+	public String toString() {
+		return "CompletedCheckpoint(id=" + getCheckpointId() + ")";
+	}
 }

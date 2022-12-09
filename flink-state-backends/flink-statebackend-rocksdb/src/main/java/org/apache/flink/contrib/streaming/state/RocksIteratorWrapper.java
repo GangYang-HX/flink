@@ -18,6 +18,7 @@
 
 package org.apache.flink.contrib.streaming.state;
 
+import org.apache.flink.metrics.Histogram;
 import org.apache.flink.util.FlinkRuntimeException;
 
 import org.rocksdb.RocksDBException;
@@ -25,108 +26,103 @@ import org.rocksdb.RocksIterator;
 import org.rocksdb.RocksIteratorInterface;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.io.Closeable;
-import java.nio.ByteBuffer;
 
 /**
- * This class was originally a wrapper around {@link RocksIterator} to check the iterator status for
- * all the methods mentioned to require this check in the wiki documentation: seek, next,
- * seekToFirst, seekToLast, seekForPrev, and prev. At that time, this was required because the
- * iterator may pass the blocks or files it had difficulties in reading (because of IO errors, data
- * corruptions or other issues) and continue with the next available keys. The status flag may not
- * be OK, even if the iterator is valid.
- *
- * <p>However, after <a href="https://github.com/facebook/rocksdb/pull/3810">3810</a> was merged,
- * the behaviour had changed. If the iterator is valid, the status() is guaranteed to be OK; If the
- * iterator is not valid, there are two possibilities: 1) We have reached the end of the data. And
- * in this case, status() is OK; 2) There is an error. In this case, status() is not OK; More
- * information can be found <a
- * href="https://github.com/facebook/rocksdb/wiki/Iterator#error-handling">here</a>.
+ * This is a wrapper around {@link RocksIterator} to check the iterator status for all the methods mentioned
+ * to require this check in the wiki documentation: seek, next, seekToFirst, seekToLast, seekForPrev, and prev.
+ * This is required because the iterator may pass the blocks or files it had difficulties in reading (because
+ * of IO error, data corruption or other issues) and continue with the next available keys. The status flag may not be
+ * OK, even if the iterator is valid. More information can be found
+ * <a href="https://github.com/facebook/rocksdb/wiki/Iterator#error-handling">here</a>.
  */
 public class RocksIteratorWrapper implements RocksIteratorInterface, Closeable {
 
-    private RocksIterator iterator;
+	private final RocksIterator iterator;
 
-    public RocksIteratorWrapper(@Nonnull RocksIterator iterator) {
-        this.iterator = iterator;
-    }
+	public RocksIteratorWrapper(@Nonnull RocksIterator iterator) {
+		this.iterator = iterator;
+	}
 
-    @Override
-    public boolean isValid() {
-        boolean isValid = this.iterator.isValid();
-        if (!isValid) {
-            status();
-        }
+	@Override
+	public boolean isValid() {
+		return this.iterator.isValid();
+	}
 
-        return isValid;
-    }
+	@Override
+	public void seekToFirst() {
+		iterator.seekToFirst();
+		status();
+	}
 
-    @Override
-    public void seekToFirst() {
-        iterator.seekToFirst();
-    }
+	@Override
+	public void seekToLast() {
+		iterator.seekToFirst();
+		status();
+	}
 
-    @Override
-    public void seekToLast() {
-        iterator.seekToLast();
-    }
+	@Override
+	public void seek(byte[] target) {
+		iterator.seek(target);
+		status();
+	}
 
-    @Override
-    public void seek(byte[] target) {
-        iterator.seek(target);
-    }
+	@Override
+	public void seekForPrev(byte[] target) {
+		iterator.seekForPrev(target);
+		status();
+	}
 
-    @Override
-    public void seekForPrev(byte[] target) {
-        iterator.seekForPrev(target);
-    }
+	@Override
+	public void next() {
+		iterator.next();
+		status();
+	}
 
-    @Override
-    public void seek(ByteBuffer target) {
-        iterator.seek(target);
-    }
+	@Override
+	public void prev() {
+		iterator.prev();
+		status();
+	}
 
-    @Override
-    public void seekForPrev(ByteBuffer target) {
-        iterator.seekForPrev(target);
-    }
+	@Override
+	public void status() {
+		try {
+			iterator.status();
+		} catch (RocksDBException ex) {
+			throw new FlinkRuntimeException("Internal exception found in RocksDB", ex);
+		}
+	}
 
-    @Override
-    public void next() {
-        iterator.next();
-    }
+	public byte[] key() {
+		return iterator.key();
+	}
 
-    @Override
-    public void prev() {
-        iterator.prev();
-    }
+	public byte[] value() {
+		byte[] value = iterator.value();
+		return value;
+	}
 
-    @Override
-    public void status() {
-        try {
-            iterator.status();
-        } catch (RocksDBException ex) {
-            throw new FlinkRuntimeException("Internal exception found in RocksDB", ex);
-        }
-    }
+	@Override
+	public void close() {
+		iterator.close();
+	}
 
-    @Override
-    public void refresh() throws RocksDBException {
-        iterator.refresh();
-        status();
-    }
-
-    public byte[] key() {
-        return iterator.key();
-    }
-
-    public byte[] value() {
-        return iterator.value();
-    }
-
-    @Override
-    public void close() {
-        iterator.close();
-    }
+//	public void refresh() throws RocksDBException {
+//		iterator.refresh();
+//		status();
+////		throw new UnsupportedOperationException("do not support for the refresh operation");
+//	}
+//
+//	public void seek(ByteBuffer var1){
+//		iterator.seek(var1);
+//		status();
+//	}
+//
+//	public void seekForPrev(ByteBuffer var1){
+//		iterator.seekForPrev(var1);
+//		status();
+//	}
 }

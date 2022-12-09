@@ -19,22 +19,9 @@
 package org.apache.flink.client.program;
 
 /**
- * A special exception used to abort programs when the caller is only interested in the program
- * plan, rather than in the full execution.
+ * A special exception used to abort programs when the caller is only interested in the
+ * program plan, rather than in the full execution.
  */
 public class ProgramAbortException extends Error {
-    private static final long serialVersionUID = 1L;
-
-    public ProgramAbortException() {
-        super();
-    }
-
-    /**
-     * Creates a <tt>ProgramAbortException</tt> for the given exception.
-     *
-     * @param cause The exception that causes the program to fail.
-     */
-    public ProgramAbortException(Throwable cause) {
-        super(cause);
-    }
+	private static final long serialVersionUID = 1L;
 }

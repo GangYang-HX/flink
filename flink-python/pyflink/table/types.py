@@ -24,19 +24,15 @@ import sys
 import time
 from array import array
 from copy import copy
-from enum import Enum
 from functools import reduce
 from threading import RLock
 
 from py4j.java_gateway import get_java_class
-from typing import List, Union
 
-from pyflink.common.types import _create_row
-from pyflink.util.java_utils import to_jarray, is_instance_of
+from pyflink.util.utils import to_jarray, is_instance_of
 from pyflink.java_gateway import get_gateway
-from pyflink.common import Row, RowKind
 
-__all__ = ['DataTypes', 'UserDefinedType', 'Row', 'RowKind']
+__all__ = ['DataTypes', 'UserDefinedType', 'Row']
 
 
 class DataType(object):
@@ -87,10 +83,10 @@ class DataType(object):
         return cp
 
     @classmethod
-    def type_name(cls) -> str:
+    def type_name(cls):
         return cls.__name__[:-4].upper()
 
-    def bridged_to(self, conversion_cls) -> 'DataType':
+    def bridged_to(self, conversion_cls):
         """
         Adds a hint that data should be represented using the given class when entering or leaving
         the table ecosystem.
@@ -100,7 +96,7 @@ class DataType(object):
         self._conversion_cls = conversion_cls
         return self
 
-    def need_conversion(self) -> bool:
+    def need_conversion(self):
         """
         Does this type need to conversion between Python object and internal SQL object.
 
@@ -563,7 +559,7 @@ class Resolution(object):
                       =fractional precision).
     """
 
-    class IntervalUnit(Enum):
+    class IntervalUnit(object):
         SECOND = 0
         MINUTE = 1
         HOUR = 2
@@ -661,7 +657,7 @@ class DayTimeIntervalType(AtomicType):
                                  between 0 and 9 (both inclusive) (default 6).
     """
 
-    class DayTimeResolution(Enum):
+    class DayTimeResolution(object):
         """
         Supported resolutions of :class:`DayTimeIntervalType`.
         """
@@ -715,19 +711,19 @@ class DayTimeIntervalType(AtomicType):
             return datetime.timedelta(microseconds=ts)
 
     @property
-    def resolution(self) -> 'DayTimeIntervalType.DayTimeResolution':
+    def resolution(self):
         return self._resolution
 
     @property
-    def day_precision(self) -> int:
+    def day_precision(self):
         return self._day_precision
 
     @property
-    def fractional_precision(self) -> int:
+    def fractional_precision(self):
         return self._fractional_precision
 
     @staticmethod
-    def _needs_default_day_precision(resolution) -> bool:
+    def _needs_default_day_precision(resolution):
         if resolution == DayTimeIntervalType.DayTimeResolution.HOUR or \
                 resolution == DayTimeIntervalType.DayTimeResolution.HOUR_TO_MINUTE or \
                 resolution == DayTimeIntervalType.DayTimeResolution.HOUR_TO_SECOND or \
@@ -739,7 +735,7 @@ class DayTimeIntervalType(AtomicType):
             return False
 
     @staticmethod
-    def _needs_default_fractional_precision(resolution) -> bool:
+    def _needs_default_fractional_precision(resolution):
         if resolution == DayTimeIntervalType.DayTimeResolution.DAY or \
                 resolution == DayTimeIntervalType.DayTimeResolution.DAY_TO_HOUR or \
                 resolution == DayTimeIntervalType.DayTimeResolution.DAY_TO_MINUTE or \
@@ -806,7 +802,7 @@ _resolution_mappings = {
 }
 
 
-def _from_resolution(upper_resolution: Resolution, lower_resolution: Resolution = None):
+def _from_resolution(upper_resolution, lower_resolution=None):
     """
     Creates an interval type (YearMonthIntervalType or DayTimeIntervalType) from the
     upper_resolution and lower_resolution.
@@ -924,26 +920,6 @@ class ArrayType(DataType):
         return obj and [self.element_type.to_sql_type(v) for v in obj]
 
 
-class ListViewType(DataType):
-
-    def __init__(self, element_type):
-        assert isinstance(element_type, DataType), \
-            "element_type %s should be an instance of %s" % (element_type, DataType)
-        super(ListViewType, self).__init__(False)
-        self._element_type = element_type
-
-    def __repr__(self):
-        return "ListViewType(%s)" % repr(self._element_type)
-
-    def to_sql_type(self, obj):
-        raise Exception("ListViewType can only be used in accumulator type declaration of "
-                        "AggregateFunction.")
-
-    def from_sql_type(self, obj):
-        raise Exception("ListViewType can only be used in accumulator type declaration of "
-                        "AggregateFunction.")
-
-
 class MapType(DataType):
     """
     Map data type.
@@ -990,29 +966,6 @@ class MapType(DataType):
             return obj
         return obj and dict((self.key_type.from_sql_type(k), self.value_type.from_sql_type(v))
                             for k, v in obj.items())
-
-
-class MapViewType(DataType):
-
-    def __init__(self, key_type, value_type):
-        assert isinstance(key_type, DataType), \
-            "element_type %s should be an instance of %s" % (key_type, DataType)
-        assert isinstance(value_type, DataType), \
-            "element_type %s should be an instance of %s" % (value_type, DataType)
-        super(MapViewType, self).__init__(False)
-        self._key_type = key_type
-        self._value_type = value_type
-
-    def __repr__(self):
-        return "MapViewType(%s, %s)" % (repr(self._key_type), repr(self._value_type))
-
-    def to_sql_type(self, obj):
-        raise Exception("MapViewType can only be used in accumulator type declaration of "
-                        "AggregateFunction.")
-
-    def from_sql_type(self, obj):
-        raise Exception("MapViewType can only be used in accumulator type declaration of "
-                        "AggregateFunction.")
 
 
 class MultisetType(DataType):
@@ -1245,40 +1198,27 @@ class RowType(DataType):
         if self._need_serialize_any_field:
             # Only calling to_sql_type function for fields that need conversion
             if isinstance(obj, dict):
-                return (RowKind.INSERT.value,) + tuple(
-                    f.to_sql_type(obj.get(n)) if c else obj.get(n)
-                    for n, f, c in zip(self.names, self.fields, self._need_conversion))
-            elif isinstance(obj, Row) and hasattr(obj, "_fields"):
-                return (obj.get_row_kind().value,) + tuple(
-                    f.to_sql_type(obj[n]) if c else obj[n]
-                    for n, f, c in zip(self.names, self.fields, self._need_conversion))
-            elif isinstance(obj, Row):
-                return (obj.get_row_kind().value, ) + tuple(
-                    f.to_sql_type(v) if c else v
-                    for f, v, c in zip(self.fields, obj, self._need_conversion))
-            elif isinstance(obj, (tuple, list, Row)):
-                return (RowKind.INSERT.value,) + tuple(
-                    f.to_sql_type(v) if c else v
-                    for f, v, c in zip(self.fields, obj, self._need_conversion))
+                return tuple(f.to_sql_type(obj.get(n)) if c else obj.get(n)
+                             for n, f, c in zip(self.names, self.fields, self._need_conversion))
+            elif isinstance(obj, (tuple, list)):
+                return tuple(f.to_sql_type(v) if c else v
+                             for f, v, c in zip(self.fields, obj, self._need_conversion))
             elif hasattr(obj, "__dict__"):
                 d = obj.__dict__
-                return (RowKind.INSERT.value,) + tuple(
-                    f.to_sql_type(d.get(n)) if c else d.get(n)
-                    for n, f, c in zip(self.names, self.fields, self._need_conversion))
+                return tuple(f.to_sql_type(d.get(n)) if c else d.get(n)
+                             for n, f, c in zip(self.names, self.fields, self._need_conversion))
             else:
                 raise ValueError("Unexpected tuple %r with RowType" % obj)
         else:
             if isinstance(obj, dict):
-                return (RowKind.INSERT.value,) + tuple(obj.get(n) for n in self.names)
-            elif isinstance(obj, Row) and hasattr(obj, "_fields"):
-                return (obj.get_row_kind().value,) + tuple(obj[n] for n in self.names)
-            elif isinstance(obj, Row):
-                return (obj.get_row_kind().value,) + tuple(obj)
+                return tuple(obj.get(n) for n in self.names)
+            elif isinstance(obj, Row) and getattr(obj, "_from_dict", False):
+                return tuple(obj[n] for n in self.names)
             elif isinstance(obj, (list, tuple)):
-                return (RowKind.INSERT.value,) + tuple(obj)
+                return tuple(obj)
             elif hasattr(obj, "__dict__"):
                 d = obj.__dict__
-                return (RowKind.INSERT.value,) + tuple(d.get(n) for n in self.names)
+                return tuple(d.get(n) for n in self.names)
             else:
                 raise ValueError("Unexpected tuple %r with RowType" % obj)
 
@@ -1295,16 +1235,6 @@ class RowType(DataType):
         else:
             values = obj
         return _create_row(self.names, values)
-
-
-class RawType(DataType):
-    """
-    Logical type of pickled byte array type.
-    """
-
-    def from_sql_type(self, obj):
-        import pickle
-        return pickle.loads(obj)
 
 
 class UserDefinedType(DataType):
@@ -1463,7 +1393,7 @@ for _typecode in _array_unsigned_int_typecode_ctype_mappings.keys():
 # removed in version 4.0. See: https://docs.python.org/3/library/array.html
 if sys.version_info[0] < 4:
     # it can be 16 bits or 32 bits depending on the platform
-    _array_type_mappings['u'] = CharType(ctypes.sizeof(ctypes.c_wchar))  # type: ignore
+    _array_type_mappings['u'] = CharType(ctypes.sizeof(ctypes.c_wchar))
 
 
 def _infer_type(obj):
@@ -1511,7 +1441,7 @@ def _infer_schema(row, names=None):
     if isinstance(row, dict):  # dict
         items = sorted(row.items())
 
-    elif isinstance(row, (Row, tuple, list)):
+    elif isinstance(row, (tuple, list)):
         if hasattr(row, "_fields"):  # namedtuple and Row
             items = zip(row._fields, tuple(row))
         else:
@@ -1594,7 +1524,7 @@ def _merge_type(a, b, name=None):
         return a
 
 
-def _infer_schema_from_data(elements, names=None) -> RowType:
+def _infer_schema_from_data(elements, names=None):
     """
     Infers schema from list of Row or tuple.
 
@@ -1681,15 +1611,148 @@ _primitive_array_element_types = {BooleanType, TinyIntType, SmallIntType, IntTyp
                                   FloatType, DoubleType}
 
 
-def _from_java_data_type(j_data_type):
+def _to_java_type(data_type):
     """
-    Converts Java DataType to Python DataType.
+    Converts Python type to Java type.
     """
+
+    global _python_java_types_mapping
+    global _python_java_types_mapping_lock
+
+    gateway = get_gateway()
+    Types = gateway.jvm.org.apache.flink.table.api.Types
+
+    if _python_java_types_mapping is None:
+        with _python_java_types_mapping_lock:
+            _python_java_types_mapping = {
+                BooleanType: Types.BOOLEAN(),
+                TinyIntType: Types.BYTE(),
+                SmallIntType: Types.SHORT(),
+                IntType: Types.INT(),
+                BigIntType: Types.LONG(),
+                FloatType: Types.FLOAT(),
+                DoubleType: Types.DOUBLE(),
+                DateType: Types.SQL_DATE(),
+            }
+
+    # basic types
+    if type(data_type) in _python_java_types_mapping:
+        return _python_java_types_mapping[type(data_type)]
+
+    # DecimalType
+    elif isinstance(data_type, DecimalType):
+        if data_type.precision == 38 and data_type.scale == 18:
+            return Types.DECIMAL()
+        else:
+            raise TypeError("The precision must be 38 and the scale must be 18 for DecimalType, "
+                            "got %s" % repr(data_type))
+
+    # TimeType
+    elif isinstance(data_type, TimeType):
+        if data_type.precision == 0:
+            return Types.SQL_TIME()
+        else:
+            raise TypeError("The precision must be 0 for TimeType, got %s" % repr(data_type))
+
+    # TimestampType
+    elif isinstance(data_type, TimestampType):
+        if data_type.precision == 3:
+            return Types.SQL_TIMESTAMP()
+        else:
+            raise TypeError("The precision must be 3 for TimestampType, got %s" % repr(data_type))
+
+    # LocalZonedTimestampType
+    elif isinstance(data_type, LocalZonedTimestampType):
+        if data_type.precision == 3:
+            return gateway.jvm.org.apache.flink.api.common.typeinfo.Types.INSTANT
+        else:
+            raise TypeError("The precision must be 3 for LocalZonedTimestampType, got %s"
+                            % repr(data_type))
+
+    # VarCharType
+    elif isinstance(data_type, VarCharType):
+        if data_type.length == 0x7fffffff:
+            return Types.STRING()
+        else:
+            raise TypeError("The length limit must be 0x7fffffff(2147483647) for VarCharType, "
+                            "got %s" % repr(data_type))
+
+    # VarBinaryType
+    elif isinstance(data_type, VarBinaryType):
+        if data_type.length == 0x7fffffff:
+            return Types.PRIMITIVE_ARRAY(Types.BYTE())
+        else:
+            raise TypeError("The length limit must be 0x7fffffff(2147483647) for VarBinaryType, "
+                            "got %s" % repr(data_type))
+
+    # YearMonthIntervalType
+    elif isinstance(data_type, YearMonthIntervalType):
+        if data_type.resolution == YearMonthIntervalType.YearMonthResolution.MONTH and \
+                data_type.precision == 2:
+            return Types.INTERVAL_MONTHS()
+        else:
+            raise TypeError("The resolution must be YearMonthResolution.MONTH and the precision "
+                            "must be 2 for YearMonthIntervalType, got %s" % repr(data_type))
+
+    # DayTimeIntervalType
+    elif isinstance(data_type, DayTimeIntervalType):
+        if data_type.resolution == DayTimeIntervalType.DayTimeResolution.SECOND and \
+                data_type.day_precision == 2 and data_type.fractional_precision == 3:
+            return Types.INTERVAL_MILLIS()
+        else:
+            raise TypeError("The resolution must be DayTimeResolution.SECOND, the day_precision "
+                            "must be 2 and the fractional_precision must be 3 for "
+                            "DayTimeIntervalType, got %s" % repr(data_type))
+
+    # ArrayType
+    elif isinstance(data_type, ArrayType):
+        return Types.OBJECT_ARRAY(_to_java_type(data_type.element_type))
+
+    # MapType
+    elif isinstance(data_type, MapType):
+        return Types.MAP(_to_java_type(data_type.key_type), _to_java_type(data_type.value_type))
+
+    # MultisetType
+    elif isinstance(data_type, MultisetType):
+        return Types.MULTISET(_to_java_type(data_type.element_type))
+
+    # RowType
+    elif isinstance(data_type, RowType):
+        return Types.ROW(
+            to_jarray(gateway.jvm.String, data_type.field_names()),
+            to_jarray(gateway.jvm.TypeInformation,
+                      [_to_java_type(f.data_type) for f in data_type.fields]))
+
+    # UserDefinedType
+    elif isinstance(data_type, UserDefinedType):
+        if data_type.java_udt():
+            return gateway.jvm.org.apache.flink.util.InstantiationUtil.instantiate(
+                gateway.jvm.Class.forName(
+                    data_type.java_udt(),
+                    True,
+                    gateway.jvm.Thread.currentThread().getContextClassLoader()))
+        else:
+            return _to_java_type(data_type.sql_type())
+
+    else:
+        raise TypeError("Not supported type: %s" % repr(data_type))
+
+
+def _from_java_type(j_data_type):
     gateway = get_gateway()
 
+    if is_instance_of(j_data_type, gateway.jvm.TypeInformation):
+        # input is TypeInformation
+        LegacyTypeInfoDataTypeConverter = \
+            gateway.jvm.org.apache.flink.table.types.utils.LegacyTypeInfoDataTypeConverter
+        java_data_type = LegacyTypeInfoDataTypeConverter.toDataType(j_data_type)
+    else:
+        # input is DataType
+        java_data_type = j_data_type
+
     # Atomic Type with parameters.
-    if is_instance_of(j_data_type, gateway.jvm.AtomicDataType):
-        logical_type = j_data_type.getLogicalType()
+    if is_instance_of(java_data_type, gateway.jvm.AtomicDataType):
+        logical_type = java_data_type.getLogicalType()
         if is_instance_of(logical_type, gateway.jvm.CharType):
             data_type = DataTypes.CHAR(logical_type.getLength(), logical_type.isNullable())
         elif is_instance_of(logical_type, gateway.jvm.VarCharType):
@@ -1744,19 +1807,9 @@ def _from_java_data_type(j_data_type):
                 get_java_class(gateway.jvm.org.apache.flink.table.runtime.typeutils
                                .BigDecimalTypeInfo):
                 data_type = DataTypes.DECIMAL(type_info.precision(), type_info.scale())
-            elif type_info.getClass() == \
-                    get_java_class(gateway.jvm.org.apache.flink.table.dataview.ListViewTypeInfo):
-                data_type = DataTypes.LIST_VIEW(_from_java_data_type(type_info.getElementType()))
-            elif type_info.getClass() == \
-                    get_java_class(gateway.jvm.org.apache.flink.table.dataview.MapViewTypeInfo):
-                data_type = DataTypes.MAP_VIEW(
-                    _from_java_data_type(type_info.getKeyType()),
-                    _from_java_data_type(type_info.getValueType()))
             else:
                 raise TypeError("Unsupported type: %s, it is recognized as a legacy type."
                                 % type_info)
-        elif is_instance_of(logical_type, gateway.jvm.RawType):
-            data_type = RawType()
         else:
             raise TypeError("Unsupported type: %s, it is not supported yet in current python type"
                             " system" % j_data_type)
@@ -1764,14 +1817,13 @@ def _from_java_data_type(j_data_type):
         return data_type
 
     # Array Type, MultiSet Type.
-    elif is_instance_of(j_data_type, gateway.jvm.CollectionDataType):
-        logical_type = j_data_type.getLogicalType()
-        element_type = j_data_type.getElementDataType()
+    elif is_instance_of(java_data_type, gateway.jvm.CollectionDataType):
+        logical_type = java_data_type.getLogicalType()
+        element_type = java_data_type.getElementDataType()
         if is_instance_of(logical_type, gateway.jvm.ArrayType):
-            data_type = DataTypes.ARRAY(_from_java_data_type(element_type),
-                                        logical_type.isNullable())
+            data_type = DataTypes.ARRAY(_from_java_type(element_type), logical_type.isNullable())
         elif is_instance_of(logical_type, gateway.jvm.MultisetType):
-            data_type = DataTypes.MULTISET(_from_java_data_type(element_type),
+            data_type = DataTypes.MULTISET(_from_java_type(element_type),
                                            logical_type.isNullable())
         else:
             raise TypeError("Unsupported collection data type: %s" % j_data_type)
@@ -1779,14 +1831,14 @@ def _from_java_data_type(j_data_type):
         return data_type
 
     # Map Type.
-    elif is_instance_of(j_data_type, gateway.jvm.KeyValueDataType):
-        logical_type = j_data_type.getLogicalType()
-        key_type = j_data_type.getKeyDataType()
-        value_type = j_data_type.getValueDataType()
+    elif is_instance_of(java_data_type, gateway.jvm.KeyValueDataType):
+        logical_type = java_data_type.getLogicalType()
+        key_type = java_data_type.getKeyDataType()
+        value_type = java_data_type.getValueDataType()
         if is_instance_of(logical_type, gateway.jvm.MapType):
             data_type = DataTypes.MAP(
-                _from_java_data_type(key_type),
-                _from_java_data_type(value_type),
+                _from_java_type(key_type),
+                _from_java_type(value_type),
                 logical_type.isNullable())
         else:
             raise TypeError("Unsupported map data type: %s" % j_data_type)
@@ -1794,21 +1846,13 @@ def _from_java_data_type(j_data_type):
         return data_type
 
     # Row Type.
-    elif is_instance_of(j_data_type, gateway.jvm.FieldsDataType):
-        logical_type = j_data_type.getLogicalType()
-        field_data_types = j_data_type.getChildren()
+    elif is_instance_of(java_data_type, gateway.jvm.FieldsDataType):
+        logical_type = java_data_type.getLogicalType()
+        field_data_types = java_data_type.getChildren()
         if is_instance_of(logical_type, gateway.jvm.RowType):
-            fields = [DataTypes.FIELD(name, _from_java_data_type(field_data_types[idx]))
+            fields = [DataTypes.FIELD(name, _from_java_type(field_data_types[idx]))
                       for idx, name in enumerate(logical_type.getFieldNames())]
             data_type = DataTypes.ROW(fields, logical_type.isNullable())
-        elif j_data_type.getConversionClass().isAssignableFrom(
-                gateway.jvm.org.apache.flink.table.api.dataview.ListView._java_lang_class):
-            array_type = _from_java_data_type(field_data_types[0])
-            data_type = DataTypes.LIST_VIEW(array_type.element_type)
-        elif j_data_type.getConversionClass().isAssignableFrom(
-                gateway.jvm.org.apache.flink.table.api.dataview.MapView._java_lang_class):
-            map_type = _from_java_data_type(field_data_types[0])
-            data_type = DataTypes.MAP_VIEW(map_type.key_type, map_type.value_type)
         else:
             raise TypeError("Unsupported row data type: %s" % j_data_type)
 
@@ -1819,125 +1863,173 @@ def _from_java_data_type(j_data_type):
         TypeError("Unsupported data type: %s" % j_data_type)
 
 
-def _to_java_data_type(data_type: DataType):
+def _create_row(fields, values):
+    row = Row(*values)
+    row._fields = fields
+    return row
+
+
+class Row(tuple):
     """
-    Converts the specified Python DataType to Java DataType.
+    A row in Table.
+    The fields in it can be accessed:
+
+    * like attributes (``row.key``)
+    * like dictionary values (``row[key]``)
+
+    ``key in row`` will search through row keys.
+
+    Row can be used to create a row object by using named arguments,
+    the fields will be sorted by names. It is not allowed to omit
+    a named argument to represent the value is None or missing. This should be
+    explicitly set to None in this case.
+
+    ::
+
+        >>> row = Row(name="Alice", age=11)
+        >>> row
+        Row(age=11, name='Alice')
+        >>> row['name'], row['age']
+        ('Alice', 11)
+        >>> row.name, row.age
+        ('Alice', 11)
+        >>> 'name' in row
+        True
+        >>> 'wrong_key' in row
+        False
+
+    Row can also be used to create another Row like class, then it
+    could be used to create Row objects, such as
+
+    ::
+
+        >>> Person = Row("name", "age")
+        >>> Person
+        <Row(name, age)>
+        >>> 'name' in Person
+        True
+        >>> 'wrong_key' in Person
+        False
+        >>> Person("Alice", 11)
+        Row(name='Alice', age=11)
     """
-    gateway = get_gateway()
-    JDataTypes = gateway.jvm.org.apache.flink.table.api.DataTypes
 
-    if isinstance(data_type, BooleanType):
-        j_data_type = JDataTypes.BOOLEAN()
-    elif isinstance(data_type, TinyIntType):
-        j_data_type = JDataTypes.TINYINT()
-    elif isinstance(data_type, SmallIntType):
-        j_data_type = JDataTypes.SMALLINT()
-    elif isinstance(data_type, IntType):
-        j_data_type = JDataTypes.INT()
-    elif isinstance(data_type, BigIntType):
-        j_data_type = JDataTypes.BIGINT()
-    elif isinstance(data_type, FloatType):
-        j_data_type = JDataTypes.FLOAT()
-    elif isinstance(data_type, DoubleType):
-        j_data_type = JDataTypes.DOUBLE()
-    elif isinstance(data_type, VarCharType):
-        j_data_type = JDataTypes.VARCHAR(data_type.length)
-    elif isinstance(data_type, CharType):
-        j_data_type = JDataTypes.CHAR(data_type.length)
-    elif isinstance(data_type, VarBinaryType):
-        j_data_type = JDataTypes.VARBINARY(data_type.length)
-    elif isinstance(data_type, BinaryType):
-        j_data_type = JDataTypes.BINARY(data_type.length)
-    elif isinstance(data_type, DecimalType):
-        j_data_type = JDataTypes.DECIMAL(data_type.precision, data_type.scale)
-    elif isinstance(data_type, DateType):
-        j_data_type = JDataTypes.DATE()
-    elif isinstance(data_type, TimeType):
-        j_data_type = JDataTypes.TIME(data_type.precision)
-    elif isinstance(data_type, TimestampType):
-        j_data_type = JDataTypes.TIMESTAMP(data_type.precision)
-    elif isinstance(data_type, LocalZonedTimestampType):
-        j_data_type = JDataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(data_type.precision)
-    elif isinstance(data_type, ZonedTimestampType):
-        j_data_type = JDataTypes.TIMESTAMP_WITH_TIME_ZONE(data_type.precision)
-    elif isinstance(data_type, ArrayType):
-        j_data_type = JDataTypes.ARRAY(_to_java_data_type(data_type.element_type))
-    elif isinstance(data_type, MapType):
-        j_data_type = JDataTypes.MAP(
-            _to_java_data_type(data_type.key_type),
-            _to_java_data_type(data_type.value_type))
-    elif isinstance(data_type, RowType):
-        fields = [JDataTypes.FIELD(f.name, _to_java_data_type(f.data_type))
-                  for f in data_type.fields]
-        j_data_type = JDataTypes.ROW(to_jarray(JDataTypes.Field, fields))
-    elif isinstance(data_type, UserDefinedType):
-        if data_type.java_udt():
-            return gateway.jvm.org.apache.flink.util.InstantiationUtil.instantiate(
-                gateway.jvm.Class.forName(
-                    data_type.java_udt(),
-                    True,
-                    gateway.jvm.Thread.currentThread().getContextClassLoader()))
+    def __new__(cls, *args, **kwargs):
+        if args and kwargs:
+            raise ValueError("Can not use both args "
+                             "and kwargs to create Row")
+        if kwargs:
+            # create row objects
+            names = sorted(kwargs.keys())
+            row = tuple.__new__(cls, [kwargs[n] for n in names])
+            row._fields = names
+            row._from_dict = True
+            return row
+
         else:
-            return _to_java_data_type(data_type.sql_type())
-    elif isinstance(data_type, MultisetType):
-        j_data_type = JDataTypes.MULTISET(_to_java_data_type(data_type.element_type))
-    elif isinstance(data_type, NullType):
-        j_data_type = JDataTypes.NULL()
-    elif isinstance(data_type, YearMonthIntervalType):
-        if data_type.resolution == YearMonthIntervalType.YearMonthResolution.YEAR:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.YEAR(data_type.precision))
-        elif data_type.resolution == YearMonthIntervalType.YearMonthResolution.MONTH:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.MONTH())
+            # create row class or objects
+            return tuple.__new__(cls, args)
+
+    def as_dict(self, recursive=False):
+        """
+        Returns as a dict.
+
+        Example:
+        ::
+
+            >>> Row(name="Alice", age=11).as_dict() == {'name': 'Alice', 'age': 11}
+            True
+            >>> row = Row(key=1, value=Row(name='a', age=2))
+            >>> row.as_dict() == {'key': 1, 'value': Row(age=2, name='a')}
+            True
+            >>> row.as_dict(True) == {'key': 1, 'value': {'name': 'a', 'age': 2}}
+            True
+
+        :param recursive: turns the nested Row as dict (default: False).
+        """
+        if not hasattr(self, "_fields"):
+            raise TypeError("Cannot convert a Row class into dict")
+
+        if recursive:
+            def conv(obj):
+                if isinstance(obj, Row):
+                    return obj.as_dict(True)
+                elif isinstance(obj, list):
+                    return [conv(o) for o in obj]
+                elif isinstance(obj, dict):
+                    return dict((k, conv(v)) for k, v in obj.items())
+                else:
+                    return obj
+
+            return dict(zip(self._fields, (conv(o) for o in self)))
         else:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.YEAR(data_type.precision),
-                                              JDataTypes.MONTH())
-    elif isinstance(data_type, DayTimeIntervalType):
-        if data_type.resolution == DayTimeIntervalType.DayTimeResolution.DAY:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.DAY(data_type.day_precision))
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.DAY_TO_HOUR:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.DAY(data_type.day_precision),
-                                              JDataTypes.HOUR())
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.DAY_TO_MINUTE:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.DAY(data_type.day_precision),
-                                              JDataTypes.MINUTE())
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.DAY_TO_SECOND:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.DAY(data_type.day_precision),
-                                              JDataTypes.SECOND(data_type.fractional_precision))
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.HOUR:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.HOUR())
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.HOUR_TO_MINUTE:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.HOUR(), JDataTypes.MINUTE())
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.HOUR_TO_SECOND:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.HOUR(),
-                                              JDataTypes.SECOND(data_type.fractional_precision))
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.MINUTE:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.MINUTE())
-        elif data_type.resolution == DayTimeIntervalType.DayTimeResolution.MINUTE_TO_SECOND:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.MINUTE(),
-                                              JDataTypes.SECOND(data_type.fractional_precision))
+            return dict(zip(self._fields, self))
+
+    def __contains__(self, item):
+        if hasattr(self, "_fields"):
+            return item in self._fields
         else:
-            j_data_type = JDataTypes.INTERVAL(JDataTypes.SECOND(data_type.fractional_precision))
-    elif isinstance(data_type, ListViewType):
-        return gateway.jvm.org.apache.flink.table.api.dataview.ListView.newListViewDataType(
-            _to_java_data_type(data_type._element_type))
-    elif isinstance(data_type, MapViewType):
-        return gateway.jvm.org.apache.flink.table.api.dataview.MapView.newMapViewDataType(
-            _to_java_data_type(data_type._key_type), _to_java_data_type(data_type._value_type))
-    else:
-        raise TypeError("Unsupported data type: %s" % data_type)
+            return super(Row, self).__contains__(item)
 
-    if data_type._nullable:
-        j_data_type = j_data_type.nullable()
-    else:
-        j_data_type = j_data_type.notNull()
+    # let object acts like class
+    def __call__(self, *args):
+        """
+        Creates new Row object
+        """
+        if len(args) > len(self):
+            raise ValueError("Can not create Row with fields %s, expected %d values "
+                             "but got %s" % (self, len(self), args))
+        return _create_row(self, args)
 
-    if data_type._conversion_cls:
-        j_data_type = j_data_type.bridgedTo(
-            gateway.jvm.org.apache.flink.api.python.shaded.py4j.reflection.ReflectionUtil
-            .classForName(data_type._conversion_cls)
-        )
+    def __getitem__(self, item):
+        if isinstance(item, (int, slice)):
+            return super(Row, self).__getitem__(item)
+        try:
+            # it will be slow when it has many fields,
+            # but this will not be used in normal cases
+            idx = self._fields.index(item)
+            return super(Row, self).__getitem__(idx)
+        except IndexError:
+            raise KeyError(item)
+        except ValueError:
+            raise ValueError(item)
 
-    return j_data_type
+    def __getattr__(self, item):
+        if item.startswith("_"):
+            raise AttributeError(item)
+        try:
+            # it will be slow when it has many fields,
+            # but this will not be used in normal cases
+            idx = self._fields.index(item)
+            return self[idx]
+        except IndexError:
+            raise AttributeError(item)
+        except ValueError:
+            raise AttributeError(item)
+
+    def __setattr__(self, key, value):
+        if key != '_fields' and key != "_from_dict":
+            raise Exception("Row is read-only")
+        self.__dict__[key] = value
+
+    def __reduce__(self):
+        """
+        Returns a tuple so Python knows how to pickle Row.
+        """
+        if hasattr(self, "_fields"):
+            return _create_row, (self._fields, tuple(self))
+        else:
+            return tuple.__reduce__(self)
+
+    def __repr__(self):
+        """
+        Printable representation of Row used in Python REPL.
+        """
+        if hasattr(self, "_fields"):
+            return "Row(%s)" % ", ".join("%s=%r" % (k, v)
+                                         for k, v in zip(self._fields, tuple(self)))
+        else:
+            return "<Row(%s)>" % ", ".join("%r" % field for field in self)
 
 
 _acceptable_types = {
@@ -1965,7 +2057,7 @@ _acceptable_types = {
 }
 
 
-def _create_type_verifier(data_type: DataType, name: str = None):
+def _create_type_verifier(data_type, name=None):
     """
     Creates a verifier that checks the type of obj against data_type and raises a TypeError if they
     do not match.
@@ -2080,17 +2172,12 @@ def _create_type_verifier(data_type: DataType, name: str = None):
         verify_value = verify_varbinary
 
     elif isinstance(data_type, UserDefinedType):
-        sql_type = data_type.sql_type()
-        verifier = _create_type_verifier(sql_type, name=name)
+        verifier = _create_type_verifier(data_type.sql_type(), name=name)
 
         def verify_udf(obj):
             if not (hasattr(obj, '__UDT__') and obj.__UDT__ == data_type):
                 raise ValueError(new_msg("%r is not an instance of type %r" % (obj, data_type)))
-            data = data_type.to_sql_type(obj)
-            if isinstance(sql_type, RowType):
-                # remove the RowKind value in the first position.
-                data = data[1:]
-            verifier(data)
+            verifier(data_type.to_sql_type(obj))
 
         verify_value = verify_udf
 
@@ -2186,7 +2273,7 @@ def _create_type_verifier(data_type: DataType, name: str = None):
     return verify
 
 
-def create_arrow_schema(field_names: List[str], field_types: List[DataType]):
+def create_arrow_schema(field_names, field_types):
     """
     Create an Arrow schema with the specified filed names and types.
     """
@@ -2196,7 +2283,7 @@ def create_arrow_schema(field_names: List[str], field_types: List[DataType]):
     return pa.schema(fields)
 
 
-def from_arrow_type(arrow_type, nullable: bool = True) -> DataType:
+def from_arrow_type(arrow_type, nullable=True):
     """
     Convert Arrow type to Flink data type.
     """
@@ -2256,34 +2343,34 @@ def from_arrow_type(arrow_type, nullable: bool = True) -> DataType:
         raise TypeError("Unsupported data type to convert to Arrow type: " + str(dt))
 
 
-def to_arrow_type(data_type: DataType):
+def to_arrow_type(data_type):
     """
     Converts the specified Flink data type to pyarrow data type.
     """
     import pyarrow as pa
-    if isinstance(data_type, TinyIntType):
+    if type(data_type) == TinyIntType:
         return pa.int8()
-    elif isinstance(data_type, SmallIntType):
+    elif type(data_type) == SmallIntType:
         return pa.int16()
-    elif isinstance(data_type, IntType):
+    elif type(data_type) == IntType:
         return pa.int32()
-    elif isinstance(data_type, BigIntType):
+    elif type(data_type) == BigIntType:
         return pa.int64()
-    elif isinstance(data_type, BooleanType):
+    elif type(data_type) == BooleanType:
         return pa.bool_()
-    elif isinstance(data_type, FloatType):
+    elif type(data_type) == FloatType:
         return pa.float32()
-    elif isinstance(data_type, DoubleType):
+    elif type(data_type) == DoubleType:
         return pa.float64()
-    elif isinstance(data_type, VarCharType):
+    elif type(data_type) == VarCharType:
         return pa.utf8()
-    elif isinstance(data_type, VarBinaryType):
+    elif type(data_type) == VarBinaryType:
         return pa.binary()
-    elif isinstance(data_type, DecimalType):
+    elif type(data_type) == DecimalType:
         return pa.decimal128(data_type.precision, data_type.scale)
-    elif isinstance(data_type, DateType):
+    elif type(data_type) == DateType:
         return pa.date32()
-    elif isinstance(data_type, TimeType):
+    elif type(data_type) == TimeType:
         if data_type.precision == 0:
             return pa.time32('s')
         elif 1 <= data_type.precision <= 3:
@@ -2292,7 +2379,7 @@ def to_arrow_type(data_type: DataType):
             return pa.time64('us')
         else:
             return pa.time64('ns')
-    elif isinstance(data_type, (LocalZonedTimestampType, TimestampType)):
+    elif type(data_type) in [LocalZonedTimestampType, TimestampType]:
         if data_type.precision == 0:
             return pa.timestamp('s')
         elif 1 <= data_type.precision <= 3:
@@ -2301,12 +2388,12 @@ def to_arrow_type(data_type: DataType):
             return pa.timestamp('us')
         else:
             return pa.timestamp('ns')
-    elif isinstance(data_type, ArrayType):
+    elif type(data_type) == ArrayType:
         if type(data_type.element_type) in [LocalZonedTimestampType, RowType]:
             raise ValueError("%s is not supported to be used as the element type of ArrayType." %
                              data_type.element_type)
         return pa.list_(to_arrow_type(data_type.element_type))
-    elif isinstance(data_type, RowType):
+    elif type(data_type) == RowType:
         for field in data_type:
             if type(field.data_type) in [LocalZonedTimestampType, RowType]:
                 raise TypeError("%s is not supported to be used as the field type of RowType" %
@@ -2325,7 +2412,7 @@ class DataTypes(object):
     """
 
     @staticmethod
-    def NULL() -> NullType:
+    def NULL():
         """
         Data type for representing untyped null (None) values. A null type has no
         other value except null (None), thus, it can be cast to any nullable type.
@@ -2341,7 +2428,7 @@ class DataTypes(object):
         return NullType()
 
     @staticmethod
-    def CHAR(length: int, nullable: bool = True) -> CharType:
+    def CHAR(length, nullable=True):
         """
         Data type of a fixed-length character string.
 
@@ -2354,7 +2441,7 @@ class DataTypes(object):
         return CharType(length, nullable)
 
     @staticmethod
-    def VARCHAR(length: int, nullable: bool = True) -> VarCharType:
+    def VARCHAR(length, nullable=True):
         """
         Data type of a variable-length character string.
 
@@ -2368,7 +2455,7 @@ class DataTypes(object):
         return VarCharType(length, nullable)
 
     @staticmethod
-    def STRING(nullable: bool = True) -> VarCharType:
+    def STRING(nullable=True):
         """
         Data type of a variable-length character string with defined maximum length.
         This is a shortcut for ``DataTypes.VARCHAR(2147483647)``.
@@ -2380,7 +2467,7 @@ class DataTypes(object):
         return DataTypes.VARCHAR(0x7fffffff, nullable)
 
     @staticmethod
-    def BOOLEAN(nullable: bool = True) -> BooleanType:
+    def BOOLEAN(nullable=True):
         """
         Data type of a boolean with a (possibly) three-valued logic of
         TRUE, FALSE, UNKNOWN.
@@ -2390,7 +2477,7 @@ class DataTypes(object):
         return BooleanType(nullable)
 
     @staticmethod
-    def BINARY(length: int, nullable: bool = True) -> BinaryType:
+    def BINARY(length, nullable=True):
         """
         Data type of a fixed-length binary string (=a sequence of bytes).
 
@@ -2403,7 +2490,7 @@ class DataTypes(object):
         return BinaryType(length, nullable)
 
     @staticmethod
-    def VARBINARY(length: int, nullable: bool = True) -> VarBinaryType:
+    def VARBINARY(length, nullable=True):
         """
         Data type of a variable-length binary string (=a sequence of bytes)
 
@@ -2417,7 +2504,7 @@ class DataTypes(object):
         return VarBinaryType(length, nullable)
 
     @staticmethod
-    def BYTES(nullable: bool = True) -> VarBinaryType:
+    def BYTES(nullable=True):
         """
         Data type of a variable-length binary string (=a sequence of bytes) with
         defined maximum length. This is a shortcut for ``DataTypes.VARBINARY(2147483647)``.
@@ -2429,7 +2516,7 @@ class DataTypes(object):
         return DataTypes.VARBINARY(0x7fffffff, nullable)
 
     @staticmethod
-    def DECIMAL(precision: int, scale: int, nullable: bool = True) -> DecimalType:
+    def DECIMAL(precision, scale, nullable=True):
         """
         Data type of a decimal number with fixed precision and scale.
 
@@ -2444,7 +2531,7 @@ class DataTypes(object):
         return DecimalType(precision, scale, nullable)
 
     @staticmethod
-    def TINYINT(nullable: bool = True) -> TinyIntType:
+    def TINYINT(nullable=True):
         """
         Data type of a 1-byte signed integer with values from -128 to 127.
 
@@ -2453,7 +2540,7 @@ class DataTypes(object):
         return TinyIntType(nullable)
 
     @staticmethod
-    def SMALLINT(nullable: bool = True) -> SmallIntType:
+    def SMALLINT(nullable=True):
         """
         Data type of a 2-byte signed integer with values from -32,768 to 32,767.
 
@@ -2462,7 +2549,7 @@ class DataTypes(object):
         return SmallIntType(nullable)
 
     @staticmethod
-    def INT(nullable: bool = True) -> IntType:
+    def INT(nullable=True):
         """
         Data type of a 2-byte signed integer with values from -2,147,483,648
         to 2,147,483,647.
@@ -2472,7 +2559,7 @@ class DataTypes(object):
         return IntType(nullable)
 
     @staticmethod
-    def BIGINT(nullable: bool = True) -> BigIntType:
+    def BIGINT(nullable=True):
         """
         Data type of an 8-byte signed integer with values from
         -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807.
@@ -2482,7 +2569,7 @@ class DataTypes(object):
         return BigIntType(nullable)
 
     @staticmethod
-    def FLOAT(nullable: bool = True) -> FloatType:
+    def FLOAT(nullable=True):
         """
         Data type of a 4-byte single precision floating point number.
 
@@ -2491,7 +2578,7 @@ class DataTypes(object):
         return FloatType(nullable)
 
     @staticmethod
-    def DOUBLE(nullable: bool = True) -> DoubleType:
+    def DOUBLE(nullable=True):
         """
         Data type of an 8-byte double precision floating point number.
 
@@ -2500,7 +2587,7 @@ class DataTypes(object):
         return DoubleType(nullable)
 
     @staticmethod
-    def DATE(nullable: bool = True) -> DateType:
+    def DATE(nullable=True):
         """
         Data type of a date consisting of year-month-day with values ranging
         from ``0000-01-01`` to ``9999-12-31``.
@@ -2512,7 +2599,7 @@ class DataTypes(object):
         return DateType(nullable)
 
     @staticmethod
-    def TIME(precision: int = 0, nullable: bool = True) -> TimeType:
+    def TIME(precision=0, nullable=True):
         """
         Data type of a time WITHOUT time zone.
 
@@ -2531,7 +2618,7 @@ class DataTypes(object):
         return TimeType(precision, nullable)
 
     @staticmethod
-    def TIMESTAMP(precision: int = 6, nullable: bool = True) -> TimestampType:
+    def TIMESTAMP(precision=6, nullable=True):
         """
         Data type of a timestamp WITHOUT time zone.
 
@@ -2556,8 +2643,7 @@ class DataTypes(object):
         return TimestampType(precision, nullable)
 
     @staticmethod
-    def TIMESTAMP_WITH_LOCAL_TIME_ZONE(precision: int = 6, nullable: bool = True) \
-            -> LocalZonedTimestampType:
+    def TIMESTAMP_WITH_LOCAL_TIME_ZONE(precision=6, nullable=True):
         """
         Data type of a timestamp WITH LOCAL time zone.
 
@@ -2575,28 +2661,13 @@ class DataTypes(object):
                           It must have a value between 0 and 9 (both inclusive). (default: 6)
         :param nullable: boolean, whether the type can be null (None) or not.
 
-        .. note:: `LocalZonedTimestampType` only supports precision of 3 currently.
+        .. note:: `LocalZonedTimestampType` is currently only supported in blink planner and the
+                  precision must be 3.
         """
         return LocalZonedTimestampType(precision, nullable)
 
     @staticmethod
-    def TIMESTAMP_LTZ(precision: int = 6, nullable: bool = True) \
-            -> LocalZonedTimestampType:
-        """
-        Data type of a timestamp WITH LOCAL time zone.
-        This is a shortcut for ``DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(precision, nullable)``.
-
-        :param precision: int, the number of digits of fractional seconds.
-                          It must have a value between 0 and 9 (both inclusive). (default: 6, only
-                          supports 3 when bridged to DataStream)
-        :param nullable: boolean, whether the type can be null (None) or not.
-
-        .. seealso:: :func:`~DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(precision, nullable)`
-        """
-        return LocalZonedTimestampType(precision, nullable)
-
-    @staticmethod
-    def ARRAY(element_type: DataType, nullable: bool = True) -> ArrayType:
+    def ARRAY(element_type, nullable=True):
         """
         Data type of an array of elements with same subtype.
 
@@ -2610,18 +2681,7 @@ class DataTypes(object):
         return ArrayType(element_type, nullable)
 
     @staticmethod
-    def LIST_VIEW(element_type: DataType) -> ListViewType:
-        """
-        Data type of a :class:`pyflink.table.data_view.ListView`.
-
-        It can only be used in accumulator type declaration of an Aggregate Function.
-
-        :param element_type: :class:`DataType` of each element in the list view.
-        """
-        return ListViewType(element_type)
-
-    @staticmethod
-    def MAP(key_type: DataType, value_type: DataType, nullable: bool = True) -> MapType:
+    def MAP(key_type, value_type, nullable=True):
         """
         Data type of an associative array that maps keys to values. A map
         cannot contain duplicate keys; each key can map to at most one value.
@@ -2636,19 +2696,7 @@ class DataTypes(object):
         return MapType(key_type, value_type, nullable)
 
     @staticmethod
-    def MAP_VIEW(key_type: DataType, value_type: DataType) -> MapViewType:
-        """
-        Data type of a :class:`pyflink.table.data_view.ListView`.
-
-        It can only be used in accumulator type declaration of an Aggregate Function.
-
-        :param key_type: :class:`DataType` of the keys in the map view.
-        :param value_type: :class:`DataType` of the values in the map view.
-        """
-        return MapViewType(key_type, value_type)
-
-    @staticmethod
-    def MULTISET(element_type: DataType, nullable: bool = True) -> MultisetType:
+    def MULTISET(element_type, nullable=True):
         """
         Data type of a multiset (=bag). Unlike a set, it allows for multiple
         instances for each of its elements with a common subtype. Each unique
@@ -2663,7 +2711,7 @@ class DataTypes(object):
         return MultisetType(element_type, nullable)
 
     @staticmethod
-    def ROW(row_fields: List = [], nullable: bool = True) -> RowType:
+    def ROW(row_fields=[], nullable=True):
         """
         Data type of a sequence of fields. A field consists of a field name,
         field type, and an optional description. The most specific type of
@@ -2681,7 +2729,7 @@ class DataTypes(object):
         return RowType(row_fields, nullable)
 
     @staticmethod
-    def FIELD(name: str, data_type: DataType, description: str = None) -> RowField:
+    def FIELD(name, data_type, description=None):
         """
         Field definition with field name, data type, and a description.
 
@@ -2692,7 +2740,7 @@ class DataTypes(object):
         return RowField(name, data_type, description)
 
     @staticmethod
-    def SECOND(precision: int = DayTimeIntervalType.DEFAULT_FRACTIONAL_PRECISION) -> Resolution:
+    def SECOND(precision=DayTimeIntervalType.DEFAULT_FRACTIONAL_PRECISION):
         """
         Resolution in seconds and (possibly) fractional seconds.
 
@@ -2706,7 +2754,7 @@ class DataTypes(object):
         return Resolution(Resolution.IntervalUnit.SECOND, precision)
 
     @staticmethod
-    def MINUTE() -> Resolution:
+    def MINUTE():
         """
         Resolution in minutes.
 
@@ -2717,7 +2765,7 @@ class DataTypes(object):
         return Resolution(Resolution.IntervalUnit.MINUTE)
 
     @staticmethod
-    def HOUR() -> Resolution:
+    def HOUR():
         """
         Resolution in hours.
 
@@ -2728,7 +2776,7 @@ class DataTypes(object):
         return Resolution(Resolution.IntervalUnit.HOUR)
 
     @staticmethod
-    def DAY(precision: int = DayTimeIntervalType.DEFAULT_DAY_PRECISION) -> Resolution:
+    def DAY(precision=DayTimeIntervalType.DEFAULT_DAY_PRECISION):
         """
         Resolution in days.
 
@@ -2741,7 +2789,7 @@ class DataTypes(object):
         return Resolution(Resolution.IntervalUnit.DAY, precision)
 
     @staticmethod
-    def MONTH() -> Resolution:
+    def MONTH():
         """
         Resolution in months.
 
@@ -2752,7 +2800,7 @@ class DataTypes(object):
         return Resolution(Resolution.IntervalUnit.MONTH)
 
     @staticmethod
-    def YEAR(precision: int = YearMonthIntervalType.DEFAULT_PRECISION) -> Resolution:
+    def YEAR(precision=YearMonthIntervalType.DEFAULT_PRECISION):
         """
         Resolution in years with 2 digits for the number of years by default.
 
@@ -2765,8 +2813,7 @@ class DataTypes(object):
         return Resolution(Resolution.IntervalUnit.YEAR, precision)
 
     @staticmethod
-    def INTERVAL(upper_resolution: Resolution, lower_resolution: Resolution = None) \
-            -> Union[DayTimeIntervalType, YearMonthIntervalType]:
+    def INTERVAL(upper_resolution, lower_resolution=None):
         """
         Data type of a temporal interval. There are two types of temporal intervals: day-time
         intervals with up to nanosecond granularity or year-month intervals with up to month

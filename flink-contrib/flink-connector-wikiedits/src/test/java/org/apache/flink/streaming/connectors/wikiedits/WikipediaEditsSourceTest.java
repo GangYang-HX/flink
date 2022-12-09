@@ -22,10 +22,10 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.testutils.junit.RetryOnFailure;
-import org.apache.flink.testutils.junit.extensions.retry.RetryExtension;
+import org.apache.flink.testutils.junit.RetryRule;
 
-import org.junit.jupiter.api.TestTemplate;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.Rule;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,134 +39,138 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-/** Tests for the WikipediaEditsSource. */
-@ExtendWith(RetryExtension.class)
-class WikipediaEditsSourceTest {
+/**
+ * Tests for the WikipediaEditsSource.
+ */
+public class WikipediaEditsSourceTest {
 
-    private static final Logger LOG = LoggerFactory.getLogger(WikipediaEditsSourceTest.class);
+	private static final Logger LOG = LoggerFactory.getLogger(WikipediaEditsSourceTest.class);
 
-    /** We first check the connection to the IRC server. If it fails, this test is ignored. */
-    @TestTemplate
-    @RetryOnFailure(times = 1)
-    void testWikipediaEditsSource() throws Exception {
-        if (canConnect(1, TimeUnit.SECONDS)) {
-            final Time testTimeout = Time.seconds(60);
-            final WikipediaEditsSource wikipediaEditsSource = new WikipediaEditsSource();
+	@Rule
+	public RetryRule retryRule = new RetryRule();
 
-            ExecutorService executorService = null;
-            try {
-                executorService = Executors.newSingleThreadExecutor();
-                BlockingQueue<Object> collectedEvents = new ArrayBlockingQueue<>(1);
-                AtomicReference<Exception> asyncError = new AtomicReference<>();
+	/**
+	 * We first check the connection to the IRC server. If it fails, this test is ignored.
+	 */
+	@Test
+	@RetryOnFailure(times = 1)
+	public void testWikipediaEditsSource() throws Exception {
+		if (canConnect(1, TimeUnit.SECONDS)) {
+			final Time testTimeout = Time.seconds(60);
+			final WikipediaEditsSource wikipediaEditsSource = new WikipediaEditsSource();
 
-                // Execute the source in a different thread and collect events into the queue.
-                // We do this in a separate thread in order to not block the main test thread
-                // indefinitely in case that something bad happens (like not receiving any
-                // events)
-                executorService.execute(
-                        () -> {
-                            try {
-                                wikipediaEditsSource.run(
-                                        new CollectingSourceContext<>(collectedEvents));
-                            } catch (Exception e) {
-                                boolean interrupted = e instanceof InterruptedException;
-                                if (!interrupted) {
-                                    LOG.warn("Failure in WikipediaEditsSource", e);
-                                }
+			ExecutorService executorService = null;
+			try {
+				executorService = Executors.newSingleThreadExecutor();
+				BlockingQueue<Object> collectedEvents = new ArrayBlockingQueue<>(1);
+				AtomicReference<Exception> asyncError = new AtomicReference<>();
 
-                                asyncError.compareAndSet(null, e);
-                            }
-                        });
+				// Execute the source in a different thread and collect events into the queue.
+				// We do this in a separate thread in order to not block the main test thread
+				// indefinitely in case that something bad happens (like not receiving any
+				// events)
+				executorService.execute(() -> {
+					try {
+						wikipediaEditsSource.run(new CollectingSourceContext<>(collectedEvents));
+					} catch (Exception e) {
+						boolean interrupted = e instanceof InterruptedException;
+						if (!interrupted) {
+							LOG.warn("Failure in WikipediaEditsSource", e);
+						}
 
-                long deadline = deadlineNanos(testTimeout);
+						asyncError.compareAndSet(null, e);
+					}
+				});
 
-                Object event = null;
-                Exception error = null;
+				long deadline = deadlineNanos(testTimeout);
 
-                // Check event or error
-                while (event == null && error == null && System.nanoTime() < deadline) {
-                    event = collectedEvents.poll(1, TimeUnit.SECONDS);
-                    error = asyncError.get();
-                }
+				Object event = null;
+				Exception error = null;
 
-                if (error != null) {
-                    // We don't use assertNull, because we want to include the error message
-                    fail("Failure in WikipediaEditsSource: " + error.getMessage());
-                }
+				// Check event or error
+				while (event == null && error == null && System.nanoTime() < deadline) {
+					event = collectedEvents.poll(1, TimeUnit.SECONDS);
+					error = asyncError.get();
+				}
 
-                assertThat(event)
-                        .as("Did not receive a WikipediaEditEvent within the desired timeout")
-                        .isNotNull();
-                assertThat(event)
-                        .as("Received unexpected event " + event)
-                        .isInstanceOf(WikipediaEditEvent.class);
-            } finally {
-                wikipediaEditsSource.cancel();
+				if (error != null) {
+					// We don't use assertNull, because we want to include the error message
+					fail("Failure in WikipediaEditsSource: " + error.getMessage());
+				}
 
-                if (executorService != null) {
-                    executorService.shutdownNow();
-                    executorService.awaitTermination(1, TimeUnit.SECONDS);
-                }
-            }
-        } else {
-            LOG.info("Skipping test, because not able to connect to IRC server.");
-        }
-    }
+				assertNotNull("Did not receive a WikipediaEditEvent within the desired timeout", event);
+				assertTrue("Received unexpected event " + event, event instanceof WikipediaEditEvent);
+			} finally {
+				wikipediaEditsSource.cancel();
 
-    private long deadlineNanos(Time testTimeout) {
-        return System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(testTimeout.toMilliseconds());
-    }
+				if (executorService != null) {
+					executorService.shutdownNow();
+					executorService.awaitTermination(1, TimeUnit.SECONDS);
+				}
+			}
+		} else {
+			LOG.info("Skipping test, because not able to connect to IRC server.");
+		}
+	}
 
-    private static class CollectingSourceContext<T> implements SourceFunction.SourceContext<T> {
+	private long deadlineNanos(Time testTimeout) {
+		return System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(testTimeout.toMilliseconds());
+	}
 
-        private final BlockingQueue<Object> events;
+	private static class CollectingSourceContext<T> implements SourceFunction.SourceContext<T> {
 
-        private CollectingSourceContext(BlockingQueue<Object> events) {
-            this.events = Objects.requireNonNull(events, "events");
-        }
+		private final BlockingQueue<Object> events;
 
-        @Override
-        public void collect(T element) {
-            events.offer(element);
-        }
+		private CollectingSourceContext(BlockingQueue<Object> events) {
+			this.events = Objects.requireNonNull(events, "events");
+		}
 
-        @Override
-        public void collectWithTimestamp(T element, long timestamp) {
-            throw new UnsupportedOperationException();
-        }
+		@Override
+		public void collect(T element) {
+			events.offer(element);
+		}
 
-        @Override
-        public void emitWatermark(Watermark mark) {
-            throw new UnsupportedOperationException();
-        }
+		@Override
+		public void collectWithTimestamp(T element, long timestamp) {
+			throw new UnsupportedOperationException();
 
-        @Override
-        public void markAsTemporarilyIdle() {
-            throw new UnsupportedOperationException();
-        }
+		}
 
-        @Override
-        public Object getCheckpointLock() {
-            throw new UnsupportedOperationException();
-        }
+		@Override
+		public void emitWatermark(Watermark mark) {
+			throw new UnsupportedOperationException();
+		}
 
-        @Override
-        public void close() {}
-    }
+		@Override
+		public void markAsTemporarilyIdle() {
+			throw new UnsupportedOperationException();
+		}
 
-    private static boolean canConnect(int timeout, TimeUnit unit) {
-        String host = WikipediaEditsSource.DEFAULT_HOST;
-        int port = WikipediaEditsSource.DEFAULT_PORT;
+		@Override
+		public Object getCheckpointLock() {
+			throw new UnsupportedOperationException();
+		}
 
-        try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress(host, port), (int) unit.toMillis(timeout));
-            return s.isConnected();
-        } catch (Throwable ignored) {
-        }
+		@Override
+		public void close() {
+		}
 
-        return false;
-    }
+	}
+
+	private static boolean canConnect(int timeout, TimeUnit unit) {
+		String host = WikipediaEditsSource.DEFAULT_HOST;
+		int port = WikipediaEditsSource.DEFAULT_PORT;
+
+		try (Socket s = new Socket()) {
+			s.connect(new InetSocketAddress(host, port), (int) unit.toMillis(timeout));
+			return s.isConnected();
+		} catch (Throwable ignored) {
+		}
+
+		return false;
+	}
 }

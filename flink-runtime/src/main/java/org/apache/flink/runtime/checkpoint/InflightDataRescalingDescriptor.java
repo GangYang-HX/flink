@@ -118,8 +118,8 @@ public class InflightDataRescalingDescriptor implements Serializable {
         private final int[] oldSubtaskIndexes;
 
         /**
-         * Set when channels are merged because the connected operator has been rescaled for each
-         * gate/partition.
+     	 * Set when channels are merged because the connected operator has been rescaled for each
+		 * gate/partition.
          */
         private final RescaleMappings rescaledChannelsMappings;
 
@@ -128,8 +128,7 @@ public class InflightDataRescalingDescriptor implements Serializable {
 
         private final MappingType mappingType;
 
-        /** Type of mapping which should be used for this in-flight data. */
-        public enum MappingType {
+        enum MappingType {
             IDENTITY,
             RESCALING
         }
@@ -213,5 +212,5 @@ public class InflightDataRescalingDescriptor implements Serializable {
         private Object readResolve() throws ObjectStreamException {
             return NO_RESCALE;
         }
-    }
+	}
 }

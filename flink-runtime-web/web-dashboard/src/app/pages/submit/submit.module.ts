@@ -16,42 +16,16 @@
  * limitations under the License.
  */
 
-import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
-
-import { ShareModule } from '@flink-runtime-web/share/share.module';
-import { NzButtonModule } from 'ng-zorro-antd/button';
-import { NzCardModule } from 'ng-zorro-antd/card';
-import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
-import { NzDrawerModule } from 'ng-zorro-antd/drawer';
-import { NzFormModule } from 'ng-zorro-antd/form';
-import { NzIconModule } from 'ng-zorro-antd/icon';
-import { NzInputModule } from 'ng-zorro-antd/input';
-import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
-import { NzProgressModule } from 'ng-zorro-antd/progress';
-import { NzTableModule } from 'ng-zorro-antd/table';
+import { ShareModule } from 'share/share.module';
 
 import { SubmitRoutingModule } from './submit-routing.module';
 import { SubmitComponent } from './submit.component';
 
 @NgModule({
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    SubmitRoutingModule,
-    ShareModule,
-    NzTableModule,
-    NzPopconfirmModule,
-    NzFormModule,
-    NzCardModule,
-    NzInputModule,
-    NzProgressModule,
-    NzDrawerModule,
-    NzIconModule,
-    NzButtonModule,
-    NzCheckboxModule
-  ],
+  imports: [CommonModule, ReactiveFormsModule, SubmitRoutingModule, ShareModule],
   declarations: [SubmitComponent]
 })
 export class SubmitModule {}

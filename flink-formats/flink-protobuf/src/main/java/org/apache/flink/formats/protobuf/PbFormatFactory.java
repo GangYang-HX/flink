@@ -68,6 +68,12 @@ public class PbFormatFactory implements DeserializationFormatFactory, Serializat
         formatOptions
                 .getOptional(PbFormatOptions.WRITE_NULL_STRING_LITERAL)
                 .ifPresent(configBuilder::writeNullStringLiterals);
+        formatOptions
+			    .getOptional(PbFormatOptions.IGNORE_NULL_ROWS)
+			    .ifPresent(configBuilder::ignoreNullRows);
+		formatOptions
+			    .getOptional(PbFormatOptions.ADD_DEFAULT_VALUE)
+		     	.ifPresent(configBuilder::addDefaultValue);
         return configBuilder.build();
     }
 
@@ -88,7 +94,8 @@ public class PbFormatFactory implements DeserializationFormatFactory, Serializat
         Set<ConfigOption<?>> result = new HashSet<>();
         result.add(PbFormatOptions.IGNORE_PARSE_ERRORS);
         result.add(PbFormatOptions.READ_DEFAULT_VALUES);
-        result.add(PbFormatOptions.WRITE_NULL_STRING_LITERAL);
+		result.add(PbFormatOptions.IGNORE_NULL_ROWS);
+		result.add(PbFormatOptions.ADD_DEFAULT_VALUE);
         return result;
     }
 }

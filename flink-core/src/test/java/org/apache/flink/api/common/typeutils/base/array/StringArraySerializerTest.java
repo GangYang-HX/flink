@@ -18,79 +18,65 @@
 
 package org.apache.flink.api.common.typeutils.base.array;
 
-import org.apache.flink.api.common.typeutils.SerializerTestBase;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.util.StringUtils;
-
-import org.junit.jupiter.api.Test;
-
 import java.util.Random;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.base.array.StringArraySerializer;
+import org.apache.flink.util.StringUtils;
+import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
+
 
 /**
- * A test for the {@link org.apache.flink.api.common.typeutils.base.array.StringArraySerializer}.
+ * A test for the {@link StringArraySerializer}.
  */
-class StringArraySerializerTest extends SerializerTestBase<String[]> {
+public class StringArraySerializerTest extends SerializerTestBase<String[]> {
 
-    @Override
-    protected TypeSerializer<String[]> createSerializer() {
-        return new StringArraySerializer();
-    }
+	@Override
+	protected TypeSerializer<String[]> createSerializer() {
+		return new StringArraySerializer();
+	}
 
-    @Override
-    protected Class<String[]> getTypeClass() {
-        return String[].class;
-    }
+	@Override
+	protected Class<String[]> getTypeClass() {
+		return String[].class;
+	}
+	
+	@Override
+	protected int getLength() {
+		return -1;
+	}
 
-    @Override
-    protected int getLength() {
-        return -1;
-    }
+	@Override
+	protected String[][] getTestData() {
+		Random rnd = new Random(874597969123412341L);
+		
 
-    @Override
-    protected String[][] getTestData() {
-        Random rnd = new Random(874597969123412341L);
+		return new String[][] {
+			new String[] {"a", "", "bcd", "jbmbmner8 jhk hj \n \t üäßß@µ", "", "non-empty"},
+			new String[] {"a", null, "", null, "bcd", null, "jbmbmner8 jhk hj \n \t üäßß@µ", null, "", null, "non-empty"},
+			new String[] {StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
+				StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
+				StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
+				StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2)},
+			new String[] {StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
+				"",
+				StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
+				null,
+				StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
+				null,
+				"",
+				StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
+				"",
+				null}
+		};
+	}
 
-        return new String[][] {
-            new String[] {"a", "", "bcd", "jbmbmner8 jhk hj \n \t üäßß@µ", "", "non-empty"},
-            new String[] {
-                "a",
-                null,
-                "",
-                null,
-                "bcd",
-                null,
-                "jbmbmner8 jhk hj \n \t üäßß@µ",
-                null,
-                "",
-                null,
-                "non-empty"
-            },
-            new String[] {
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2)
-            },
-            new String[] {
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
-                "",
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
-                null,
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
-                null,
-                "",
-                StringUtils.getRandomString(rnd, 10000, 1024 * 1024 * 2),
-                "",
-                null
-            }
-        };
-    }
-
-    @Test
-    void arrayTypeIsMutable() {
-        StringArraySerializer serializer = (StringArraySerializer) createSerializer();
-        assertThat(serializer.isImmutableType()).isFalse();
-    }
+	@Test
+	public void arrayTypeIsMutable() {
+		StringArraySerializer serializer = (StringArraySerializer) createSerializer();
+		assertFalse(serializer.isImmutableType());
+	}
 }

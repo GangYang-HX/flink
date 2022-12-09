@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.state;
 
+import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
@@ -27,202 +28,188 @@ import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RunnableFuture;
 
-/** Snapshot strategy for this backend. */
-class DefaultOperatorStateBackendSnapshotStrategy
-        implements SnapshotStrategy<
-                OperatorStateHandle,
-                DefaultOperatorStateBackendSnapshotStrategy
-                        .DefaultOperatorStateBackendSnapshotResources> {
-    private final ClassLoader userClassLoader;
-    private final Map<String, PartitionableListState<?>> registeredOperatorStates;
-    private final Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStates;
+/**
+ * Snapshot strategy for this backend.
+ */
+class DefaultOperatorStateBackendSnapshotStrategy extends AbstractSnapshotStrategy<OperatorStateHandle> {
+	private final ClassLoader userClassLoader;
+	private final boolean asynchronousSnapshots;
+	private final Map<String, PartitionableListState<?>> registeredOperatorStates;
+	private final Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStates;
+	private final CloseableRegistry closeStreamOnCancelRegistry;
 
-    protected DefaultOperatorStateBackendSnapshotStrategy(
-            ClassLoader userClassLoader,
-            Map<String, PartitionableListState<?>> registeredOperatorStates,
-            Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStates) {
-        this.userClassLoader = userClassLoader;
-        this.registeredOperatorStates = registeredOperatorStates;
-        this.registeredBroadcastStates = registeredBroadcastStates;
-    }
+	protected DefaultOperatorStateBackendSnapshotStrategy(
+		ClassLoader userClassLoader,
+		boolean asynchronousSnapshots,
+		Map<String, PartitionableListState<?>> registeredOperatorStates,
+		Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStates,
+		CloseableRegistry closeStreamOnCancelRegistry) {
+		super("DefaultOperatorStateBackend snapshot");
+		this.userClassLoader = userClassLoader;
+		this.asynchronousSnapshots = asynchronousSnapshots;
+		this.registeredOperatorStates = registeredOperatorStates;
+		this.registeredBroadcastStates = registeredBroadcastStates;
+		this.closeStreamOnCancelRegistry = closeStreamOnCancelRegistry;
+	}
 
-    @Override
-    public DefaultOperatorStateBackendSnapshotResources syncPrepareResources(long checkpointId) {
-        if (registeredOperatorStates.isEmpty() && registeredBroadcastStates.isEmpty()) {
-            return new DefaultOperatorStateBackendSnapshotResources(
-                    Collections.emptyMap(), Collections.emptyMap());
-        }
+	@Nonnull
+	@Override
+	public RunnableFuture<SnapshotResult<OperatorStateHandle>> snapshot(
+		final long checkpointId,
+		final long timestamp,
+		@Nonnull final CheckpointStreamFactory streamFactory,
+		@Nonnull final CheckpointOptions checkpointOptions) throws IOException {
 
-        final Map<String, PartitionableListState<?>> registeredOperatorStatesDeepCopies =
-                new HashMap<>(registeredOperatorStates.size());
-        final Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStatesDeepCopies =
-                new HashMap<>(registeredBroadcastStates.size());
+		if (registeredOperatorStates.isEmpty() && registeredBroadcastStates.isEmpty()) {
+			return DoneFuture.of(SnapshotResult.empty());
+		}
 
-        ClassLoader snapshotClassLoader = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(userClassLoader);
-        try {
-            // eagerly create deep copies of the list and the broadcast states (if any)
-            // in the synchronous phase, so that we can use them in the async writing.
+		final Map<String, PartitionableListState<?>> registeredOperatorStatesDeepCopies =
+			new HashMap<>(registeredOperatorStates.size());
+		final Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStatesDeepCopies =
+			new HashMap<>(registeredBroadcastStates.size());
 
-            if (!registeredOperatorStates.isEmpty()) {
-                for (Map.Entry<String, PartitionableListState<?>> entry :
-                        registeredOperatorStates.entrySet()) {
-                    PartitionableListState<?> listState = entry.getValue();
-                    if (null != listState) {
-                        listState = listState.deepCopy();
-                    }
-                    registeredOperatorStatesDeepCopies.put(entry.getKey(), listState);
-                }
-            }
+		ClassLoader snapshotClassLoader = Thread.currentThread().getContextClassLoader();
+		Thread.currentThread().setContextClassLoader(userClassLoader);
+		try {
+			// eagerly create deep copies of the list and the broadcast states (if any)
+			// in the synchronous phase, so that we can use them in the async writing.
 
-            if (!registeredBroadcastStates.isEmpty()) {
-                for (Map.Entry<String, BackendWritableBroadcastState<?, ?>> entry :
-                        registeredBroadcastStates.entrySet()) {
-                    BackendWritableBroadcastState<?, ?> broadcastState = entry.getValue();
-                    if (null != broadcastState) {
-                        broadcastState = broadcastState.deepCopy();
-                    }
-                    registeredBroadcastStatesDeepCopies.put(entry.getKey(), broadcastState);
-                }
-            }
-        } finally {
-            Thread.currentThread().setContextClassLoader(snapshotClassLoader);
-        }
+			if (!registeredOperatorStates.isEmpty()) {
+				for (Map.Entry<String, PartitionableListState<?>> entry : registeredOperatorStates.entrySet()) {
+					PartitionableListState<?> listState = entry.getValue();
+					if (null != listState) {
+						listState = listState.deepCopy();
+					}
+					registeredOperatorStatesDeepCopies.put(entry.getKey(), listState);
+				}
+			}
 
-        return new DefaultOperatorStateBackendSnapshotResources(
-                registeredOperatorStatesDeepCopies, registeredBroadcastStatesDeepCopies);
-    }
+			if (!registeredBroadcastStates.isEmpty()) {
+				for (Map.Entry<String, BackendWritableBroadcastState<?, ?>> entry : registeredBroadcastStates.entrySet()) {
+					BackendWritableBroadcastState<?, ?> broadcastState = entry.getValue();
+					if (null != broadcastState) {
+						broadcastState = broadcastState.deepCopy();
+					}
+					registeredBroadcastStatesDeepCopies.put(entry.getKey(), broadcastState);
+				}
+			}
+		} finally {
+			Thread.currentThread().setContextClassLoader(snapshotClassLoader);
+		}
 
-    @Override
-    public SnapshotResultSupplier<OperatorStateHandle> asyncSnapshot(
-            DefaultOperatorStateBackendSnapshotResources syncPartResource,
-            long checkpointId,
-            long timestamp,
-            @Nonnull CheckpointStreamFactory streamFactory,
-            @Nonnull CheckpointOptions checkpointOptions) {
+		AsyncSnapshotCallable<SnapshotResult<OperatorStateHandle>> snapshotCallable =
+			new AsyncSnapshotCallable<SnapshotResult<OperatorStateHandle>>() {
 
-        Map<String, PartitionableListState<?>> registeredOperatorStatesDeepCopies =
-                syncPartResource.getRegisteredOperatorStatesDeepCopies();
-        Map<String, BackendWritableBroadcastState<?, ?>> registeredBroadcastStatesDeepCopies =
-                syncPartResource.getRegisteredBroadcastStatesDeepCopies();
+				@Override
+				protected SnapshotResult<OperatorStateHandle> callInternal() throws Exception {
 
-        if (registeredBroadcastStatesDeepCopies.isEmpty()
-                && registeredOperatorStatesDeepCopies.isEmpty()) {
-            return snapshotCloseableRegistry -> SnapshotResult.empty();
-        }
+					CheckpointStreamFactory.CheckpointStateOutputStream localOut =
+						streamFactory.createCheckpointStateOutputStream(CheckpointedStateScope.EXCLUSIVE);
+					snapshotCloseableRegistry.registerCloseable(localOut);
 
-        return (snapshotCloseableRegistry) -> {
-            CheckpointStateOutputStream localOut =
-                    streamFactory.createCheckpointStateOutputStream(
-                            CheckpointedStateScope.EXCLUSIVE);
-            snapshotCloseableRegistry.registerCloseable(localOut);
+					// get the registered operator state infos ...
+					List<StateMetaInfoSnapshot> operatorMetaInfoSnapshots =
+						new ArrayList<>(registeredOperatorStatesDeepCopies.size());
 
-            // get the registered operator state infos ...
-            List<StateMetaInfoSnapshot> operatorMetaInfoSnapshots =
-                    new ArrayList<>(registeredOperatorStatesDeepCopies.size());
+					for (Map.Entry<String, PartitionableListState<?>> entry :
+						registeredOperatorStatesDeepCopies.entrySet()) {
+						operatorMetaInfoSnapshots.add(entry.getValue().getStateMetaInfo().snapshot());
+					}
 
-            for (Map.Entry<String, PartitionableListState<?>> entry :
-                    registeredOperatorStatesDeepCopies.entrySet()) {
-                operatorMetaInfoSnapshots.add(entry.getValue().getStateMetaInfo().snapshot());
-            }
+					// ... get the registered broadcast operator state infos ...
+					List<StateMetaInfoSnapshot> broadcastMetaInfoSnapshots =
+						new ArrayList<>(registeredBroadcastStatesDeepCopies.size());
 
-            // ... get the registered broadcast operator state infos ...
-            List<StateMetaInfoSnapshot> broadcastMetaInfoSnapshots =
-                    new ArrayList<>(registeredBroadcastStatesDeepCopies.size());
+					for (Map.Entry<String, BackendWritableBroadcastState<?, ?>> entry :
+						registeredBroadcastStatesDeepCopies.entrySet()) {
+						broadcastMetaInfoSnapshots.add(entry.getValue().getStateMetaInfo().snapshot());
+					}
 
-            for (Map.Entry<String, BackendWritableBroadcastState<?, ?>> entry :
-                    registeredBroadcastStatesDeepCopies.entrySet()) {
-                broadcastMetaInfoSnapshots.add(entry.getValue().getStateMetaInfo().snapshot());
-            }
+					// ... write them all in the checkpoint stream ...
+					DataOutputView dov = new DataOutputViewStreamWrapper(localOut);
 
-            // ... write them all in the checkpoint stream ...
-            DataOutputView dov = new DataOutputViewStreamWrapper(localOut);
+					OperatorBackendSerializationProxy backendSerializationProxy =
+						new OperatorBackendSerializationProxy(operatorMetaInfoSnapshots, broadcastMetaInfoSnapshots);
 
-            OperatorBackendSerializationProxy backendSerializationProxy =
-                    new OperatorBackendSerializationProxy(
-                            operatorMetaInfoSnapshots, broadcastMetaInfoSnapshots);
+					backendSerializationProxy.write(dov);
 
-            backendSerializationProxy.write(dov);
+					snapshotStateDescriptor(streamFactory, null);
 
-            // ... and then go for the states ...
+					// ... and then go for the states ...
 
-            // we put BOTH normal and broadcast state metadata here
-            int initialMapCapacity =
-                    registeredOperatorStatesDeepCopies.size()
-                            + registeredBroadcastStatesDeepCopies.size();
-            final Map<String, OperatorStateHandle.StateMetaInfo> writtenStatesMetaData =
-                    new HashMap<>(initialMapCapacity);
+					// we put BOTH normal and broadcast state metadata here
+					int initialMapCapacity =
+						registeredOperatorStatesDeepCopies.size() + registeredBroadcastStatesDeepCopies.size();
+					final Map<String, OperatorStateHandle.StateMetaInfo> writtenStatesMetaData =
+						new HashMap<>(initialMapCapacity);
 
-            for (Map.Entry<String, PartitionableListState<?>> entry :
-                    registeredOperatorStatesDeepCopies.entrySet()) {
+					for (Map.Entry<String, PartitionableListState<?>> entry :
+						registeredOperatorStatesDeepCopies.entrySet()) {
 
-                PartitionableListState<?> value = entry.getValue();
-                long[] partitionOffsets = value.write(localOut);
-                OperatorStateHandle.Mode mode = value.getStateMetaInfo().getAssignmentMode();
-                writtenStatesMetaData.put(
-                        entry.getKey(),
-                        new OperatorStateHandle.StateMetaInfo(partitionOffsets, mode));
-            }
+						PartitionableListState<?> value = entry.getValue();
+						long[] partitionOffsets = value.write(localOut);
+						OperatorStateHandle.Mode mode = value.getStateMetaInfo().getAssignmentMode();
+						writtenStatesMetaData.put(
+							entry.getKey(),
+							new OperatorStateHandle.StateMetaInfo(partitionOffsets, mode));
+					}
 
-            // ... and the broadcast states themselves ...
-            for (Map.Entry<String, BackendWritableBroadcastState<?, ?>> entry :
-                    registeredBroadcastStatesDeepCopies.entrySet()) {
+					// ... and the broadcast states themselves ...
+					for (Map.Entry<String, BackendWritableBroadcastState<?, ?>> entry :
+						registeredBroadcastStatesDeepCopies.entrySet()) {
 
-                BackendWritableBroadcastState<?, ?> value = entry.getValue();
-                long[] partitionOffsets = {value.write(localOut)};
-                OperatorStateHandle.Mode mode = value.getStateMetaInfo().getAssignmentMode();
-                writtenStatesMetaData.put(
-                        entry.getKey(),
-                        new OperatorStateHandle.StateMetaInfo(partitionOffsets, mode));
-            }
+						BackendWritableBroadcastState<?, ?> value = entry.getValue();
+						long[] partitionOffsets = {value.write(localOut)};
+						OperatorStateHandle.Mode mode = value.getStateMetaInfo().getAssignmentMode();
+						writtenStatesMetaData.put(
+							entry.getKey(),
+							new OperatorStateHandle.StateMetaInfo(partitionOffsets, mode));
+					}
 
-            // ... and, finally, create the state handle.
-            OperatorStateHandle retValue = null;
+					// ... and, finally, create the state handle.
+					OperatorStateHandle retValue = null;
 
-            if (snapshotCloseableRegistry.unregisterCloseable(localOut)) {
+					if (snapshotCloseableRegistry.unregisterCloseable(localOut)) {
 
-                StreamStateHandle stateHandle = localOut.closeAndGetHandle();
+						StreamStateHandle stateHandle = localOut.closeAndGetHandle();
 
-                if (stateHandle != null) {
-                    retValue = new OperatorStreamStateHandle(writtenStatesMetaData, stateHandle);
-                }
+						if (stateHandle != null) {
+							retValue = new OperatorStreamStateHandle(writtenStatesMetaData, stateHandle);
+						}
 
-                return SnapshotResult.of(retValue);
-            } else {
-                throw new IOException("Stream was already unregistered.");
-            }
-        };
-    }
+						return SnapshotResult.of(retValue);
+					} else {
+						throw new IOException("Stream was already unregistered.");
+					}
+				}
 
-    static class DefaultOperatorStateBackendSnapshotResources implements SnapshotResources {
+				@Override
+				protected void cleanupProvidedResources() {
+					// nothing to do
+				}
 
-        private final Map<String, PartitionableListState<?>> registeredOperatorStatesDeepCopies;
-        private final Map<String, BackendWritableBroadcastState<?, ?>>
-                registeredBroadcastStatesDeepCopies;
+				@Override
+				protected void logAsyncSnapshotComplete(long startTime) {
+					if (asynchronousSnapshots) {
+						logAsyncCompleted(streamFactory, startTime);
+					}
+				}
+			};
 
-        DefaultOperatorStateBackendSnapshotResources(
-                Map<String, PartitionableListState<?>> registeredOperatorStatesDeepCopies,
-                Map<String, BackendWritableBroadcastState<?, ?>>
-                        registeredBroadcastStatesDeepCopies) {
-            this.registeredOperatorStatesDeepCopies = registeredOperatorStatesDeepCopies;
-            this.registeredBroadcastStatesDeepCopies = registeredBroadcastStatesDeepCopies;
-        }
+		final FutureTask<SnapshotResult<OperatorStateHandle>> task =
+			snapshotCallable.toAsyncSnapshotFutureTask(closeStreamOnCancelRegistry);
 
-        public Map<String, PartitionableListState<?>> getRegisteredOperatorStatesDeepCopies() {
-            return registeredOperatorStatesDeepCopies;
-        }
+		if (!asynchronousSnapshots) {
+			task.run();
+		}
 
-        public Map<String, BackendWritableBroadcastState<?, ?>>
-                getRegisteredBroadcastStatesDeepCopies() {
-            return registeredBroadcastStatesDeepCopies;
-        }
-
-        @Override
-        public void release() {}
-    }
+		return task;
+	}
 }

@@ -18,14 +18,8 @@
 @import "theme";
 
 :host {
+  display: block;
   position: relative;
-  display: flex;
-  flex: 1;
-
-  .text-secondary {
-    color: @text-color-secondary;
-    font-size: @font-size-sm;
-  }
 }
 
 .name {
@@ -33,24 +27,29 @@
 
   a {
     position: absolute;
-    top: 0;
-    left: 8px;
     display: inline-block;
-    overflow: hidden;
     width: calc(~"100% - 12px");
     line-height: 34px;
-    text-overflow: ellipsis;
+    top: 0;
+    left: 8px;
     white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
 }
 
 .selected {
-  background: @select-item-selected-bg;
-  color: @text-color;
+  background: @primary-color;
+  color: #ffffff;
+
+  a {
+    color: #ffffff;
+  }
 
   &:hover {
     td {
-      background: @select-item-selected-bg;
+      background: @primary-color;
     }
   }
 }
+

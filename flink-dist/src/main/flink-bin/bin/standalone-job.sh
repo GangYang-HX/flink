@@ -34,19 +34,13 @@ bin=`cd "$bin"; pwd`
 . "$bin"/config.sh
 
 # Startup parameters
-ARGS=("${@:2}")
+ARGS=("--configDir" "${FLINK_CONF_DIR}" "${@:2}")
 
 if [[ $STARTSTOP == "start" ]] || [[ $STARTSTOP == "start-foreground" ]]; then
     # Add cluster entry point specific JVM options
     export FLINK_ENV_JAVA_OPTS="${FLINK_ENV_JAVA_OPTS} ${FLINK_ENV_JAVA_OPTS_JM}"
-    parseJmArgsAndExportLogs "${ARGS[@]}"
-
-    if [ ! -z "${DYNAMIC_PARAMETERS}" ]; then
-        ARGS=(${DYNAMIC_PARAMETERS[@]} "${ARGS[@]}")
-    fi
+    parseJmJvmArgsAndExportLogs "${ARGS[@]}"
 fi
-
-ARGS=("--configDir" "${FLINK_CONF_DIR}" "${ARGS[@]}")
 
 if [[ $STARTSTOP == "start-foreground" ]]; then
     exec "${FLINK_BIN_DIR}"/flink-console.sh ${ENTRY_POINT_NAME} "${ARGS[@]}"

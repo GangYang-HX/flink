@@ -16,58 +16,59 @@
  * limitations under the License.
  */
 
+
 package org.apache.flink.api.common.operators.util;
+
+import java.io.IOException;
 
 import org.apache.flink.api.common.io.GenericInputFormat;
 import org.apache.flink.api.common.io.NonParallelInput;
 
-import java.io.IOException;
+/**
+ * Same as the non rich test input format, except it provide access to runtime context.
+ */
+public class TestRichInputFormat extends GenericInputFormat<String> implements NonParallelInput{
 
-/** Same as the non rich test input format, except it provide access to runtime context. */
-public class TestRichInputFormat extends GenericInputFormat<String> implements NonParallelInput {
+	private static final long serialVersionUID = 1L;
+	private static final int NUM = 5;
+	private static final String[] NAMES = TestIOData.NAMES;
+	private int count = 0;
+	private boolean openCalled = false;
+	private boolean closeCalled = false;
 
-    private static final long serialVersionUID = 1L;
-    private static final int NUM = 5;
-    private static final String[] NAMES = TestIOData.NAMES;
-    private int count = 0;
-    private boolean openCalled = false;
-    private boolean closeCalled = false;
+	@Override
+	public boolean reachedEnd() throws IOException {
+		return count >= NUM;
+	}
 
-    @Override
-    public boolean reachedEnd() throws IOException {
-        return count >= NUM;
-    }
+	@Override
+	public String nextRecord(String reuse) throws IOException {
+		count++;
+		return NAMES[count - 1] + getRuntimeContext().getIndexOfThisSubtask() + "" +
+				getRuntimeContext().getNumberOfParallelSubtasks();
+	}
 
-    @Override
-    public String nextRecord(String reuse) throws IOException {
-        count++;
-        return NAMES[count - 1]
-                + getRuntimeContext().getIndexOfThisSubtask()
-                + ""
-                + getRuntimeContext().getNumberOfParallelSubtasks();
-    }
+	public void reset() {
+		count = 0;
+		openCalled = false;
+		closeCalled = false;
+	}
 
-    public void reset() {
-        count = 0;
-        openCalled = false;
-        closeCalled = false;
-    }
+	@Override
+	public void openInputFormat() {
+		openCalled = true;
+	}
 
-    @Override
-    public void openInputFormat() {
-        openCalled = true;
-    }
+	@Override
+	public void closeInputFormat() {
+		closeCalled = true;
+	}
 
-    @Override
-    public void closeInputFormat() {
-        closeCalled = true;
-    }
+	public boolean hasBeenOpened() {
+		return openCalled;
+	}
 
-    public boolean hasBeenOpened() {
-        return openCalled;
-    }
-
-    public boolean hasBeenClosed() {
-        return closeCalled;
-    }
+	public boolean hasBeenClosed() {
+		return closeCalled;
+	}
 }

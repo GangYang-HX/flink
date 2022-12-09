@@ -27,6 +27,8 @@ import org.apache.flink.configuration.RestOptions;
 import org.apache.flink.configuration.SecurityOptions;
 import org.apache.flink.configuration.WebOptions;
 import org.apache.flink.runtime.clusterframework.BootstrapTools;
+import org.apache.flink.runtime.statistics.StartupUtils;
+import org.apache.flink.runtime.statistics.StatisticsUtils;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.yarn.Utils;
 import org.apache.flink.yarn.YarnConfigKeys;
@@ -34,6 +36,8 @@ import org.apache.flink.yarn.configuration.YarnConfigOptions;
 
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
+import org.apache.hadoop.yarn.api.records.ContainerId;
+import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -41,101 +45,107 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.flink.runtime.entrypoint.ClusterEntrypointUtils.tryFindUserLibDirectory;
+import static org.apache.flink.runtime.util.ClusterEntrypointUtils.tryFindUserLibDirectory;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /**
- * This class contains utility methods for the {@link YarnSessionClusterEntrypoint} and {@link
- * YarnJobClusterEntrypoint}.
+ * This class contains utility methods for the {@link YarnSessionClusterEntrypoint} and
+ * {@link YarnJobClusterEntrypoint}.
  */
 public class YarnEntrypointUtils {
 
-    public static Configuration loadConfiguration(
-            String workingDirectory, Configuration dynamicParameters, Map<String, String> env) {
-        final Configuration configuration =
-                GlobalConfiguration.loadConfiguration(workingDirectory, dynamicParameters);
+	public static Configuration loadConfiguration(String workingDirectory, Map<String, String> env) {
+		Configuration configuration = GlobalConfiguration.loadConfiguration(workingDirectory);
 
-        final String keytabPrincipal = env.get(YarnConfigKeys.KEYTAB_PRINCIPAL);
+		final String keytabPrincipal = env.get(YarnConfigKeys.KEYTAB_PRINCIPAL);
 
-        final String hostname = env.get(ApplicationConstants.Environment.NM_HOST.key());
-        Preconditions.checkState(
-                hostname != null,
-                "ApplicationMaster hostname variable %s not set",
-                ApplicationConstants.Environment.NM_HOST.key());
+		final String hostname = env.get(ApplicationConstants.Environment.NM_HOST.key());
+		Preconditions.checkState(
+			hostname != null,
+			"ApplicationMaster hostname variable %s not set",
+			ApplicationConstants.Environment.NM_HOST.key());
 
-        configuration.setString(JobManagerOptions.ADDRESS, hostname);
-        configuration.setString(RestOptions.ADDRESS, hostname);
-        configuration.setString(RestOptions.BIND_ADDRESS, hostname);
+		configuration.setString(JobManagerOptions.ADDRESS, hostname);
+		configuration.setString(RestOptions.ADDRESS, hostname);
 
-        // if a web monitor shall be started, set the port to random binding
-        if (configuration.getInteger(WebOptions.PORT, 0) >= 0) {
-            configuration.setInteger(WebOptions.PORT, 0);
-        }
+		// if a web monitor shall be started, set the port to random binding
+		if (configuration.getInteger(WebOptions.PORT, 0) >= 0) {
+			configuration.setInteger(WebOptions.PORT, 0);
+		}
 
-        if (!configuration.contains(RestOptions.BIND_PORT)) {
-            // set the REST port to 0 to select it randomly
-            configuration.setString(RestOptions.BIND_PORT, "0");
-        }
+		if (!configuration.contains(RestOptions.BIND_PORT)) {
+			// set the REST port to 0 to select it randomly
+			configuration.setString(RestOptions.BIND_PORT, "0");
+		}
 
-        // if the user has set the deprecated YARN-specific config keys, we add the
-        // corresponding generic config keys instead. that way, later code needs not
-        // deal with deprecated config keys
+		// if the user has set the deprecated YARN-specific config keys, we add the
+		// corresponding generic config keys instead. that way, later code needs not
+		// deal with deprecated config keys
 
-        BootstrapTools.substituteDeprecatedConfigPrefix(
-                configuration,
-                ConfigConstants.YARN_APPLICATION_MASTER_ENV_PREFIX,
-                ResourceManagerOptions.CONTAINERIZED_MASTER_ENV_PREFIX);
+		BootstrapTools.substituteDeprecatedConfigPrefix(configuration,
+			ConfigConstants.YARN_APPLICATION_MASTER_ENV_PREFIX,
+			ResourceManagerOptions.CONTAINERIZED_MASTER_ENV_PREFIX);
 
-        BootstrapTools.substituteDeprecatedConfigPrefix(
-                configuration,
-                ConfigConstants.YARN_TASK_MANAGER_ENV_PREFIX,
-                ResourceManagerOptions.CONTAINERIZED_TASK_MANAGER_ENV_PREFIX);
+		BootstrapTools.substituteDeprecatedConfigPrefix(configuration,
+			ConfigConstants.YARN_TASK_MANAGER_ENV_PREFIX,
+			ResourceManagerOptions.CONTAINERIZED_TASK_MANAGER_ENV_PREFIX);
 
-        final String keytabPath =
-                Utils.resolveKeytabPath(
-                        workingDirectory, env.get(YarnConfigKeys.LOCAL_KEYTAB_PATH));
+		final String keytabPath = Utils.resolveKeytabPath(workingDirectory, env.get(YarnConfigKeys.LOCAL_KEYTAB_PATH));
 
-        if (keytabPath != null && keytabPrincipal != null) {
-            configuration.setString(SecurityOptions.KERBEROS_LOGIN_KEYTAB, keytabPath);
-            configuration.setString(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL, keytabPrincipal);
-        }
+		if (keytabPath != null && keytabPrincipal != null) {
+			configuration.setString(SecurityOptions.KERBEROS_LOGIN_KEYTAB, keytabPath);
+			configuration.setString(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL, keytabPrincipal);
+		}
 
-        final String localDirs = env.get(ApplicationConstants.Environment.LOCAL_DIRS.key());
-        BootstrapTools.updateTmpDirectoriesInConfiguration(configuration, localDirs);
+		final String localDirs = env.get(ApplicationConstants.Environment.LOCAL_DIRS.key());
+		BootstrapTools.updateTmpDirectoriesInConfiguration(configuration, localDirs);
 
-        return configuration;
-    }
+		return configuration;
+	}
 
-    public static void logYarnEnvironmentInformation(Map<String, String> env, Logger log)
-            throws IOException {
-        final String yarnClientUsername = env.get(YarnConfigKeys.ENV_HADOOP_USER_NAME);
-        Preconditions.checkArgument(
-                yarnClientUsername != null,
-                "YARN client user name environment variable %s not set",
-                YarnConfigKeys.ENV_HADOOP_USER_NAME);
+	public static void logYarnEnvironmentInformation(Map<String, String> env, Logger log) throws IOException {
+		final String yarnClientUsername = env.get(YarnConfigKeys.ENV_HADOOP_USER_NAME);
+		Preconditions.checkArgument(
+			yarnClientUsername != null,
+			"YARN client user name environment variable %s not set",
+			YarnConfigKeys.ENV_HADOOP_USER_NAME);
 
-        UserGroupInformation currentUser = UserGroupInformation.getCurrentUser();
+		UserGroupInformation currentUser = UserGroupInformation.getCurrentUser();
 
-        log.info(
-                "YARN daemon is running as: {} Yarn client user obtainer: {}",
-                currentUser.getShortUserName(),
-                yarnClientUsername);
-    }
+		log.info("YARN daemon is running as: {} Yarn client user obtainer: {}",
+			currentUser.getShortUserName(), yarnClientUsername);
+	}
 
-    public static Optional<File> getUsrLibDir(final Configuration configuration) {
-        final YarnConfigOptions.UserJarInclusion userJarInclusion =
-                configuration.get(YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR);
-        final Optional<File> userLibDir = tryFindUserLibDirectory();
+	public static Optional<File> getUsrLibDir(final Configuration configuration) {
+		final YarnConfigOptions.UserJarInclusion userJarInclusion = configuration
+				.getEnum(YarnConfigOptions.UserJarInclusion.class, YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR);
+		final Optional<File> userLibDir = tryFindUserLibDirectory();
 
-        checkState(
-                userJarInclusion != YarnConfigOptions.UserJarInclusion.DISABLED
-                        || userLibDir.isPresent(),
-                "The %s is set to %s. But the usrlib directory does not exist.",
-                YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR.key(),
-                YarnConfigOptions.UserJarInclusion.DISABLED);
+		checkState(
+				userJarInclusion != YarnConfigOptions.UserJarInclusion.DISABLED || userLibDir.isPresent(),
+				"The %s is set to %s. But the usrlib directory does not exist.",
+				YarnConfigOptions.CLASSPATH_INCLUDE_USER_JAR.key(),
+				YarnConfigOptions.UserJarInclusion.DISABLED);
 
-        return userJarInclusion == YarnConfigOptions.UserJarInclusion.DISABLED
-                ? userLibDir
-                : Optional.empty();
-    }
+		return userJarInclusion == YarnConfigOptions.UserJarInclusion.DISABLED ? userLibDir : Optional.empty();
+	}
+
+	public static void reportJobManagerStartMetric(){
+		ContainerId containerId = ConverterUtils.toContainerId(
+				System.getenv(ApplicationConstants.Environment.CONTAINER_ID.key()));
+		int attemptId = containerId.getApplicationAttemptId().getAttemptId();
+		if (attemptId == 1) {
+			StatisticsUtils.reportStartTracking(
+					StartupUtils.StartupPhase.PREPARE_RESOURCE_FOR_JOB_MANAGER,
+					System.getenv(ApplicationConstants.APP_SUBMIT_TIME_ENV));
+
+			StatisticsUtils.reportEndTracking(StartupUtils.StartupPhase.PREPARE_RESOURCE_FOR_JOB_MANAGER);
+
+			StatisticsUtils.reportStartTracking(
+					StartupUtils.StartupPhase.SUBMIT_JOB_MANAGER,
+					System.getenv(StartupUtils.ENV_SUBMIT_JOB_MANAGER));
+
+			StatisticsUtils.reportEndTracking(StartupUtils.StartupPhase.SUBMIT_JOB_MANAGER);
+		}
+	}
 }

@@ -18,13 +18,14 @@
 package org.apache.flink.api.scala.runtime.tuple.base
 
 import org.apache.flink.api.common.typeutils.ComparatorTestBase
-
-import org.assertj.core.api.AssertionsForClassTypes.assertThat
+import org.apache.flink.api.scala.typeutils.{CaseClassSerializer, CaseClassComparator}
+import org.junit.Assert._
 
 abstract class TupleComparatorTestBase[T <: Product] extends ComparatorTestBase[T] {
-  override protected def deepEquals(message: String, should: T, is: T) {
+  protected override def deepEquals(message: String, should: T, is: T) {
     for (i <- 0 until should.productArity) {
-      assertThat(is.productElement(i)).isEqualTo(should.productElement(i))
+      assertEquals(should.productElement(i), is.productElement(i))
     }
   }
 }
+

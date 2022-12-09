@@ -20,19 +20,15 @@ package org.apache.flink.runtime.io.network.partition;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
-import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
-import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
-import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
+import org.apache.flink.util.CollectionUtil;
 import org.apache.flink.util.Preconditions;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -42,243 +38,154 @@ import static java.util.stream.Collectors.toList;
  * Utility for tracking partitions and issuing release calls to task executors and shuffle masters.
  */
 public class JobMasterPartitionTrackerImpl
-        extends AbstractPartitionTracker<ResourceID, ResultPartitionDeploymentDescriptor>
-        implements JobMasterPartitionTracker {
+	extends AbstractPartitionTracker<ResourceID, ResultPartitionDeploymentDescriptor>
+	implements JobMasterPartitionTracker {
 
-    // Besides below fields, JobMasterPartitionTrackerImpl inherits 'partitionTable' and
-    // 'partitionInfos' from parent and tracks partitions from different dimensions:
-    // 'partitionTable' tracks partitions which occupie local resource on TM;
-    // 'partitionInfos' tracks all available partitions no matter they are accommodated
-    // externally on remote or internally on TM;
+	private final JobID jobId;
 
-    private final JobID jobId;
+	private final ShuffleMaster<?> shuffleMaster;
 
-    private final ShuffleMaster<?> shuffleMaster;
+	private final PartitionTrackerFactory.TaskExecutorGatewayLookup taskExecutorGatewayLookup;
 
-    private final PartitionTrackerFactory.TaskExecutorGatewayLookup taskExecutorGatewayLookup;
-    private ResourceManagerGateway resourceManagerGateway;
-    private final Map<IntermediateDataSetID, List<ShuffleDescriptor>>
-            clusterPartitionShuffleDescriptors;
+	public JobMasterPartitionTrackerImpl(
+		JobID jobId,
+		ShuffleMaster<?> shuffleMaster,
+		PartitionTrackerFactory.TaskExecutorGatewayLookup taskExecutorGatewayLookup) {
 
-    public JobMasterPartitionTrackerImpl(
-            JobID jobId,
-            ShuffleMaster<?> shuffleMaster,
-            PartitionTrackerFactory.TaskExecutorGatewayLookup taskExecutorGatewayLookup) {
+		this.jobId = Preconditions.checkNotNull(jobId);
+		this.shuffleMaster = Preconditions.checkNotNull(shuffleMaster);
+		this.taskExecutorGatewayLookup = taskExecutorGatewayLookup;
+	}
 
-        this.jobId = Preconditions.checkNotNull(jobId);
-        this.shuffleMaster = Preconditions.checkNotNull(shuffleMaster);
-        this.taskExecutorGatewayLookup = taskExecutorGatewayLookup;
-        this.clusterPartitionShuffleDescriptors = new HashMap<>();
-    }
+	@Override
+	public void startTrackingPartition(ResourceID producingTaskExecutorId, ResultPartitionDeploymentDescriptor resultPartitionDeploymentDescriptor) {
+		Preconditions.checkNotNull(producingTaskExecutorId);
+		Preconditions.checkNotNull(resultPartitionDeploymentDescriptor);
 
-    @Override
-    public void startTrackingPartition(
-            ResourceID producingTaskExecutorId,
-            ResultPartitionDeploymentDescriptor resultPartitionDeploymentDescriptor) {
-        Preconditions.checkNotNull(producingTaskExecutorId);
-        Preconditions.checkNotNull(resultPartitionDeploymentDescriptor);
+		// only blocking partitions require explicit release call
+		if (!resultPartitionDeploymentDescriptor.getPartitionType().isBlocking()) {
+			return;
+		}
 
-        // non-releaseByScheduler partitions don't require explicit partition release calls.
-        if (!resultPartitionDeploymentDescriptor.getPartitionType().isReleaseByScheduler()) {
-            return;
-        }
+		final ResultPartitionID resultPartitionId = resultPartitionDeploymentDescriptor.getShuffleDescriptor().getResultPartitionID();
 
-        final ResultPartitionID resultPartitionId =
-                resultPartitionDeploymentDescriptor.getShuffleDescriptor().getResultPartitionID();
+		startTrackingPartition(producingTaskExecutorId, resultPartitionId, resultPartitionDeploymentDescriptor);
+	}
 
-        startTrackingPartition(
-                producingTaskExecutorId, resultPartitionId, resultPartitionDeploymentDescriptor);
-    }
+	@Override
+	public void stopTrackingAndReleasePartitions(Collection<ResultPartitionID> resultPartitionIds) {
+		Preconditions.checkNotNull(resultPartitionIds);
 
-    @Override
-    void startTrackingPartition(
-            ResourceID key,
-            ResultPartitionID resultPartitionId,
-            ResultPartitionDeploymentDescriptor metaInfo) {
-        // A partition is registered into 'partitionTable' only when it occupies
-        // resource on the corresponding TM;
-        if (metaInfo.getShuffleDescriptor().storesLocalResourcesOn().isPresent()) {
-            partitionTable.startTrackingPartitions(
-                    key, Collections.singletonList(resultPartitionId));
-        }
-        partitionInfos.put(resultPartitionId, new PartitionInfo<>(key, metaInfo));
-    }
+		// stop tracking partitions to be released and group them by task executor ID
+		Map<ResourceID, List<ResultPartitionDeploymentDescriptor>> partitionsToReleaseByResourceId =
+			stopTrackingPartitions(resultPartitionIds)
+				.stream()
+				.collect(Collectors.groupingBy(
+					PartitionTrackerEntry::getKey,
+					Collectors.mapping(
+						PartitionTrackerEntry::getMetaInfo,
+						toList())));
 
-    @Override
-    public void stopTrackingAndReleasePartitions(
-            Collection<ResultPartitionID> resultPartitionIds, boolean releaseOnShuffleMaster) {
-        stopTrackingAndHandlePartitions(
-                resultPartitionIds,
-                (tmID, partitionDescs) ->
-                        internalReleasePartitions(tmID, partitionDescs, releaseOnShuffleMaster));
-    }
+		partitionsToReleaseByResourceId.forEach(this::internalReleasePartitions);
+	}
 
-    @Override
-    public void stopTrackingAndReleaseOrPromotePartitions(
-            Collection<ResultPartitionID> resultPartitionIds) {
-        stopTrackingAndHandlePartitions(
-                resultPartitionIds,
-                (tmID, partitionDescs) -> internalReleaseOrPromotePartitions(tmID, partitionDescs));
-    }
+	@Override
+	public void stopTrackingAndReleasePartitionsFor(ResourceID producingTaskExecutorId) {
+		Preconditions.checkNotNull(producingTaskExecutorId);
 
-    @Override
-    public Collection<ResultPartitionDeploymentDescriptor> getAllTrackedPartitions() {
-        return partitionInfos.values().stream().map(PartitionInfo::getMetaInfo).collect(toList());
-    }
+		Collection<ResultPartitionDeploymentDescriptor> resultPartitionIds =
+			CollectionUtil.project(stopTrackingPartitionsFor(producingTaskExecutorId), PartitionTrackerEntry::getMetaInfo);
 
-    @Override
-    public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {
-        this.resourceManagerGateway = resourceManagerGateway;
-    }
+		internalReleasePartitions(producingTaskExecutorId, resultPartitionIds);
+	}
 
-    @Override
-    public List<ShuffleDescriptor> getClusterPartitionShuffleDescriptors(
-            IntermediateDataSetID intermediateDataSetID) {
-        return clusterPartitionShuffleDescriptors.computeIfAbsent(
-                intermediateDataSetID, this::requestShuffleDescriptorsFromResourceManager);
-    }
+	@Override
+	public void stopTrackingAndReleaseOrPromotePartitionsFor(ResourceID producingTaskExecutorId) {
+		Preconditions.checkNotNull(producingTaskExecutorId);
 
-    private List<ShuffleDescriptor> requestShuffleDescriptorsFromResourceManager(
-            IntermediateDataSetID intermediateDataSetID) {
-        Preconditions.checkNotNull(
-                resourceManagerGateway, "JobMaster is not connected to ResourceManager");
-        try {
-            return this.resourceManagerGateway
-                    .getClusterPartitionsShuffleDescriptors(intermediateDataSetID)
-                    .get();
-        } catch (Throwable e) {
-            throw new RuntimeException(
-                    String.format(
-                            "Failed to get shuffle descriptors of intermediate dataset %s from ResourceManager",
-                            intermediateDataSetID),
-                    e);
-        }
-    }
+		Collection<ResultPartitionDeploymentDescriptor> resultPartitionIds =
+			CollectionUtil.project(stopTrackingPartitionsFor(producingTaskExecutorId), PartitionTrackerEntry::getMetaInfo);
 
-    private void stopTrackingAndHandlePartitions(
-            Collection<ResultPartitionID> resultPartitionIds,
-            BiConsumer<ResourceID, Collection<ResultPartitionDeploymentDescriptor>>
-                    partitionHandler) {
-        Preconditions.checkNotNull(resultPartitionIds);
+		internalReleaseOrPromotePartitions(producingTaskExecutorId, resultPartitionIds);
+	}
 
-        // stop tracking partitions to handle and group them by task executor ID
-        Map<ResourceID, List<ResultPartitionDeploymentDescriptor>> partitionsToReleaseByResourceId =
-                stopTrackingPartitions(resultPartitionIds).stream()
-                        .collect(
-                                Collectors.groupingBy(
-                                        PartitionTrackerEntry::getKey,
-                                        Collectors.mapping(
-                                                PartitionTrackerEntry::getMetaInfo, toList())));
+	private void internalReleasePartitions(
+		ResourceID potentialPartitionLocation,
+		Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
 
-        partitionsToReleaseByResourceId.forEach(partitionHandler);
-    }
+		internalReleasePartitionsOnTaskExecutor(potentialPartitionLocation, partitionDeploymentDescriptors);
+		internalReleasePartitionsOnShuffleMaster(partitionDeploymentDescriptors.stream());
+	}
 
-    private void internalReleasePartitions(
-            ResourceID potentialPartitionLocation,
-            Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors,
-            boolean releaseOnShuffleMaster) {
+	private void internalReleaseOrPromotePartitions(
+		ResourceID potentialPartitionLocation,
+		Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
 
-        internalReleasePartitionsOnTaskExecutor(
-                potentialPartitionLocation, partitionDeploymentDescriptors);
-        if (releaseOnShuffleMaster) {
-            internalReleasePartitionsOnShuffleMaster(partitionDeploymentDescriptors.stream());
-        }
-    }
+		internalReleaseOrPromotePartitionsOnTaskExecutor(potentialPartitionLocation, partitionDeploymentDescriptors);
+		internalReleasePartitionsOnShuffleMaster(excludePersistentPartitions(partitionDeploymentDescriptors));
+	}
 
-    private void internalReleaseOrPromotePartitions(
-            ResourceID potentialPartitionLocation,
-            Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
+	private void internalReleasePartitionsOnTaskExecutor(
+		ResourceID potentialPartitionLocation,
+		Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
 
-        internalReleaseOrPromotePartitionsOnTaskExecutor(
-                potentialPartitionLocation, partitionDeploymentDescriptors);
-        internalReleasePartitionsOnShuffleMaster(
-                excludePersistentPartitions(partitionDeploymentDescriptors));
-    }
+		final Set<ResultPartitionID> partitionsRequiringRpcReleaseCalls = partitionDeploymentDescriptors.stream()
+			.filter(JobMasterPartitionTrackerImpl::isPartitionWithLocalResources)
+			.map(JobMasterPartitionTrackerImpl::getResultPartitionId)
+			.collect(Collectors.toSet());
 
-    private void internalReleasePartitionsOnTaskExecutor(
-            ResourceID potentialPartitionLocation,
-            Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
+		internalReleaseOrPromotePartitionsOnTaskExecutor(
+			potentialPartitionLocation,
+			partitionsRequiringRpcReleaseCalls,
+			Collections.emptySet()
+		);
+	}
 
-        final Set<ResultPartitionID> partitionsRequiringRpcReleaseCalls =
-                partitionDeploymentDescriptors.stream()
-                        .filter(JobMasterPartitionTrackerImpl::isPartitionWithLocalResources)
-                        .map(JobMasterPartitionTrackerImpl::getResultPartitionId)
-                        .collect(Collectors.toSet());
+	private void internalReleaseOrPromotePartitionsOnTaskExecutor(
+		ResourceID potentialPartitionLocation,
+		Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
 
-        internalReleaseOrPromotePartitionsOnTaskExecutor(
-                potentialPartitionLocation,
-                partitionsRequiringRpcReleaseCalls,
-                Collections.emptySet());
-    }
+		Map<Boolean, Set<ResultPartitionID>> partitionsToReleaseByPersistence = partitionDeploymentDescriptors.stream()
+			.filter(JobMasterPartitionTrackerImpl::isPartitionWithLocalResources)
+			.collect(Collectors.partitioningBy(
+				resultPartitionDeploymentDescriptor -> resultPartitionDeploymentDescriptor.getPartitionType().isPersistent(),
+				Collectors.mapping(JobMasterPartitionTrackerImpl::getResultPartitionId, Collectors.toSet())));
 
-    private void internalReleaseOrPromotePartitionsOnTaskExecutor(
-            ResourceID potentialPartitionLocation,
-            Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
+		internalReleaseOrPromotePartitionsOnTaskExecutor(
+			potentialPartitionLocation,
+			partitionsToReleaseByPersistence.get(false),
+			partitionsToReleaseByPersistence.get(true)
+		);
+	}
 
-        Map<Boolean, Set<ResultPartitionID>> partitionsToReleaseByPersistence =
-                partitionDeploymentDescriptors.stream()
-                        .filter(JobMasterPartitionTrackerImpl::isPartitionWithLocalResources)
-                        .collect(
-                                Collectors.partitioningBy(
-                                        resultPartitionDeploymentDescriptor ->
-                                                resultPartitionDeploymentDescriptor
-                                                        .getPartitionType()
-                                                        .isPersistent(),
-                                        Collectors.mapping(
-                                                JobMasterPartitionTrackerImpl::getResultPartitionId,
-                                                Collectors.toSet())));
+	private void internalReleaseOrPromotePartitionsOnTaskExecutor(
+		ResourceID potentialPartitionLocation,
+		Set<ResultPartitionID> partitionsRequiringRpcReleaseCalls,
+		Set<ResultPartitionID> partitionsRequiringRpcPromoteCalls) {
 
-        internalReleaseOrPromotePartitionsOnTaskExecutor(
-                potentialPartitionLocation,
-                partitionsToReleaseByPersistence.get(false),
-                partitionsToReleaseByPersistence.get(true));
-    }
+		if (!partitionsRequiringRpcReleaseCalls.isEmpty() || !partitionsRequiringRpcPromoteCalls.isEmpty()) {
+			taskExecutorGatewayLookup
+				.lookup(potentialPartitionLocation)
+				.ifPresent(taskExecutorGateway ->
+					taskExecutorGateway.releaseOrPromotePartitions(jobId, partitionsRequiringRpcReleaseCalls, partitionsRequiringRpcPromoteCalls));
+		}
+	}
 
-    private void internalReleaseOrPromotePartitionsOnTaskExecutor(
-            ResourceID potentialPartitionLocation,
-            Set<ResultPartitionID> partitionsRequiringRpcReleaseCalls,
-            Set<ResultPartitionID> partitionsRequiringRpcPromoteCalls) {
+	private void internalReleasePartitionsOnShuffleMaster(Stream<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
+		partitionDeploymentDescriptors
+			.map(ResultPartitionDeploymentDescriptor::getShuffleDescriptor)
+			.forEach(shuffleMaster::releasePartitionExternally);
+	}
 
-        if (!partitionsRequiringRpcReleaseCalls.isEmpty()
-                || !partitionsRequiringRpcPromoteCalls.isEmpty()) {
-            taskExecutorGatewayLookup
-                    .lookup(potentialPartitionLocation)
-                    .ifPresent(
-                            taskExecutorGateway ->
-                                    taskExecutorGateway.releaseOrPromotePartitions(
-                                            jobId,
-                                            partitionsRequiringRpcReleaseCalls,
-                                            partitionsRequiringRpcPromoteCalls));
-        }
-    }
+	private static boolean isPartitionWithLocalResources(ResultPartitionDeploymentDescriptor resultPartitionDeploymentDescriptor) {
+		return resultPartitionDeploymentDescriptor.getShuffleDescriptor().storesLocalResourcesOn().isPresent();
+	}
 
-    private void internalReleasePartitionsOnShuffleMaster(
-            Stream<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
-        partitionDeploymentDescriptors
-                .map(ResultPartitionDeploymentDescriptor::getShuffleDescriptor)
-                .forEach(shuffleMaster::releasePartitionExternally);
-    }
+	private static Stream<ResultPartitionDeploymentDescriptor> excludePersistentPartitions(Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
+		return partitionDeploymentDescriptors.stream().filter(resultPartitionDeploymentDescriptor -> !resultPartitionDeploymentDescriptor.getPartitionType().isPersistent());
+	}
 
-    private static boolean isPartitionWithLocalResources(
-            ResultPartitionDeploymentDescriptor resultPartitionDeploymentDescriptor) {
-        return resultPartitionDeploymentDescriptor
-                .getShuffleDescriptor()
-                .storesLocalResourcesOn()
-                .isPresent();
-    }
-
-    private static Stream<ResultPartitionDeploymentDescriptor> excludePersistentPartitions(
-            Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
-        return partitionDeploymentDescriptors.stream()
-                .filter(
-                        resultPartitionDeploymentDescriptor ->
-                                !resultPartitionDeploymentDescriptor
-                                        .getPartitionType()
-                                        .isPersistent());
-    }
-
-    private static ResultPartitionID getResultPartitionId(
-            ResultPartitionDeploymentDescriptor resultPartitionDeploymentDescriptor) {
-        return resultPartitionDeploymentDescriptor.getShuffleDescriptor().getResultPartitionID();
-    }
+	private static ResultPartitionID getResultPartitionId(ResultPartitionDeploymentDescriptor resultPartitionDeploymentDescriptor) {
+		return resultPartitionDeploymentDescriptor.getShuffleDescriptor().getResultPartitionID();
+	}
 }

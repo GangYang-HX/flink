@@ -32,42 +32,41 @@ import org.apache.flink.util.Preconditions;
 import java.util.concurrent.CompletableFuture;
 
 public class RpcInputSplitProvider implements InputSplitProvider {
-    private final JobMasterGateway jobMasterGateway;
-    private final JobVertexID jobVertexID;
-    private final ExecutionAttemptID executionAttemptID;
-    private final Time timeout;
+	private final JobMasterGateway jobMasterGateway;
+	private final JobVertexID jobVertexID;
+	private final ExecutionAttemptID executionAttemptID;
+	private final Time timeout;
 
-    public RpcInputSplitProvider(
-            JobMasterGateway jobMasterGateway,
-            JobVertexID jobVertexID,
-            ExecutionAttemptID executionAttemptID,
-            Time timeout) {
-        this.jobMasterGateway = Preconditions.checkNotNull(jobMasterGateway);
-        this.jobVertexID = Preconditions.checkNotNull(jobVertexID);
-        this.executionAttemptID = Preconditions.checkNotNull(executionAttemptID);
-        this.timeout = Preconditions.checkNotNull(timeout);
-    }
+	public RpcInputSplitProvider(
+			JobMasterGateway jobMasterGateway,
+			JobVertexID jobVertexID,
+			ExecutionAttemptID executionAttemptID,
+			Time timeout) {
+		this.jobMasterGateway = Preconditions.checkNotNull(jobMasterGateway);
+		this.jobVertexID = Preconditions.checkNotNull(jobVertexID);
+		this.executionAttemptID = Preconditions.checkNotNull(executionAttemptID);
+		this.timeout = Preconditions.checkNotNull(timeout);
+	}
 
-    @Override
-    public InputSplit getNextInputSplit(ClassLoader userCodeClassLoader)
-            throws InputSplitProviderException {
-        Preconditions.checkNotNull(userCodeClassLoader);
 
-        CompletableFuture<SerializedInputSplit> futureInputSplit =
-                jobMasterGateway.requestNextInputSplit(jobVertexID, executionAttemptID);
+	@Override
+	public InputSplit getNextInputSplit(ClassLoader userCodeClassLoader) throws InputSplitProviderException {
+		Preconditions.checkNotNull(userCodeClassLoader);
 
-        try {
-            SerializedInputSplit serializedInputSplit =
-                    futureInputSplit.get(timeout.getSize(), timeout.getUnit());
+		CompletableFuture<SerializedInputSplit> futureInputSplit = jobMasterGateway.requestNextInputSplit(
+			jobVertexID,
+			executionAttemptID);
 
-            if (serializedInputSplit.isEmpty()) {
-                return null;
-            } else {
-                return InstantiationUtil.deserializeObject(
-                        serializedInputSplit.getInputSplitData(), userCodeClassLoader);
-            }
-        } catch (Exception e) {
-            throw new InputSplitProviderException("Requesting the next input split failed.", e);
-        }
-    }
+		try {
+			SerializedInputSplit serializedInputSplit = futureInputSplit.get(timeout.getSize(), timeout.getUnit());
+
+			if (serializedInputSplit.isEmpty()) {
+				return null;
+			} else {
+				return InstantiationUtil.deserializeObject(serializedInputSplit.getInputSplitData(), userCodeClassLoader);
+			}
+		} catch (Exception e) {
+			throw new InputSplitProviderException("Requesting the next input split failed.", e);
+		}
+	}
 }

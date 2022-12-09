@@ -20,60 +20,31 @@ package org.apache.flink.client.testjar;
 
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.io.DiscardingOutputFormat;
-import org.apache.flink.client.cli.CliFrontendTestUtils;
-import org.apache.flink.client.program.PackagedProgram;
-import org.apache.flink.client.program.ProgramInvocationException;
-import org.apache.flink.util.FlinkException;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.net.MalformedURLException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * A testing job with configurable number of calls to {@link ExecutionEnvironment#executeAsync()}.
+ * A testing job with configurable number
+ * of calls to {@link ExecutionEnvironment#executeAsync()}.
  */
 public class MultiExecuteJob {
 
-    public static PackagedProgram getProgram(int noOfJobs, boolean attached) throws FlinkException {
-        try {
-            return PackagedProgram.newBuilder()
-                    .setUserClassPaths(
-                            Collections.singletonList(
-                                    new File(CliFrontendTestUtils.getTestJarPath())
-                                            .toURI()
-                                            .toURL()))
-                    .setEntryPointClassName(MultiExecuteJob.class.getName())
-                    .setArguments(String.valueOf(noOfJobs), Boolean.toString(attached))
-                    .build();
-        } catch (ProgramInvocationException | FileNotFoundException | MalformedURLException e) {
-            throw new FlinkException("Could not load the provided entrypoint class.", e);
-        }
-    }
+	public static void main(String[] args) throws Exception {
+		int noOfExecutes = Integer.parseInt(args[0]);
 
-    public static void main(String[] args) throws Exception {
-        int noOfExecutes = Integer.parseInt(args[0]);
-        boolean attached = args.length > 1 && Boolean.parseBoolean(args[1]);
+		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		for (int i = 0; i < noOfExecutes; i++) {
+			final List<Integer> input = new ArrayList<>();
+			input.add(1);
+			input.add(2);
+			input.add(3);
 
-        for (int i = 0; i < noOfExecutes; i++) {
-            final List<Integer> input = new ArrayList<>();
-            input.add(1);
-            input.add(2);
-            input.add(3);
-
-            env.fromCollection(input)
-                    .map(element -> element + 1)
-                    .output(new DiscardingOutputFormat<>());
-
-            if (attached) {
-                env.execute();
-            } else {
-                env.executeAsync();
-            }
-        }
-    }
+			env.fromCollection(input)
+					.map(element -> element + 1)
+					.output(new DiscardingOutputFormat<>());
+			env.executeAsync();
+		}
+	}
 }

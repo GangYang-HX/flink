@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.graph
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
@@ -22,11 +23,14 @@ import org.apache.flink.graph.{Graph => JGraph}
 
 import _root_.scala.reflect.ClassTag
 
+
 package object scala {
   private[flink] def wrapGraph[
-      K: TypeInformation: ClassTag,
-      VV: TypeInformation: ClassTag,
-      EV: TypeInformation: ClassTag](javagraph: JGraph[K, VV, EV]): scala.Graph[K, VV, EV] = {
+      K: TypeInformation : ClassTag,
+      VV: TypeInformation : ClassTag,
+      EV: TypeInformation : ClassTag](
+      javagraph: JGraph[K, VV, EV])
+    : scala.Graph[K, VV, EV] = {
     new scala.Graph[K, VV, EV](javagraph)
   }
 }

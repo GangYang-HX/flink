@@ -32,6 +32,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -40,188 +45,226 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * A file system factory for Hadoop-based file systems.
  *
  * <p>This factory calls Hadoop's mechanism to find a file system implementation for a given file
- * system scheme (a {@link org.apache.hadoop.fs.FileSystem}) and wraps it as a Flink file system (a
- * {@link org.apache.flink.core.fs.FileSystem}).
+ * system scheme (a {@link org.apache.hadoop.fs.FileSystem}) and wraps it as a Flink file system
+ * (a {@link org.apache.flink.core.fs.FileSystem}).
  */
 public class HadoopFsFactory implements FileSystemFactory {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HadoopFsFactory.class);
+	private static final Logger LOG = LoggerFactory.getLogger(HadoopFsFactory.class);
 
-    /** Flink's configuration object. */
-    private Configuration flinkConfig;
+	/** Flink's configuration object. */
+	private Configuration flinkConfig;
 
-    /** Hadoop's configuration for the file systems. */
-    private org.apache.hadoop.conf.Configuration hadoopConfig;
+	/** Hadoop's configuration for the file systems. */
+	private HashMap<String, org.apache.hadoop.conf.Configuration> hadoopConfig;
 
-    @Override
-    public String getScheme() {
-        // the hadoop factory creates various schemes
-        return "*";
-    }
 
-    @Override
-    public void configure(Configuration config) {
-        flinkConfig = config;
-        hadoopConfig = null; // reset the Hadoop Config
-    }
+	public static final String HADOOP_CONF_PREFIX = "hadoop.conf.";
 
-    @Override
-    public FileSystem create(URI fsUri) throws IOException {
-        checkNotNull(fsUri, "fsUri");
+	public static final String HADOOP_CONF_SUFFIX = "path";
 
-        final String scheme = fsUri.getScheme();
-        checkArgument(scheme != null, "file system has null scheme");
+	public static final String DFS_REPLICATION = "dfs.replication";
 
-        // from here on, we need to handle errors due to missing optional
-        // dependency classes
-        try {
-            // -- (1) get the loaded Hadoop config (or fall back to one loaded from the classpath)
+	private static final Pattern hadoopConfPath = Pattern.compile(
+		Pattern.quote(HADOOP_CONF_PREFIX) +
+			// [\S&&[^.]] = intersection of non-whitespace and non-period character classes
+			"([\\S&&[^.]]*)\\." +
+			Pattern.quote(HADOOP_CONF_SUFFIX));
 
-            final org.apache.hadoop.conf.Configuration hadoopConfig;
-            if (this.hadoopConfig != null) {
-                hadoopConfig = this.hadoopConfig;
-            } else if (flinkConfig != null) {
-                hadoopConfig = HadoopUtils.getHadoopConfiguration(flinkConfig);
-                this.hadoopConfig = hadoopConfig;
-            } else {
-                LOG.warn(
-                        "Hadoop configuration has not been explicitly initialized prior to loading a Hadoop file system."
-                                + " Using configuration from the classpath.");
+	@Override
+	public String getScheme() {
+		// the hadoop factory creates various schemes
+		return "*";
+	}
 
-                hadoopConfig = new org.apache.hadoop.conf.Configuration();
-            }
+	@Override
+	public void configure(Configuration config) {
+		flinkConfig = config;
+		hadoopConfig = new HashMap<>(); // reset the Hadoop Config
+	}
 
-            // -- (2) get the Hadoop file system class for that scheme
+	@Override
+	public FileSystem create(URI fsUri) throws IOException {
+		checkNotNull(fsUri, "fsUri");
 
-            final Class<? extends org.apache.hadoop.fs.FileSystem> fsClass;
-            try {
-                fsClass = org.apache.hadoop.fs.FileSystem.getFileSystemClass(scheme, hadoopConfig);
-            } catch (IOException e) {
-                throw new UnsupportedFileSystemSchemeException(
-                        "Hadoop File System abstraction does not support scheme '"
-                                + scheme
-                                + "'. "
-                                + "Either no file system implementation exists for that scheme, "
-                                + "or the relevant classes are missing from the classpath.",
-                        e);
-            }
+		final String scheme = fsUri.getScheme();
+		checkArgument(scheme != null, "file system has null scheme");
 
-            // -- (3) instantiate the Hadoop file system
+		// from here on, we need to handle errors due to missing optional
+		// dependency classes
+		try {
+			// -- (1) get the loaded Hadoop config (or fall back to one loaded from the classpath)
 
-            LOG.debug(
-                    "Instantiating for file system scheme {} Hadoop File System {}",
-                    scheme,
-                    fsClass.getName());
+			final org.apache.hadoop.conf.Configuration hadoopConfig;
+			String hdfsHost = fsUri.getHost();
 
-            final org.apache.hadoop.fs.FileSystem hadoopFs = fsClass.newInstance();
+			if (this.hadoopConfig.get(hdfsHost) != null) {
+				hadoopConfig = this.hadoopConfig.get(hdfsHost);
+			}
+			else if (flinkConfig != null) {
+				Configuration currentFlinkConfig = new Configuration(flinkConfig);
+				for (String key : flinkConfig.keySet()) {
+					if (key.startsWith(HADOOP_CONF_PREFIX)) {
+						Matcher matcher = hadoopConfPath.matcher(key);
+						if (matcher.matches()) {
+							String hdfsHostName = matcher.group(1);
+							if (hdfsHost.equals(hdfsHostName)){
+								String configPath = flinkConfig.getString(key, "/etc/second-hadoop");
+								LOG.info("hdfs {} got configuration path {}",
+									hdfsHost, configPath);
+								currentFlinkConfig.setString("fs.second.hdfs.hadoopconf", configPath);
+								break;
+							}
+						}
+					}
+				}
+				LOG.info("the flink config content are : " + currentFlinkConfig.toString());
+				hadoopConfig = HadoopUtils.getHadoopConfiguration(currentFlinkConfig);
+				if (currentFlinkConfig.containsKey(DFS_REPLICATION)) {
+					hadoopConfig.set("dfs.replication", currentFlinkConfig.getString(DFS_REPLICATION, "2"));
+					LOG.info("set dfs.replication={} successfully",hadoopConfig.get(DFS_REPLICATION,"2"));
+				}
+				this.hadoopConfig.put(hdfsHost, hadoopConfig);
 
-            // -- (4) create the proper URI to initialize the file system
+				// only log when hadoop config was put in cache
+				LOG.info("the hadoop config resources files are : " + hadoopConfig.toString());
+				LOG.info("the hadoop config content are : " + getConfigContent(hadoopConfig));
+			}
+			else {
+				LOG.warn("Hadoop configuration has not been explicitly initialized prior to loading a Hadoop file system."
+						+ " Using configuration from the classpath.");
 
-            final URI initUri;
-            if (fsUri.getAuthority() != null) {
-                initUri = fsUri;
-            } else {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(
-                            "URI {} does not specify file system authority, trying to load default authority (fs.defaultFS)",
-                            fsUri);
-                }
+				hadoopConfig = new org.apache.hadoop.conf.Configuration();
+			}
 
-                String configEntry = hadoopConfig.get("fs.defaultFS", null);
-                if (configEntry == null) {
-                    // fs.default.name deprecated as of hadoop 2.2.0 - see
-                    // http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/DeprecatedProperties.html
-                    configEntry = hadoopConfig.get("fs.default.name", null);
-                }
+			// -- (2) get the Hadoop file system class for that scheme
 
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Hadoop's 'fs.defaultFS' is set to {}", configEntry);
-                }
+			final Class<? extends org.apache.hadoop.fs.FileSystem> fsClass;
+			try {
+				fsClass = org.apache.hadoop.fs.FileSystem.getFileSystemClass(scheme, hadoopConfig);
+			}
+			catch (IOException e) {
+				throw new UnsupportedFileSystemSchemeException(
+						"Hadoop File System abstraction does not support scheme '" + scheme + "'. " +
+								"Either no file system implementation exists for that scheme, " +
+								"or the relevant classes are missing from the classpath.", e);
+			}
 
-                if (configEntry == null) {
-                    throw new IOException(
-                            getMissingAuthorityErrorPrefix(fsUri)
-                                    + "Hadoop configuration did not contain an entry for the default file system ('fs.defaultFS').");
-                } else {
-                    try {
-                        initUri = URI.create(configEntry);
-                    } catch (IllegalArgumentException e) {
-                        throw new IOException(
-                                getMissingAuthorityErrorPrefix(fsUri)
-                                        + "The configuration contains an invalid file system default name "
-                                        + "('fs.default.name' or 'fs.defaultFS'): "
-                                        + configEntry);
-                    }
+			// -- (3) instantiate the Hadoop file system
 
-                    if (initUri.getAuthority() == null) {
-                        throw new IOException(
-                                getMissingAuthorityErrorPrefix(fsUri)
-                                        + "Hadoop configuration for default file system ('fs.default.name' or 'fs.defaultFS') "
-                                        + "contains no valid authority component (like hdfs namenode, S3 host, etc)");
-                    }
-                }
-            }
+			LOG.debug("Instantiating for file system scheme {} Hadoop File System {}", scheme, fsClass.getName());
 
-            // -- (5) configure the Hadoop file system
+			final org.apache.hadoop.fs.FileSystem hadoopFs = fsClass.newInstance();
 
-            try {
-                hadoopFs.initialize(initUri, hadoopConfig);
-            } catch (UnknownHostException e) {
-                String message =
-                        "The Hadoop file system's authority ("
-                                + initUri.getAuthority()
-                                + "), specified by either the file URI or the configuration, cannot be resolved.";
+			// -- (4) create the proper URI to initialize the file system
 
-                throw new IOException(message, e);
-            }
+			final URI initUri;
+			if (fsUri.getAuthority() != null) {
+				initUri = fsUri;
+			}
+			else {
+				LOG.debug("URI {} does not specify file system authority, trying to load default authority (fs.defaultFS)");
 
-            HadoopFileSystem fs = new HadoopFileSystem(hadoopFs);
+				String configEntry = hadoopConfig.get("fs.defaultFS", null);
+				if (configEntry == null) {
+					// fs.default.name deprecated as of hadoop 2.2.0 - see
+					// http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/DeprecatedProperties.html
+					configEntry = hadoopConfig.get("fs.default.name", null);
+				}
 
-            // create the Flink file system, optionally limiting the open connections
-            if (flinkConfig != null) {
-                return limitIfConfigured(fs, scheme, flinkConfig);
-            } else {
-                return fs;
-            }
-        } catch (ReflectiveOperationException | LinkageError e) {
-            throw new UnsupportedFileSystemSchemeException(
-                    "Cannot support file system for '"
-                            + fsUri.getScheme()
-                            + "' via Hadoop, because Hadoop is not in the classpath, or some classes "
-                            + "are missing from the classpath.",
-                    e);
-        } catch (IOException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IOException("Cannot instantiate file system for URI: " + fsUri, e);
-        }
-    }
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("Hadoop's 'fs.defaultFS' is set to {}", configEntry);
+				}
 
-    private static String getMissingAuthorityErrorPrefix(URI fsURI) {
-        return "The given file system URI ("
-                + fsURI.toString()
-                + ") did not describe the authority "
-                + "(like for example HDFS NameNode address/port or S3 host). "
-                + "The attempt to use a configured default authority failed: ";
-    }
+				if (configEntry == null) {
+					throw new IOException(getMissingAuthorityErrorPrefix(fsUri) +
+							"Hadoop configuration did not contain an entry for the default file system ('fs.defaultFS').");
+				}
+				else {
+					try {
+						initUri = URI.create(configEntry);
+					}
+					catch (IllegalArgumentException e) {
+						throw new IOException(getMissingAuthorityErrorPrefix(fsUri) +
+								"The configuration contains an invalid file system default name " +
+								"('fs.default.name' or 'fs.defaultFS'): " + configEntry);
+					}
 
-    private static FileSystem limitIfConfigured(
-            HadoopFileSystem fs, String scheme, Configuration config) {
-        final ConnectionLimitingSettings limitSettings =
-                ConnectionLimitingSettings.fromConfig(config, scheme);
+					if (initUri.getAuthority() == null) {
+						throw new IOException(getMissingAuthorityErrorPrefix(fsUri) +
+								"Hadoop configuration for default file system ('fs.default.name' or 'fs.defaultFS') " +
+								"contains no valid authority component (like hdfs namenode, S3 host, etc)");
+					}
+				}
+			}
 
-        // decorate only if any limit is configured
-        if (limitSettings == null) {
-            // no limit configured
-            return fs;
-        } else {
-            return new LimitedConnectionsFileSystem(
-                    fs,
-                    limitSettings.limitTotal,
-                    limitSettings.limitOutput,
-                    limitSettings.limitInput,
-                    limitSettings.streamOpenTimeout,
-                    limitSettings.streamInactivityTimeout);
-        }
-    }
+			// -- (5) configure the Hadoop file system
+
+			try {
+				hadoopFs.initialize(initUri, hadoopConfig);
+			}
+			catch (UnknownHostException e) {
+				String message = "The Hadoop file system's authority (" + initUri.getAuthority() +
+						"), specified by either the file URI or the configuration, cannot be resolved.";
+
+				throw new IOException(message, e);
+			}
+
+			HadoopFileSystem fs = new HadoopFileSystem(hadoopFs);
+
+			// create the Flink file system, optionally limiting the open connections
+			if (flinkConfig != null) {
+				return limitIfConfigured(fs, scheme, flinkConfig);
+			}
+			else {
+				return fs;
+			}
+		}
+		catch (ReflectiveOperationException | LinkageError e) {
+			throw new UnsupportedFileSystemSchemeException("Cannot support file system for '" + fsUri.getScheme() +
+					"' via Hadoop, because Hadoop is not in the classpath, or some classes " +
+					"are missing from the classpath.", e);
+		}
+		catch (IOException e) {
+			throw e;
+		}
+		catch (Exception e) {
+			throw new IOException("Cannot instantiate file system for URI: " + fsUri, e);
+		}
+	}
+
+	public static String getConfigContent(org.apache.hadoop.conf.Configuration configuration) {
+		Iterator<Map.Entry<String, String>> iterator = configuration.iterator();
+		StringBuilder stringBuilder = new StringBuilder("Config : \n");
+		while (iterator.hasNext()) {
+			Map.Entry<String, String> entry = iterator.next();
+			stringBuilder.append(String.format("%s : %s \n", entry.getKey(), entry.getValue()));
+		}
+		return stringBuilder.toString();
+	}
+
+	private static String getMissingAuthorityErrorPrefix(URI fsURI) {
+		return "The given file system URI (" + fsURI.toString() + ") did not describe the authority " +
+				"(like for example HDFS NameNode address/port or S3 host). " +
+				"The attempt to use a configured default authority failed: ";
+	}
+
+	private static FileSystem limitIfConfigured(HadoopFileSystem fs, String scheme, Configuration config) {
+		final ConnectionLimitingSettings limitSettings = ConnectionLimitingSettings.fromConfig(config, scheme);
+
+		// decorate only if any limit is configured
+		if (limitSettings == null) {
+			// no limit configured
+			return fs;
+		}
+		else {
+			return new LimitedConnectionsFileSystem(
+					fs,
+					limitSettings.limitTotal,
+					limitSettings.limitOutput,
+					limitSettings.limitInput,
+					limitSettings.streamOpenTimeout,
+					limitSettings.streamInactivityTimeout);
+		}
+	}
 }

@@ -20,11 +20,19 @@ package org.apache.flink.formats.protobuf.deserialize;
 
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.formats.protobuf.PbCodegenException;
 import org.apache.flink.formats.protobuf.PbFormatConfig;
-import org.apache.flink.formats.protobuf.util.PbFormatUtils;
-import org.apache.flink.formats.protobuf.util.PbSchemaValidationUtils;
+import org.apache.flink.formats.protobuf.PbFormatUtils;
+import org.apache.flink.formats.protobuf.PbSchemaValidator;
+import org.apache.flink.formats.protobuf.metrics.PbMetricsWrapper;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.QueryServiceMode;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.util.FlinkRuntimeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -40,12 +48,27 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * <p>Failures during deserialization are forwarded as wrapped IOExceptions.
  */
 public class PbRowDataDeserializationSchema implements DeserializationSchema<RowData> {
+
     private static final long serialVersionUID = 1L;
+
+	private static final Logger LOG = LoggerFactory.getLogger(PbRowDataDeserializationSchema.class);
 
     private final RowType rowType;
     private final TypeInformation<RowData> resultTypeInfo;
+
     private final PbFormatConfig formatConfig;
+
     private transient ProtoToRowConverter protoToRowConverter;
+
+	private RowData defaultRowData;
+
+	private static final String PB_METRICS = "PbMetrics";
+
+	private static final String DIRTY_DATA = "dirtyData";
+
+	private static final String DEFAULT_VALUE = "defaultValue";
+
+	private PbMetricsWrapper pbMetricsWrapper;
 
     public PbRowDataDeserializationSchema(
             RowType rowType, TypeInformation<RowData> resultTypeInfo, PbFormatConfig formatConfig) {
@@ -54,23 +77,42 @@ public class PbRowDataDeserializationSchema implements DeserializationSchema<Row
         this.resultTypeInfo = resultTypeInfo;
         this.formatConfig = formatConfig;
         // do it in client side to report error in the first place
-        PbSchemaValidationUtils.validate(
-                PbFormatUtils.getDescriptor(formatConfig.getMessageClassName()), rowType);
+        new PbSchemaValidator(
+                        PbFormatUtils.getDescriptor(formatConfig.getMessageClassName()), rowType)
+                .validate();
         // this step is only used to validate codegen in client side in the first place
+        try {
+            // validate converter in client side to early detect errors
+            protoToRowConverter = new ProtoToRowConverter(rowType, formatConfig);
+        } catch (PbCodegenException e) {
+            throw new FlinkRuntimeException(e);
+        }
     }
 
     @Override
     public void open(InitializationContext context) throws Exception {
         protoToRowConverter = new ProtoToRowConverter(rowType, formatConfig);
-    }
+		this.defaultRowData = protoToRowConverter.convertDefaultRow();
+		MetricGroup metricGroup = context.getMetricGroup().addGroup(PB_METRICS, "", QueryServiceMode.DISABLED);
+		pbMetricsWrapper = new PbMetricsWrapper()
+			.setDirtyData(metricGroup.counter(DIRTY_DATA))
+			.setDefaultValue(metricGroup.counter(DEFAULT_VALUE));
+
+	}
 
     @Override
     public RowData deserialize(byte[] message) throws IOException {
         try {
-            return protoToRowConverter.convertProtoBinaryToRow(message);
+			RowData rowData = protoToRowConverter.convertProtoBinaryToRow(message);
+			return rowData;
         } catch (Throwable t) {
             if (formatConfig.isIgnoreParseErrors()) {
-                return null;
+				if (formatConfig.isAddDefaultValue()) {
+					pbMetricsWrapper.defaultValue();
+					return defaultRowData;
+				}
+				pbMetricsWrapper.dirtyData();
+				return null;
             }
             throw new IOException("Failed to deserialize PB object.", t);
         }

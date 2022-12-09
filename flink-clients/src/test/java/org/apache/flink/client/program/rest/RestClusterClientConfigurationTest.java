@@ -20,30 +20,33 @@ package org.apache.flink.client.program.rest;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.RestOptions;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
-/** Tests for {@link RestClusterClientConfiguration}. */
-class RestClusterClientConfigurationTest {
+/**
+ * Tests for {@link RestClusterClientConfiguration}.
+ */
+public class RestClusterClientConfigurationTest extends TestLogger {
 
-    private RestClusterClientConfiguration restClusterClientConfiguration;
+	private RestClusterClientConfiguration restClusterClientConfiguration;
 
-    @BeforeEach
-    void setUp() throws Exception {
-        final Configuration config = new Configuration();
-        config.setLong(RestOptions.AWAIT_LEADER_TIMEOUT, 1);
-        config.setInteger(RestOptions.RETRY_MAX_ATTEMPTS, 2);
-        config.setLong(RestOptions.RETRY_DELAY, 3);
-        restClusterClientConfiguration = RestClusterClientConfiguration.fromConfiguration(config);
-    }
+	@Before
+	public void setUp() throws Exception {
+		final Configuration config = new Configuration();
+		config.setLong(RestOptions.AWAIT_LEADER_TIMEOUT, 1);
+		config.setInteger(RestOptions.RETRY_MAX_ATTEMPTS, 2);
+		config.setLong(RestOptions.RETRY_DELAY, 3);
+		restClusterClientConfiguration = RestClusterClientConfiguration.fromConfiguration(config);
+	}
 
-    @Test
-    void testConfiguration() {
-        assertThat(restClusterClientConfiguration.getAwaitLeaderTimeout()).isEqualTo(1);
-        assertThat(restClusterClientConfiguration.getRetryMaxAttempts()).isEqualTo(2);
-        assertThat(restClusterClientConfiguration.getRetryDelay()).isEqualTo(3);
-    }
+	@Test
+	public void testConfiguration() {
+		assertEquals(1, restClusterClientConfiguration.getAwaitLeaderTimeout());
+		assertEquals(2, restClusterClientConfiguration.getRetryMaxAttempts());
+		assertEquals(3, restClusterClientConfiguration.getRetryDelay());
+	}
 }

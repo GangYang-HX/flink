@@ -20,7 +20,6 @@ set -o pipefail
 
 source "$(dirname "$0")"/common.sh
 source "$(dirname "$0")"/common_docker.sh
-source "$(dirname "$0")"/common_artifact_download_cacher.sh
 
 FLINK_TARBALL_DIR=$TEST_DATA_DIR
 FLINK_TARBALL=flink.tar.gz
@@ -66,7 +65,7 @@ function start_hadoop_cluster() {
     done
 
     # perform health checks
-    containers_health_check "master" "worker1" "worker2" "kdc"
+    containers_health_check "master" "slave1" "slave2" "kdc"
 
     # try and see if NodeManagers are up, otherwise the Flink job will not have enough resources
     # to run
@@ -94,12 +93,8 @@ function start_hadoop_cluster() {
 }
 
 function build_image() {
-    echo "Predownloading Hadoop tarball"
-    cache_path=$(get_artifact "http://archive.apache.org/dist/hadoop/common/hadoop-2.8.5/hadoop-2.8.5.tar.gz")
-    ln "$cache_path" "$END_TO_END_DIR/test-scripts/docker-hadoop-secure-cluster/hadoop-2.8.5.tar.gz"
-
     echo "Building Hadoop Docker container"
-    docker build --build-arg HADOOP_VERSION=2.8.5 \
+    docker build --build-arg HADOOP_VERSION=2.8.4 \
         -f $END_TO_END_DIR/test-scripts/docker-hadoop-secure-cluster/Dockerfile \
         -t flink/docker-hadoop-secure-cluster:latest \
         $END_TO_END_DIR/test-scripts/docker-hadoop-secure-cluster/
@@ -138,51 +133,32 @@ END
 
 function debug_copy_and_show_logs {
     echo "Debugging failed YARN Docker test:"
-    echo -e "\nCurrently running containers"
+    echo "Currently running containers"
     docker ps
 
-    echo -e "\n\nCurrently running JVMs"
+    echo "Currently running JVMs"
     jps -v
 
-    local log_directory="$TEST_DATA_DIR/logs"
-    local yarn_docker_containers="master $(docker ps --format '{{.Names}}' | grep worker)"
+    echo "Hadoop logs:"
+    mkdir -p $TEST_DATA_DIR/logs
+    docker cp master:/var/log/hadoop/ $TEST_DATA_DIR/logs/
+    ls -lisah $TEST_DATA_DIR/logs/hadoop
+    for f in $TEST_DATA_DIR/logs/hadoop/*; do
+        echo "$f:"
+        cat $f
+    done
 
-    extract_hadoop_logs ${log_directory} ${yarn_docker_containers}
-    print_logs ${log_directory}
+    echo "Docker logs:"
+    docker logs master
 
-    echo -e "\n\n ==== Flink logs ===="
+    echo "Flink logs:"
     docker exec master bash -c "kinit -kt /home/hadoop-user/hadoop-user.keytab hadoop-user"
     docker exec master bash -c "yarn application -list -appStates ALL"
-    application_id=`docker exec master bash -c "yarn application -list -appStates ALL" | grep -i "Flink" | grep -i "cluster" | awk '{print \$1}'`
+    application_id=`docker exec master bash -c "yarn application -list -appStates ALL" | grep "Flink" | grep "cluster" | awk '{print \$1}'`
 
-    echo -e "\n\nApplication ID: '$application_id'"
+    echo "Application ID: $application_id"
     docker exec master bash -c "yarn logs -applicationId $application_id"
-
     docker exec master bash -c "kdestroy"
-}
-
-function extract_hadoop_logs() {
-    local parent_folder="$1"
-    shift
-    docker_container_aliases="$@"
-
-    for docker_container_alias in $(echo ${docker_container_aliases}); do
-        local target_container_log_folder="${parent_folder}/${docker_container_alias}"
-        echo "Extracting ${docker_container_alias} Hadoop logs into ${target_container_log_folder}"
-        mkdir -p "${target_container_log_folder}"
-        docker cp "${docker_container_alias}:/var/log/hadoop/" "${target_container_log_folder}"
-
-        local target_container_docker_log_file="${target_container_log_folder}/docker-${docker_container_alias}.log"
-        echo "Extracting ${docker_container_alias} Docker logs into ${target_container_docker_log_file}"
-        docker logs "${docker_container_alias}" > "${target_container_docker_log_file}"
-    done
-}
-
-function print_logs() {
-    local parent_folder="$1"
-
-    ls -lisahR "${parent_folder}"
-    find "${parent_folder}" -type f -exec echo -e "\n\nContent of {}:" \; -exec cat {} \;
 }
 
 # expects only one application to be running and waits until this one is in
@@ -197,7 +173,7 @@ function wait_for_single_yarn_application {
 
     echo "Application ID: $application_id"
 
-    # wait for the application to finish successfully
+    # wait for the application to finish succesfully
     start_time=$(date +%s)
     application_state="UNDEFINED"
     while [[ $application_state != "FINISHED" ]]; do

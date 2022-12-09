@@ -24,15 +24,16 @@ import org.apache.flink.util.Disposable;
 import java.io.Closeable;
 
 /**
- * Interface that combines both, the user facing {@link OperatorStateStore} interface and the system
- * interface {@link Snapshotable}
+ * Interface that combines both, the user facing {@link OperatorStateStore} interface and the system interface
+ * {@link SnapshotStrategy}
+ *
  */
-public interface OperatorStateBackend
-        extends OperatorStateStore,
-                Snapshotable<SnapshotResult<OperatorStateHandle>>,
-                Closeable,
-                Disposable {
+public interface OperatorStateBackend extends
+	OperatorStateStore,
+	SnapshotStrategy<SnapshotResult<OperatorStateHandle>>,
+	Closeable,
+	Disposable {
 
-    @Override
-    void dispose();
+	@Override
+	void dispose();
 }

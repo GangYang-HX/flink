@@ -17,9 +17,13 @@
  */
 package org.apache.flink.runtime.clusterframework.types;
 
-/** An interface to retrieve the ResourceID of an object. */
+/**
+ * An interface to retrieve the ResourceID of an object.
+ */
 public interface ResourceIDRetrievable {
 
-    /** Gets the ResourceID of the object. */
-    ResourceID getResourceID();
+	/**
+	 * Gets the ResourceID of the object.
+	 */
+	ResourceID getResourceID();
 }

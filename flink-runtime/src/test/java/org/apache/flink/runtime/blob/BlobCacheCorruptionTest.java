@@ -19,14 +19,16 @@
 package org.apache.flink.runtime.blob;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.configuration.BlobServerOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.HighAvailabilityOptions;
-import org.apache.flink.core.testutils.FlinkAssertions;
 import org.apache.flink.util.TestLogger;
 
 import org.apache.commons.io.FileUtils;
-import org.junit.ClassRule;
+import org.hamcrest.CoreMatchers;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 
 import javax.annotation.Nullable;
@@ -42,7 +44,9 @@ import static org.apache.flink.runtime.blob.BlobKey.BlobType.PERMANENT_BLOB;
 import static org.apache.flink.runtime.blob.BlobKey.BlobType.TRANSIENT_BLOB;
 import static org.apache.flink.runtime.blob.BlobServerGetTest.get;
 import static org.apache.flink.runtime.blob.BlobServerPutTest.put;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -53,157 +57,163 @@ import static org.junit.Assert.assertTrue;
  */
 public class BlobCacheCorruptionTest extends TestLogger {
 
-    @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
+	@Rule
+	public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-    @Test
-    public void testGetFailsFromCorruptFile1() throws IOException {
-        testGetFailsFromCorruptFile(null, TRANSIENT_BLOB, false);
-    }
+	@Rule
+	public final ExpectedException exception = ExpectedException.none();
 
-    @Test
-    public void testGetFailsFromCorruptFile2() throws IOException {
-        testGetFailsFromCorruptFile(new JobID(), TRANSIENT_BLOB, false);
-    }
+	@Test
+	public void testGetFailsFromCorruptFile1() throws IOException {
+		testGetFailsFromCorruptFile(null, TRANSIENT_BLOB, false);
+	}
 
-    @Test
-    public void testGetFailsFromCorruptFile3() throws IOException {
-        testGetFailsFromCorruptFile(new JobID(), PERMANENT_BLOB, false);
-    }
+	@Test
+	public void testGetFailsFromCorruptFile2() throws IOException {
+		testGetFailsFromCorruptFile(new JobID(), TRANSIENT_BLOB, false);
+	}
 
-    @Test
-    public void testGetFailsFromCorruptFile4() throws IOException {
-        testGetFailsFromCorruptFile(new JobID(), PERMANENT_BLOB, true);
-    }
+	@Test
+	public void testGetFailsFromCorruptFile3() throws IOException {
+		testGetFailsFromCorruptFile(new JobID(), PERMANENT_BLOB, false);
+	}
 
-    /**
-     * Checks the GET operation fails when the downloaded file (from {@link BlobServer} or HA store)
-     * is corrupt, i.e. its content's hash does not match the {@link BlobKey}'s hash.
-     *
-     * @param jobId job ID or <tt>null</tt> if job-unrelated
-     * @param blobType whether the BLOB should become permanent or transient
-     * @param corruptOnHAStore whether the file should be corrupt in the HA store (<tt>true</tt>,
-     *     required <tt>highAvailability</tt> to be set) or on the {@link BlobServer}'s local store
-     *     (<tt>false</tt>)
-     */
-    private void testGetFailsFromCorruptFile(
-            final JobID jobId, BlobKey.BlobType blobType, boolean corruptOnHAStore)
-            throws IOException {
+	@Test
+	public void testGetFailsFromCorruptFile4() throws IOException {
+		testGetFailsFromCorruptFile(new JobID(), PERMANENT_BLOB, true);
+	}
 
-        final Configuration config = new Configuration();
-        config.setString(HighAvailabilityOptions.HA_MODE, "ZOOKEEPER");
-        config.setString(
-                HighAvailabilityOptions.HA_STORAGE_PATH, TEMPORARY_FOLDER.newFolder().getPath());
+	/**
+	 * Checks the GET operation fails when the downloaded file (from {@link BlobServer} or HA store)
+	 * is corrupt, i.e. its content's hash does not match the {@link BlobKey}'s hash.
+	 *
+	 * @param jobId
+	 * 		job ID or <tt>null</tt> if job-unrelated
+	 * @param blobType
+	 * 		whether the BLOB should become permanent or transient
+	 * @param corruptOnHAStore
+	 * 		whether the file should be corrupt in the HA store (<tt>true</tt>, required
+	 * 		<tt>highAvailability</tt> to be set) or on the {@link BlobServer}'s local store
+	 * 		(<tt>false</tt>)
+	 */
+	private void testGetFailsFromCorruptFile(final JobID jobId, BlobKey.BlobType blobType,
+			boolean corruptOnHAStore) throws IOException {
 
-        BlobStoreService blobStoreService = null;
+		final Configuration config = new Configuration();
+		config.setString(HighAvailabilityOptions.HA_MODE, "ZOOKEEPER");
+		config.setString(BlobServerOptions.STORAGE_DIRECTORY, temporaryFolder.newFolder().getAbsolutePath());
+		config.setString(HighAvailabilityOptions.HA_STORAGE_PATH, temporaryFolder.newFolder().getPath());
 
-        try {
-            blobStoreService = BlobUtils.createBlobStoreFromConfig(config);
+		BlobStoreService blobStoreService = null;
 
-            testGetFailsFromCorruptFile(
-                    jobId,
-                    blobType,
-                    corruptOnHAStore,
-                    config,
-                    blobStoreService,
-                    TEMPORARY_FOLDER.newFolder());
-        } finally {
-            if (blobStoreService != null) {
-                blobStoreService.closeAndCleanupAllData();
-            }
-        }
-    }
+		try {
+			blobStoreService = BlobUtils.createBlobStoreFromConfig(config);
 
-    /**
-     * Checks the GET operation fails when the downloaded file (from HA store) is corrupt, i.e. its
-     * content's hash does not match the {@link BlobKey}'s hash, using a permanent BLOB.
-     *
-     * @param jobId job ID
-     * @param config blob server configuration (including HA settings like {@link
-     *     HighAvailabilityOptions#HA_STORAGE_PATH} and {@link
-     *     HighAvailabilityOptions#HA_CLUSTER_ID}) used to set up <tt>blobStore</tt>
-     * @param blobStore shared HA blob store to use
-     */
-    public static void testGetFailsFromCorruptFile(
-            JobID jobId, Configuration config, BlobStore blobStore, File blobStorage)
-            throws IOException {
+			testGetFailsFromCorruptFile(jobId, blobType, corruptOnHAStore, config,
+				blobStoreService, exception);
+		} finally {
+			if (blobStoreService != null) {
+				blobStoreService.closeAndCleanupAllData();
+			}
+		}
+	}
 
-        testGetFailsFromCorruptFile(jobId, PERMANENT_BLOB, true, config, blobStore, blobStorage);
-    }
+	/**
+	 * Checks the GET operation fails when the downloaded file (from HA store)
+	 * is corrupt, i.e. its content's hash does not match the {@link BlobKey}'s hash, using a
+	 * permanent BLOB.
+	 *
+	 * @param jobId
+	 * 		job ID
+	 * @param config
+	 * 		blob server configuration (including HA settings like {@link HighAvailabilityOptions#HA_STORAGE_PATH}
+	 * 		and {@link HighAvailabilityOptions#HA_CLUSTER_ID}) used to set up <tt>blobStore</tt>
+	 * @param blobStore
+	 * 		shared HA blob store to use
+	 * @param expectedException
+	 * 		expected exception rule to use
+	 */
+	public static void testGetFailsFromCorruptFile(
+			JobID jobId, Configuration config, BlobStore blobStore,
+			ExpectedException expectedException) throws IOException {
 
-    /**
-     * Checks the GET operation fails when the downloaded file (from {@link BlobServer} or HA store)
-     * is corrupt, i.e. its content's hash does not match the {@link BlobKey}'s hash.
-     *
-     * @param jobId job ID or <tt>null</tt> if job-unrelated
-     * @param blobType whether the BLOB should become permanent or transient
-     * @param corruptOnHAStore whether the file should be corrupt in the HA store (<tt>true</tt>,
-     *     required <tt>highAvailability</tt> to be set) or on the {@link BlobServer}'s local store
-     *     (<tt>false</tt>)
-     * @param config blob server configuration (including HA settings like {@link
-     *     HighAvailabilityOptions#HA_STORAGE_PATH} and {@link
-     *     HighAvailabilityOptions#HA_CLUSTER_ID}) used to set up <tt>blobStore</tt>
-     * @param blobStore shared HA blob store to use
-     */
-    private static void testGetFailsFromCorruptFile(
-            @Nullable JobID jobId,
-            BlobKey.BlobType blobType,
-            boolean corruptOnHAStore,
-            Configuration config,
-            BlobStore blobStore,
-            File blobStorage)
-            throws IOException {
+		testGetFailsFromCorruptFile(jobId, PERMANENT_BLOB, true, config, blobStore,
+			expectedException);
+	}
 
-        assertTrue(
-                "corrupt HA file requires a HA setup",
-                !corruptOnHAStore || blobType == PERMANENT_BLOB);
+	/**
+	 * Checks the GET operation fails when the downloaded file (from {@link BlobServer} or HA store)
+	 * is corrupt, i.e. its content's hash does not match the {@link BlobKey}'s hash.
+	 *
+	 * @param jobId
+	 * 		job ID or <tt>null</tt> if job-unrelated
+	 * @param blobType
+	 * 		whether the BLOB should become permanent or transient
+	 * @param corruptOnHAStore
+	 * 		whether the file should be corrupt in the HA store (<tt>true</tt>, required
+	 * 		<tt>highAvailability</tt> to be set) or on the {@link BlobServer}'s local store
+	 * 		(<tt>false</tt>)
+	 * @param config
+	 * 		blob server configuration (including HA settings like {@link HighAvailabilityOptions#HA_STORAGE_PATH}
+	 * 		and {@link HighAvailabilityOptions#HA_CLUSTER_ID}) used to set up <tt>blobStore</tt>
+	 * @param blobStore
+	 * 		shared HA blob store to use
+	 * @param expectedException
+	 * 		expected exception rule to use
+	 */
+	private static void testGetFailsFromCorruptFile(
+			@Nullable JobID jobId, BlobKey.BlobType blobType, boolean corruptOnHAStore,
+			Configuration config, BlobStore blobStore, ExpectedException expectedException)
+			throws IOException {
 
-        Random rnd = new Random();
+		assertTrue("corrupt HA file requires a HA setup",
+			!corruptOnHAStore || blobType == PERMANENT_BLOB);
 
-        try (BlobServer server =
-                        new BlobServer(config, new File(blobStorage, "server"), blobStore);
-                BlobCacheService cache =
-                        new BlobCacheService(
-                                config,
-                                new File(blobStorage, "cache"),
-                                corruptOnHAStore ? blobStore : new VoidBlobStore(),
-                                new InetSocketAddress("localhost", server.getPort()))) {
+		Random rnd = new Random();
 
-            server.start();
+		try (
+			BlobServer server = new BlobServer(config, blobStore);
+			BlobCacheService cache = new BlobCacheService(config, corruptOnHAStore ? blobStore : new VoidBlobStore(), new InetSocketAddress("localhost", server.getPort())
+			)) {
 
-            byte[] data = new byte[2000000];
-            rnd.nextBytes(data);
+			server.start();
 
-            // put content addressable (like libraries)
-            BlobKey key = put(server, jobId, data, blobType);
-            assertNotNull(key);
+			byte[] data = new byte[2000000];
+			rnd.nextBytes(data);
 
-            // change server/HA store file contents to make sure that GET requests fail
-            byte[] data2 = Arrays.copyOf(data, data.length);
-            data2[0] ^= 1;
-            if (corruptOnHAStore) {
-                File tmpFile = Files.createTempFile("blob", ".jar").toFile();
-                try {
-                    FileUtils.writeByteArrayToFile(tmpFile, data2);
-                    blobStore.put(tmpFile, jobId, key);
-                } finally {
-                    //noinspection ResultOfMethodCallIgnored
-                    tmpFile.delete();
-                }
+			// put content addressable (like libraries)
+			BlobKey key = put(server, jobId, data, blobType);
+			assertNotNull(key);
 
-                // delete local (correct) file on server to make sure that the GET request does not
-                // fall back to downloading the file from the BlobServer's local store
-                File blobFile = server.getStorageLocation(jobId, key);
-                assertTrue(blobFile.delete());
-            } else {
-                File blobFile = server.getStorageLocation(jobId, key);
-                assertTrue(blobFile.exists());
-                FileUtils.writeByteArrayToFile(blobFile, data2);
-            }
+			// change server/HA store file contents to make sure that GET requests fail
+			byte[] data2 = Arrays.copyOf(data, data.length);
+			data2[0] ^= 1;
+			if (corruptOnHAStore) {
+				File tmpFile = Files.createTempFile("blob", ".jar").toFile();
+				try {
+					FileUtils.writeByteArrayToFile(tmpFile, data2);
+					blobStore.put(tmpFile, jobId, key);
+				} finally {
+					//noinspection ResultOfMethodCallIgnored
+					tmpFile.delete();
+				}
 
-            // issue a GET request that fails
-            assertThatThrownBy(() -> get(cache, jobId, key))
-                    .satisfies(
-                            FlinkAssertions.anyCauseMatches(IOException.class, "data corruption"));
-        }
-    }
+				// delete local (correct) file on server to make sure that the GET request does not
+				// fall back to downloading the file from the BlobServer's local store
+				File blobFile = server.getStorageLocation(jobId, key);
+				assertTrue(blobFile.delete());
+			} else {
+				File blobFile = server.getStorageLocation(jobId, key);
+				assertTrue(blobFile.exists());
+				FileUtils.writeByteArrayToFile(blobFile, data2);
+			}
+
+			// issue a GET request that fails
+			expectedException.expect(IOException.class);
+			expectedException.expectCause(CoreMatchers.allOf(instanceOf(IOException.class),
+				hasProperty("message", containsString("data corruption"))));
+
+			get(cache, jobId, key);
+		}
+	}
 }

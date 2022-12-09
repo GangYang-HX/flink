@@ -24,10 +24,14 @@ import com.google.pubsub.v1.ReceivedMessage;
 
 import java.util.List;
 
-/** Used by {@link PubSubSource} to pull and acknowledge messages. */
+/**
+ * Used by {@link PubSubSource} to pull and acknowledge messages.
+ */
 public interface PubSubSubscriber extends Acknowledger<String> {
-    List<ReceivedMessage> pull();
+	List<ReceivedMessage> pull();
 
-    /** After returning all resources should have been cleaned up. */
-    void close() throws Exception;
+	/**
+	 * After returning all resources should have been cleaned up.
+	 */
+	void close() throws Exception;
 }

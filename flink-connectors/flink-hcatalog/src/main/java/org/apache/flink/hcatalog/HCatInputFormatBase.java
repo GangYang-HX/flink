@@ -57,355 +57,347 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A InputFormat to read from HCatalog tables. The InputFormat supports projection (selection and
- * order of fields) and partition filters.
+ * A InputFormat to read from HCatalog tables.
+ * The InputFormat supports projection (selection and order of fields) and partition filters.
  *
- * <p>Data can be returned as {@link org.apache.hive.hcatalog.data.HCatRecord} or Flink-native
- * tuple.
+ * <p>Data can be returned as {@link org.apache.hive.hcatalog.data.HCatRecord} or Flink-native tuple.
  *
  * <p>Note: Flink tuples might only support a limited number of fields (depending on the API).
  *
  * @param <T>
  */
-public abstract class HCatInputFormatBase<T> extends RichInputFormat<T, HadoopInputSplit>
-        implements ResultTypeQueryable<T> {
+public abstract class HCatInputFormatBase<T> extends RichInputFormat<T, HadoopInputSplit> implements ResultTypeQueryable<T> {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private Configuration configuration;
+	private Configuration configuration;
 
-    private org.apache.hive.hcatalog.mapreduce.HCatInputFormat hCatInputFormat;
-    private RecordReader<WritableComparable, HCatRecord> recordReader;
-    private boolean fetched = false;
-    private boolean hasNext;
+	private org.apache.hive.hcatalog.mapreduce.HCatInputFormat hCatInputFormat;
+	private RecordReader<WritableComparable, HCatRecord> recordReader;
+	private boolean fetched = false;
+	private boolean hasNext;
 
-    protected String[] fieldNames = new String[0];
-    protected HCatSchema outputSchema;
+	protected String[] fieldNames = new String[0];
+	protected HCatSchema outputSchema;
 
-    private TypeInformation<T> resultType;
+	private TypeInformation<T> resultType;
 
-    public HCatInputFormatBase() {}
+	public HCatInputFormatBase() { }
 
-    /**
-     * Creates a HCatInputFormat for the given database and table. By default, the InputFormat
-     * returns {@link org.apache.hive.hcatalog.data.HCatRecord}. The return type of the InputFormat
-     * can be changed to Flink-native tuples by calling {@link HCatInputFormatBase#asFlinkTuples()}.
-     *
-     * @param database The name of the database to read from.
-     * @param table The name of the table to read.
-     * @throws java.io.IOException
-     */
-    public HCatInputFormatBase(String database, String table) throws IOException {
-        this(database, table, new Configuration());
-    }
+	/**
+	 * Creates a HCatInputFormat for the given database and table.
+	 * By default, the InputFormat returns {@link org.apache.hive.hcatalog.data.HCatRecord}.
+	 * The return type of the InputFormat can be changed to Flink-native tuples by calling
+	 * {@link HCatInputFormatBase#asFlinkTuples()}.
+	 *
+	 * @param database The name of the database to read from.
+	 * @param table The name of the table to read.
+	 * @throws java.io.IOException
+	 */
+	public HCatInputFormatBase(String database, String table) throws IOException {
+		this(database, table, new Configuration());
+	}
 
-    /**
-     * Creates a HCatInputFormat for the given database, table, and {@link
-     * org.apache.hadoop.conf.Configuration}. By default, the InputFormat returns {@link
-     * org.apache.hive.hcatalog.data.HCatRecord}. The return type of the InputFormat can be changed
-     * to Flink-native tuples by calling {@link HCatInputFormatBase#asFlinkTuples()}.
-     *
-     * @param database The name of the database to read from.
-     * @param table The name of the table to read.
-     * @param config The Configuration for the InputFormat.
-     * @throws java.io.IOException
-     */
-    public HCatInputFormatBase(String database, String table, Configuration config)
-            throws IOException {
-        super();
-        this.configuration = config;
-        HadoopUtils.mergeHadoopConf(this.configuration);
+	/**
+	 * Creates a HCatInputFormat for the given database, table, and
+	 * {@link org.apache.hadoop.conf.Configuration}.
+	 * By default, the InputFormat returns {@link org.apache.hive.hcatalog.data.HCatRecord}.
+	 * The return type of the InputFormat can be changed to Flink-native tuples by calling
+	 * {@link HCatInputFormatBase#asFlinkTuples()}.
+	 *
+	 * @param database The name of the database to read from.
+	 * @param table The name of the table to read.
+	 * @param config The Configuration for the InputFormat.
+	 * @throws java.io.IOException
+	 */
+	public HCatInputFormatBase(String database, String table, Configuration config) throws IOException {
+		super();
+		this.configuration = config;
+		HadoopUtils.mergeHadoopConf(this.configuration);
 
-        this.hCatInputFormat =
-                org.apache.hive.hcatalog.mapreduce.HCatInputFormat.setInput(
-                        this.configuration, database, table);
-        this.outputSchema =
-                org.apache.hive.hcatalog.mapreduce.HCatInputFormat.getTableSchema(
-                        this.configuration);
+		this.hCatInputFormat = org.apache.hive.hcatalog.mapreduce.HCatInputFormat.setInput(this.configuration, database, table);
+		this.outputSchema = org.apache.hive.hcatalog.mapreduce.HCatInputFormat.getTableSchema(this.configuration);
 
-        // configure output schema of HCatFormat
-        configuration.set("mapreduce.lib.hcat.output.schema", HCatUtil.serialize(outputSchema));
-        // set type information
-        this.resultType = new WritableTypeInfo(DefaultHCatRecord.class);
-    }
+		// configure output schema of HCatFormat
+		configuration.set("mapreduce.lib.hcat.output.schema", HCatUtil.serialize(outputSchema));
+		// set type information
+		this.resultType = new WritableTypeInfo(DefaultHCatRecord.class);
+	}
 
-    /**
-     * Specifies the fields which are returned by the InputFormat and their order.
-     *
-     * @param fields The fields and their order which are returned by the InputFormat.
-     * @return This InputFormat with specified return fields.
-     * @throws java.io.IOException
-     */
-    public HCatInputFormatBase<T> getFields(String... fields) throws IOException {
+	/**
+	 * Specifies the fields which are returned by the InputFormat and their order.
+	 *
+	 * @param fields The fields and their order which are returned by the InputFormat.
+	 * @return This InputFormat with specified return fields.
+	 * @throws java.io.IOException
+	 */
+	public HCatInputFormatBase<T> getFields(String... fields) throws IOException {
 
-        // build output schema
-        ArrayList<HCatFieldSchema> fieldSchemas = new ArrayList<HCatFieldSchema>(fields.length);
-        for (String field : fields) {
-            fieldSchemas.add(this.outputSchema.get(field));
-        }
-        this.outputSchema = new HCatSchema(fieldSchemas);
+		// build output schema
+		ArrayList<HCatFieldSchema> fieldSchemas = new ArrayList<HCatFieldSchema>(fields.length);
+		for (String field : fields) {
+			fieldSchemas.add(this.outputSchema.get(field));
+		}
+		this.outputSchema = new HCatSchema(fieldSchemas);
 
-        // update output schema configuration
-        configuration.set("mapreduce.lib.hcat.output.schema", HCatUtil.serialize(outputSchema));
+		// update output schema configuration
+		configuration.set("mapreduce.lib.hcat.output.schema", HCatUtil.serialize(outputSchema));
 
-        return this;
-    }
+		return this;
+	}
 
-    /**
-     * Specifies a SQL-like filter condition on the table's partition columns. Filter conditions on
-     * non-partition columns are invalid. A partition filter can significantly reduce the amount of
-     * data to be read.
-     *
-     * @param filter A SQL-like filter condition on the table's partition columns.
-     * @return This InputFormat with specified partition filter.
-     * @throws java.io.IOException
-     */
-    public HCatInputFormatBase<T> withFilter(String filter) throws IOException {
+	/**
+	 * Specifies a SQL-like filter condition on the table's partition columns.
+	 * Filter conditions on non-partition columns are invalid.
+	 * A partition filter can significantly reduce the amount of data to be read.
+	 *
+	 * @param filter A SQL-like filter condition on the table's partition columns.
+	 * @return This InputFormat with specified partition filter.
+	 * @throws java.io.IOException
+	 */
+	public HCatInputFormatBase<T> withFilter(String filter) throws IOException {
 
-        // set filter
-        this.hCatInputFormat.setFilter(filter);
+		// set filter
+		this.hCatInputFormat.setFilter(filter);
 
-        return this;
-    }
+		return this;
+	}
 
-    /**
-     * Specifies that the InputFormat returns Flink tuples instead of {@link
-     * org.apache.hive.hcatalog.data.HCatRecord}.
-     *
-     * <p>Note: Flink tuples might only support a limited number of fields (depending on the API).
-     *
-     * @return This InputFormat.
-     * @throws org.apache.hive.hcatalog.common.HCatException
-     */
-    public HCatInputFormatBase<T> asFlinkTuples() throws HCatException {
+	/**
+	 * Specifies that the InputFormat returns Flink tuples instead of
+	 * {@link org.apache.hive.hcatalog.data.HCatRecord}.
+	 *
+	 * <p>Note: Flink tuples might only support a limited number of fields (depending on the API).
+	 *
+	 * @return This InputFormat.
+	 * @throws org.apache.hive.hcatalog.common.HCatException
+	 */
+	public HCatInputFormatBase<T> asFlinkTuples() throws HCatException {
 
-        // build type information
-        int numFields = outputSchema.getFields().size();
-        if (numFields > this.getMaxFlinkTupleSize()) {
-            throw new IllegalArgumentException(
-                    "Only up to "
-                            + this.getMaxFlinkTupleSize()
-                            + " fields can be returned as Flink tuples.");
-        }
+		// build type information
+		int numFields = outputSchema.getFields().size();
+		if (numFields > this.getMaxFlinkTupleSize()) {
+			throw new IllegalArgumentException("Only up to " + this.getMaxFlinkTupleSize() +
+					" fields can be returned as Flink tuples.");
+		}
 
-        TypeInformation[] fieldTypes = new TypeInformation[numFields];
-        fieldNames = new String[numFields];
-        for (String fieldName : outputSchema.getFieldNames()) {
-            HCatFieldSchema field = outputSchema.get(fieldName);
+		TypeInformation[] fieldTypes = new TypeInformation[numFields];
+		fieldNames = new String[numFields];
+		for (String fieldName : outputSchema.getFieldNames()) {
+			HCatFieldSchema field = outputSchema.get(fieldName);
 
-            int fieldPos = outputSchema.getPosition(fieldName);
-            TypeInformation fieldType = getFieldType(field);
+			int fieldPos = outputSchema.getPosition(fieldName);
+			TypeInformation fieldType = getFieldType(field);
 
-            fieldTypes[fieldPos] = fieldType;
-            fieldNames[fieldPos] = fieldName;
-        }
-        this.resultType = new TupleTypeInfo(fieldTypes);
+			fieldTypes[fieldPos] = fieldType;
+			fieldNames[fieldPos] = fieldName;
 
-        return this;
-    }
+		}
+		this.resultType = new TupleTypeInfo(fieldTypes);
 
-    protected abstract int getMaxFlinkTupleSize();
+		return this;
+	}
 
-    private TypeInformation getFieldType(HCatFieldSchema fieldSchema) {
+	protected abstract int getMaxFlinkTupleSize();
 
-        switch (fieldSchema.getType()) {
-            case INT:
-                return BasicTypeInfo.INT_TYPE_INFO;
-            case TINYINT:
-                return BasicTypeInfo.BYTE_TYPE_INFO;
-            case SMALLINT:
-                return BasicTypeInfo.SHORT_TYPE_INFO;
-            case BIGINT:
-                return BasicTypeInfo.LONG_TYPE_INFO;
-            case BOOLEAN:
-                return BasicTypeInfo.BOOLEAN_TYPE_INFO;
-            case FLOAT:
-                return BasicTypeInfo.FLOAT_TYPE_INFO;
-            case DOUBLE:
-                return BasicTypeInfo.DOUBLE_TYPE_INFO;
-            case STRING:
-                return BasicTypeInfo.STRING_TYPE_INFO;
-            case BINARY:
-                return PrimitiveArrayTypeInfo.BYTE_PRIMITIVE_ARRAY_TYPE_INFO;
-            case ARRAY:
-                return new GenericTypeInfo(List.class);
-            case MAP:
-                return new GenericTypeInfo(Map.class);
-            case STRUCT:
-                return new GenericTypeInfo(List.class);
-            default:
-                throw new IllegalArgumentException(
-                        "Unknown data type \"" + fieldSchema.getType() + "\" encountered.");
-        }
-    }
+	private TypeInformation getFieldType(HCatFieldSchema fieldSchema) {
 
-    /**
-     * Returns the {@link org.apache.hadoop.conf.Configuration} of the HCatInputFormat.
-     *
-     * @return The Configuration of the HCatInputFormat.
-     */
-    public Configuration getConfiguration() {
-        return this.configuration;
-    }
+		switch(fieldSchema.getType()) {
+			case INT:
+				return BasicTypeInfo.INT_TYPE_INFO;
+			case TINYINT:
+				return BasicTypeInfo.BYTE_TYPE_INFO;
+			case SMALLINT:
+				return BasicTypeInfo.SHORT_TYPE_INFO;
+			case BIGINT:
+				return BasicTypeInfo.LONG_TYPE_INFO;
+			case BOOLEAN:
+				return BasicTypeInfo.BOOLEAN_TYPE_INFO;
+			case FLOAT:
+				return BasicTypeInfo.FLOAT_TYPE_INFO;
+			case DOUBLE:
+				return BasicTypeInfo.DOUBLE_TYPE_INFO;
+			case STRING:
+				return BasicTypeInfo.STRING_TYPE_INFO;
+			case BINARY:
+				return PrimitiveArrayTypeInfo.BYTE_PRIMITIVE_ARRAY_TYPE_INFO;
+			case ARRAY:
+				return new GenericTypeInfo(List.class);
+			case MAP:
+				return new GenericTypeInfo(Map.class);
+			case STRUCT:
+				return new GenericTypeInfo(List.class);
+			default:
+				throw new IllegalArgumentException("Unknown data type \"" + fieldSchema.getType() + "\" encountered.");
+		}
+	}
 
-    /**
-     * Returns the {@link org.apache.hive.hcatalog.data.schema.HCatSchema} of the {@link
-     * org.apache.hive.hcatalog.data.HCatRecord} returned by this InputFormat.
-     *
-     * @return The HCatSchema of the HCatRecords returned by this InputFormat.
-     */
-    public HCatSchema getOutputSchema() {
-        return this.outputSchema;
-    }
+	/**
+	 * Returns the {@link org.apache.hadoop.conf.Configuration} of the HCatInputFormat.
+	 *
+	 * @return The Configuration of the HCatInputFormat.
+	 */
+	public Configuration getConfiguration() {
+		return this.configuration;
+	}
 
-    // --------------------------------------------------------------------------------------------
-    //  InputFormat
-    // --------------------------------------------------------------------------------------------
+	/**
+	 * Returns the {@link org.apache.hive.hcatalog.data.schema.HCatSchema} of the {@link org.apache.hive.hcatalog.data.HCatRecord}
+	 * returned by this InputFormat.
+	 *
+	 * @return The HCatSchema of the HCatRecords returned by this InputFormat.
+	 */
+	public HCatSchema getOutputSchema() {
+		return this.outputSchema;
+	}
 
-    @Override
-    public void configure(org.apache.flink.configuration.Configuration parameters) {
-        // nothing to do
-    }
+	// --------------------------------------------------------------------------------------------
+	//  InputFormat
+	// --------------------------------------------------------------------------------------------
 
-    @Override
-    public BaseStatistics getStatistics(BaseStatistics cachedStats) throws IOException {
-        // no statistics provided at the moment
-        return null;
-    }
+	@Override
+	public void configure(org.apache.flink.configuration.Configuration parameters) {
+		// nothing to do
+	}
 
-    @Override
-    public HadoopInputSplit[] createInputSplits(int minNumSplits) throws IOException {
-        configuration.setInt("mapreduce.input.fileinputformat.split.minsize", minNumSplits);
+	@Override
+	public BaseStatistics getStatistics(BaseStatistics cachedStats) throws IOException {
+		// no statistics provided at the moment
+		return null;
+	}
 
-        JobContext jobContext = new JobContextImpl(configuration, new JobID());
+	@Override
+	public HadoopInputSplit[] createInputSplits(int minNumSplits)
+			throws IOException {
+		configuration.setInt("mapreduce.input.fileinputformat.split.minsize", minNumSplits);
 
-        List<InputSplit> splits;
-        try {
-            splits = this.hCatInputFormat.getSplits(jobContext);
-        } catch (InterruptedException e) {
-            throw new IOException("Could not get Splits.", e);
-        }
-        HadoopInputSplit[] hadoopInputSplits = new HadoopInputSplit[splits.size()];
+		JobContext jobContext = new JobContextImpl(configuration, new JobID());
 
-        for (int i = 0; i < hadoopInputSplits.length; i++) {
-            hadoopInputSplits[i] = new HadoopInputSplit(i, splits.get(i), jobContext);
-        }
-        return hadoopInputSplits;
-    }
+		List<InputSplit> splits;
+		try {
+			splits = this.hCatInputFormat.getSplits(jobContext);
+		} catch (InterruptedException e) {
+			throw new IOException("Could not get Splits.", e);
+		}
+		HadoopInputSplit[] hadoopInputSplits = new HadoopInputSplit[splits.size()];
 
-    @Override
-    public InputSplitAssigner getInputSplitAssigner(HadoopInputSplit[] inputSplits) {
-        return new LocatableInputSplitAssigner(inputSplits);
-    }
+		for (int i = 0; i < hadoopInputSplits.length; i++){
+			hadoopInputSplits[i] = new HadoopInputSplit(i, splits.get(i), jobContext);
+		}
+		return hadoopInputSplits;
+	}
 
-    @Override
-    public void open(HadoopInputSplit split) throws IOException {
-        TaskAttemptContext context = new TaskAttemptContextImpl(configuration, new TaskAttemptID());
+	@Override
+	public InputSplitAssigner getInputSplitAssigner(HadoopInputSplit[] inputSplits) {
+		return new LocatableInputSplitAssigner(inputSplits);
+	}
 
-        try {
-            this.recordReader =
-                    this.hCatInputFormat.createRecordReader(split.getHadoopInputSplit(), context);
-            this.recordReader.initialize(split.getHadoopInputSplit(), context);
-        } catch (InterruptedException e) {
-            throw new IOException("Could not create RecordReader.", e);
-        } finally {
-            this.fetched = false;
-        }
-    }
+	@Override
+	public void open(HadoopInputSplit split) throws IOException {
+		TaskAttemptContext context = new TaskAttemptContextImpl(configuration, new TaskAttemptID());
 
-    @Override
-    public boolean reachedEnd() throws IOException {
-        if (!this.fetched) {
-            fetchNext();
-        }
-        return !this.hasNext;
-    }
+		try {
+			this.recordReader = this.hCatInputFormat
+					.createRecordReader(split.getHadoopInputSplit(), context);
+			this.recordReader.initialize(split.getHadoopInputSplit(), context);
+		} catch (InterruptedException e) {
+			throw new IOException("Could not create RecordReader.", e);
+		} finally {
+			this.fetched = false;
+		}
+	}
 
-    private void fetchNext() throws IOException {
-        try {
-            this.hasNext = this.recordReader.nextKeyValue();
-        } catch (InterruptedException e) {
-            throw new IOException("Could not fetch next KeyValue pair.", e);
-        } finally {
-            this.fetched = true;
-        }
-    }
+	@Override
+	public boolean reachedEnd() throws IOException {
+		if (!this.fetched) {
+			fetchNext();
+		}
+		return !this.hasNext;
+	}
 
-    @Override
-    public T nextRecord(T record) throws IOException {
-        if (!this.fetched) {
-            // first record
-            fetchNext();
-        }
-        if (!this.hasNext) {
-            return null;
-        }
-        try {
+	private void fetchNext() throws IOException {
+		try {
+			this.hasNext = this.recordReader.nextKeyValue();
+		} catch (InterruptedException e) {
+			throw new IOException("Could not fetch next KeyValue pair.", e);
+		} finally {
+			this.fetched = true;
+		}
+	}
 
-            // get next HCatRecord
-            HCatRecord v = this.recordReader.getCurrentValue();
-            this.fetched = false;
+	@Override
+	public T nextRecord(T record) throws IOException {
+		if (!this.fetched) {
+			// first record
+			fetchNext();
+		}
+		if (!this.hasNext) {
+			return null;
+		}
+		try {
 
-            if (this.fieldNames.length > 0) {
-                // return as Flink tuple
-                return this.buildFlinkTuple(record, v);
+			// get next HCatRecord
+			HCatRecord v = this.recordReader.getCurrentValue();
+			this.fetched = false;
 
-            } else {
-                // return as HCatRecord
-                return (T) v;
-            }
+			if (this.fieldNames.length > 0) {
+				// return as Flink tuple
+				return this.buildFlinkTuple(record, v);
 
-        } catch (InterruptedException e) {
-            throw new IOException("Could not get next record.", e);
-        }
-    }
+			} else {
+				// return as HCatRecord
+				return (T) v;
+			}
 
-    protected abstract T buildFlinkTuple(T t, HCatRecord record) throws HCatException;
+		} catch (InterruptedException e) {
+			throw new IOException("Could not get next record.", e);
+		}
+	}
 
-    @Override
-    public void close() throws IOException {
-        this.recordReader.close();
-    }
+	protected abstract T buildFlinkTuple(T t, HCatRecord record) throws HCatException;
 
-    // --------------------------------------------------------------------------------------------
-    //  Custom de/serialization methods
-    // --------------------------------------------------------------------------------------------
+	@Override
+	public void close() throws IOException {
+		this.recordReader.close();
+	}
 
-    private void writeObject(ObjectOutputStream out) throws IOException {
-        out.writeInt(this.fieldNames.length);
-        for (String fieldName : this.fieldNames) {
-            out.writeUTF(fieldName);
-        }
-        this.configuration.write(out);
-    }
+	// --------------------------------------------------------------------------------------------
+	//  Custom de/serialization methods
+	// --------------------------------------------------------------------------------------------
 
-    @SuppressWarnings("unchecked")
-    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-        this.fieldNames = new String[in.readInt()];
-        for (int i = 0; i < this.fieldNames.length; i++) {
-            this.fieldNames[i] = in.readUTF();
-        }
+	private void writeObject(ObjectOutputStream out) throws IOException {
+		out.writeInt(this.fieldNames.length);
+		for (String fieldName : this.fieldNames) {
+			out.writeUTF(fieldName);
+		}
+		this.configuration.write(out);
+	}
 
-        Configuration configuration = new Configuration();
-        configuration.readFields(in);
+	@SuppressWarnings("unchecked")
+	private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+		this.fieldNames = new String[in.readInt()];
+		for (int i = 0; i < this.fieldNames.length; i++) {
+			this.fieldNames[i] = in.readUTF();
+		}
 
-        if (this.configuration == null) {
-            this.configuration = configuration;
-        }
+		Configuration configuration = new Configuration();
+		configuration.readFields(in);
 
-        this.hCatInputFormat = new org.apache.hive.hcatalog.mapreduce.HCatInputFormat();
-        this.outputSchema =
-                (HCatSchema)
-                        HCatUtil.deserialize(
-                                this.configuration.get("mapreduce.lib.hcat.output.schema"));
-    }
+		if (this.configuration == null) {
+			this.configuration = configuration;
+		}
 
-    // --------------------------------------------------------------------------------------------
-    //  Result type business
-    // --------------------------------------------------------------------------------------------
+		this.hCatInputFormat = new org.apache.hive.hcatalog.mapreduce.HCatInputFormat();
+		this.outputSchema = (HCatSchema) HCatUtil.deserialize(this.configuration.get("mapreduce.lib.hcat.output.schema"));
+	}
 
-    @Override
-    public TypeInformation<T> getProducedType() {
-        return this.resultType;
-    }
+	// --------------------------------------------------------------------------------------------
+	//  Result type business
+	// --------------------------------------------------------------------------------------------
+
+	@Override
+	public TypeInformation<T> getProducedType() {
+		return this.resultType;
+	}
+
 }

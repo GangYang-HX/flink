@@ -29,7 +29,6 @@ import org.apache.flink.table.data.RowData;
  * @see FactoryUtil#createTableFactoryHelper(DynamicTableFactory, DynamicTableFactory.Context)
  */
 @PublicEvolving
-public interface DeserializationFormatFactory
-        extends DecodingFormatFactory<DeserializationSchema<RowData>> {
-    // interface is used for discovery but is already fully specified by the generics
+public interface DeserializationFormatFactory extends DecodingFormatFactory<DeserializationSchema<RowData>> {
+  // interface is used for discovery but is already fully specified by the generics
 }

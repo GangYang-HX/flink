@@ -21,36 +21,39 @@ package org.apache.flink.api.common.aggregators;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.types.DoubleValue;
 
-/** An {@link Aggregator} that sums up {@link DoubleValue} values. */
+
+/**
+ * An {@link Aggregator} that sums up {@link DoubleValue} values.
+ */
 @SuppressWarnings("serial")
 @PublicEvolving
 public class DoubleSumAggregator implements Aggregator<DoubleValue> {
 
-    private DoubleValue wrapper = new DoubleValue();
-    private double sum;
+	private DoubleValue wrapper = new DoubleValue();
+	private double sum;
+	
+	@Override
+	public DoubleValue getAggregate() {
+		wrapper.setValue(sum);
+		return wrapper;
+	}
 
-    @Override
-    public DoubleValue getAggregate() {
-        wrapper.setValue(sum);
-        return wrapper;
-    }
+	@Override
+	public void aggregate(DoubleValue element) {
+		sum += element.getValue();
+	}
 
-    @Override
-    public void aggregate(DoubleValue element) {
-        sum += element.getValue();
-    }
-
-    /**
-     * Adds the given value to the current aggregate.
-     *
-     * @param value The value to add to the aggregate.
-     */
-    public void aggregate(double value) {
-        sum += value;
-    }
-
-    @Override
-    public void reset() {
-        sum = 0;
-    }
+	/**
+	 * Adds the given value to the current aggregate.
+	 * 
+	 * @param value The value to add to the aggregate.
+	 */
+	public void aggregate(double value) {
+		sum += value;
+	}
+	
+	@Override
+	public void reset() {
+		sum = 0;
+	}
 }

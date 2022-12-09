@@ -31,28 +31,28 @@ import java.net.URL;
  */
 @Internal
 public final class ThreadLocalClassLoaderConfiguration extends Configuration {
-    public ThreadLocalClassLoaderConfiguration() {}
+	public ThreadLocalClassLoaderConfiguration() {}
 
-    public ThreadLocalClassLoaderConfiguration(Configuration other) {
-        super(other);
-    }
+	public ThreadLocalClassLoaderConfiguration(Configuration other) {
+		super(other);
+	}
 
-    @Override
-    public ClassLoader getClassLoader() {
-        return Thread.currentThread().getContextClassLoader();
-    }
+	@Override
+	public ClassLoader getClassLoader() {
+		return Thread.currentThread().getContextClassLoader();
+	}
 
-    @Override
-    public Class<?> getClassByNameOrNull(String name) {
-        try {
-            return Class.forName(name, true, getClassLoader());
-        } catch (ClassNotFoundException e) {
-            return null;
-        }
-    }
+	@Override
+	public Class<?> getClassByNameOrNull(String name) {
+		try {
+			return Class.forName(name, true, getClassLoader());
+		} catch (ClassNotFoundException e) {
+			return null;
+		}
+	}
 
-    @Override
-    public URL getResource(String name) {
-        return getClassLoader().getResource(name);
-    }
+	@Override
+	public URL getResource(String name) {
+		return getClassLoader().getResource(name);
+	}
 }

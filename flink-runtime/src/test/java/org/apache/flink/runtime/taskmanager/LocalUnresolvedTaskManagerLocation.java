@@ -20,11 +20,13 @@ package org.apache.flink.runtime.taskmanager;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 
-/** Dummy local task manager unresolved location for testing purposes. */
+/**
+ * Dummy local task manager unresolved location for testing purposes.
+ */
 public class LocalUnresolvedTaskManagerLocation extends UnresolvedTaskManagerLocation {
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    public LocalUnresolvedTaskManagerLocation() {
-        super(ResourceID.generate(), "localhost", 42, "localhost");
-    }
+	public LocalUnresolvedTaskManagerLocation() {
+		super(ResourceID.generate(), "localhost", 42);
+	}
 }

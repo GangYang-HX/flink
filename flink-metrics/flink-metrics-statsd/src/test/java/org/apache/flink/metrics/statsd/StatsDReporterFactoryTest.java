@@ -19,14 +19,17 @@
 package org.apache.flink.metrics.statsd;
 
 import org.apache.flink.metrics.util.MetricReporterTestUtils;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-/** Tests for the {@link StatsDReporterFactory}. */
-class StatsDReporterFactoryTest {
+/**
+ * Tests for the {@link StatsDReporterFactory}.
+ */
+public class StatsDReporterFactoryTest extends TestLogger {
 
-    @Test
-    void testMetricReporterSetupViaSPI() {
-        MetricReporterTestUtils.testMetricReporterSetupViaSPI(StatsDReporterFactory.class);
-    }
+	@Test
+	public void testMetricReporterSetupViaSPI() {
+		MetricReporterTestUtils.testMetricReporterSetupViaSPI(StatsDReporterFactory.class);
+	}
 }

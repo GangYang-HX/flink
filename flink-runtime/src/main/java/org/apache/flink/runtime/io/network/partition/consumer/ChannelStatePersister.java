@@ -36,37 +36,32 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.OptionalLong;
+import java.util.Optional;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
-/** Helper class for persisting channel state via {@link ChannelStateWriter}. */
+/**
+ * Helper class for persisting channel state via {@link ChannelStateWriter}.
+ */
 @NotThreadSafe
 public final class ChannelStatePersister {
     private static final Logger LOG = LoggerFactory.getLogger(ChannelStatePersister.class);
 
-    private final InputChannelInfo channelInfo;
+	private final InputChannelInfo channelInfo;
 
-    private enum CheckpointStatus {
-        COMPLETED,
-        BARRIER_PENDING,
-        BARRIER_RECEIVED
-    }
+	private enum CheckpointStatus {COMPLETED, BARRIER_PENDING, BARRIER_RECEIVED}
 
-    private CheckpointStatus checkpointStatus = CheckpointStatus.COMPLETED;
+	private CheckpointStatus checkpointStatus = CheckpointStatus.COMPLETED;
 
-    private long lastSeenBarrier = -1L;
+	private long lastSeenBarrier = -1L;
 
-    /**
-     * Writer must be initialized before usage. {@link #startPersisting(long, List)} enforces this
-     * invariant.
-     */
-    private final ChannelStateWriter channelStateWriter;
+	/** Writer must be initialized before usage. {@link #startPersisting(long, List)} enforces this invariant. */
+	private final ChannelStateWriter channelStateWriter;
 
-    ChannelStatePersister(ChannelStateWriter channelStateWriter, InputChannelInfo channelInfo) {
-        this.channelStateWriter = checkNotNull(channelStateWriter);
-        this.channelInfo = checkNotNull(channelInfo);
-    }
+	ChannelStatePersister(ChannelStateWriter channelStateWriter, InputChannelInfo channelInfo) {
+		this.channelStateWriter = checkNotNull(channelStateWriter);
+		this.channelInfo = checkNotNull(channelInfo);
+	}
 
     protected void startPersisting(long barrierId, List<Buffer> knownBuffers)
             throws CheckpointException {
@@ -87,39 +82,39 @@ public final class ChannelStatePersister {
             // has not yet been processed by the task, but task is now notifying us that checkpoint
             // has started for even newer checkpoint. We should spill the knownBuffers and mark that
             // we are waiting for that newer barrier to arrive
-            checkpointStatus = CheckpointStatus.BARRIER_PENDING;
-            lastSeenBarrier = barrierId;
-        }
-        if (knownBuffers.size() > 0) {
-            channelStateWriter.addInputData(
-                    barrierId,
-                    channelInfo,
-                    ChannelStateWriter.SEQUENCE_NUMBER_UNKNOWN,
-                    CloseableIterator.fromList(knownBuffers, Buffer::recycleBuffer));
-        }
-    }
+			checkpointStatus = CheckpointStatus.BARRIER_PENDING;
+			lastSeenBarrier = barrierId;
+		}
+		if (knownBuffers.size() > 0) {
+			channelStateWriter.addInputData(
+				barrierId,
+				channelInfo,
+				ChannelStateWriter.SEQUENCE_NUMBER_UNKNOWN,
+				CloseableIterator.fromList(knownBuffers, Buffer::recycleBuffer));
+		}
+	}
 
-    protected void stopPersisting(long id) {
+	protected void stopPersisting(long id) {
         logEvent("stopPersisting", id);
-        if (id >= lastSeenBarrier) {
-            checkpointStatus = CheckpointStatus.COMPLETED;
-            lastSeenBarrier = id;
-        }
-    }
+		if (id >= lastSeenBarrier) {
+			checkpointStatus = CheckpointStatus.COMPLETED;
+			lastSeenBarrier = id;
+		}
+	}
 
-    protected void maybePersist(Buffer buffer) {
-        if (checkpointStatus == CheckpointStatus.BARRIER_PENDING && buffer.isBuffer()) {
-            channelStateWriter.addInputData(
-                    lastSeenBarrier,
-                    channelInfo,
-                    ChannelStateWriter.SEQUENCE_NUMBER_UNKNOWN,
-                    CloseableIterator.ofElement(buffer.retainBuffer(), Buffer::recycleBuffer));
-        }
-    }
+	protected void maybePersist(Buffer buffer) {
+		if (checkpointStatus == CheckpointStatus.BARRIER_PENDING && buffer.isBuffer()) {
+			channelStateWriter.addInputData(
+				lastSeenBarrier,
+				channelInfo,
+				ChannelStateWriter.SEQUENCE_NUMBER_UNKNOWN,
+				CloseableIterator.ofElement(buffer.retainBuffer(), Buffer::recycleBuffer));
+		}
+	}
 
-    protected OptionalLong checkForBarrier(Buffer buffer) throws IOException {
+	protected Optional<Long> checkForBarrier(Buffer buffer) throws IOException {
         AbstractEvent event = parseEvent(buffer);
-        if (event instanceof CheckpointBarrier) {
+		if (event instanceof CheckpointBarrier) {
             long barrierId = ((CheckpointBarrier) event).getId();
             long expectedBarrierId =
                     checkpointStatus == CheckpointStatus.COMPLETED
@@ -127,23 +122,23 @@ public final class ChannelStatePersister {
                             : lastSeenBarrier;
             if (barrierId >= expectedBarrierId) {
                 logEvent("found barrier", barrierId);
-                checkpointStatus = CheckpointStatus.BARRIER_RECEIVED;
+				checkpointStatus = CheckpointStatus.BARRIER_RECEIVED;
                 lastSeenBarrier = barrierId;
-                return OptionalLong.of(lastSeenBarrier);
+				return Optional.of(lastSeenBarrier);
             } else {
                 logEvent("ignoring barrier", barrierId);
-            }
-        }
-        if (event instanceof EventAnnouncement) { // NOTE: only remote channels
-            EventAnnouncement announcement = (EventAnnouncement) event;
-            if (announcement.getAnnouncedEvent() instanceof CheckpointBarrier) {
+			}
+		}
+		if (event instanceof EventAnnouncement) { // NOTE: only remote channels
+			EventAnnouncement announcement = (EventAnnouncement) event;
+			if (announcement.getAnnouncedEvent() instanceof CheckpointBarrier) {
                 long barrierId = ((CheckpointBarrier) announcement.getAnnouncedEvent()).getId();
                 logEvent("found announcement for barrier", barrierId);
-                return OptionalLong.of(barrierId);
-            }
-        }
-        return OptionalLong.empty();
-    }
+                return Optional.of(barrierId);
+			}
+		}
+		return Optional.empty();
+	}
 
     private void logEvent(String event, long barrierId) {
         if (LOG.isDebugEnabled()) {
@@ -157,27 +152,26 @@ public final class ChannelStatePersister {
         }
     }
 
-    /**
-     * Parses the buffer as an event and returns the {@link CheckpointBarrier} if the event is
-     * indeed a barrier or returns null in all other cases.
-     */
-    @Nullable
-    protected AbstractEvent parseEvent(Buffer buffer) throws IOException {
-        if (buffer.isBuffer()) {
-            return null;
-        } else {
-            AbstractEvent event = EventSerializer.fromBuffer(buffer, getClass().getClassLoader());
-            // reset the buffer because it would be deserialized again in SingleInputGate while
-            // getting next buffer.
-            // we can further improve to avoid double deserialization in the future.
-            buffer.setReaderIndex(0);
-            return event;
-        }
-    }
+	/**
+	 * Parses the buffer as an event and returns the {@link CheckpointBarrier} if the event is indeed a barrier or
+	 * returns null in all other cases.
+	 */
+	@Nullable
+	protected AbstractEvent parseEvent(Buffer buffer) throws IOException {
+		if (buffer.isBuffer()) {
+			return null;
+		} else {
+			AbstractEvent event = EventSerializer.fromBuffer(buffer, getClass().getClassLoader());
+			// reset the buffer because it would be deserialized again in SingleInputGate while getting next buffer.
+			// we can further improve to avoid double deserialization in the future.
+			buffer.setReaderIndex(0);
+			return event;
+		}
+	}
 
-    protected boolean hasBarrierReceived() {
-        return checkpointStatus == CheckpointStatus.BARRIER_RECEIVED;
-    }
+	protected boolean hasBarrierReceived() {
+		return checkpointStatus == CheckpointStatus.BARRIER_RECEIVED;
+	}
 
     @Override
     public String toString() {

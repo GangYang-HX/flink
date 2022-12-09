@@ -34,43 +34,32 @@ import static org.apache.flink.runtime.state.CheckpointStorageLocationReference.
 /** Tests for {@link RecoveredInputChannel}. */
 public class RecoveredInputChannelTest {
 
-    @Test(expected = IllegalStateException.class)
-    public void testConversionOnlyPossibleAfterConsumed() throws IOException {
-        buildChannel().toInputChannel();
-    }
+	@Test(expected = IllegalStateException.class)
+	public void testConversionOnlyPossibleAfterConsumed() throws IOException {
+		buildChannel().toInputChannel();
+	}
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void testRequestPartitionsImpossible() {
-        buildChannel().requestSubpartition();
-    }
+	@Test(expected = UnsupportedOperationException.class)
+	public void testRequestPartitionsImpossible() {
+		buildChannel().requestSubpartition(0);
+	}
 
     @Test(expected = CheckpointException.class)
     public void testCheckpointStartImpossible() throws CheckpointException {
-        buildChannel()
-                .checkpointStarted(
-                        new CheckpointBarrier(
-                                0L, 0L, unaligned(CheckpointType.CHECKPOINT, getDefault())));
+        buildChannel().checkpointStarted(new CheckpointBarrier(0L, 0L, unaligned(CheckpointType.CHECKPOINT, getDefault())));
     }
 
-    private RecoveredInputChannel buildChannel() {
-        try {
-            return new RecoveredInputChannel(
-                    new SingleInputGateBuilder().build(),
-                    0,
-                    new ResultPartitionID(),
-                    0,
-                    0,
-                    0,
-                    new SimpleCounter(),
-                    new SimpleCounter(),
-                    10) {
-                @Override
-                protected InputChannel toInputChannelInternal() {
-                    throw new AssertionError("channel conversion succeeded");
-                }
-            };
-        } catch (Exception e) {
-            throw new AssertionError("channel creation failed", e);
-        }
-    }
+	private RecoveredInputChannel buildChannel() {
+		try {
+			return new RecoveredInputChannel(new SingleInputGateBuilder().build(), 0, new ResultPartitionID(), 0, 0, new SimpleCounter(), new SimpleCounter(), 10) {
+				@Override
+				protected InputChannel toInputChannelInternal() {
+					throw new AssertionError("channel conversion succeeded");
+				}
+			};
+		} catch (Exception e) {
+			throw new AssertionError("channel creation failed", e);
+		}
+	}
+
 }

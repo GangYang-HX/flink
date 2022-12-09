@@ -22,17 +22,28 @@ import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
-/** A report about the current values of all accumulators of the TaskExecutor for a given job. */
+/**
+ * A report about the current values of all accumulators of the TaskExecutor for a given job.
+ */
 public class AccumulatorReport implements Serializable {
-    private final Collection<AccumulatorSnapshot> accumulatorSnapshots;
+	private final Collection<AccumulatorSnapshot> accumulatorSnapshots;
 
-    public AccumulatorReport(List<AccumulatorSnapshot> accumulatorSnapshots) {
-        this.accumulatorSnapshots = accumulatorSnapshots;
-    }
+	public AccumulatorReport() {
+		this(Collections.emptyList());
+	}
 
-    public Collection<AccumulatorSnapshot> getAccumulatorSnapshots() {
-        return accumulatorSnapshots;
-    }
+	public AccumulatorReport(AccumulatorSnapshot accumulatorSnapshot) {
+		this(Collections.singletonList(accumulatorSnapshot));
+	}
+
+	public AccumulatorReport(List<AccumulatorSnapshot> accumulatorSnapshots) {
+		this.accumulatorSnapshots = accumulatorSnapshots;
+	}
+
+	public Collection<AccumulatorSnapshot> getAccumulatorSnapshots() {
+		return accumulatorSnapshots;
+	}
 }

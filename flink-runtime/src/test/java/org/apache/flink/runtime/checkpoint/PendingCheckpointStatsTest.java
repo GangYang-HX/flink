@@ -20,7 +20,6 @@ package org.apache.flink.runtime.checkpoint;
 
 import org.apache.flink.core.testutils.CommonTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
-
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -36,253 +35,243 @@ import static org.mockito.Mockito.verify;
 
 public class PendingCheckpointStatsTest {
 
-    /** Tests reporting of subtask stats. */
-    @Test
-    public void testReportSubtaskStats() throws Exception {
-        long checkpointId = Integer.MAX_VALUE + 1222L;
-        long triggerTimestamp = Integer.MAX_VALUE - 1239L;
-        CheckpointProperties props =
-                CheckpointProperties.forCheckpoint(
-                        CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION);
-        TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
-        TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
-        int totalSubtaskCount = task1.getNumberOfSubtasks() + task2.getNumberOfSubtasks();
+	/**
+	 * Tests reporting of subtask stats.
+	 */
+	@Test
+	public void testReportSubtaskStats() throws Exception {
+		long checkpointId = Integer.MAX_VALUE + 1222L;
+		long triggerTimestamp = Integer.MAX_VALUE - 1239L;
+		CheckpointProperties props = CheckpointProperties.forCheckpoint(CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION);
+		TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
+		TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
+		int totalSubtaskCount = task1.getNumberOfSubtasks() + task2.getNumberOfSubtasks();
 
-        HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
-        taskStats.put(task1.getJobVertexId(), task1);
-        taskStats.put(task2.getJobVertexId(), task2);
+		HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
+		taskStats.put(task1.getJobVertexId(), task1);
+		taskStats.put(task2.getJobVertexId(), task2);
 
-        PendingCheckpointStats pending =
-                new PendingCheckpointStats(
-                        checkpointId, triggerTimestamp, props, totalSubtaskCount, taskStats);
+		CheckpointStatsTracker.PendingCheckpointStatsCallback callback = mock(
+			CheckpointStatsTracker.PendingCheckpointStatsCallback.class);
 
-        // Check initial state
-        assertEquals(checkpointId, pending.getCheckpointId());
-        assertEquals(triggerTimestamp, pending.getTriggerTimestamp());
-        assertEquals(props, pending.getProperties());
-        assertEquals(CheckpointStatsStatus.IN_PROGRESS, pending.getStatus());
-        assertEquals(0, pending.getNumberOfAcknowledgedSubtasks());
-        assertEquals(0, pending.getStateSize());
-        assertEquals(totalSubtaskCount, pending.getNumberOfSubtasks());
-        assertNull(pending.getLatestAcknowledgedSubtaskStats());
-        assertEquals(-1, pending.getLatestAckTimestamp());
-        assertEquals(-1, pending.getEndToEndDuration());
-        assertEquals(task1, pending.getTaskStateStats(task1.getJobVertexId()));
-        assertEquals(task2, pending.getTaskStateStats(task2.getJobVertexId()));
-        assertNull(pending.getTaskStateStats(new JobVertexID()));
+		PendingCheckpointStats pending = new PendingCheckpointStats(
+				checkpointId,
+				triggerTimestamp,
+				props,
+				totalSubtaskCount,
+				taskStats,
+				callback);
 
-        // Report subtasks and check getters
-        assertFalse(pending.reportSubtaskStats(new JobVertexID(), createSubtaskStats(0)));
+		// Check initial state
+		assertEquals(checkpointId, pending.getCheckpointId());
+		assertEquals(triggerTimestamp, pending.getTriggerTimestamp());
+		assertEquals(props, pending.getProperties());
+		assertEquals(CheckpointStatsStatus.IN_PROGRESS, pending.getStatus());
+		assertEquals(0, pending.getNumberOfAcknowledgedSubtasks());
+		assertEquals(0, pending.getStateSize());
+		assertEquals(totalSubtaskCount, pending.getNumberOfSubtasks());
+		assertNull(pending.getLatestAcknowledgedSubtaskStats());
+		assertEquals(-1, pending.getLatestAckTimestamp());
+		assertEquals(-1, pending.getEndToEndDuration());
+		assertEquals(task1, pending.getTaskStateStats(task1.getJobVertexId()));
+		assertEquals(task2, pending.getTaskStateStats(task2.getJobVertexId()));
+		assertNull(pending.getTaskStateStats(new JobVertexID()));
 
-        long stateSize = 0;
+		// Report subtasks and check getters
+		assertFalse(pending.reportSubtaskStats(new JobVertexID(), createSubtaskStats(0)));
 
-        // Report 1st task
-        for (int i = 0; i < task1.getNumberOfSubtasks(); i++) {
-            SubtaskStateStats subtask = createSubtaskStats(i);
-            stateSize += subtask.getStateSize();
+		long stateSize = 0;
 
-            pending.reportSubtaskStats(task1.getJobVertexId(), subtask);
+		// Report 1st task
+		for (int i = 0; i < task1.getNumberOfSubtasks(); i++) {
+			SubtaskStateStats subtask = createSubtaskStats(i);
+			stateSize += subtask.getStateSize();
 
-            assertEquals(subtask, pending.getLatestAcknowledgedSubtaskStats());
-            assertEquals(subtask.getAckTimestamp(), pending.getLatestAckTimestamp());
-            assertEquals(
-                    subtask.getAckTimestamp() - triggerTimestamp, pending.getEndToEndDuration());
-            assertEquals(stateSize, pending.getStateSize());
-        }
+			pending.reportSubtaskStats(task1.getJobVertexId(), subtask);
 
-        // Don't allow overwrite
-        assertFalse(pending.reportSubtaskStats(task1.getJobVertexId(), task1.getSubtaskStats()[0]));
+			assertEquals(subtask, pending.getLatestAcknowledgedSubtaskStats());
+			assertEquals(subtask.getAckTimestamp(), pending.getLatestAckTimestamp());
+			assertEquals(subtask.getAckTimestamp() - triggerTimestamp, pending.getEndToEndDuration());
+			assertEquals(stateSize, pending.getStateSize());
+		}
 
-        // Report 2nd task
-        for (int i = 0; i < task2.getNumberOfSubtasks(); i++) {
-            SubtaskStateStats subtask = createSubtaskStats(i);
-            stateSize += subtask.getStateSize();
+		// Don't allow overwrite
+		assertFalse(pending.reportSubtaskStats(task1.getJobVertexId(), task1.getSubtaskStats()[0]));
 
-            pending.reportSubtaskStats(task2.getJobVertexId(), subtask);
+		// Report 2nd task
+		for (int i = 0; i < task2.getNumberOfSubtasks(); i++) {
+			SubtaskStateStats subtask = createSubtaskStats(i);
+			stateSize += subtask.getStateSize();
 
-            assertEquals(subtask, pending.getLatestAcknowledgedSubtaskStats());
-            assertEquals(subtask.getAckTimestamp(), pending.getLatestAckTimestamp());
-            assertEquals(
-                    subtask.getAckTimestamp() - triggerTimestamp, pending.getEndToEndDuration());
-            assertEquals(stateSize, pending.getStateSize());
-        }
+			pending.reportSubtaskStats(task2.getJobVertexId(), subtask);
 
-        assertEquals(task1.getNumberOfSubtasks(), task1.getNumberOfAcknowledgedSubtasks());
-        assertEquals(task2.getNumberOfSubtasks(), task2.getNumberOfAcknowledgedSubtasks());
-    }
+			assertEquals(subtask, pending.getLatestAcknowledgedSubtaskStats());
+			assertEquals(subtask.getAckTimestamp(), pending.getLatestAckTimestamp());
+			assertEquals(subtask.getAckTimestamp() - triggerTimestamp, pending.getEndToEndDuration());
+			assertEquals(stateSize, pending.getStateSize());
+		}
 
-    /** Test reporting of a completed checkpoint. */
-    @Test
-    public void testReportCompletedCheckpoint() throws Exception {
-        TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
-        TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
+		assertEquals(task1.getNumberOfSubtasks(), task1.getNumberOfAcknowledgedSubtasks());
+		assertEquals(task2.getNumberOfSubtasks(), task2.getNumberOfAcknowledgedSubtasks());
+	}
 
-        HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
-        taskStats.put(task1.getJobVertexId(), task1);
-        taskStats.put(task2.getJobVertexId(), task2);
+	/**
+	 * Test reporting of a completed checkpoint.
+	 */
+	@Test
+	public void testReportCompletedCheckpoint() throws Exception {
+		TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
+		TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
 
-        CheckpointStatsTracker callback = mock(CheckpointStatsTracker.class);
+		HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
+		taskStats.put(task1.getJobVertexId(), task1);
+		taskStats.put(task2.getJobVertexId(), task2);
 
-        PendingCheckpointStats pending =
-                new PendingCheckpointStats(
-                        0,
-                        1,
-                        CheckpointProperties.forCheckpoint(
-                                CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION),
-                        task1.getNumberOfSubtasks() + task2.getNumberOfSubtasks(),
-                        taskStats);
+		CheckpointStatsTracker.PendingCheckpointStatsCallback callback = mock(
+			CheckpointStatsTracker.PendingCheckpointStatsCallback.class);
 
-        // Report subtasks
-        for (int i = 0; i < task1.getNumberOfSubtasks(); i++) {
-            pending.reportSubtaskStats(task1.getJobVertexId(), createSubtaskStats(i));
-        }
+		PendingCheckpointStats pending = new PendingCheckpointStats(
+			0,
+			1,
+			CheckpointProperties.forCheckpoint(CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION),
+			task1.getNumberOfSubtasks() + task2.getNumberOfSubtasks(),
+			taskStats,
+			callback);
 
-        for (int i = 0; i < task2.getNumberOfSubtasks(); i++) {
-            pending.reportSubtaskStats(task2.getJobVertexId(), createSubtaskStats(i));
-        }
+		// Report subtasks
+		for (int i = 0; i < task1.getNumberOfSubtasks(); i++) {
+			pending.reportSubtaskStats(task1.getJobVertexId(), createSubtaskStats(i));
+		}
 
-        // Report completed
-        String externalPath = "asdjkasdjkasd";
+		for (int i = 0; i < task2.getNumberOfSubtasks(); i++) {
+			pending.reportSubtaskStats(task2.getJobVertexId(), createSubtaskStats(i));
+		}
 
-        callback.reportCompletedCheckpoint(pending.toCompletedCheckpointStats(externalPath));
+		// Report completed
+		String externalPath = "asdjkasdjkasd";
 
-        ArgumentCaptor<CompletedCheckpointStats> args =
-                ArgumentCaptor.forClass(CompletedCheckpointStats.class);
-        verify(callback).reportCompletedCheckpoint(args.capture());
+		CompletedCheckpointStats.DiscardCallback discardCallback = pending.reportCompletedCheckpoint(externalPath);
 
-        CompletedCheckpointStats completed = args.getValue();
+		ArgumentCaptor<CompletedCheckpointStats> args = ArgumentCaptor.forClass(CompletedCheckpointStats.class);
+		verify(callback).reportCompletedCheckpoint(args.capture());
 
-        assertNotNull(completed);
-        assertEquals(CheckpointStatsStatus.COMPLETED, completed.getStatus());
-        assertFalse(completed.isDiscarded());
-        completed.discard();
-        assertTrue(completed.isDiscarded());
-        assertEquals(externalPath, completed.getExternalPath());
+		CompletedCheckpointStats completed = args.getValue();
 
-        assertEquals(pending.getCheckpointId(), completed.getCheckpointId());
-        assertEquals(
-                pending.getNumberOfAcknowledgedSubtasks(),
-                completed.getNumberOfAcknowledgedSubtasks());
-        assertEquals(
-                pending.getLatestAcknowledgedSubtaskStats(),
-                completed.getLatestAcknowledgedSubtaskStats());
-        assertEquals(pending.getLatestAckTimestamp(), completed.getLatestAckTimestamp());
-        assertEquals(pending.getEndToEndDuration(), completed.getEndToEndDuration());
-        assertEquals(pending.getStateSize(), completed.getStateSize());
-        assertEquals(task1, completed.getTaskStateStats(task1.getJobVertexId()));
-        assertEquals(task2, completed.getTaskStateStats(task2.getJobVertexId()));
-    }
+		assertNotNull(completed);
+		assertEquals(CheckpointStatsStatus.COMPLETED, completed.getStatus());
+		assertFalse(completed.isDiscarded());
+		discardCallback.notifyDiscardedCheckpoint();
+		assertTrue(completed.isDiscarded());
+		assertEquals(externalPath, completed.getExternalPath());
 
-    /** Test reporting of a failed checkpoint. */
-    @Test
-    public void testReportFailedCheckpoint() throws Exception {
-        TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
-        TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
+		assertEquals(pending.getCheckpointId(), completed.getCheckpointId());
+		assertEquals(pending.getNumberOfAcknowledgedSubtasks(), completed.getNumberOfAcknowledgedSubtasks());
+		assertEquals(pending.getLatestAcknowledgedSubtaskStats(), completed.getLatestAcknowledgedSubtaskStats());
+		assertEquals(pending.getLatestAckTimestamp(), completed.getLatestAckTimestamp());
+		assertEquals(pending.getEndToEndDuration(), completed.getEndToEndDuration());
+		assertEquals(pending.getStateSize(), completed.getStateSize());
+		assertEquals(task1, completed.getTaskStateStats(task1.getJobVertexId()));
+		assertEquals(task2, completed.getTaskStateStats(task2.getJobVertexId()));
+	}
 
-        HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
-        taskStats.put(task1.getJobVertexId(), task1);
-        taskStats.put(task2.getJobVertexId(), task2);
+	/**
+	 * Test reporting of a failed checkpoint.
+	 */
+	@Test
+	public void testReportFailedCheckpoint() throws Exception {
+		TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
+		TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
 
-        CheckpointStatsTracker callback = mock(CheckpointStatsTracker.class);
+		HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
+		taskStats.put(task1.getJobVertexId(), task1);
+		taskStats.put(task2.getJobVertexId(), task2);
 
-        long triggerTimestamp = 123123;
-        PendingCheckpointStats pending =
-                new PendingCheckpointStats(
-                        0,
-                        triggerTimestamp,
-                        CheckpointProperties.forCheckpoint(
-                                CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION),
-                        task1.getNumberOfSubtasks() + task2.getNumberOfSubtasks(),
-                        taskStats);
+		CheckpointStatsTracker.PendingCheckpointStatsCallback callback = mock(
+			CheckpointStatsTracker.PendingCheckpointStatsCallback.class);
 
-        // Report subtasks
-        for (int i = 0; i < task1.getNumberOfSubtasks(); i++) {
-            pending.reportSubtaskStats(task1.getJobVertexId(), createSubtaskStats(i));
-        }
+		long triggerTimestamp = 123123;
+		PendingCheckpointStats pending = new PendingCheckpointStats(
+			0,
+			triggerTimestamp,
+			CheckpointProperties.forCheckpoint(CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION),
+			task1.getNumberOfSubtasks() + task2.getNumberOfSubtasks(),
+			taskStats,
+			callback);
 
-        for (int i = 0; i < task2.getNumberOfSubtasks(); i++) {
-            pending.reportSubtaskStats(task2.getJobVertexId(), createSubtaskStats(i));
-        }
+		// Report subtasks
+		for (int i = 0; i < task1.getNumberOfSubtasks(); i++) {
+			pending.reportSubtaskStats(task1.getJobVertexId(), createSubtaskStats(i));
+		}
 
-        // Report failed
-        Exception cause = new Exception("test exception");
-        long failureTimestamp = 112211137;
-        callback.reportFailedCheckpoint(pending.toFailedCheckpoint(failureTimestamp, cause));
+		for (int i = 0; i < task2.getNumberOfSubtasks(); i++) {
+			pending.reportSubtaskStats(task2.getJobVertexId(), createSubtaskStats(i));
+		}
 
-        ArgumentCaptor<FailedCheckpointStats> args =
-                ArgumentCaptor.forClass(FailedCheckpointStats.class);
-        verify(callback).reportFailedCheckpoint(args.capture());
+		// Report failed
+		Exception cause = new Exception("test exception");
+		long failureTimestamp = 112211137;
+		pending.reportFailedCheckpoint(failureTimestamp, cause);
 
-        FailedCheckpointStats failed = args.getValue();
+		ArgumentCaptor<FailedCheckpointStats> args = ArgumentCaptor.forClass(FailedCheckpointStats.class);
+		verify(callback).reportFailedCheckpoint(args.capture());
 
-        assertNotNull(failed);
-        assertEquals(CheckpointStatsStatus.FAILED, failed.getStatus());
-        assertEquals(failureTimestamp, failed.getFailureTimestamp());
-        assertEquals(cause.getMessage(), failed.getFailureMessage());
+		FailedCheckpointStats failed = args.getValue();
 
-        assertEquals(pending.getCheckpointId(), failed.getCheckpointId());
-        assertEquals(
-                pending.getNumberOfAcknowledgedSubtasks(),
-                failed.getNumberOfAcknowledgedSubtasks());
-        assertEquals(
-                pending.getLatestAcknowledgedSubtaskStats(),
-                failed.getLatestAcknowledgedSubtaskStats());
-        assertEquals(pending.getLatestAckTimestamp(), failed.getLatestAckTimestamp());
-        assertEquals(failureTimestamp - triggerTimestamp, failed.getEndToEndDuration());
-        assertEquals(pending.getStateSize(), failed.getStateSize());
-        assertEquals(task1, failed.getTaskStateStats(task1.getJobVertexId()));
-        assertEquals(task2, failed.getTaskStateStats(task2.getJobVertexId()));
-    }
+		assertNotNull(failed);
+		assertEquals(CheckpointStatsStatus.FAILED, failed.getStatus());
+		assertEquals(failureTimestamp, failed.getFailureTimestamp());
+		assertEquals(cause.getMessage(), failed.getFailureMessage());
 
-    @Test
-    public void testIsJavaSerializable() throws Exception {
-        TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
-        TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
+		assertEquals(pending.getCheckpointId(), failed.getCheckpointId());
+		assertEquals(pending.getNumberOfAcknowledgedSubtasks(), failed.getNumberOfAcknowledgedSubtasks());
+		assertEquals(pending.getLatestAcknowledgedSubtaskStats(), failed.getLatestAcknowledgedSubtaskStats());
+		assertEquals(pending.getLatestAckTimestamp(), failed.getLatestAckTimestamp());
+		assertEquals(failureTimestamp - triggerTimestamp, failed.getEndToEndDuration());
+		assertEquals(pending.getStateSize(), failed.getStateSize());
+		assertEquals(task1, failed.getTaskStateStats(task1.getJobVertexId()));
+		assertEquals(task2, failed.getTaskStateStats(task2.getJobVertexId()));
+	}
 
-        HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
-        taskStats.put(task1.getJobVertexId(), task1);
-        taskStats.put(task2.getJobVertexId(), task2);
+	@Test
+	public void testIsJavaSerializable() throws Exception {
+		TaskStateStats task1 = new TaskStateStats(new JobVertexID(), 3);
+		TaskStateStats task2 = new TaskStateStats(new JobVertexID(), 4);
 
-        PendingCheckpointStats pending =
-                new PendingCheckpointStats(
-                        123123123L,
-                        10123L,
-                        CheckpointProperties.forCheckpoint(
-                                CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION),
-                        1337,
-                        taskStats);
+		HashMap<JobVertexID, TaskStateStats> taskStats = new HashMap<>();
+		taskStats.put(task1.getJobVertexId(), task1);
+		taskStats.put(task2.getJobVertexId(), task2);
 
-        PendingCheckpointStats copy = CommonTestUtils.createCopySerializable(pending);
+		PendingCheckpointStats pending = new PendingCheckpointStats(
+			123123123L,
+			10123L,
+			CheckpointProperties.forCheckpoint(CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION),
+			1337,
+			taskStats,
+			mock(CheckpointStatsTracker.PendingCheckpointStatsCallback.class));
 
-        assertEquals(pending.getCheckpointId(), copy.getCheckpointId());
-        assertEquals(pending.getTriggerTimestamp(), copy.getTriggerTimestamp());
-        assertEquals(pending.getProperties(), copy.getProperties());
-        assertEquals(pending.getNumberOfSubtasks(), copy.getNumberOfSubtasks());
-        assertEquals(
-                pending.getNumberOfAcknowledgedSubtasks(), copy.getNumberOfAcknowledgedSubtasks());
-        assertEquals(pending.getEndToEndDuration(), copy.getEndToEndDuration());
-        assertEquals(pending.getStateSize(), copy.getStateSize());
-        assertEquals(
-                pending.getLatestAcknowledgedSubtaskStats(),
-                copy.getLatestAcknowledgedSubtaskStats());
-        assertEquals(pending.getStatus(), copy.getStatus());
-    }
+		PendingCheckpointStats copy = CommonTestUtils.createCopySerializable(pending);
 
-    // ------------------------------------------------------------------------
+		assertEquals(pending.getCheckpointId(), copy.getCheckpointId());
+		assertEquals(pending.getTriggerTimestamp(), copy.getTriggerTimestamp());
+		assertEquals(pending.getProperties(), copy.getProperties());
+		assertEquals(pending.getNumberOfSubtasks(), copy.getNumberOfSubtasks());
+		assertEquals(pending.getNumberOfAcknowledgedSubtasks(), copy.getNumberOfAcknowledgedSubtasks());
+		assertEquals(pending.getEndToEndDuration(), copy.getEndToEndDuration());
+		assertEquals(pending.getStateSize(), copy.getStateSize());
+		assertEquals(pending.getLatestAcknowledgedSubtaskStats(), copy.getLatestAcknowledgedSubtaskStats());
+		assertEquals(pending.getStatus(), copy.getStatus());
+	}
 
-    private SubtaskStateStats createSubtaskStats(int index) {
-        return new SubtaskStateStats(
-                index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                Integer.MAX_VALUE + (long) index,
-                false,
-                true);
-    }
+	// ------------------------------------------------------------------------
+
+	private SubtaskStateStats createSubtaskStats(int index) {
+		return new SubtaskStateStats(
+			index,
+			Integer.MAX_VALUE + (long) index,
+			Integer.MAX_VALUE + (long) index,
+			Integer.MAX_VALUE + (long) index,
+			Integer.MAX_VALUE + (long) index,
+			Integer.MAX_VALUE + (long) index,
+			Integer.MAX_VALUE + (long) index);
+	}
 }

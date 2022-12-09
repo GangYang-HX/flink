@@ -17,14 +17,16 @@
  */
 package org.apache.flink.api.scala.typeutils
 
-import org.apache.flink.annotation.{Public, PublicEvolving}
+import org.apache.flink.annotation.{PublicEvolving, Public}
 import org.apache.flink.api.common.ExecutionConfig
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.common.typeutils.TypeSerializer
 
 import scala.collection.JavaConverters._
 
-/** TypeInformation [[Either]]. */
+/**
+ * TypeInformation [[Either]].
+ */
 @Public
 class EitherTypeInfo[A, B, T <: Either[A, B]](
     val clazz: Class[T],

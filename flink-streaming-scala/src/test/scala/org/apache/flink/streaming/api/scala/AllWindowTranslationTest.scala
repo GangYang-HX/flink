@@ -15,14 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.streaming.api.scala
 
+
+import org.apache.flink.api.common.ExecutionConfig
 import org.apache.flink.api.common.functions._
-import org.apache.flink.api.common.state.{AggregatingStateDescriptor, ListStateDescriptor, ReducingStateDescriptor}
+import org.apache.flink.api.common.state.{AggregatingStateDescriptor, FoldingStateDescriptor, ListStateDescriptor, ReducingStateDescriptor}
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.functions.KeySelector
+import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator
-import org.apache.flink.streaming.api.scala.function.{AllWindowFunction, ProcessAllWindowFunction}
+import org.apache.flink.streaming.api.scala.function.{AllWindowFunction, ProcessAllWindowFunction, WindowFunction}
 import org.apache.flink.streaming.api.transformations.OneInputTransformation
 import org.apache.flink.streaming.api.windowing.assigners._
 import org.apache.flink.streaming.api.windowing.evictors.CountEvictor
@@ -33,38 +37,32 @@ import org.apache.flink.streaming.runtime.operators.windowing._
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord
 import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness
 import org.apache.flink.util.Collector
-
-import org.junit.{Rule, Test}
 import org.junit.Assert._
-import org.junit.rules.ExpectedException
+import org.junit.Test
 
 /**
- * These tests verify that the api calls on [[AllWindowedStream]] instantiate the correct window
- * operator.
- *
- * We also create a test harness and push one element into the operator to verify that we get some
- * output.
- */
+  * These tests verify that the api calls on [[AllWindowedStream]] instantiate the correct
+  * window operator.
+  *
+  * We also create a test harness and push one element into the operator to verify
+  * that we get some output.
+  */
 class AllWindowTranslationTest {
-
-  // used for accurate exception information checking.
-  val expectedException: ExpectedException = ExpectedException.none()
-
-  @Rule
-  def thrown: ExpectedException = expectedException
 
   // ------------------------------------------------------------------------
   //  rich function tests
   // ------------------------------------------------------------------------
-
+  
   /**
-   * .reduce() does not support [[RichReduceFunction]], since the reduce function is used internally
-   * in a [[org.apache.flink.api.common.state.ReducingState]].
-   */
+    * .reduce() does not support [[RichReduceFunction]], since the reduce function is used
+    * internally in a [[org.apache.flink.api.common.state.ReducingState]].
+    */
   @Test(expected = classOf[UnsupportedOperationException])
   def testReduceWithRichReducerFails() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     source
       .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
@@ -84,9 +82,31 @@ class AllWindowTranslationTest {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
+
     source
       .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .aggregate(new DummyRichAggregator())
+
+    fail("exception was not thrown")
+  }
+
+  /**
+    * .fold() does not support [[RichFoldFunction]], since the reduce function is used internally
+    * in a [[org.apache.flink.api.common.state.FoldingState]].
+    */
+  @Test(expected = classOf[UnsupportedOperationException])
+  def testFoldWithRichFolderFails() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
+
+    source
+      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(("", 0), new RichFoldFunction[(String, Int), (String, Int)] {
+        override def fold(accumulator: (String, Int), value: (String, Int)) = null
+      })
 
     fail("exception was not thrown")
   }
@@ -96,23 +116,44 @@ class AllWindowTranslationTest {
   // ------------------------------------------------------------------------
 
   @Test
+  def testSessionWithFoldFails() {
+    // verify that fold does not work with merging windows
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    val windowedStream = env.fromElements("Hello", "Ciao")
+      .windowAll(EventTimeSessionWindows.withGap(Time.seconds(5)))
+
+    try
+      windowedStream.fold("", new FoldFunction[String, String]() {
+        @throws[Exception]
+        def fold(accumulator: String, value: String): String = accumulator
+      })
+
+    catch {
+      case _: UnsupportedOperationException =>
+        // expected
+        // use a catch to ensure that the exception is thrown by the fold
+        return
+    }
+
+    fail("The fold call should fail.")
+  }
+
+  @Test
   def testMergingAssignerWithNonMergingTriggerFails() {
-    expectedException.expect(classOf[UnsupportedOperationException])
-    expectedException.expectMessage(
-      "A merging window assigner cannot be used with a trigger"
-        + " that does not support merging")
     // verify that we check for trigger compatibility
     val env = StreamExecutionEnvironment.getExecutionEnvironment
 
-    env
-      .fromElements("Hello", "Ciao")
+    val windowedStream = env.fromElements("Hello", "Ciao")
       .windowAll(EventTimeSessionWindows.withGap(Time.seconds(5)))
-      .trigger(new Trigger[String, TimeWindow]() {
+
+    try
+      windowedStream.trigger(new Trigger[String, TimeWindow]() {
         def onElement(
-            element: String,
-            timestamp: Long,
-            window: TimeWindow,
-            ctx: Trigger.TriggerContext) = null
+                       element: String,
+                       timestamp: Long,
+                       window: TimeWindow,
+                       ctx: Trigger.TriggerContext) = null
 
         def onProcessingTime(time: Long, window: TimeWindow, ctx: Trigger.TriggerContext) = null
 
@@ -122,11 +163,21 @@ class AllWindowTranslationTest {
 
         def clear(window: TimeWindow, ctx: Trigger.TriggerContext) {}
       })
+
+    catch {
+      case _: UnsupportedOperationException =>
+        // expected
+        // use a catch to ensure that the exception is thrown by the fold
+        return
+    }
+
+    fail("The trigger call should fail.")
   }
 
   @Test
   def testMergingWindowsWithEvictor() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -135,7 +186,9 @@ class AllWindowTranslationTest {
       .evictor(CountEvictor.of(2))
       .process(new TestProcessAllWindowFunction)
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -155,6 +208,7 @@ class AllWindowTranslationTest {
       ("hello", 1))
   }
 
+
   // ------------------------------------------------------------------------
   //  reduce() translation tests
   // ------------------------------------------------------------------------
@@ -162,6 +216,7 @@ class AllWindowTranslationTest {
   @Test
   def testReduceEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -169,7 +224,9 @@ class AllWindowTranslationTest {
       .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .reduce(new DummyReducer)
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -192,6 +249,7 @@ class AllWindowTranslationTest {
   @Test
   def testReduceProcessingTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -199,7 +257,9 @@ class AllWindowTranslationTest {
       .windowAll(SlidingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .reduce(new DummyReducer)
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -222,14 +282,17 @@ class AllWindowTranslationTest {
   @Test
   def testReduceEventTimeWithScalaFunction() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
-      .reduce((x, _) => x)
+      .reduce( (x, _) => x )
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -252,6 +315,7 @@ class AllWindowTranslationTest {
   @Test
   def testReduceWithWindowFunctionEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -263,11 +327,12 @@ class AllWindowTranslationTest {
           override def process(
               context: Context,
               input: Iterable[(String, Int)],
-              out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect(x))
-        }
-      )
+              out: Collector[(String, Int)]): Unit = input foreach ( x => out.collect(x))
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -290,22 +355,23 @@ class AllWindowTranslationTest {
   @Test
   def testReduceWithWindowFunctionProcessingTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
       .reduce(
-        new DummyReducer,
-        new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+        new DummyReducer, new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
           override def process(
               context: Context,
               input: Iterable[(String, Int)],
-              out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect(x))
-        }
-      )
+              out: Collector[(String, Int)]): Unit = input foreach ( x => out.collect(x))
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -328,24 +394,24 @@ class AllWindowTranslationTest {
   @Test
   def testReduceWithProcessWindowFunctionEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
       .reduce(
-        new DummyReducer,
-        new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-          override def process(
-              context: Context,
-              elements: Iterable[(String, Int)],
-              out: Collector[(String, Int)]): Unit = {
-            elements.foreach(x => out.collect(x))
+        new DummyReducer, new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def process(context: Context,
+                               elements: Iterable[(String, Int)],
+                               out: Collector[(String, Int)]): Unit = {
+            elements foreach ( x => out.collect(x))
           }
-        }
-      )
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -368,22 +434,23 @@ class AllWindowTranslationTest {
   @Test
   def testReduceWithProcessWindowFunctionProcessingTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
       .reduce(
-        new DummyReducer,
-        new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+        new DummyReducer, new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
           override def process(
               context: Context,
               input: Iterable[(String, Int)],
-              out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect(x))
-        }
-      )
+              out: Collector[(String, Int)]): Unit = input foreach ( x => out.collect(x))
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -406,22 +473,23 @@ class AllWindowTranslationTest {
   @Test
   def testApplyWithPreReducerEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
       .apply(
-        new DummyReducer,
-        new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+        new DummyReducer, new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
           override def apply(
               window: TimeWindow,
               input: Iterable[(String, Int)],
-              out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect(x))
-        }
-      )
+              out: Collector[(String, Int)]): Unit = input foreach ( x => out.collect(x))
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -444,18 +512,22 @@ class AllWindowTranslationTest {
   @Test
   def testReduceWithWindowFunctionEventTimeWithScalaFunction() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
       .reduce(
-        (x, _) => x,
-        (_: TimeWindow, in: Iterable[(String, Int)], out: Collector[(String, Int)]) =>
-          in.foreach(x => out.collect(x))
-      )
+        { (x, _) => x },
+        {
+          (_: TimeWindow, in: Iterable[(String, Int)], out: Collector[(String, Int)]) =>
+            in foreach { x => out.collect(x)}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -482,6 +554,7 @@ class AllWindowTranslationTest {
   @Test
   def testAggregateEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -489,7 +562,9 @@ class AllWindowTranslationTest {
       .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .aggregate(new DummyAggregator())
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -512,6 +587,7 @@ class AllWindowTranslationTest {
   @Test
   def testAggregateProcessingTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -519,7 +595,9 @@ class AllWindowTranslationTest {
       .windowAll(SlidingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .aggregate(new DummyAggregator())
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -542,6 +620,7 @@ class AllWindowTranslationTest {
   @Test
   def testAggregateWithWindowFunctionEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -549,7 +628,9 @@ class AllWindowTranslationTest {
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
       .aggregate(new DummyAggregator(), new TestAllWindowFunction())
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -572,14 +653,17 @@ class AllWindowTranslationTest {
   @Test
   def testAggregateWithWindowFunctionProcessingTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
-      .aggregate(new DummyAggregator(), new TestAllWindowFunction())
+        .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
+        .aggregate(new DummyAggregator(), new TestAllWindowFunction())
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -602,6 +686,7 @@ class AllWindowTranslationTest {
   @Test
   def testAggregateWithProcessWindowFunctionEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -609,7 +694,9 @@ class AllWindowTranslationTest {
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
       .aggregate(new DummyAggregator(), new TestProcessAllWindowFunction())
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -632,14 +719,17 @@ class AllWindowTranslationTest {
   @Test
   def testAggregateWithProcessWindowFunctionProcessingTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
-      .aggregate(new DummyAggregator(), new TestProcessAllWindowFunction())
+        .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
+        .aggregate(new DummyAggregator(), new TestProcessAllWindowFunction())
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -662,6 +752,7 @@ class AllWindowTranslationTest {
   @Test
   def testAggregateWithWindowFunctionEventTimeWithScalaFunction() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -669,14 +760,13 @@ class AllWindowTranslationTest {
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
       .aggregate(
         new DummyAggregator(),
-        {
-          (_: TimeWindow, in: Iterable[(String, Int)], out: Collector[(String, Int)]) =>
-            {
-              in.foreach(x => out.collect(x))
-            }
-        })
+        { (_: TimeWindow, in: Iterable[(String, Int)], out: Collector[(String, Int)]) => {
+          in foreach { x => out.collect(x)}
+        } })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -697,25 +787,377 @@ class AllWindowTranslationTest {
   }
 
   // ------------------------------------------------------------------------
+  //  fold() translation tests
+  // ------------------------------------------------------------------------
+
+  @Test
+  def testFoldEventTime() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(("", "", 1), new DummyFolder)
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[SlidingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
+  def testFoldProcessingTime() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(SlidingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(("", "", 1), new DummyFolder)
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[ProcessingTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[SlidingProcessingTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
+  def testFoldEventTimeWithScalaFunction() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(("", "", 1)) { (acc, _) => acc }
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[SlidingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+
+  @Test
+  def testFoldWithWindowFunctionEventTime() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(
+        ("", "", 1),
+        new DummyFolder,
+        new ProcessAllWindowFunction[(String, String, Int), (String, Int), TimeWindow] {
+          override def process(
+              context: Context,
+              input: Iterable[(String, String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._3))}
+        })
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[TumblingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
+  def testFoldWithWindowFunctionProcessingTime() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(
+        ("", "", 1),
+        new DummyFolder,
+        new AllWindowFunction[(String, String, Int), (String, Int), TimeWindow] {
+          override def apply(
+              window: TimeWindow,
+              input: Iterable[(String, String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._3))}
+        })
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[ProcessingTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[TumblingProcessingTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
+  def testFoldWithProcessWindowFunctionEventTime() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(
+        ("", "", 1),
+        new DummyFolder,
+        new ProcessAllWindowFunction[(String, String, Int), (String, Int), TimeWindow] {
+          override def process(
+              context: Context,
+              input: Iterable[(String, String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._3))}
+        })
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[TumblingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
+  def testFoldWithProcessWindowFunctionProcessingTime() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(
+        ("", "", 1),
+        new DummyFolder,
+        new ProcessAllWindowFunction[(String, String, Int), (String, Int), TimeWindow] {
+          override def process(
+              context: Context,
+              input: Iterable[(String, String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._3))}
+        })
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[ProcessingTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[TumblingProcessingTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
+  def testApplyWithPreFolderEventTime() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .apply(
+        ("", "", 1),
+        new DummyFolder,
+        new AllWindowFunction[(String, String, Int), (String, String, Int), TimeWindow] {
+          override def apply(
+              window: TimeWindow,
+              input: Iterable[(String, String, Int)],
+              out: Collector[(String, String, Int)]): Unit =
+            input foreach {x => out.collect((x._1, x._2, x._3))}
+        })
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[TumblingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
+  def testFoldWithWindowFunctionEventTimeWithScalaFunction() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .fold(
+        ("", "", 1),
+        { (acc: (String, String, Int), _) => acc },
+        { (_: TimeWindow, in: Iterable[(String, String, Int)], out: Collector[(String, Int)]) =>
+          in foreach { x => out.collect((x._1, x._3)) }
+        })
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[TumblingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  // ------------------------------------------------------------------------
   //  apply() translation tests
   // ------------------------------------------------------------------------
 
   @Test
   def testApplyEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
-      .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def apply(
-            window: TimeWindow,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .apply(
+        new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def apply(
+              window: TimeWindow,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -738,19 +1180,23 @@ class AllWindowTranslationTest {
   @Test
   def testApplyProcessingTimeTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
-      .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def apply(
-            window: TimeWindow,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .apply(
+        new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def apply(
+              window: TimeWindow,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -773,19 +1219,23 @@ class AllWindowTranslationTest {
   @Test
   def testProcessEventTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
-      .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def process(
-            context: Context,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .process(
+        new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def process(
+              context: Context,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -808,19 +1258,23 @@ class AllWindowTranslationTest {
   @Test
   def testProcessProcessingTimeTime() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
-      .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def process(
-            context: Context,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .process(
+        new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def process(
+              context: Context,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -843,14 +1297,19 @@ class AllWindowTranslationTest {
   @Test
   def testApplyEventTimeWithScalaFunction() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
-      .apply((window, in, out: Collector[(String, Int)]) => in.foreach(x => out.collect(x)))
+      .apply { (window, in, out: Collector[(String, Int)]) =>
+        in foreach { x => out.collect(x)}
+      }
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -870,9 +1329,11 @@ class AllWindowTranslationTest {
       ("hello", 1))
   }
 
+
   @Test
   def testReduceWithCustomTrigger() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -881,7 +1342,9 @@ class AllWindowTranslationTest {
       .trigger(CountTrigger.of(1))
       .reduce(new DummyReducer)
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -902,22 +1365,60 @@ class AllWindowTranslationTest {
   }
 
   @Test
+  def testFoldWithCustomTrigger() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .trigger(CountTrigger.of(1))
+      .fold(("", "", 1), new DummyFolder)
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[WindowOperator[_, _, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[WindowOperator[String, (String, Int), _, (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[CountTrigger[_]])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[SlidingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[FoldingStateDescriptor[_, _]])
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
   def testApplyWithCustomTrigger() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .trigger(CountTrigger.of(1))
-      .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def apply(
-            window: TimeWindow,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .apply(
+        new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def apply(
+              window: TimeWindow,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -940,20 +1441,24 @@ class AllWindowTranslationTest {
   @Test
   def testProcessWithCustomTrigger() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .trigger(CountTrigger.of(1))
-      .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def process(
-            context: Context,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .process(
+        new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def process(
+              context: Context,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -976,6 +1481,7 @@ class AllWindowTranslationTest {
   @Test
   def testReduceWithEvictor() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
@@ -984,14 +1490,17 @@ class AllWindowTranslationTest {
       .evictor(CountEvictor.of(100))
       .reduce(new DummyReducer)
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
     assertTrue(operator.isInstanceOf[EvictingWindowOperator[_, _, _, _ <: Window]])
 
     val winOperator = operator
-      .asInstanceOf[EvictingWindowOperator[String, (String, Int), (String, Int), _ <: Window]]
+      .asInstanceOf[
+      EvictingWindowOperator[String, (String, Int), (String, Int), _ <: Window]]
 
     assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
     assertTrue(winOperator.getEvictor.isInstanceOf[CountEvictor[_]])
@@ -1006,22 +1515,66 @@ class AllWindowTranslationTest {
   }
 
   @Test
+  def testFoldWithEvictor() {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+
+    val source = env.fromElements(("hello", 1), ("hello", 2))
+
+    val window1 = source
+      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .evictor(CountEvictor.of(100))
+      .fold(("", "", 1), new DummyFolder)
+
+    val transform = window1
+      .javaStream
+      .getTransformation
+      .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
+
+    val operator = transform.getOperator
+    assertTrue(operator.isInstanceOf[EvictingWindowOperator[_, _, _, _ <: Window]])
+
+    val winOperator = operator
+      .asInstanceOf[
+      EvictingWindowOperator[String, (String, Int), (String, Int), _ <: Window]]
+
+    assertTrue(winOperator.getTrigger.isInstanceOf[EventTimeTrigger])
+    assertTrue(winOperator.getEvictor.isInstanceOf[CountEvictor[_]])
+    assertTrue(winOperator.getWindowAssigner.isInstanceOf[SlidingEventTimeWindows])
+    assertTrue(winOperator.getStateDescriptor.isInstanceOf[ListStateDescriptor[_]])
+
+    winOperator.setOutputType(
+      window1.javaStream.getType.asInstanceOf[TypeInformation[(String, Int)]],
+      new ExecutionConfig)
+
+    processElementAndEnsureOutput[String, (String, Int), (String, Int)](
+      winOperator,
+      winOperator.getKeySelector,
+      BasicTypeInfo.STRING_TYPE_INFO,
+      ("hello", 1))
+  }
+
+  @Test
   def testApplyWithEvictor() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .evictor(CountEvictor.of(100))
-      .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def apply(
-            window: TimeWindow,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .apply(
+        new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def apply(
+              window: TimeWindow,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -1045,20 +1598,24 @@ class AllWindowTranslationTest {
   @Test
   def testProcessWithEvictor() {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
 
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
       .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
       .evictor(CountEvictor.of(100))
-      .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
-        override def process(
-            context: Context,
-            input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = input.foreach(x => out.collect((x._1, x._2)))
-      })
+      .process(
+        new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+          override def process(
+              context: Context,
+              input: Iterable[(String, Int)],
+              out: Collector[(String, Int)]): Unit = input foreach {x => out.collect((x._1, x._2))}
+        })
 
-    val transform = window1.javaStream.getTransformation
+    val transform = window1
+      .javaStream
+      .getTransformation
       .asInstanceOf[OneInputTransformation[(String, Int), (String, Int)]]
 
     val operator = transform.getOperator
@@ -1080,9 +1637,9 @@ class AllWindowTranslationTest {
   }
 
   /**
-   * Ensure that we get some output from the given operator when pushing in an element and setting
-   * watermark and processing time to `Long.MaxValue`.
-   */
+    * Ensure that we get some output from the given operator when pushing in an element and
+    * setting watermark and processing time to `Long.MaxValue`.
+    */
   @throws[Exception]
   private def processElementAndEnsureOutput[K, IN, OUT](
       operator: OneInputStreamOperator[IN, OUT],
@@ -1110,7 +1667,8 @@ class AllWindowTranslationTest {
   }
 }
 
-class TestAllWindowFunction extends AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+class TestAllWindowFunction
+    extends AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
 
   override def apply(
       window: TimeWindow,
@@ -1122,7 +1680,7 @@ class TestAllWindowFunction extends AllWindowFunction[(String, Int), (String, In
 }
 
 class TestProcessAllWindowFunction
-  extends ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+    extends ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
 
   override def process(
       context: Context,

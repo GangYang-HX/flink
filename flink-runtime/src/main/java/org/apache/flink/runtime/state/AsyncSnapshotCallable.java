@@ -25,149 +25,198 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Base class that outlines the strategy for asynchronous snapshots. Implementations of this class
- * are typically instantiated with resources that have been created in the synchronous part of a
- * snapshot. Then, the implementation of {@link #callInternal()} is invoked in the asynchronous
- * part. All resources created by this methods should be released by the end of the method. If the
- * created resources are {@link Closeable} objects and can block in calls (e.g. in/output streams),
- * they should be registered with the snapshot's {@link CloseableRegistry} so that the can be closed
- * and unblocked on cancellation. After {@link #callInternal()} ended, {@link
- * #logAsyncSnapshotComplete(long)} is called. In that method, implementations can emit log
- * statements about the duration. At the very end, this class calls {@link
- * #cleanupProvidedResources()}. The implementation of this method should release all provided
- * resources that have been passed into the snapshot from the synchronous part of the snapshot.
+ * Base class that outlines the strategy for asynchronous snapshots. Implementations of this class are typically
+ * instantiated with resources that have been created in the synchronous part of a snapshot. Then, the implementation
+ * of {@link #callInternal()} is invoked in the asynchronous part. All resources created by this methods should
+ * be released by the end of the method. If the created resources are {@link Closeable} objects and can block in calls
+ * (e.g. in/output streams), they should be registered with the snapshot's {@link CloseableRegistry} so that the can
+ * be closed and unblocked on cancellation. After {@link #callInternal()} ended, {@link #logAsyncSnapshotComplete(long)}
+ * is called. In that method, implementations can emit log statements about the duration. At the very end, this class
+ * calls {@link #cleanupProvidedResources()}. The implementation of this method should release all provided resources
+ * that have been passed into the snapshot from the synchronous part of the snapshot.
  *
  * @param <T> type of the result.
  */
 public abstract class AsyncSnapshotCallable<T> implements Callable<T> {
 
-    /** Message for the {@link CancellationException}. */
-    private static final String CANCELLATION_EXCEPTION_MSG = "Async snapshot was cancelled.";
+	/** Message for the {@link CancellationException}. */
+	private static final String CANCELLATION_EXCEPTION_MSG = "Async snapshot was cancelled.";
 
-    private static final Logger LOG = LoggerFactory.getLogger(AsyncSnapshotCallable.class);
+	private static final Logger LOG = LoggerFactory.getLogger(AsyncSnapshotCallable.class);
 
-    /** This is used to atomically claim ownership for the resource cleanup. */
-    @Nonnull private final AtomicBoolean resourceCleanupOwnershipTaken;
+	private static final ExecutorService DEFAULT_CLOSE_EXECUTOR;
 
-    /**
-     * Registers streams that can block in I/O during snapshot. Forwards close from
-     * taskCancelCloseableRegistry.
-     */
-    @Nonnull protected final CloseableRegistry snapshotCloseableRegistry;
+	/** This is used to atomically claim ownership for the resource cleanup. */
+	@Nonnull
+	private final AtomicBoolean resourceCleanupOwnershipTaken;
 
-    protected AsyncSnapshotCallable() {
-        this.snapshotCloseableRegistry = new CloseableRegistry();
-        this.resourceCleanupOwnershipTaken = new AtomicBoolean(false);
-    }
+	/** Registers streams that can block in I/O during snapshot. Forwards close from taskCancelCloseableRegistry. */
+	@Nonnull
+	protected final CloseableRegistry snapshotCloseableRegistry;
 
-    @Override
-    public T call() throws Exception {
-        final long startTime = System.currentTimeMillis();
+	private volatile boolean cancelled = false;
 
-        if (resourceCleanupOwnershipTaken.compareAndSet(false, true)) {
-            try {
-                T result = callInternal();
-                logAsyncSnapshotComplete(startTime);
-                return result;
-            } catch (Exception ex) {
-                if (!snapshotCloseableRegistry.isClosed()) {
-                    throw ex;
-                }
-            } finally {
-                closeSnapshotIO();
-                cleanup();
-            }
-        }
+	protected AsyncSnapshotCallable() {
+		this.snapshotCloseableRegistry = new CloseableRegistry();
+		this.resourceCleanupOwnershipTaken = new AtomicBoolean(false);
+	}
 
-        throw new CancellationException(CANCELLATION_EXCEPTION_MSG);
-    }
+	static {
+		DEFAULT_CLOSE_EXECUTOR = new ThreadPoolExecutor(
+				2,
+				2, // Normally, closing stream is always fast, and just few tasks on taskmanager have keyed state.
+				10L, // The alive time doesn't have to be set too long,
+				     // just to avoid the checkpoint interval is very short and continuous failure in some scenarios.
+				TimeUnit.SECONDS,
+				new LinkedBlockingQueue<>());
+	}
 
-    @VisibleForTesting
-    protected void cancel() {
-        closeSnapshotIO();
-        if (resourceCleanupOwnershipTaken.compareAndSet(false, true)) {
-            cleanup();
-        }
-    }
+	@Override
+	public T call() throws Exception {
+		final long startTime = System.currentTimeMillis();
 
-    /**
-     * Creates a future task from this and registers it with the given {@link CloseableRegistry}.
-     * The task is unregistered again in {@link FutureTask#done()}.
-     */
-    public AsyncSnapshotTask toAsyncSnapshotFutureTask(@Nonnull CloseableRegistry taskRegistry)
-            throws IOException {
-        return new AsyncSnapshotTask(taskRegistry);
-    }
+		if (resourceCleanupOwnershipTaken.compareAndSet(false, true)) {
+			try {
+				T result = callInternal();
+				logAsyncSnapshotComplete(startTime);
+				return result;
+			} catch (Exception ex) {
+				if (!snapshotCloseableRegistry.isClosed()) {
+					throw ex;
+				}
+			} finally {
+				closeSnapshotIO();
+				cleanup();
+			}
+		}
 
-    /**
-     * {@link FutureTask} that wraps a {@link AsyncSnapshotCallable} and connects it with
-     * cancellation and closing.
-     */
-    public class AsyncSnapshotTask extends FutureTask<T> {
+		throw new CancellationException(CANCELLATION_EXCEPTION_MSG);
+	}
 
-        @Nonnull private final CloseableRegistry taskRegistry;
+	@VisibleForTesting
+	protected void cancel() {
+		// async to close, see https://git.bilibili.co/datacenter/flink/-/issues/440 for detail.
+		DEFAULT_CLOSE_EXECUTOR.execute(() -> {
+			closeSnapshotIO();
+			if (resourceCleanupOwnershipTaken.compareAndSet(false, true)) {
+				cleanup();
+			}
+		});
+	}
 
-        @Nonnull private final Closeable cancelOnClose;
+	/**
+	 * Get all uploaded state object, if task cancelled, we will clean up these state.
+	 *
+	 * @return states
+	 */
+	protected Collection<StateObject> statesToBeDiscardedWhenTaskCancelled() {
+		return null;
+	}
 
-        private AsyncSnapshotTask(@Nonnull CloseableRegistry taskRegistry) throws IOException {
-            super(AsyncSnapshotCallable.this);
-            this.cancelOnClose = () -> cancel(true);
-            this.taskRegistry = taskRegistry;
-            taskRegistry.registerCloseable(cancelOnClose);
-        }
+	/**
+	 * Creates a future task from this and registers it with the given {@link CloseableRegistry}. The task is
+	 * unregistered again in {@link FutureTask#done()}.
+	 */
+	public AsyncSnapshotTask toAsyncSnapshotFutureTask(@Nonnull CloseableRegistry taskRegistry) throws IOException {
+		return new AsyncSnapshotTask(taskRegistry);
+	}
 
-        @Override
-        public boolean cancel(boolean mayInterruptIfRunning) {
-            boolean result = super.cancel(mayInterruptIfRunning);
-            if (mayInterruptIfRunning) {
-                AsyncSnapshotCallable.this.cancel();
-            }
-            return result;
-        }
+	/**
+	 * {@link FutureTask} that wraps a {@link AsyncSnapshotCallable} and connects it with cancellation and closing.
+	 */
+	public class AsyncSnapshotTask extends FutureTask<T> {
 
-        @Override
-        protected void done() {
-            super.done();
-            taskRegistry.unregisterCloseable(cancelOnClose);
-        }
-    }
+		@Nonnull
+		private final CloseableRegistry taskRegistry;
 
-    /**
-     * This method implements the (async) snapshot logic. Resources aquired within this method
-     * should be released at the end of the method.
-     */
-    protected abstract T callInternal() throws Exception;
+		@Nonnull
+		private final Closeable cancelOnClose;
 
-    /**
-     * This method implements the cleanup of resources that have been passed in (from the sync
-     * part). Called after the end of {@link #callInternal()}.
-     */
-    protected abstract void cleanupProvidedResources();
+		private AsyncSnapshotTask(@Nonnull CloseableRegistry taskRegistry) throws IOException {
+			super(AsyncSnapshotCallable.this);
+			this.cancelOnClose = () -> cancel(true);
+			this.taskRegistry = taskRegistry;
+			taskRegistry.registerCloseable(cancelOnClose);
+		}
 
-    /**
-     * This method is invoked after completion of the snapshot and can be overridden to output a
-     * logging about the duration of the async part.
-     */
-    protected void logAsyncSnapshotComplete(long startTime) {}
+		@Override
+		public boolean cancel(boolean mayInterruptIfRunning) {
+			AsyncSnapshotCallable.this.cancelled = true;
+			boolean result = super.cancel(mayInterruptIfRunning);
+			if (mayInterruptIfRunning) {
+				AsyncSnapshotCallable.this.cancel();
+			}
+			return result;
+		}
 
-    private void cleanup() {
-        cleanupProvidedResources();
-    }
+		@Override
+		protected void done() {
+			super.done();
+			taskRegistry.unregisterCloseable(cancelOnClose);
+		}
+	}
 
-    private void closeSnapshotIO() {
-        try {
-            snapshotCloseableRegistry.close();
-        } catch (IOException e) {
-            LOG.warn("Could not properly close incremental snapshot streams.", e);
-        }
-    }
+	/**
+	 * This method implements the (async) snapshot logic. Resources aquired within this method should be released at
+	 * the end of the method.
+	 */
+	protected abstract T callInternal() throws Exception;
+
+	/**
+	 * This method implements the cleanup of resources that have been passed in (from the sync part). Called after the
+	 * end of {@link #callInternal()}.
+	 */
+	protected abstract void cleanupProvidedResources();
+
+	/**
+	 * This method is invoked after completion of the snapshot and can be overridden to output a logging about the
+	 * duration of the async part.
+	 */
+	protected void logAsyncSnapshotComplete(long startTime) {
+
+	}
+
+	private void cleanup() {
+		cleanupProvidedResources();
+		Collection<StateObject> statesToBeDiscardedWhenTaskCancelled =
+				AsyncSnapshotCallable.this.statesToBeDiscardedWhenTaskCancelled();
+		if (cancelled) {
+			if (statesToBeDiscardedWhenTaskCancelled == null) {
+				return;
+			}
+
+			if (!statesToBeDiscardedWhenTaskCancelled.isEmpty()) {
+				try {
+					StateUtil.bestEffortDiscardAllStateObjects(statesToBeDiscardedWhenTaskCancelled);
+				} catch (Exception e) {
+					LOG.warn("clean statesToBeDiscardedWhenTaskCancelled error.", e);
+				}
+			}
+		} else if (statesToBeDiscardedWhenTaskCancelled != null) {
+			// do nothing, clear for gc.
+			statesToBeDiscardedWhenTaskCancelled.clear();
+		}
+	}
+
+	private void closeSnapshotIO() {
+		try {
+			snapshotCloseableRegistry.close();
+		} catch (IOException e) {
+			LOG.warn("Could not properly close incremental snapshot streams.", e);
+		}
+	}
 }

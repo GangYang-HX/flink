@@ -22,9 +22,14 @@ import org.apache.flink.annotation.PublicEvolving;
 
 import org.apache.hadoop.util.Progressable;
 
-/** This is a dummy progress. */
+/**
+ * This is a dummy progress.
+ *
+ */
 @PublicEvolving
 public class HadoopDummyProgressable implements Progressable {
-    @Override
-    public void progress() {}
+	@Override
+	public void progress() {
+
+	}
 }

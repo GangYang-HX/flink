@@ -18,43 +18,77 @@
 
 package org.apache.flink.runtime.io.network.api.writer;
 
-import org.apache.flink.core.memory.MemorySegment;
-import org.apache.flink.core.memory.MemorySegmentFactory;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
-import org.apache.flink.runtime.io.network.buffer.FreeingBufferRecycler;
-import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.BufferBuilder;
+import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
+import org.apache.flink.runtime.io.network.buffer.BufferProvider;
 import org.apache.flink.runtime.io.network.partition.MockResultPartitionWriter;
 
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 
-import static org.apache.flink.util.Preconditions.checkArgument;
+import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.flink.util.Preconditions.checkState;
 
-/** {@link ResultPartitionWriter} that collects output on the List. */
+/**
+ * {@link ResultPartitionWriter} that collects output on the List.
+ */
 @ThreadSafe
 public abstract class AbstractCollectingResultPartitionWriter extends MockResultPartitionWriter {
+	private final BufferProvider bufferProvider;
+	private final ArrayDeque<BufferConsumer> bufferConsumers = new ArrayDeque<>();
 
-    @Override
-    public void emitRecord(ByteBuffer record, int targetSubpartition) throws IOException {
-        checkArgument(targetSubpartition < getNumberOfSubpartitions());
-        deserializeRecord(record);
-    }
+	public AbstractCollectingResultPartitionWriter(BufferProvider bufferProvider) {
+		this.bufferProvider = checkNotNull(bufferProvider);
+	}
 
-    @Override
-    public void broadcastRecord(ByteBuffer record) throws IOException {
-        deserializeRecord(record);
-    }
+	@Override
+	public BufferBuilder getBufferBuilder(int targetChannel) throws IOException, InterruptedException {
+		return bufferProvider.requestBufferBuilderBlocking(targetChannel);
+	}
 
-    private void deserializeRecord(ByteBuffer serializedRecord) throws IOException {
-        checkArgument(serializedRecord.hasArray());
+	@Override
+	public BufferBuilder tryGetBufferBuilder(int targetChannel) throws IOException {
+		return bufferProvider.requestBufferBuilder(targetChannel);
+	}
 
-        MemorySegment segment = MemorySegmentFactory.wrap(serializedRecord.array());
-        NetworkBuffer buffer = new NetworkBuffer(segment, FreeingBufferRecycler.INSTANCE);
-        buffer.setSize(serializedRecord.remaining());
-        deserializeBuffer(buffer);
-    }
+	@Override
+	public synchronized int addBufferConsumer(
+			BufferConsumer bufferConsumer,
+			int targetChannel) throws IOException {
+		checkState(targetChannel < getNumberOfSubpartitions());
+		bufferConsumers.add(bufferConsumer);
+		processBufferConsumers();
+		return 0;
+	}
 
-    protected abstract void deserializeBuffer(Buffer buffer) throws IOException;
+	private void processBufferConsumers() throws IOException {
+		while (!bufferConsumers.isEmpty()) {
+			BufferConsumer bufferConsumer = bufferConsumers.peek();
+			Buffer buffer = bufferConsumer.build();
+			deserializeBuffer(buffer);
+			if (!bufferConsumer.isFinished()) {
+				break;
+			}
+			bufferConsumers.pop().close();
+		}
+	}
+
+	@Override
+	public synchronized void flushAll() {
+		try {
+			processBufferConsumers();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	@Override
+	public void flush(int subpartitionIndex) {
+		flushAll();
+	}
+
+	protected abstract void deserializeBuffer(Buffer buffer) throws IOException;
 }

@@ -18,51 +18,54 @@
 
 package org.apache.flink.table.module.hive;
 
-import org.apache.flink.annotation.Internal;
-import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.table.catalog.hive.client.HiveShimLoader;
-import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.descriptors.DescriptorProperties;
 import org.apache.flink.table.factories.ModuleFactory;
 import org.apache.flink.table.module.Module;
 
-import java.util.Collections;
-import java.util.Set;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import static org.apache.flink.table.module.hive.HiveModuleOptions.HIVE_VERSION;
+import static org.apache.flink.table.descriptors.ModuleDescriptorValidator.MODULE_TYPE;
+import static org.apache.flink.table.module.hive.HiveModuleDescriptorValidator.MODULE_HIVE_VERSION;
+import static org.apache.flink.table.module.hive.HiveModuleDescriptorValidator.MODULE_TYPE_HIVE;
 
-/** Factory for {@link HiveModule}. */
-@Internal
+/**
+ * Factory for {@link HiveModule}.
+ */
 public class HiveModuleFactory implements ModuleFactory {
 
-    public static final String IDENTIFIER = "hive";
+	@Override
+	public Module createModule(Map<String, String> properties) {
+		final DescriptorProperties descProperties = getValidatedProperties(properties);
 
-    @Override
-    public String factoryIdentifier() {
-        return IDENTIFIER;
-    }
+		final String hiveVersion = descProperties.getOptionalString(MODULE_HIVE_VERSION)
+			.orElse(HiveShimLoader.getHiveVersion());
 
-    @Override
-    public Set<ConfigOption<?>> requiredOptions() {
-        return Collections.emptySet();
-    }
+		return new HiveModule(hiveVersion);
+	}
 
-    @Override
-    public Set<ConfigOption<?>> optionalOptions() {
-        return Collections.singleton(HIVE_VERSION);
-    }
+	private static DescriptorProperties getValidatedProperties(Map<String, String> properties) {
+		final DescriptorProperties descriptorProperties = new DescriptorProperties(true);
+		descriptorProperties.putProperties(properties);
 
-    @Override
-    public Module createModule(Context context) {
-        final FactoryUtil.ModuleFactoryHelper factoryHelper =
-                FactoryUtil.createModuleFactoryHelper(this, context);
-        factoryHelper.validate();
+		new HiveModuleDescriptorValidator().validate(descriptorProperties);
 
-        final String hiveVersion =
-                factoryHelper
-                        .getOptions()
-                        .getOptional(HIVE_VERSION)
-                        .orElseGet(HiveShimLoader::getHiveVersion);
+		return descriptorProperties;
+	}
 
-        return new HiveModule(hiveVersion, context.getClassLoader());
-    }
+	@Override
+	public Map<String, String> requiredContext() {
+		Map<String, String> context = new HashMap<>();
+		context.put(MODULE_TYPE, MODULE_TYPE_HIVE);
+
+		return context;
+	}
+
+	@Override
+	public List<String> supportedProperties() {
+		return Arrays.asList(MODULE_HIVE_VERSION);
+	}
 }

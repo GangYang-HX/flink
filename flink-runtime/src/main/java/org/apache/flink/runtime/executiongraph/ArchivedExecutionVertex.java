@@ -15,120 +15,101 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.flink.runtime.executiongraph;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.execution.ExecutionState;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+import org.apache.flink.runtime.util.EvictingBoundedList;
+
+import javax.annotation.Nullable;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Optional;
 
-import static org.apache.flink.util.Preconditions.checkNotNull;
-
-/** {@code ArchivedExecutionVertex} is a readonly representation of {@link ExecutionVertex}. */
 public class ArchivedExecutionVertex implements AccessExecutionVertex, Serializable {
 
-    private static final long serialVersionUID = -6708241535015028576L;
+	private static final long serialVersionUID = -6708241535015028576L;
 
-    private final int subTaskIndex;
+	private final int subTaskIndex;
 
-    private final ExecutionHistory executionHistory;
+	private final EvictingBoundedList<ArchivedExecution> priorExecutions;
 
-    /** The name in the format "myTask (2/7)", cached to avoid frequent string concatenations. */
-    private final String taskNameWithSubtask;
+	/** The name in the format "myTask (2/7)", cached to avoid frequent string concatenations */
+	private final String taskNameWithSubtask;
 
-    private final ArchivedExecution currentExecution; // this field must never be null
+	private final ArchivedExecution currentExecution;    // this field must never be null
 
-    private final Collection<AccessExecution> currentExecutions;
+	private JobVertexID jobVertexId;
 
-    // ------------------------------------------------------------------------
+	// ------------------------------------------------------------------------
 
-    public ArchivedExecutionVertex(ExecutionVertex vertex) {
-        this.subTaskIndex = vertex.getParallelSubtaskIndex();
-        this.executionHistory = getCopyOfExecutionHistory(vertex);
-        this.taskNameWithSubtask = vertex.getTaskNameWithSubtaskIndex();
+	public ArchivedExecutionVertex(ExecutionVertex vertex) {
+		this.subTaskIndex = vertex.getParallelSubtaskIndex();
+		this.priorExecutions = vertex.getCopyOfPriorExecutionsList();
+		this.taskNameWithSubtask = vertex.getTaskNameWithSubtaskIndex();
+		this.currentExecution = vertex.getCurrentExecutionAttempt().archive();
+		this.jobVertexId = vertex.getID().getJobVertexId();
+	}
 
-        Execution vertexCurrentExecution = vertex.getCurrentExecutionAttempt();
-        ArrayList<AccessExecution> currentExecutionList =
-                new ArrayList<>(vertex.getCurrentExecutions().size());
-        currentExecution = vertexCurrentExecution.archive();
-        currentExecutionList.add(currentExecution);
-        for (Execution execution : vertex.getCurrentExecutions()) {
-            if (execution != vertexCurrentExecution) {
-                currentExecutionList.add(execution.archive());
-            }
-        }
-        currentExecutions = Collections.unmodifiableList(currentExecutionList);
-    }
+	public ArchivedExecutionVertex(
+			int subTaskIndex, String taskNameWithSubtask,
+			ArchivedExecution currentExecution, EvictingBoundedList<ArchivedExecution> priorExecutions) {
+		this.subTaskIndex = subTaskIndex;
+		this.taskNameWithSubtask = taskNameWithSubtask;
+		this.currentExecution = currentExecution;
+		this.priorExecutions = priorExecutions;
+	}
 
-    @VisibleForTesting
-    public ArchivedExecutionVertex(
-            int subTaskIndex,
-            String taskNameWithSubtask,
-            ArchivedExecution currentExecution,
-            ExecutionHistory executionHistory) {
-        this.subTaskIndex = subTaskIndex;
-        this.taskNameWithSubtask = checkNotNull(taskNameWithSubtask);
-        this.currentExecution = checkNotNull(currentExecution);
-        this.executionHistory = checkNotNull(executionHistory);
-        this.currentExecutions = Collections.singletonList(currentExecution);
-    }
+	// --------------------------------------------------------------------------------------------
+	//   Accessors
+	// --------------------------------------------------------------------------------------------
 
-    // --------------------------------------------------------------------------------------------
-    //   Accessors
-    // --------------------------------------------------------------------------------------------
+	@Override
+	public String getTaskNameWithSubtaskIndex() {
+		return this.taskNameWithSubtask;
+	}
 
-    @Override
-    public String getTaskNameWithSubtaskIndex() {
-        return this.taskNameWithSubtask;
-    }
+	@Override
+	public int getParallelSubtaskIndex() {
+		return this.subTaskIndex;
+	}
 
-    @Override
-    public int getParallelSubtaskIndex() {
-        return this.subTaskIndex;
-    }
+	@Override
+	public ArchivedExecution getCurrentExecutionAttempt() {
+		return currentExecution;
+	}
 
-    @Override
-    public ArchivedExecution getCurrentExecutionAttempt() {
-        return currentExecution;
-    }
+	@Override
+	public ExecutionState getExecutionState() {
+		return currentExecution.getState();
+	}
 
-    @Override
-    public Collection<AccessExecution> getCurrentExecutions() {
-        return currentExecutions;
-    }
+	@Override
+	public long getStateTimestamp(ExecutionState state) {
+		return currentExecution.getStateTimestamp(state);
+	}
 
-    @Override
-    public ExecutionState getExecutionState() {
-        return currentExecution.getState();
-    }
+	@Override
+	public String getFailureCauseAsString() {
+		return currentExecution.getFailureCauseAsString();
+	}
 
-    @Override
-    public long getStateTimestamp(ExecutionState state) {
-        return currentExecution.getStateTimestamp(state);
-    }
+	@Override
+	public TaskManagerLocation getCurrentAssignedResourceLocation() {
+		return currentExecution.getAssignedResourceLocation();
+	}
 
-    @Override
-    public Optional<ErrorInfo> getFailureInfo() {
-        return currentExecution.getFailureInfo();
-    }
+	@Nullable
+	@Override
+	public ArchivedExecution getPriorExecutionAttempt(int attemptNumber) {
+		if (attemptNumber >= 0 && attemptNumber < priorExecutions.size()) {
+			return priorExecutions.get(attemptNumber);
+		} else {
+			throw new IllegalArgumentException("attempt does not exist");
+		}
+	}
 
-    @Override
-    public TaskManagerLocation getCurrentAssignedResourceLocation() {
-        return currentExecution.getAssignedResourceLocation();
-    }
-
-    @Override
-    public ExecutionHistory getExecutionHistory() {
-        return executionHistory;
-    }
-
-    static ExecutionHistory getCopyOfExecutionHistory(ExecutionVertex executionVertex) {
-        return new ExecutionHistory(executionVertex.getExecutionHistory());
-    }
+	public JobVertexID getJobVertexId() {
+		return jobVertexId;
+	}
 }

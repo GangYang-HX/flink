@@ -24,174 +24,183 @@ import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.fs.hdfs.HadoopFileSystem;
-import org.apache.flink.testutils.junit.RetryOnException;
-import org.apache.flink.testutils.junit.extensions.retry.RetryExtension;
+import org.apache.flink.testutils.junit.RetryOnFailure;
+import org.apache.flink.testutils.junit.RetryRule;
 import org.apache.flink.testutils.s3.S3TestCredentials;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.hadoop.util.VersionUtil;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.TestTemplate;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.AfterClass;
+import org.junit.Assume;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
-import static org.assertj.core.api.Assumptions.assumeThatThrownBy;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assume.assumeFalse;
+import static org.junit.Assume.assumeNoException;
 
 /**
  * Tests for verifying file staging during submission to YARN works with the S3A file system.
  *
- * <p>Note that the setup is similar to
- * <tt>org.apache.flink.fs.s3hadoop.HadoopS3FileSystemITCase</tt>.
+ * <p>Note that the setup is similar to <tt>org.apache.flink.fs.s3hadoop.HadoopS3FileSystemITCase</tt>.
  */
-@ExtendWith(RetryExtension.class)
-class YarnFileStageTestS3ITCase {
+public class YarnFileStageTestS3ITCase extends TestLogger {
 
-    private static final Logger log = LoggerFactory.getLogger(YarnFileStageTestS3ITCase.class);
+	private static final String TEST_DATA_DIR = "tests-" + UUID.randomUUID();
 
-    private static final String TEST_DATA_DIR = "tests-" + UUID.randomUUID();
+	@ClassRule
+	public static final TemporaryFolder TEMP_FOLDER = new TemporaryFolder();
 
-    /** Number of tests executed. */
-    private static int numRecursiveUploadTests = 0;
+	@Rule
+	public final TemporaryFolder tempFolder = new TemporaryFolder();
 
-    /** Will be updated by {@link #checkCredentialsAndSetup(File)} if the test is not skipped. */
-    private static boolean skipTest = true;
+	@Rule
+	public final RetryRule retryRule = new RetryRule();
 
-    @BeforeAll
-    static void checkCredentialsAndSetup(@TempDir File tempFolder) throws IOException {
-        // check whether credentials exist
-        S3TestCredentials.assumeCredentialsAvailable();
+	/**
+	 * Number of tests executed.
+	 */
+	private static int numRecursiveUploadTests = 0;
 
-        skipTest = false;
+	/**
+	 * Will be updated by {@link #checkCredentialsAndSetup()} if the test is not skipped.
+	 */
+	private static boolean skipTest = true;
 
-        setupCustomHadoopConfig(tempFolder);
-    }
+	@BeforeClass
+	public static void checkCredentialsAndSetup() throws IOException {
+		// check whether credentials exist
+		S3TestCredentials.assumeCredentialsAvailable();
 
-    @AfterAll
-    static void resetFileSystemConfiguration() {
-        FileSystem.initialize(new Configuration());
-    }
+		skipTest = false;
 
-    @AfterAll
-    static void checkAtLeastOneTestRun() {
-        if (!skipTest) {
-            assertThat(numRecursiveUploadTests)
-                    .as(
-                            "No S3 filesystem upload test executed. Please activate the "
-                                    + "'include_hadoop_aws' build profile or set '-Dinclude_hadoop_aws' during build "
-                                    + "(Hadoop >= 2.6 moved S3 filesystems out of hadoop-common).")
-                    .isGreaterThan(0);
-        }
-    }
+		setupCustomHadoopConfig();
+	}
 
-    /**
-     * Create a Hadoop config file containing S3 access credentials.
-     *
-     * <p>Note that we cannot use them as part of the URL since this may fail if the credentials
-     * contain a "/" (see <a
-     * href="https://issues.apache.org/jira/browse/HADOOP-3733">HADOOP-3733</a>).
-     */
-    private static void setupCustomHadoopConfig(File tempFolder) throws IOException {
-        File hadoopConfig =
-                Files.createTempFile(tempFolder.toPath(), UUID.randomUUID().toString(), "")
-                        .toFile();
-        Map<String /* key */, String /* value */> parameters = new HashMap<>();
+	@AfterClass
+	public static void resetFileSystemConfiguration() throws IOException {
+		FileSystem.initialize(new Configuration());
+	}
 
-        // set all different S3 fs implementation variants' configuration keys
-        parameters.put("fs.s3a.access.key", S3TestCredentials.getS3AccessKey());
-        parameters.put("fs.s3a.secret.key", S3TestCredentials.getS3SecretKey());
+	@AfterClass
+	public static void checkAtLeastOneTestRun() {
+		if (!skipTest) {
+			assertThat(
+				"No S3 filesystem upload test executed. Please activate the " +
+					"'include_hadoop_aws' build profile or set '-Dinclude_hadoop_aws' during build " +
+					"(Hadoop >= 2.6 moved S3 filesystems out of hadoop-common).",
+				numRecursiveUploadTests, greaterThan(0));
+		}
+	}
 
-        parameters.put("fs.s3.awsAccessKeyId", S3TestCredentials.getS3AccessKey());
-        parameters.put("fs.s3.awsSecretAccessKey", S3TestCredentials.getS3SecretKey());
+	/**
+	 * Create a Hadoop config file containing S3 access credentials.
+	 *
+	 * <p>Note that we cannot use them as part of the URL since this may fail if the credentials
+	 * contain a "/" (see <a href="https://issues.apache.org/jira/browse/HADOOP-3733">HADOOP-3733</a>).
+	 */
+	private static void setupCustomHadoopConfig() throws IOException {
+		File hadoopConfig = TEMP_FOLDER.newFile();
+		Map<String /* key */, String /* value */> parameters = new HashMap<>();
 
-        parameters.put("fs.s3n.awsAccessKeyId", S3TestCredentials.getS3AccessKey());
-        parameters.put("fs.s3n.awsSecretAccessKey", S3TestCredentials.getS3SecretKey());
+		// set all different S3 fs implementation variants' configuration keys
+		parameters.put("fs.s3a.access.key", S3TestCredentials.getS3AccessKey());
+		parameters.put("fs.s3a.secret.key", S3TestCredentials.getS3SecretKey());
 
-        try (PrintStream out = new PrintStream(new FileOutputStream(hadoopConfig))) {
-            out.println("<?xml version=\"1.0\"?>");
-            out.println("<?xml-stylesheet type=\"text/xsl\" href=\"configuration.xsl\"?>");
-            out.println("<configuration>");
-            for (Map.Entry<String, String> entry : parameters.entrySet()) {
-                out.println("\t<property>");
-                out.println("\t\t<name>" + entry.getKey() + "</name>");
-                out.println("\t\t<value>" + entry.getValue() + "</value>");
-                out.println("\t</property>");
-            }
-            out.println("</configuration>");
-        }
+		parameters.put("fs.s3.awsAccessKeyId", S3TestCredentials.getS3AccessKey());
+		parameters.put("fs.s3.awsSecretAccessKey", S3TestCredentials.getS3SecretKey());
 
-        final Configuration conf = new Configuration();
-        conf.setString(ConfigConstants.HDFS_SITE_CONFIG, hadoopConfig.getAbsolutePath());
-        conf.set(CoreOptions.ALLOWED_FALLBACK_FILESYSTEMS, "s3;s3a;s3n");
+		parameters.put("fs.s3n.awsAccessKeyId", S3TestCredentials.getS3AccessKey());
+		parameters.put("fs.s3n.awsSecretAccessKey", S3TestCredentials.getS3SecretKey());
 
-        FileSystem.initialize(conf, null);
-    }
+		try (PrintStream out = new PrintStream(new FileOutputStream(hadoopConfig))) {
+			out.println("<?xml version=\"1.0\"?>");
+			out.println("<?xml-stylesheet type=\"text/xsl\" href=\"configuration.xsl\"?>");
+			out.println("<configuration>");
+			for (Map.Entry<String, String> entry : parameters.entrySet()) {
+				out.println("\t<property>");
+				out.println("\t\t<name>" + entry.getKey() + "</name>");
+				out.println("\t\t<value>" + entry.getValue() + "</value>");
+				out.println("\t</property>");
+			}
+			out.println("</configuration>");
+		}
 
-    /**
-     * Verifies that nested directories are properly copied with to the given S3 path (using the
-     * appropriate file system) during resource uploads for YARN.
-     *
-     * @param scheme file system scheme
-     * @param pathSuffix test path suffix which will be the test's target path
-     */
-    private void testRecursiveUploadForYarn(String scheme, String pathSuffix, File tempFolder)
-            throws Exception {
-        ++numRecursiveUploadTests;
+		final Configuration conf = new Configuration();
+		conf.setString(ConfigConstants.HDFS_SITE_CONFIG, hadoopConfig.getAbsolutePath());
+		conf.set(CoreOptions.ALLOWED_FALLBACK_FILESYSTEMS, "s3;s3a;s3n");
 
-        final Path basePath =
-                new Path(S3TestCredentials.getTestBucketUriWithScheme(scheme) + TEST_DATA_DIR);
-        final HadoopFileSystem fs = (HadoopFileSystem) basePath.getFileSystem();
+		FileSystem.initialize(conf);
+	}
 
-        assumeThat(fs.exists(basePath)).isTrue();
+	/**
+	 * Verifies that nested directories are properly copied with to the given S3 path (using the
+	 * appropriate file system) during resource uploads for YARN.
+	 *
+	 * @param scheme
+	 * 		file system scheme
+	 * @param pathSuffix
+	 * 		test path suffix which will be the test's target path
+	 */
+	private void testRecursiveUploadForYarn(String scheme, String pathSuffix) throws Exception {
+		++numRecursiveUploadTests;
 
-        try {
-            final Path directory = new Path(basePath, pathSuffix);
+		final Path basePath = new Path(S3TestCredentials.getTestBucketUriWithScheme(scheme) + TEST_DATA_DIR);
+		final HadoopFileSystem fs = (HadoopFileSystem) basePath.getFileSystem();
 
-            YarnFileStageTest.testRegisterMultipleLocalResources(
-                    fs.getHadoopFileSystem(),
-                    new org.apache.hadoop.fs.Path(directory.toUri()),
-                    Path.CUR_DIR,
-                    tempFolder,
-                    false,
-                    false);
-        } finally {
-            // clean up
-            fs.delete(basePath, true);
-        }
-    }
+		assumeFalse(fs.exists(basePath));
 
-    @TestTemplate
-    @RetryOnException(times = 3, exception = Exception.class)
-    void testRecursiveUploadForYarnS3n(@TempDir File tempFolder) throws Exception {
-        // skip test on Hadoop 3: https://issues.apache.org/jira/browse/HADOOP-14738
-        assumeThat(VersionUtil.compareVersions(System.getProperty("hadoop.version"), "3.0.0") < 0)
-                .as("This test is skipped for Hadoop versions above 3")
-                .isTrue();
+		try {
+			final Path directory = new Path(basePath, pathSuffix);
 
-        assumeThatThrownBy(() -> Class.forName("org.apache.hadoop.fs.s3native.NativeS3FileSystem"))
-                .as("Skipping test because NativeS3FileSystem is not in the class path")
-                .isNull();
-        testRecursiveUploadForYarn("s3n", "testYarn-s3n", tempFolder);
-    }
+			YarnFileStageTest.testRegisterMultipleLocalResources(fs.getHadoopFileSystem(),
+				new org.apache.hadoop.fs.Path(directory.toUri()), Path.CUR_DIR, tempFolder, false, false);
+		} finally {
+			// clean up
+			fs.delete(basePath, true);
+		}
+	}
 
-    @TestTemplate
-    @RetryOnException(times = 3, exception = Exception.class)
-    public void testRecursiveUploadForYarnS3a(@TempDir File tempFolder) throws Exception {
-        assumeThatThrownBy(() -> Class.forName("org.apache.hadoop.fs.s3a.S3AFileSystem"))
-                .as("Skipping test because S3AFileSystem is not in the class path")
-                .isNull();
-        testRecursiveUploadForYarn("s3a", "testYarn-s3a", tempFolder);
-    }
+	@Test
+	@RetryOnFailure(times = 3)
+	public void testRecursiveUploadForYarnS3n() throws Exception {
+		// skip test on Hadoop 3: https://issues.apache.org/jira/browse/HADOOP-14738
+		Assume.assumeTrue("This test is skipped for Hadoop versions above 3", VersionUtil.compareVersions(System.getProperty("hadoop.version"), "3.0.0") < 0);
+
+		try {
+			Class.forName("org.apache.hadoop.fs.s3native.NativeS3FileSystem");
+		} catch (ClassNotFoundException e) {
+			// not in the classpath, cannot run this test
+			String msg = "Skipping test because NativeS3FileSystem is not in the class path";
+			log.info(msg);
+			assumeNoException(msg, e);
+		}
+		testRecursiveUploadForYarn("s3n", "testYarn-s3n");
+	}
+
+	@Test
+	@RetryOnFailure(times = 3)
+	public void testRecursiveUploadForYarnS3a() throws Exception {
+		try {
+			Class.forName("org.apache.hadoop.fs.s3a.S3AFileSystem");
+		} catch (ClassNotFoundException e) {
+			// not in the classpath, cannot run this test
+			String msg = "Skipping test because S3AFileSystem is not in the class path";
+			log.info(msg);
+			assumeNoException(msg, e);
+		}
+		testRecursiveUploadForYarn("s3a", "testYarn-s3a");
+	}
 }

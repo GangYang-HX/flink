@@ -20,19 +20,22 @@ package org.apache.flink.cep.utils;
 
 import org.apache.flink.cep.time.TimerService;
 
-/** Test implementation of {@link TimerService}. Provides setters for encapsulated properties. */
+/**
+ * Test implementation of {@link TimerService}. Provides setters for encapsulated properties.
+ */
 public class TestTimerService implements TimerService {
 
-    public static final long UNDEFINED_TIME = Long.MIN_VALUE;
+	public static final long UNDEFINED_TIME = Long.MIN_VALUE;
 
-    private Long processingTime = UNDEFINED_TIME;
+	private Long processingTime = UNDEFINED_TIME;
 
-    @Override
-    public long currentProcessingTime() {
-        return processingTime;
-    }
+	@Override
+	public long currentProcessingTime() {
+		return processingTime;
+	}
 
-    public void setCurrentProcessingTime(long processingTime) {
-        this.processingTime = processingTime;
-    }
+	public void setCurrentProcessingTime(long processingTime) {
+		this.processingTime = processingTime;
+	}
+
 }

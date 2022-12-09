@@ -18,10 +18,8 @@
 
 package org.apache.flink.api.connector.source;
 
-import org.apache.flink.annotation.Public;
+import org.apache.flink.annotation.PublicEvolving;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,27 +29,23 @@ import java.util.Map;
  * <p>The assignment is always incremental. In another word, splits in the assignment are simply
  * added to the existing assignment.
  */
-@Public
+@PublicEvolving
 public final class SplitsAssignment<SplitT extends SourceSplit> {
+	private final Map<Integer, List<SplitT>> assignment;
 
-    private final Map<Integer, List<SplitT>> assignment;
+	public SplitsAssignment(Map<Integer, List<SplitT>> assignment) {
+		this.assignment = assignment;
+	}
 
-    public SplitsAssignment(Map<Integer, List<SplitT>> assignment) {
-        this.assignment = assignment;
-    }
+	/**
+	 * @return A mapping from subtask ID to their split assignment.
+	 */
+	public Map<Integer, List<SplitT>> assignment() {
+		return assignment;
+	}
 
-    public SplitsAssignment(SplitT split, int subtask) {
-        this.assignment = new HashMap<>();
-        this.assignment.put(subtask, Collections.singletonList(split));
-    }
-
-    /** @return A mapping from subtask ID to their split assignment. */
-    public Map<Integer, List<SplitT>> assignment() {
-        return assignment;
-    }
-
-    @Override
-    public String toString() {
-        return assignment.toString();
-    }
+	@Override
+	public String toString() {
+		return assignment.toString();
+	}
 }

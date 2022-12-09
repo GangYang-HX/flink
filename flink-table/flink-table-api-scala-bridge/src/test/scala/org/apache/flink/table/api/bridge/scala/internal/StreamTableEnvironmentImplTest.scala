@@ -15,26 +15,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.table.api.bridge.scala.internal
 
+import java.util.{Collections, List => JList}
+
+import org.apache.flink.api.common.time.Time
 import org.apache.flink.api.dag.Transformation
 import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, _}
 import org.apache.flink.table.api.TableConfig
 import org.apache.flink.table.catalog.FunctionCatalog
 import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.operations.ModifyOperation
-import org.apache.flink.table.resource.ResourceManager
 import org.apache.flink.table.utils.{CatalogManagerMocks, ExecutorMock, PlannerMock}
 import org.apache.flink.types.Row
+import org.hamcrest.CoreMatchers.equalTo
+import org.junit.Assert.assertThat
+import org.junit.Test
 
-import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Test
-
-import java.net.URL
-import java.time.Duration
-import java.util.{Collections, List => JList}
-
-/** Tests for [[StreamTableEnvironmentImpl]]. */
+/**
+ * Tests for [[StreamTableEnvironmentImpl]].
+ */
 class StreamTableEnvironmentImplTest {
   @Test
   def testAppendStreamDoesNotOverwriteTableConfig(): Unit = {
@@ -42,13 +43,18 @@ class StreamTableEnvironmentImplTest {
     val elements = env.fromElements(1, 2, 3)
     val tEnv: StreamTableEnvironmentImpl = getStreamTableEnvironment(env, elements)
 
-    val retention = Duration.ofMinutes(1)
-    tEnv.getConfig.setIdleStateRetention(retention)
+    val minRetention = Time.minutes(1)
+    val maxRetention = Time.minutes(10)
+    tEnv.getConfig.setIdleStateRetentionTime(minRetention, maxRetention)
     val table = tEnv.fromDataStream(elements)
     tEnv.toAppendStream[Row](table)
 
-    assertThat(tEnv.getConfig.getMinIdleStateRetentionTime).isEqualTo(retention.toMillis)
-    assertThat(tEnv.getConfig.getMaxIdleStateRetentionTime).isEqualTo(retention.toMillis * 3 / 2)
+    assertThat(
+      tEnv.getConfig.getMinIdleStateRetentionTime,
+      equalTo(minRetention.toMilliseconds))
+    assertThat(
+      tEnv.getConfig.getMaxIdleStateRetentionTime,
+      equalTo(maxRetention.toMilliseconds))
   }
 
   @Test
@@ -57,40 +63,41 @@ class StreamTableEnvironmentImplTest {
     val elements = env.fromElements(1, 2, 3)
     val tEnv: StreamTableEnvironmentImpl = getStreamTableEnvironment(env, elements)
 
-    val retention = Duration.ofMinutes(1)
-    tEnv.getConfig.setIdleStateRetention(retention)
+    val minRetention = Time.minutes(1)
+    val maxRetention = Time.minutes(10)
+    tEnv.getConfig.setIdleStateRetentionTime(minRetention, maxRetention)
     val table = tEnv.fromDataStream(elements)
     tEnv.toRetractStream[Row](table)
 
-    assertThat(tEnv.getConfig.getMinIdleStateRetentionTime).isEqualTo(retention.toMillis)
-    assertThat(tEnv.getConfig.getMaxIdleStateRetentionTime).isEqualTo(retention.toMillis * 3 / 2)
+    assertThat(
+      tEnv.getConfig.getMinIdleStateRetentionTime,
+      equalTo(minRetention.toMilliseconds))
+    assertThat(
+      tEnv.getConfig.getMaxIdleStateRetentionTime,
+      equalTo(maxRetention.toMilliseconds))
   }
 
   private def getStreamTableEnvironment(
       env: StreamExecutionEnvironment,
       elements: DataStream[Int]) = {
-    val tableConfig = TableConfig.getDefault
+    val config = new TableConfig
     val catalogManager = CatalogManagerMocks.createEmptyCatalogManager()
     val moduleManager = new ModuleManager
-    val resourceManager = ResourceManager.createResourceManager(
-      new Array[URL](0),
-      Thread.currentThread.getContextClassLoader,
-      tableConfig.getConfiguration)
-
     new StreamTableEnvironmentImpl(
       catalogManager,
       moduleManager,
-      resourceManager,
-      new FunctionCatalog(tableConfig, resourceManager, catalogManager, moduleManager),
-      tableConfig,
+      new FunctionCatalog(config, catalogManager, moduleManager),
+      config,
       env,
       new TestPlanner(elements.javaStream.getTransformation),
       new ExecutorMock,
-      true)
+      true,
+      this.getClass.getClassLoader)
   }
 
   private class TestPlanner(transformation: Transformation[_]) extends PlannerMock {
-    override def translate(modifyOperations: JList[ModifyOperation]): JList[Transformation[_]] = {
+    override def translate(modifyOperations: JList[ModifyOperation])
+      : JList[Transformation[_]] = {
       Collections.singletonList(transformation)
     }
   }

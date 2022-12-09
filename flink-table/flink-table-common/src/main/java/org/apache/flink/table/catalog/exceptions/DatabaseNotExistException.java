@@ -18,18 +18,17 @@
 
 package org.apache.flink.table.catalog.exceptions;
 
-import org.apache.flink.annotation.PublicEvolving;
-
-/** Exception for trying to operate on a database that doesn't exist. */
-@PublicEvolving
+/**
+ * Exception for trying to operate on a database that doesn't exist.
+ */
 public class DatabaseNotExistException extends Exception {
-    private static final String MSG = "Database %s does not exist in Catalog %s.";
+	private static final String MSG = "Database %s does not exist in Catalog %s.";
 
-    public DatabaseNotExistException(String catalogName, String databaseName, Throwable cause) {
-        super(String.format(MSG, databaseName, catalogName), cause);
-    }
+	public DatabaseNotExistException(String catalogName, String databaseName, Throwable cause) {
+		super(String.format(MSG, databaseName, catalogName), cause);
+	}
 
-    public DatabaseNotExistException(String catalogName, String databaseName) {
-        this(catalogName, databaseName, null);
-    }
+	public DatabaseNotExistException(String catalogName, String databaseName) {
+		this(catalogName, databaseName, null);
+	}
 }

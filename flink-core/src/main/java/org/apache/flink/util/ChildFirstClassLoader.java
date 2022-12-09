@@ -27,104 +27,102 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * A variant of the URLClassLoader that first loads from the URLs and only after that from the
- * parent.
+ * A variant of the URLClassLoader that first loads from the URLs and only after that from the parent.
  *
- * <p>{@link #getResourceAsStream(String)} uses {@link #getResource(String)} internally so we don't
- * override that.
+ * <p>{@link #getResourceAsStream(String)} uses {@link #getResource(String)} internally so we
+ * don't override that.
  */
 public final class ChildFirstClassLoader extends FlinkUserCodeClassLoader {
 
-    /**
-     * The classes that should always go through the parent ClassLoader. This is relevant for Flink
-     * classes, for example, to avoid loading Flink classes that cross the user-code/system-code
-     * barrier in the user-code ClassLoader.
-     */
-    private final String[] alwaysParentFirstPatterns;
+	/**
+	 * The classes that should always go through the parent ClassLoader. This is relevant
+	 * for Flink classes, for example, to avoid loading Flink classes that cross the
+	 * user-code/system-code barrier in the user-code ClassLoader.
+	 */
+	private final String[] alwaysParentFirstPatterns;
 
-    public ChildFirstClassLoader(
-            URL[] urls,
-            ClassLoader parent,
-            String[] alwaysParentFirstPatterns,
-            Consumer<Throwable> classLoadingExceptionHandler) {
-        super(urls, parent, classLoadingExceptionHandler);
-        this.alwaysParentFirstPatterns = alwaysParentFirstPatterns;
-    }
+	public ChildFirstClassLoader(
+			URL[] urls,
+			ClassLoader parent,
+			String[] alwaysParentFirstPatterns,
+			Consumer<Throwable> classLoadingExceptionHandler) {
+		super(urls, parent, classLoadingExceptionHandler);
+		this.alwaysParentFirstPatterns = alwaysParentFirstPatterns;
+	}
 
-    @Override
-    protected Class<?> loadClassWithoutExceptionHandling(String name, boolean resolve)
-            throws ClassNotFoundException {
+	@Override
+	protected synchronized Class<?> loadClassWithoutExceptionHandling(
+			String name,
+			boolean resolve) throws ClassNotFoundException {
 
-        // First, check if the class has already been loaded
-        Class<?> c = findLoadedClass(name);
+		// First, check if the class has already been loaded
+		Class<?> c = findLoadedClass(name);
 
-        if (c == null) {
-            // check whether the class should go parent-first
-            for (String alwaysParentFirstPattern : alwaysParentFirstPatterns) {
-                if (name.startsWith(alwaysParentFirstPattern)) {
-                    return super.loadClassWithoutExceptionHandling(name, resolve);
-                }
-            }
+		if (c == null) {
+			// check whether the class should go parent-first
+			for (String alwaysParentFirstPattern : alwaysParentFirstPatterns) {
+				if (name.startsWith(alwaysParentFirstPattern)) {
+					return super.loadClassWithoutExceptionHandling(name, resolve);
+				}
+			}
 
-            try {
-                // check the URLs
-                c = findClass(name);
-            } catch (ClassNotFoundException e) {
-                // let URLClassLoader do it, which will eventually call the parent
-                c = super.loadClassWithoutExceptionHandling(name, resolve);
-            }
-        } else if (resolve) {
-            resolveClass(c);
-        }
+			try {
+				// check the URLs
+				c = findClass(name);
+			} catch (ClassNotFoundException e) {
+				// let URLClassLoader do it, which will eventually call the parent
+				c = super.loadClassWithoutExceptionHandling(name, resolve);
+			}
+		}
 
-        return c;
-    }
+		if (resolve) {
+			resolveClass(c);
+		}
 
-    @Override
-    public URL getResource(String name) {
-        // first, try and find it via the URLClassloader
-        URL urlClassLoaderResource = findResource(name);
+		return c;
+	}
 
-        if (urlClassLoaderResource != null) {
-            return urlClassLoaderResource;
-        }
+	@Override
+	public URL getResource(String name) {
+		// first, try and find it via the URLClassloader
+		URL urlClassLoaderResource = findResource(name);
 
-        // delegate to super
-        return super.getResource(name);
-    }
+		if (urlClassLoaderResource != null) {
+			return urlClassLoaderResource;
+		}
 
-    @Override
-    public Enumeration<URL> getResources(String name) throws IOException {
-        // first get resources from URLClassloader
-        Enumeration<URL> urlClassLoaderResources = findResources(name);
+		// delegate to super
+		return super.getResource(name);
+	}
 
-        final List<URL> result = new ArrayList<>();
+	@Override
+	public Enumeration<URL> getResources(String name) throws IOException {
+		// first get resources from URLClassloader
+		Enumeration<URL> urlClassLoaderResources = findResources(name);
 
-        while (urlClassLoaderResources.hasMoreElements()) {
-            result.add(urlClassLoaderResources.nextElement());
-        }
+		final List<URL> result = new ArrayList<>();
 
-        // get parent urls
-        Enumeration<URL> parentResources = getParent().getResources(name);
+		while (urlClassLoaderResources.hasMoreElements()) {
+			result.add(urlClassLoaderResources.nextElement());
+		}
 
-        while (parentResources.hasMoreElements()) {
-            result.add(parentResources.nextElement());
-        }
+		// get parent urls
+		Enumeration<URL> parentResources = getParent().getResources(name);
 
-        return new Enumeration<URL>() {
-            Iterator<URL> iter = result.iterator();
+		while (parentResources.hasMoreElements()) {
+			result.add(parentResources.nextElement());
+		}
 
-            public boolean hasMoreElements() {
-                return iter.hasNext();
-            }
+		return new Enumeration<URL>() {
+			Iterator<URL> iter = result.iterator();
 
-            public URL nextElement() {
-                return iter.next();
-            }
-        };
-    }
+			public boolean hasMoreElements() {
+				return iter.hasNext();
+			}
 
-    static {
-        ClassLoader.registerAsParallelCapable();
-    }
+			public URL nextElement() {
+				return iter.next();
+			}
+		};
+	}
 }

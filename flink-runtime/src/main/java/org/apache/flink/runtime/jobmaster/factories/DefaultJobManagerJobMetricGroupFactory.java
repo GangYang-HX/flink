@@ -30,15 +30,14 @@ import javax.annotation.Nonnull;
  */
 public class DefaultJobManagerJobMetricGroupFactory implements JobManagerJobMetricGroupFactory {
 
-    private final JobManagerMetricGroup jobManagerMetricGroup;
+	private final JobManagerMetricGroup jobManagerMetricGroup;
 
-    public DefaultJobManagerJobMetricGroupFactory(
-            @Nonnull JobManagerMetricGroup jobManagerMetricGroup) {
-        this.jobManagerMetricGroup = jobManagerMetricGroup;
-    }
+	public DefaultJobManagerJobMetricGroupFactory(@Nonnull JobManagerMetricGroup jobManagerMetricGroup) {
+		this.jobManagerMetricGroup = jobManagerMetricGroup;
+	}
 
-    @Override
-    public JobManagerJobMetricGroup create(@Nonnull JobGraph jobGraph) {
-        return jobManagerMetricGroup.addJob(jobGraph.getJobID(), jobGraph.getName());
-    }
+	@Override
+	public JobManagerJobMetricGroup create(@Nonnull JobGraph jobGraph) {
+		return jobManagerMetricGroup.addJob(jobGraph);
+	}
 }

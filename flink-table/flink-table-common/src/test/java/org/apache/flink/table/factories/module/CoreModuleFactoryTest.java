@@ -18,35 +18,35 @@
 
 package org.apache.flink.table.factories.module;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.descriptors.CoreModuleDescriptor;
+import org.apache.flink.table.descriptors.ModuleDescriptor;
+import org.apache.flink.table.factories.ModuleFactory;
+import org.apache.flink.table.factories.TableFactoryService;
 import org.apache.flink.table.module.CoreModule;
-import org.apache.flink.table.module.CoreModuleFactory;
 import org.apache.flink.table.module.Module;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
- * Test for {@link org.apache.flink.table.module.CoreModule} created by {@link
- * org.apache.flink.table.module.CoreModuleFactory}.
+ * Test for {@link org.apache.flink.table.module.CoreModule} created by {@link org.apache.flink.table.module.CoreModuleFactory}.
  */
-class CoreModuleFactoryTest {
+public class CoreModuleFactoryTest {
 
-    @Test
-    void test() {
-        final CoreModule expectedModule = CoreModule.INSTANCE;
+	@Test
+	public void test() {
+		final CoreModule expectedModule = CoreModule.INSTANCE;
 
-        final Module actualModule =
-                FactoryUtil.createModule(
-                        CoreModuleFactory.IDENTIFIER,
-                        Collections.emptyMap(),
-                        new Configuration(),
-                        Thread.currentThread().getContextClassLoader());
+		final ModuleDescriptor moduleDescriptor = new CoreModuleDescriptor();
 
-        assertThat(actualModule).isEqualTo(expectedModule);
-    }
+		final Map<String, String> properties = moduleDescriptor.toProperties();
+
+		final Module actualModule = TableFactoryService.find(ModuleFactory.class, properties)
+			.createModule(properties);
+
+		assertEquals(expectedModule, actualModule);
+	}
 }

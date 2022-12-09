@@ -20,65 +20,51 @@ package org.apache.flink.state.api;
 
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.java.DataSet;
-import org.apache.flink.streaming.api.datastream.DataStream;
 
 /**
- * This class provides the entry point for building {@link StateBootstrapTransformation}s, which
- * represents procedures to bootstrap new operator states with a given {@link DataStream}.
+ * This class provides the entry point for building {@link BootstrapTransformation}s,
+ * which represents procedures to bootstrap new operator states with a given {@code DataSet}.
  *
  * <h2>Example usage</h2>
  *
  * <pre>{@code
- * DataStream<StateData> stateData = ...;
+ *   DataSet<StateData> stateData = ...;
  *
- * // to bootstrap non-keyed state:
- * StateBootstrapTransformation<StateData> nonKeyedStateBootstrap = OperatorTransformation
- *     .bootstrapWith(stateData)
- *     .transform(new StateBootstrapFunction<StateData>() {...})
+ *   // to bootstrap non-keyed state:
+ *   BootstrapTransformation<StateData> nonKeyedStateBootstrap = OperatorTransformation
+ *       .bootstrapWith(stateData)
+ *       .transform(new StateBootstrapFunction<StateData>() {...})
  *
- * // to bootstrap keyed state:
- * StateBootstrapTransformation<StateData> keyedStateBootstrap = OperatorTransformation
- *     .bootstrapWith(stateData)
- *     .keyBy(new KeySelector<StateData, KeyType>() {...})
- *     .transform(new KeyedStateBootstrapFunction<KeyType, StateData>() {...})
+ *   // to bootstrap keyed state:
+ *   BootstrapTransformation<StateData> keyedStateBootstrap = OperatorTransformation
+ *       .bootstrapWith(stateData)
+ *       .keyBy(new KeySelector<StateData, KeyType>() {...})
+ *       .transform(new KeyedStateBootstrapFunction<KeyType, StateData>() {...})
  * }</pre>
  *
- * <p>The code example above demonstrates how to create {@code BootstrapTransformation}s for
- * non-keyed and keyed state. The built bootstrap transformations can then used with a {@link
- * SavepointWriter}.
+ * <p>The code example above demonstrates how to create {@code BootstrapTransformation}s for non-keyed and keyed
+ * state. The built bootstrap transformations can then be registered with your {@link ExistingSavepoint} or {@link Savepoint}
+ * prior to writing it.
  *
- * @see OneInputStateTransformation
- * @see KeyedStateTransformation
- * @see StateBootstrapTransformation
+ * @see OneInputOperatorTransformation
+ * @see KeyedOperatorTransformation
+ * @see BootstrapTransformation
  */
 @PublicEvolving
 @SuppressWarnings("WeakerAccess")
 public final class OperatorTransformation {
 
-    private OperatorTransformation() {}
+	private OperatorTransformation() {}
 
-    /**
-     * Create a new {@link OperatorTransformation} from a {@link DataSet}.
-     *
-     * @param dataSet A dataset of elements.
-     * @param <T> The type of the input.
-     * @return A {@link OneInputOperatorTransformation}.
-     * @deprecated use {@link #bootstrapWith(DataStream)} to bootstrap a savepoint using the data
-     *     stream api under batch execution.
-     */
-    @Deprecated
-    public static <T> OneInputOperatorTransformation<T> bootstrapWith(DataSet<T> dataSet) {
-        return new OneInputOperatorTransformation<>(dataSet);
-    }
-
-    /**
-     * Create a new {@link OneInputStateTransformation} from a {@link DataStream}.
-     *
-     * @param stream A data stream of elements.
-     * @param <T> The type of the input.
-     * @return A {@link OneInputStateTransformation}.
-     */
-    public static <T> OneInputStateTransformation<T> bootstrapWith(DataStream<T> stream) {
-        return new OneInputStateTransformation<>(stream);
-    }
+	/**
+	 * Create a new {@link OperatorTransformation} from a {@link DataSet}.
+	 *
+	 * @param dataSet A dataset of elements.
+	 * @param <T> The type of the input.
+	 * @return A {@link OneInputOperatorTransformation}.
+	 */
+	public static <T> OneInputOperatorTransformation<T> bootstrapWith(DataSet<T> dataSet) {
+		return new OneInputOperatorTransformation<>(dataSet);
+	}
 }
+

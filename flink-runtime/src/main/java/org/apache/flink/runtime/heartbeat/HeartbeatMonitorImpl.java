@@ -19,15 +19,14 @@
 package org.apache.flink.runtime.heartbeat;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.util.Preconditions;
-import org.apache.flink.util.concurrent.ScheduledExecutor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -37,179 +36,168 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class HeartbeatMonitorImpl<O> implements HeartbeatMonitor<O>, Runnable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HeartbeatMonitorImpl.class);
+	private final Logger logger = LoggerFactory.getLogger(getClass());
 
-    /** Resource ID of the monitored heartbeat target. */
-    private final ResourceID resourceID;
+	/** Resource ID of the monitored heartbeat target. */
+	private final ResourceID resourceID;
 
-    /** Associated heartbeat target. */
-    private final HeartbeatTarget<O> heartbeatTarget;
+	/** Associated heartbeat target. */
+	private final HeartbeatTarget<O> heartbeatTarget;
 
-    private final ScheduledExecutor scheduledExecutor;
+	private final ScheduledExecutor scheduledExecutor;
 
-    /** Listener which is notified about heartbeat timeouts. */
-    private final HeartbeatListener<?, ?> heartbeatListener;
+	/** Listener which is notified about heartbeat timeouts. */
+	private final HeartbeatListener<?, ?> heartbeatListener;
 
-    /** Maximum heartbeat timeout interval. */
-    private final long heartbeatTimeoutIntervalMs;
+	private final boolean haReconcileEnabled;
 
-    private final int failedRpcRequestsUntilUnreachable;
+	private final long yarnExpiryIntervalMs;
 
-    private volatile ScheduledFuture<?> futureTimeout;
+	/** Maximum heartbeat timeout interval. */
+	private final long heartbeatTimeoutIntervalMs;
 
-    private final AtomicReference<State> state = new AtomicReference<>(State.RUNNING);
+	private volatile ScheduledFuture<?> futureTimeout;
 
-    private final AtomicInteger numberFailedRpcRequestsSinceLastSuccess = new AtomicInteger(0);
+	private final AtomicReference<State> state = new AtomicReference<>(State.RUNNING);
 
-    private volatile long lastHeartbeat;
+	private volatile long lastHeartbeat;
 
-    HeartbeatMonitorImpl(
-            ResourceID resourceID,
-            HeartbeatTarget<O> heartbeatTarget,
-            ScheduledExecutor scheduledExecutor,
-            HeartbeatListener<?, O> heartbeatListener,
-            long heartbeatTimeoutIntervalMs,
-            int failedRpcRequestsUntilUnreachable) {
+	private volatile boolean shouldWaitForNewJobManager = false;
 
-        this.resourceID = Preconditions.checkNotNull(resourceID);
-        this.heartbeatTarget = Preconditions.checkNotNull(heartbeatTarget);
-        this.scheduledExecutor = Preconditions.checkNotNull(scheduledExecutor);
-        this.heartbeatListener = Preconditions.checkNotNull(heartbeatListener);
+	HeartbeatMonitorImpl(
+		ResourceID resourceID,
+		HeartbeatTarget<O> heartbeatTarget,
+		ScheduledExecutor scheduledExecutor,
+		HeartbeatListener<?, O> heartbeatListener,
+		long heartbeatTimeoutIntervalMs,
+		boolean haReconcileEnabled,
+		long yarnExpiryIntervalMs) {
 
-        Preconditions.checkArgument(
-                heartbeatTimeoutIntervalMs > 0L,
-                "The heartbeat timeout interval has to be larger than 0.");
-        this.heartbeatTimeoutIntervalMs = heartbeatTimeoutIntervalMs;
+		this.resourceID = Preconditions.checkNotNull(resourceID);
+		this.heartbeatTarget = Preconditions.checkNotNull(heartbeatTarget);
+		this.scheduledExecutor = Preconditions.checkNotNull(scheduledExecutor);
+		this.heartbeatListener = Preconditions.checkNotNull(heartbeatListener);
+		this.haReconcileEnabled = haReconcileEnabled;
+		this.yarnExpiryIntervalMs = yarnExpiryIntervalMs;
 
-        Preconditions.checkArgument(
-                failedRpcRequestsUntilUnreachable > 0 || failedRpcRequestsUntilUnreachable == -1,
-                "The number of failed heartbeat RPC requests has to be larger than 0 or -1 (deactivated).");
-        this.failedRpcRequestsUntilUnreachable = failedRpcRequestsUntilUnreachable;
+		Preconditions.checkArgument(heartbeatTimeoutIntervalMs > 0L, "The heartbeat timeout interval has to be larger than 0.");
+		this.heartbeatTimeoutIntervalMs = heartbeatTimeoutIntervalMs;
 
-        lastHeartbeat = 0L;
+		lastHeartbeat = 0L;
 
-        resetHeartbeatTimeout(heartbeatTimeoutIntervalMs);
-    }
+		resetHeartbeatTimeout(heartbeatTimeoutIntervalMs);
+	}
 
-    @Override
-    public HeartbeatTarget<O> getHeartbeatTarget() {
-        return heartbeatTarget;
-    }
+	@Override
+	public HeartbeatTarget<O> getHeartbeatTarget() {
+		return heartbeatTarget;
+	}
 
-    @Override
-    public ResourceID getHeartbeatTargetId() {
-        return resourceID;
-    }
+	@Override
+	public ResourceID getHeartbeatTargetId() {
+		return resourceID;
+	}
 
-    @Override
-    public long getLastHeartbeat() {
-        return lastHeartbeat;
-    }
+	@Override
+	public long getLastHeartbeat() {
+		return lastHeartbeat;
+	}
 
-    @Override
-    public void reportHeartbeatRpcFailure() {
-        final int failedRpcRequestsSinceLastSuccess =
-                numberFailedRpcRequestsSinceLastSuccess.incrementAndGet();
+	@Override
+	public void reportHeartbeat() {
+		lastHeartbeat = System.currentTimeMillis();
+		resetHeartbeatTimeout(heartbeatTimeoutIntervalMs);
+	}
 
-        if (isHeartbeatRpcFailureDetectionEnabled()
-                && failedRpcRequestsSinceLastSuccess >= failedRpcRequestsUntilUnreachable) {
-            if (state.compareAndSet(State.RUNNING, State.UNREACHABLE)) {
-                LOG.debug(
-                        "Mark heartbeat target {} as unreachable because {} consecutive heartbeat RPCs have failed.",
-                        resourceID,
-                        failedRpcRequestsSinceLastSuccess);
+	@Override
+	public void cancel() {
+		// we can only cancel if we are in state running
+		if (state.compareAndSet(State.RUNNING, State.CANCELED)) {
+			cancelTimeout();
+		}
+	}
 
-                cancelTimeout();
-                heartbeatListener.notifyTargetUnreachable(resourceID);
-            }
-        }
-    }
+	@Override
+	public void run() {
+		if (haReconcileEnabled && yarnExpiryIntervalMs > 0L && shouldWaitForNewJobManager) {
+			waitForNewJobManager(yarnExpiryIntervalMs);
+			return;
+		}
+		// The heartbeat has timed out if we're in state running
+		if (state.compareAndSet(State.RUNNING, State.TIMEOUT)) {
+			heartbeatListener.notifyHeartbeatTimeout(resourceID);
+		}
+	}
 
-    private boolean isHeartbeatRpcFailureDetectionEnabled() {
-        return failedRpcRequestsUntilUnreachable > 0;
-    }
+	void waitForNewJobManager(long yarnExpiryIntervalMs) {
+		if (state.get() == State.RUNNING) {
+			// wait for yarnExpiryIntervalMs for yarn to start appMaster
+			logger.warn("Wait for a more time ({} ms) for {}", yarnExpiryIntervalMs, heartbeatListener.getClass());
+			futureTimeout = scheduledExecutor.schedule(this, yarnExpiryIntervalMs, TimeUnit.MILLISECONDS);
 
-    @Override
-    public void reportHeartbeatRpcSuccess() {
-        numberFailedRpcRequestsSinceLastSuccess.set(0);
-    }
+			// Double check for concurrent accesses (e.g. a firing of the scheduled future)
+			if (state.get() != State.RUNNING) {
+				cancelTimeout();
+			}
+			shouldWaitForNewJobManager = false;
+		}
+	}
 
-    @Override
-    public void reportHeartbeat() {
-        lastHeartbeat = System.currentTimeMillis();
-        resetHeartbeatTimeout(heartbeatTimeoutIntervalMs);
-    }
+	public boolean isCanceled() {
+		return state.get() == State.CANCELED;
+	}
 
-    @Override
-    public void cancel() {
-        // we can only cancel if we are in state running
-        if (state.compareAndSet(State.RUNNING, State.CANCELED)) {
-            cancelTimeout();
-        }
-    }
+	void resetHeartbeatTimeout(long heartbeatTimeout) {
+		if (state.get() == State.RUNNING) {
+			cancelTimeout();
 
-    @Override
-    public void run() {
-        // The heartbeat has timed out if we're in state running
-        if (state.compareAndSet(State.RUNNING, State.TIMEOUT)) {
-            heartbeatListener.notifyHeartbeatTimeout(resourceID);
-        }
-    }
+			futureTimeout = scheduledExecutor.schedule(this, heartbeatTimeout, TimeUnit.MILLISECONDS);
 
-    public boolean isCanceled() {
-        return state.get() == State.CANCELED;
-    }
+			// Double check for concurrent accesses (e.g. a firing of the scheduled future)
+			if (state.get() != State.RUNNING) {
+				cancelTimeout();
+			}
+			shouldWaitForNewJobManager = true;
+		}
+	}
 
-    void resetHeartbeatTimeout(long heartbeatTimeout) {
-        if (state.get() == State.RUNNING) {
-            cancelTimeout();
+	private void cancelTimeout() {
+		if (futureTimeout != null) {
+			futureTimeout.cancel(true);
+		}
+	}
 
-            futureTimeout =
-                    scheduledExecutor.schedule(this, heartbeatTimeout, TimeUnit.MILLISECONDS);
+	private enum State {
+		RUNNING,
+		TIMEOUT,
+		CANCELED
+	}
 
-            // Double check for concurrent accesses (e.g. a firing of the scheduled future)
-            if (state.get() != State.RUNNING) {
-                cancelTimeout();
-            }
-        }
-    }
+	/**
+	 * The factory that instantiates {@link HeartbeatMonitorImpl}.
+	 *
+	 * @param <O> Type of the outgoing heartbeat payload
+	 */
+	static class Factory<O> implements HeartbeatMonitor.Factory<O> {
 
-    private void cancelTimeout() {
-        if (futureTimeout != null) {
-            futureTimeout.cancel(true);
-        }
-    }
+		@Override
+		public HeartbeatMonitor<O> createHeartbeatMonitor(
+			ResourceID resourceID,
+			HeartbeatTarget<O> heartbeatTarget,
+			ScheduledExecutor mainThreadExecutor,
+			HeartbeatListener<?, O> heartbeatListener,
+			long heartbeatTimeoutIntervalMs,
+			boolean haReconcileEnabled,
+			long yarnExpiryIntervalMs) {
 
-    private enum State {
-        RUNNING,
-        TIMEOUT,
-        UNREACHABLE,
-        CANCELED
-    }
-
-    /**
-     * The factory that instantiates {@link HeartbeatMonitorImpl}.
-     *
-     * @param <O> Type of the outgoing heartbeat payload
-     */
-    static class Factory<O> implements HeartbeatMonitor.Factory<O> {
-
-        @Override
-        public HeartbeatMonitor<O> createHeartbeatMonitor(
-                ResourceID resourceID,
-                HeartbeatTarget<O> heartbeatTarget,
-                ScheduledExecutor mainThreadExecutor,
-                HeartbeatListener<?, O> heartbeatListener,
-                long heartbeatTimeoutIntervalMs,
-                int failedRpcRequestsUntilUnreachable) {
-
-            return new HeartbeatMonitorImpl<>(
-                    resourceID,
-                    heartbeatTarget,
-                    mainThreadExecutor,
-                    heartbeatListener,
-                    heartbeatTimeoutIntervalMs,
-                    failedRpcRequestsUntilUnreachable);
-        }
-    }
+			return new HeartbeatMonitorImpl<>(
+				resourceID,
+				heartbeatTarget,
+				mainThreadExecutor,
+				heartbeatListener,
+				heartbeatTimeoutIntervalMs,
+			 	haReconcileEnabled,
+				yarnExpiryIntervalMs);
+		}
+	}
 }

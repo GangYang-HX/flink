@@ -18,6 +18,9 @@
 
 package org.apache.flink.optimizer.dag;
 
+import java.util.Collections;
+import java.util.List;
+
 import org.apache.flink.api.common.operators.base.BulkIterationBase.PartialSolutionPlaceHolder;
 import org.apache.flink.optimizer.DataStatistics;
 import org.apache.flink.optimizer.dataproperties.GlobalProperties;
@@ -26,90 +29,75 @@ import org.apache.flink.optimizer.plan.BulkPartialSolutionPlanNode;
 import org.apache.flink.optimizer.plan.Channel;
 import org.apache.flink.optimizer.plan.PlanNode;
 
-import java.util.Collections;
-import java.util.List;
-
 /**
- * The optimizer's internal representation of the partial solution that is input to a bulk
- * iteration.
+ * The optimizer's internal representation of the partial solution that is input to a bulk iteration.
  */
 public class BulkPartialSolutionNode extends AbstractPartialSolutionNode {
+	
+	private final BulkIterationNode iterationNode;
+	
+	
+	public BulkPartialSolutionNode(PartialSolutionPlaceHolder<?> psph, BulkIterationNode iterationNode) {
+		super(psph);
+		this.iterationNode = iterationNode;
+	}
 
-    private final BulkIterationNode iterationNode;
+	// --------------------------------------------------------------------------------------------
+	
+	public void setCandidateProperties(GlobalProperties gProps, LocalProperties lProps, Channel initialInput) {
+		if (this.cachedPlans != null) {
+			throw new IllegalStateException();
+		} else {
+			this.cachedPlans = Collections.<PlanNode>singletonList(new BulkPartialSolutionPlanNode(this,
+					"PartialSolution ("+this.getOperator().getName()+")", gProps, lProps, initialInput));
+		}
+	}
+	
+	public BulkPartialSolutionPlanNode getCurrentPartialSolutionPlanNode() {
+		if (this.cachedPlans != null) {
+			return (BulkPartialSolutionPlanNode) this.cachedPlans.get(0);
+		} else {
+			throw new IllegalStateException();
+		}
+	}
+	
+	public BulkIterationNode getIterationNode() {
+		return this.iterationNode;
+	}
+	
+	@Override
+	public void computeOutputEstimates(DataStatistics statistics) {
+		copyEstimates(this.iterationNode.getPredecessorNode());
+	}
+	
+	// --------------------------------------------------------------------------------------------
 
-    public BulkPartialSolutionNode(
-            PartialSolutionPlaceHolder<?> psph, BulkIterationNode iterationNode) {
-        super(psph);
-        this.iterationNode = iterationNode;
-    }
+	/**
+	 * Gets the operator (here the {@link PartialSolutionPlaceHolder}) that is represented by this
+	 * optimizer node.
+	 * 
+	 * @return The operator represented by this optimizer node.
+	 */
+	@Override
+	public PartialSolutionPlaceHolder<?> getOperator() {
+		return (PartialSolutionPlaceHolder<?>) super.getOperator();
+	}
 
-    // --------------------------------------------------------------------------------------------
+	@Override
+	public String getOperatorName() {
+		return "Bulk Partial Solution";
+	}
 
-    public void setCandidateProperties(
-            GlobalProperties gProps, LocalProperties lProps, Channel initialInput) {
-        if (this.cachedPlans != null) {
-            throw new IllegalStateException();
-        } else {
-            this.cachedPlans =
-                    Collections.<PlanNode>singletonList(
-                            new BulkPartialSolutionPlanNode(
-                                    this,
-                                    "PartialSolution (" + this.getOperator().getName() + ")",
-                                    gProps,
-                                    lProps,
-                                    initialInput));
-        }
-    }
+	@Override
+	public void computeUnclosedBranchStack() {
+		if (this.openBranches != null) {
+			return;
+		}
 
-    public BulkPartialSolutionPlanNode getCurrentPartialSolutionPlanNode() {
-        if (this.cachedPlans != null) {
-            return (BulkPartialSolutionPlanNode) this.cachedPlans.get(0);
-        } else {
-            throw new IllegalStateException();
-        }
-    }
-
-    public BulkIterationNode getIterationNode() {
-        return this.iterationNode;
-    }
-
-    @Override
-    public void computeOutputEstimates(DataStatistics statistics) {
-        copyEstimates(this.iterationNode.getPredecessorNode());
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    /**
-     * Gets the operator (here the {@link PartialSolutionPlaceHolder}) that is represented by this
-     * optimizer node.
-     *
-     * @return The operator represented by this optimizer node.
-     */
-    @Override
-    public PartialSolutionPlaceHolder<?> getOperator() {
-        return (PartialSolutionPlaceHolder<?>) super.getOperator();
-    }
-
-    @Override
-    public String getOperatorName() {
-        return "Bulk Partial Solution";
-    }
-
-    @Override
-    public void computeUnclosedBranchStack() {
-        if (this.openBranches != null) {
-            return;
-        }
-
-        OptimizerNode inputToIteration = this.iterationNode.getPredecessorNode();
-
-        addClosedBranches(inputToIteration.closedBranchingNodes);
-        List<UnclosedBranchDescriptor> fromInput =
-                inputToIteration.getBranchesForParent(this.iterationNode.getIncomingConnection());
-        this.openBranches =
-                (fromInput == null || fromInput.isEmpty())
-                        ? Collections.<UnclosedBranchDescriptor>emptyList()
-                        : fromInput;
-    }
+		OptimizerNode inputToIteration = this.iterationNode.getPredecessorNode();
+		
+		addClosedBranches(inputToIteration.closedBranchingNodes);
+		List<UnclosedBranchDescriptor> fromInput = inputToIteration.getBranchesForParent(this.iterationNode.getIncomingConnection());
+		this.openBranches = (fromInput == null || fromInput.isEmpty()) ? Collections.<UnclosedBranchDescriptor>emptyList() : fromInput;
+	}
 }

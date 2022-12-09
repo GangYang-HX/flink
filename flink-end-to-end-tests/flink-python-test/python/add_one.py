@@ -21,5 +21,5 @@ from pyflink.table.udf import udf
 
 @udf(input_types=[DataTypes.BIGINT()], result_type=DataTypes.BIGINT())
 def add_one(i):
-    import pytest
-    return i + 1
+    from scipy.special import jv
+    return i + int(jv([0], [0])[0])

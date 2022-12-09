@@ -16,22 +16,15 @@
  * limitations under the License.
  */
 
-export interface JobBackpressure {
+export interface JobBackpressureInterface {
   status: string;
   'backpressure-level': string;
   'end-timestamp': number;
-  subtasks: JobBackpressureSubtask[];
+  subtasks: JobBackpressureSubtaskInterface[];
 }
 
-export interface JobBackpressureSubtaskData {
+export interface JobBackpressureSubtaskInterface {
   subtask: number;
-  'attempt-number'?: number;
   'backpressure-level': string;
   ratio: number;
-  idleRatio: number;
-  busyRatio: number;
-}
-
-export interface JobBackpressureSubtask extends JobBackpressureSubtaskData {
-  'other-concurrent-attempts'?: JobBackpressureSubtaskData[];
 }

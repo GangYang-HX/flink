@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.resourcemanager.slotmanager;
 
-import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.clusterframework.types.SlotID;
 import org.apache.flink.runtime.instance.InstanceID;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
@@ -29,99 +28,82 @@ import java.util.HashSet;
 
 public class TaskManagerRegistration {
 
-    private final TaskExecutorConnection taskManagerConnection;
+	private final TaskExecutorConnection taskManagerConnection;
 
-    private final ResourceProfile defaultSlotResourceProfile;
+	private final HashSet<SlotID> slots;
 
-    private final ResourceProfile totalResource;
+	private int numberFreeSlots;
 
-    private final HashSet<SlotID> slots;
+	/** Timestamp when the last time becoming idle. Otherwise Long.MAX_VALUE. */
+	private long idleSince;
 
-    private int numberFreeSlots;
+	public TaskManagerRegistration(
+		TaskExecutorConnection taskManagerConnection,
+		Collection<SlotID> slots) {
 
-    /** Timestamp when the last time becoming idle. Otherwise Long.MAX_VALUE. */
-    private long idleSince;
+		this.taskManagerConnection = Preconditions.checkNotNull(taskManagerConnection, "taskManagerConnection");
+		Preconditions.checkNotNull(slots, "slots");
 
-    public TaskManagerRegistration(
-            TaskExecutorConnection taskManagerConnection,
-            Collection<SlotID> slots,
-            ResourceProfile totalResourceProfile,
-            ResourceProfile defaultSlotResourceProfile) {
+		this.slots = new HashSet<>(slots);
 
-        this.taskManagerConnection =
-                Preconditions.checkNotNull(taskManagerConnection, "taskManagerConnection");
-        Preconditions.checkNotNull(slots, "slots");
+		this.numberFreeSlots = slots.size();
 
-        this.totalResource = Preconditions.checkNotNull(totalResourceProfile);
-        this.defaultSlotResourceProfile = Preconditions.checkNotNull(defaultSlotResourceProfile);
+		idleSince = System.currentTimeMillis();
+	}
 
-        this.slots = new HashSet<>(slots);
+	public TaskExecutorConnection getTaskManagerConnection() {
+		return taskManagerConnection;
+	}
 
-        this.numberFreeSlots = slots.size();
+	public InstanceID getInstanceId() {
+		return taskManagerConnection.getInstanceID();
+	}
 
-        idleSince = System.currentTimeMillis();
-    }
+	public int getNumberRegisteredSlots() {
+		return slots.size();
+	}
 
-    public TaskExecutorConnection getTaskManagerConnection() {
-        return taskManagerConnection;
-    }
+	public int getNumberFreeSlots() {
+		return numberFreeSlots;
+	}
 
-    public InstanceID getInstanceId() {
-        return taskManagerConnection.getInstanceID();
-    }
+	public void freeSlot() {
+		Preconditions.checkState(
+			numberFreeSlots < slots.size(),
+			"The number of free slots cannot exceed the number of registered slots. This indicates a bug.");
+		numberFreeSlots++;
 
-    public int getNumberRegisteredSlots() {
-        return slots.size();
-    }
+		if (numberFreeSlots == getNumberRegisteredSlots() && idleSince == Long.MAX_VALUE) {
+			idleSince = System.currentTimeMillis();
+		}
+	}
 
-    public int getNumberFreeSlots() {
-        return numberFreeSlots;
-    }
+	public void occupySlot() {
+		Preconditions.checkState(
+			numberFreeSlots > 0,
+			"There are no more free slots. This indicates a bug.");
+		numberFreeSlots--;
 
-    public ResourceProfile getDefaultSlotResourceProfile() {
-        return defaultSlotResourceProfile;
-    }
+		idleSince = Long.MAX_VALUE;
+	}
 
-    public ResourceProfile getTotalResource() {
-        return totalResource;
-    }
+	public Iterable<SlotID> getSlots() {
+		return slots;
+	}
 
-    public void freeSlot() {
-        Preconditions.checkState(
-                numberFreeSlots < slots.size(),
-                "The number of free slots cannot exceed the number of registered slots. This indicates a bug.");
-        numberFreeSlots++;
+	public long getIdleSince() {
+		return idleSince;
+	}
 
-        if (numberFreeSlots == getNumberRegisteredSlots() && idleSince == Long.MAX_VALUE) {
-            idleSince = System.currentTimeMillis();
-        }
-    }
+	public boolean isIdle() {
+		return idleSince != Long.MAX_VALUE;
+	}
 
-    public void occupySlot() {
-        Preconditions.checkState(
-                numberFreeSlots > 0, "There are no more free slots. This indicates a bug.");
-        numberFreeSlots--;
+	public void markUsed() {
+		idleSince = Long.MAX_VALUE;
+	}
 
-        idleSince = Long.MAX_VALUE;
-    }
-
-    public Iterable<SlotID> getSlots() {
-        return slots;
-    }
-
-    public long getIdleSince() {
-        return idleSince;
-    }
-
-    public boolean isIdle() {
-        return idleSince != Long.MAX_VALUE;
-    }
-
-    public void markUsed() {
-        idleSince = Long.MAX_VALUE;
-    }
-
-    public boolean containsSlot(SlotID slotId) {
-        return slots.contains(slotId);
-    }
+	public boolean containsSlot(SlotID slotId) {
+		return slots.contains(slotId);
+	}
 }

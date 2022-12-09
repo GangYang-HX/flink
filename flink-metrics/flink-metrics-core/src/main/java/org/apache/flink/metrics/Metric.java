@@ -18,12 +18,8 @@
 
 package org.apache.flink.metrics;
 
-import org.apache.flink.annotation.Public;
-
-/** Common super interface for all metrics. */
-@Public
+/**
+ * Common super interface for all metrics.
+ */
 public interface Metric {
-    default MetricType getMetricType() {
-        throw new UnsupportedOperationException("Custom metric types are not supported.");
-    }
 }

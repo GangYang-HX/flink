@@ -24,9 +24,10 @@ import java.io.IOException;
 
 public interface BufferFileReader extends FileIOChannel {
 
-    void readInto(Buffer buffer) throws IOException;
+	void readInto(Buffer buffer) throws IOException;
 
-    void seekToPosition(long position) throws IOException;
+	void seekToPosition(long position) throws IOException;
 
-    boolean hasReachedEndOfFile();
+	boolean hasReachedEndOfFile();
+
 }

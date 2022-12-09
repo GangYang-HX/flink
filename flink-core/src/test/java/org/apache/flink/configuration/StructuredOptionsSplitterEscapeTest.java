@@ -26,65 +26,71 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.Collection;
 
-/** Tests for {@link StructuredOptionsSplitter#escapeWithSingleQuote}. */
+/**
+ * Tests for {@link StructuredOptionsSplitter#escapeWithSingleQuote}.
+ */
 @RunWith(Parameterized.class)
 public class StructuredOptionsSplitterEscapeTest {
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<TestSpec> getEncodeSpecs() {
-        return Arrays.asList(
-                TestSpec.encode("A,B,C,D", ";").expect("A,B,C,D"),
-                TestSpec.encode("A;BCD", ";").expect("'A;BCD'"),
-                TestSpec.encode("A'B'C'D", ";").expect("'A''B''C''D'"),
-                TestSpec.encode("AB\"C\"D", ";").expect("'AB\"C\"D'"),
-                TestSpec.encode("AB'\"D:B", ";").expect("'AB''\"D:B'"),
-                TestSpec.encode("A,B,C,D", ",").expect("'A,B,C,D'"),
-                TestSpec.encode("A;BCD", ",").expect("A;BCD"),
-                TestSpec.encode("AB\"C\"D", ",").expect("'AB\"C\"D'"),
-                TestSpec.encode("AB'\"D:B", ",").expect("'AB''\"D:B'"),
-                TestSpec.encode("A;B;C;D", ",", ":").expect("A;B;C;D"),
-                TestSpec.encode("A;B;C:D", ",", ":").expect("'A;B;C:D'"));
-    }
+	@Parameterized.Parameters(name = "{0}")
+	public static Collection<TestSpec> getEncodeSpecs() {
+		return Arrays.asList(
+			TestSpec.encode("A,B,C,D", ";").expect("A,B,C,D"),
+			TestSpec.encode("A;BCD", ";").expect("'A;BCD'"),
+			TestSpec.encode("A'B'C'D", ";").expect("'A''B''C''D'"),
+			TestSpec.encode("AB\"C\"D", ";").expect("'AB\"C\"D'"),
+			TestSpec.encode("AB'\"D:B", ";").expect("'AB''\"D:B'"),
 
-    @Parameterized.Parameter public TestSpec testSpec;
+			TestSpec.encode("A,B,C,D", ",").expect("'A,B,C,D'"),
+			TestSpec.encode("A;BCD", ",").expect("A;BCD"),
+			TestSpec.encode("AB\"C\"D", ",").expect("'AB\"C\"D'"),
+			TestSpec.encode("AB'\"D:B", ",").expect("'AB''\"D:B'"),
 
-    @Test
-    public void testEscapeWithSingleQuote() {
-        String encoded =
-                StructuredOptionsSplitter.escapeWithSingleQuote(
-                        testSpec.getString(), testSpec.getEscapeChars());
-        Assert.assertEquals(testSpec.getEncodedString(), encoded);
-    }
+			TestSpec.encode("A;B;C;D", ",", ":").expect("A;B;C;D"),
+			TestSpec.encode("A;B;C:D", ",", ":").expect("'A;B;C:D'")
+		);
+	}
 
-    private static class TestSpec {
-        private final String string;
-        private final String[] escapeChars;
-        private String encodedString;
+	@Parameterized.Parameter
+	public TestSpec testSpec;
 
-        private TestSpec(String string, String... escapeChars) {
-            this.string = string;
-            this.escapeChars = escapeChars;
-        }
+	@Test
+	public void testEscapeWithSingleQuote() {
+		String encoded = StructuredOptionsSplitter.escapeWithSingleQuote(
+			testSpec.getString(),
+			testSpec.getEscapeChars());
+		Assert.assertEquals(testSpec.getEncodedString(), encoded);
+	}
 
-        public static TestSpec encode(String string, String... escapeChars) {
-            return new TestSpec(string, escapeChars);
-        }
+	private static class TestSpec {
+		private final String string;
+		private final String[] escapeChars;
+		private String encodedString;
 
-        public TestSpec expect(String string) {
-            this.encodedString = string;
-            return this;
-        }
+		private TestSpec(String string, String... escapeChars) {
+			this.string = string;
+			this.escapeChars = escapeChars;
+		}
 
-        public String getString() {
-            return string;
-        }
+		public static TestSpec encode(String string, String... escapeChars) {
+			return new TestSpec(string, escapeChars);
+		}
 
-        public String getEncodedString() {
-            return encodedString;
-        }
+		public TestSpec expect(String string) {
+			this.encodedString = string;
+			return this;
+		}
 
-        public String[] getEscapeChars() {
-            return escapeChars;
-        }
-    }
+		public String getString() {
+			return string;
+		}
+
+		public String getEncodedString() {
+			return encodedString;
+		}
+
+		public String[] getEscapeChars() {
+			return escapeChars;
+		}
+	}
 }

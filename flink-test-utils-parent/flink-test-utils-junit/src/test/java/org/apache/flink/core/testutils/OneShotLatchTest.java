@@ -18,35 +18,41 @@
 
 package org.apache.flink.core.testutils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-/** Tests for the OneShotLatch. */
-class OneShotLatchTest {
+/**
+ * Tests for the OneShotLatch.
+ */
+public class OneShotLatchTest {
 
-    @Test
-    void testAwaitWithTimeout() throws Exception {
-        OneShotLatch latch = new OneShotLatch();
-        assertThat(latch.isTriggered()).isFalse();
+	@Test
+	public void testAwaitWithTimeout() throws Exception {
+		OneShotLatch latch = new OneShotLatch();
+		assertFalse(latch.isTriggered());
 
-        assertThatThrownBy(() -> latch.await(1, TimeUnit.MILLISECONDS))
-                .withFailMessage(() -> "should fail with a TimeoutException")
-                .isInstanceOf(TimeoutException.class);
+		try {
+			latch.await(1, TimeUnit.MILLISECONDS);
+			fail("should fail with a TimeoutException");
+		} catch (TimeoutException e) {
+			// expected
+		}
 
-        assertThat(latch.isTriggered()).isFalse();
+		assertFalse(latch.isTriggered());
 
-        latch.trigger();
-        assertThat(latch.isTriggered()).isTrue();
+		latch.trigger();
+		assertTrue(latch.isTriggered());
 
-        latch.await(100, TimeUnit.DAYS);
-        assertThat(latch.isTriggered()).isTrue();
+		latch.await(100, TimeUnit.DAYS);
+		assertTrue(latch.isTriggered());
 
-        latch.await(0, TimeUnit.MILLISECONDS);
-        assertThat(latch.isTriggered()).isTrue();
-    }
+		latch.await(0, TimeUnit.MILLISECONDS);
+		assertTrue(latch.isTriggered());
+	}
 }

@@ -37,15 +37,15 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.powermock.api.mockito.PowerMockito.when;
 
-/** Tests to guard {@link RocksDBMemoryControllerUtils}. */
+/**
+ * Tests to guard {@link RocksDBMemoryControllerUtils}.
+ */
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(RocksDBMemoryControllerUtils.class)
 public class RocksDBMemoryControllerUtilsTest {
@@ -144,16 +144,5 @@ public class RocksDBMemoryControllerUtilsTest {
         long limit = bufferSize * 7 / 8;
         assertThat(
                 RocksDBMemoryControllerUtils.calculateRocksDBMutableLimit(bufferSize), is(limit));
-    }
-
-    @Test
-    public void testValidateArenaBlockSize() {
-        long arenaBlockSize = 8 * 1024 * 1024;
-        assertFalse(
-                RocksDBMemoryControllerUtils.validateArenaBlockSize(
-                        arenaBlockSize, (long) (arenaBlockSize * 0.5)));
-        assertTrue(
-                RocksDBMemoryControllerUtils.validateArenaBlockSize(
-                        arenaBlockSize, (long) (arenaBlockSize * 1.5)));
     }
 }

@@ -19,45 +19,49 @@
 package org.apache.flink.runtime.messages.webmonitor;
 
 /**
- * This message requests an overview of how many jobs are in which status. The response to this
- * message is a {@link JobsOverview} message.
+ * This message requests an overview of how many jobs are in which status.
+ * The response to this message is a {@link JobsOverview} message.
  */
 public class RequestJobsOverview implements InfoMessage {
 
-    private static final long serialVersionUID = 3052933564788843275L;
+	private static final long serialVersionUID = 3052933564788843275L;
+	
+	// ------------------------------------------------------------------------
+	
+	private static final RequestJobsOverview INSTANCE = new RequestJobsOverview();
 
-    // ------------------------------------------------------------------------
+	public static RequestJobsOverview getInstance() {
+		return INSTANCE;
+	}
 
-    private static final RequestJobsOverview INSTANCE = new RequestJobsOverview();
+	// ------------------------------------------------------------------------
 
-    public static RequestJobsOverview getInstance() {
-        return INSTANCE;
-    }
+	@Override
+	public int hashCode() {
+		return RequestJobsOverview.class.hashCode();
+	}
 
-    // ------------------------------------------------------------------------
+	@Override
+	public boolean equals(Object obj) {
+		return obj != null && obj.getClass() == RequestJobsOverview.class;
+	}
 
-    @Override
-    public int hashCode() {
-        return RequestJobsOverview.class.hashCode();
-    }
+	@Override
+	public String toString() {
+		return RequestJobsOverview.class.getSimpleName();
+	}
+	
+	// ------------------------------------------------------------------------
+	
+	/**
+	 * No external instantiation
+	 */
+	private RequestJobsOverview() {}
 
-    @Override
-    public boolean equals(Object obj) {
-        return obj != null && obj.getClass() == RequestJobsOverview.class;
-    }
-
-    @Override
-    public String toString() {
-        return RequestJobsOverview.class.getSimpleName();
-    }
-
-    // ------------------------------------------------------------------------
-
-    /** No external instantiation */
-    private RequestJobsOverview() {}
-
-    /** Preserve the singleton property by returning the singleton instance */
-    private Object readResolve() {
-        return INSTANCE;
-    }
+	/**
+	 * Preserve the singleton property by returning the singleton instance
+	 */
+	private Object readResolve() {
+		return INSTANCE;
+	}
 }

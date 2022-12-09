@@ -28,8 +28,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.flink.util.Preconditions.checkState;
-
 /**
  * A controller for keeping track of channels state in {@link AbstractAlignedBarrierHandlerState}
  * and {@link AbstractAlternatingAlignedBarrierHandlerState}.
@@ -56,10 +54,9 @@ final class ChannelState {
         blockedChannels.add(channelInfo);
     }
 
-    public void channelFinished(InputChannelInfo channelInfo) {
-        blockedChannels.remove(channelInfo);
-        sequenceNumberInAnnouncedChannels.remove(channelInfo);
-    }
+	public void unblockChannel(InputChannelInfo channelInfo) {
+		blockedChannels.remove(channelInfo);
+	}
 
     public void prioritizeAllAnnouncements() throws IOException {
         for (Map.Entry<InputChannelInfo, Integer> announcedNumberInChannel :
@@ -88,14 +85,5 @@ final class ChannelState {
 
     public void removeSeenAnnouncement(InputChannelInfo channelInfo) {
         this.sequenceNumberInAnnouncedChannels.remove(channelInfo);
-    }
-
-    public ChannelState emptyState() {
-        checkState(
-                blockedChannels.isEmpty(),
-                "We should not reset to an empty state if there are blocked channels: %s",
-                blockedChannels);
-        sequenceNumberInAnnouncedChannels.clear();
-        return this;
     }
 }

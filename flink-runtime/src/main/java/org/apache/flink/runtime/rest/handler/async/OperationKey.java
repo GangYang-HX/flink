@@ -21,46 +21,43 @@ package org.apache.flink.runtime.rest.handler.async;
 import org.apache.flink.runtime.rest.messages.TriggerId;
 import org.apache.flink.util.Preconditions;
 
-import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Any operation key for the {@link AbstractAsynchronousOperationHandlers} must extend this class.
  * It is used to store the trigger id.
  */
-public class OperationKey implements Serializable {
+public class OperationKey {
 
-    private static final long serialVersionUID = 6138473450686379255L;
+	private final TriggerId triggerId;
 
-    private final TriggerId triggerId;
+	public OperationKey(TriggerId triggerId) {
+		this.triggerId = Preconditions.checkNotNull(triggerId);
+	}
 
-    public OperationKey(TriggerId triggerId) {
-        this.triggerId = Preconditions.checkNotNull(triggerId);
-    }
+	/**
+	 * Get the trigger id for the given operation key.
+	 *
+	 * @return trigger id
+	 */
+	public TriggerId getTriggerId() {
+		return triggerId;
+	}
 
-    /**
-     * Get the trigger id for the given operation key.
-     *
-     * @return trigger id
-     */
-    public TriggerId getTriggerId() {
-        return triggerId;
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		OperationKey that = (OperationKey) o;
+		return Objects.equals(triggerId, that.triggerId);
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        OperationKey that = (OperationKey) o;
-        return Objects.equals(triggerId, that.triggerId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(triggerId);
-    }
+	@Override
+	public int hashCode() {
+		return Objects.hash(triggerId);
+	}
 }

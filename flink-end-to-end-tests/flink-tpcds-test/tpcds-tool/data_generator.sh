@@ -23,8 +23,8 @@
 
 set -Eeuo pipefail
 
-if [ $# -lt 4 ]; then
-	echo "[ERROR] `date +%H:%M:%S` Insufficient params, need 4 parameters: <generatorDir> <scaleFactor> <outputDataDir> <commonScriptsDir>"
+if [ $# -lt 3 ]; then
+	echo "[ERROR] `date +%H:%M:%S` Insufficient params, need 3 parameters: <generatorDir> <scaleFactor>  <outputDataDir>"
 	exit 127
 fi
 

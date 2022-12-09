@@ -17,25 +17,26 @@
 ################################################################################
 from abc import ABCMeta
 from datetime import timedelta
-from typing import Optional
 
 from py4j.java_gateway import get_java_class
 
 from pyflink.java_gateway import get_gateway
-from pyflink.util.java_utils import to_j_flink_time, from_j_flink_time
+from pyflink.util.utils import to_j_flink_time, from_j_flink_time
 
 __all__ = ['RestartStrategies', 'RestartStrategyConfiguration']
 
 
-class RestartStrategyConfiguration(object, metaclass=ABCMeta):
+class RestartStrategyConfiguration(object):
     """
     Abstract configuration for restart strategies.
     """
 
+    __metaclass__ = ABCMeta
+
     def __init__(self, j_restart_strategy_configuration):
         self._j_restart_strategy_configuration = j_restart_strategy_configuration
 
-    def get_description(self) -> str:
+    def get_description(self):
         """
         Returns a description which is shown in the web interface.
 
@@ -99,10 +100,10 @@ class RestartStrategies(object):
                 super(RestartStrategies.FixedDelayRestartStrategyConfiguration, self) \
                     .__init__(j_restart_strategy)
 
-        def get_restart_attempts(self) -> int:
+        def get_restart_attempts(self):
             return self._j_restart_strategy_configuration.getRestartAttempts()
 
-        def get_delay_between_attempts_interval(self) -> timedelta:
+        def get_delay_between_attempts_interval(self):
             return from_j_flink_time(
                 self._j_restart_strategy_configuration.getDelayBetweenAttemptsInterval())
 
@@ -138,13 +139,13 @@ class RestartStrategies(object):
                 super(RestartStrategies.FailureRateRestartStrategyConfiguration, self)\
                     .__init__(j_restart_strategy)
 
-        def get_max_failure_rate(self) -> int:
+        def get_max_failure_rate(self):
             return self._j_restart_strategy_configuration.getMaxFailureRate()
 
-        def get_failure_interval(self) -> timedelta:
+        def get_failure_interval(self):
             return from_j_flink_time(self._j_restart_strategy_configuration.getFailureInterval())
 
-        def get_delay_between_attempts_interval(self) -> timedelta:
+        def get_delay_between_attempts_interval(self):
             return from_j_flink_time(self._j_restart_strategy_configuration
                                      .getDelayBetweenAttemptsInterval())
 
@@ -167,7 +168,7 @@ class RestartStrategies(object):
                     .__init__(j_restart_strategy)
 
     @staticmethod
-    def _from_j_restart_strategy(j_restart_strategy) -> Optional[RestartStrategyConfiguration]:
+    def _from_j_restart_strategy(j_restart_strategy):
         if j_restart_strategy is None:
             return None
         gateway = get_gateway()
@@ -196,7 +197,7 @@ class RestartStrategies(object):
             raise Exception("Unsupported java RestartStrategyConfiguration: %s" % clz.getName())
 
     @staticmethod
-    def no_restart() -> 'NoRestartStrategyConfiguration':
+    def no_restart():
         """
         Generates NoRestartStrategyConfiguration.
 
@@ -205,12 +206,11 @@ class RestartStrategies(object):
         return RestartStrategies.NoRestartStrategyConfiguration()
 
     @staticmethod
-    def fall_back_restart() -> 'FallbackRestartStrategyConfiguration':
+    def fall_back_restart():
         return RestartStrategies.FallbackRestartStrategyConfiguration()
 
     @staticmethod
-    def fixed_delay_restart(restart_attempts: int, delay_between_attempts: int) -> \
-            'FixedDelayRestartStrategyConfiguration':
+    def fixed_delay_restart(restart_attempts, delay_between_attempts):
         """
         Generates a FixedDelayRestartStrategyConfiguration.
 
@@ -224,8 +224,7 @@ class RestartStrategies(object):
                                                                         delay_between_attempts)
 
     @staticmethod
-    def failure_rate_restart(failure_rate: int, failure_interval: int, delay_interval: int) -> \
-            'FailureRateRestartStrategyConfiguration':
+    def failure_rate_restart(failure_rate, failure_interval, delay_interval):
         """
         Generates a FailureRateRestartStrategyConfiguration.
 

@@ -16,11 +16,9 @@
  * limitations under the License.
  */
 
-@import "theme";
-
 :host {
-  position: relative;
   display: block;
+  position: relative;
   height: 100%;
 
   nz-tabset {
@@ -28,41 +26,12 @@
   }
 
   ::ng-deep {
-    .ant-table-cell {
-      font-size: @font-size-sm;
-    }
-
     .ant-tabs-content {
       height: 100%;
 
       .ant-tabs-tabpane {
         height: 100%;
       }
-    }
-
-    .ant-tabs-nav {
-      margin-bottom: 0;
-    }
-
-    .ant-tabs-small > .ant-tabs-nav .ant-tabs-tab {
-      font-size: @font-size-sm;
-
-      &:first-of-type {
-        margin: 0 0 0 @margin-md;
-      }
-    }
-
-    ::-webkit-scrollbar {
-      display: none;
-    }
-
-    nz-table,
-    nz-spin,
-    cdk-virtual-scroll-viewport,
-    nz-table-inner-scroll,
-    .ant-spin-container,
-    .ant-table {
-      height: 100%;
     }
   }
 }

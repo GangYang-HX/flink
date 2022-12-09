@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.checkpoint;
 
-import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.core.testutils.CommonTestUtils;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions.AlignmentType;
 import org.apache.flink.runtime.state.CheckpointStorageLocationReference;
@@ -27,143 +26,103 @@ import org.junit.Test;
 
 import java.util.Random;
 
-import static org.apache.flink.runtime.checkpoint.CheckpointOptions.NO_ALIGNED_CHECKPOINT_TIME_OUT;
+import static org.apache.flink.runtime.checkpoint.CheckpointOptions.NO_ALIGNMENT_TIME_OUT;
 import static org.apache.flink.runtime.checkpoint.CheckpointType.CHECKPOINT;
-import static org.apache.flink.runtime.checkpoint.CheckpointType.FULL_CHECKPOINT;
+import static org.apache.flink.runtime.checkpoint.CheckpointType.SAVEPOINT;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/** Tests for the {@link CheckpointOptions} class. */
+/**
+ * Tests for the {@link CheckpointOptions} class.
+ */
 public class CheckpointOptionsTest {
 
-    @Test
-    public void testDefaultCheckpoint() throws Exception {
-        final CheckpointOptions options = CheckpointOptions.forCheckpointWithDefaultLocation();
-        assertEquals(CheckpointType.CHECKPOINT, options.getCheckpointType());
-        assertTrue(options.getTargetLocation().isDefaultReference());
+	@Test
+	public void testDefaultCheckpoint() throws Exception {
+		final CheckpointOptions options = CheckpointOptions.forCheckpointWithDefaultLocation();
+		assertEquals(CheckpointType.CHECKPOINT, options.getCheckpointType());
+		assertTrue(options.getTargetLocation().isDefaultReference());
 
-        final CheckpointOptions copy = CommonTestUtils.createCopySerializable(options);
-        assertEquals(CheckpointType.CHECKPOINT, copy.getCheckpointType());
-        assertTrue(copy.getTargetLocation().isDefaultReference());
-    }
+		final CheckpointOptions copy = CommonTestUtils.createCopySerializable(options);
+		assertEquals(CheckpointType.CHECKPOINT, copy.getCheckpointType());
+		assertTrue(copy.getTargetLocation().isDefaultReference());
+	}
 
-    @Test
-    public void testSavepoint() throws Exception {
-        final Random rnd = new Random();
-        final byte[] locationBytes = new byte[rnd.nextInt(41) + 1];
-        rnd.nextBytes(locationBytes);
+	@Test
+	public void testSavepoint() throws Exception {
+		final Random rnd = new Random();
+		final byte[] locationBytes = new byte[rnd.nextInt(41) + 1];
+		rnd.nextBytes(locationBytes);
 
-        final SnapshotType[] snapshotTypes = {
-            CHECKPOINT,
-            FULL_CHECKPOINT,
-            SavepointType.savepoint(SavepointFormatType.CANONICAL),
-            SavepointType.suspend(SavepointFormatType.CANONICAL),
-            SavepointType.terminate(SavepointFormatType.CANONICAL)
-        };
+		final CheckpointOptions options = new CheckpointOptions(
+				CheckpointType.values()[rnd.nextInt(CheckpointType.values().length)],
+				new CheckpointStorageLocationReference(locationBytes));
 
-        final CheckpointOptions options =
-                new CheckpointOptions(
-                        snapshotTypes[rnd.nextInt(snapshotTypes.length)],
-                        new CheckpointStorageLocationReference(locationBytes));
+		final CheckpointOptions copy = CommonTestUtils.createCopySerializable(options);
+		assertEquals(options.getCheckpointType(), copy.getCheckpointType());
+		assertArrayEquals(locationBytes, copy.getTargetLocation().getReferenceBytes());
+	}
 
-        final CheckpointOptions copy = CommonTestUtils.createCopySerializable(options);
-        assertEquals(options.getCheckpointType(), copy.getCheckpointType());
-        assertArrayEquals(locationBytes, copy.getTargetLocation().getReferenceBytes());
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testSavepointNeedsAlignment() {
+	@Test(expected = IllegalArgumentException.class)
+	public void testSavepointNeedsAlignment() {
         new CheckpointOptions(
-                SavepointType.savepoint(SavepointFormatType.CANONICAL),
+                SAVEPOINT,
                 CheckpointStorageLocationReference.getDefault(),
                 AlignmentType.UNALIGNED,
                 0);
-    }
+	}
 
-    @Test
-    public void testCheckpointNeedsAlignment() {
+	@Test
+	public void testCheckpointNeedsAlignment() {
         CheckpointStorageLocationReference location =
                 CheckpointStorageLocationReference.getDefault();
         assertFalse(
-                new CheckpointOptions(
-                                CHECKPOINT,
-                                location,
-                                AlignmentType.UNALIGNED,
-                                NO_ALIGNED_CHECKPOINT_TIME_OUT)
+                new CheckpointOptions(CHECKPOINT, location, AlignmentType.UNALIGNED, Long.MAX_VALUE)
+                        .needsAlignment());
+        assertTrue(
+                new CheckpointOptions(CHECKPOINT, location, AlignmentType.ALIGNED, Long.MAX_VALUE)
                         .needsAlignment());
         assertTrue(
                 new CheckpointOptions(
-                                CHECKPOINT,
-                                location,
-                                AlignmentType.ALIGNED,
-                                NO_ALIGNED_CHECKPOINT_TIME_OUT)
-                        .needsAlignment());
-        assertTrue(
-                new CheckpointOptions(
-                                CHECKPOINT,
-                                location,
-                                AlignmentType.FORCED_ALIGNED,
-                                NO_ALIGNED_CHECKPOINT_TIME_OUT)
+                                CHECKPOINT, location, AlignmentType.FORCED_ALIGNED, Long.MAX_VALUE)
                         .needsAlignment());
         assertFalse(
                 new CheckpointOptions(
-                                CHECKPOINT,
-                                location,
-                                AlignmentType.AT_LEAST_ONCE,
-                                NO_ALIGNED_CHECKPOINT_TIME_OUT)
+                                CHECKPOINT, location, AlignmentType.AT_LEAST_ONCE, Long.MAX_VALUE)
                         .needsAlignment());
-    }
+	}
 
-    @Test
-    public void testCheckpointIsTimeoutable() {
-        CheckpointStorageLocationReference location =
-                CheckpointStorageLocationReference.getDefault();
+	@Test
+	public void testCheckpointIsTimeoutable() {
+		CheckpointStorageLocationReference location = CheckpointStorageLocationReference.getDefault();
+		assertTimeoutable(
+                CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, location), true, false, NO_ALIGNMENT_TIME_OUT);
         assertTimeoutable(
-                CheckpointOptions.alignedWithTimeout(CheckpointType.CHECKPOINT, location, 10),
-                false,
-                true,
-                10);
-        assertTimeoutable(
-                CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, location),
-                true,
-                false,
-                NO_ALIGNED_CHECKPOINT_TIME_OUT);
-        assertTimeoutable(
-                CheckpointOptions.alignedWithTimeout(CheckpointType.CHECKPOINT, location, 10)
-                        .withUnalignedUnsupported(),
+                CheckpointOptions.alignedWithTimeout(CheckpointType.CHECKPOINT, location, 10).withUnalignedUnsupported(),
                 false,
                 false,
                 10);
         assertTimeoutable(
-                CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, location)
-                        .withUnalignedUnsupported(),
+                CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, location).withUnalignedUnsupported(),
                 false,
                 false,
-                NO_ALIGNED_CHECKPOINT_TIME_OUT);
+                NO_ALIGNMENT_TIME_OUT);
     }
 
     @Test
     public void testForceAlignmentIsReversable() {
         CheckpointStorageLocationReference location =
                 CheckpointStorageLocationReference.getDefault();
-        assertReversable(
-                CheckpointOptions.alignedWithTimeout(CheckpointType.CHECKPOINT, location, 10),
-                true);
+        assertReversable(CheckpointOptions.alignedWithTimeout(CheckpointType.CHECKPOINT, location, 10), true);
         assertReversable(CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, location), true);
 
         assertReversable(CheckpointOptions.alignedNoTimeout(CHECKPOINT, location), false);
-        assertReversable(
-                CheckpointOptions.alignedNoTimeout(
-                        SavepointType.savepoint(SavepointFormatType.CANONICAL), location),
-                false);
+        assertReversable(CheckpointOptions.alignedNoTimeout(SAVEPOINT, location), false);
         assertReversable(CheckpointOptions.notExactlyOnce(CHECKPOINT, location), false);
-        assertReversable(
-                CheckpointOptions.notExactlyOnce(
-                        SavepointType.savepoint(SavepointFormatType.CANONICAL), location),
-                false);
+        assertReversable(CheckpointOptions.notExactlyOnce(SAVEPOINT, location), false);
     }
 
     private void assertReversable(CheckpointOptions options, boolean forceHasEffect) {
@@ -181,14 +140,13 @@ public class CheckpointOptionsTest {
                 "expected fully reversable options",
                 options,
                 unalignedUnsupported.withUnalignedSupported());
-    }
+	}
 
-    private void assertTimeoutable(
-            CheckpointOptions options, boolean isUnaligned, boolean isTimeoutable, long timeout) {
-        assertTrue("exactly once", options.isExactlyOnceMode());
-        assertEquals("need alignment", !isUnaligned, options.needsAlignment());
-        assertEquals("unaligned", isUnaligned, options.isUnalignedCheckpoint());
-        assertEquals("timeoutable", isTimeoutable, options.isTimeoutable());
-        assertEquals("timeout", timeout, options.getAlignedCheckpointTimeout());
-    }
+	private void assertTimeoutable(CheckpointOptions options, boolean isUnaligned, boolean isTimeoutable, long timeout) {
+		assertTrue("exactly once", options.isExactlyOnceMode());
+		assertEquals("need alignment", !isUnaligned, options.needsAlignment());
+		assertEquals("unaligned", isUnaligned, options.isUnalignedCheckpoint());
+		assertEquals("timeoutable", isTimeoutable, options.isTimeoutable());
+		assertEquals("timeout", timeout, options.getAlignmentTimeout());
+	}
 }

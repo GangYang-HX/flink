@@ -39,10 +39,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** {@link ChannelStatePersister} test. */
+/**
+ * {@link ChannelStatePersister} test.
+ */
 public class ChannelStatePersisterTest {
 
-    @Test
+	@Test
     public void testNewBarrierNotOverwrittenByStopPersisting() throws Exception {
         RecordingChannelStateWriter channelStateWriter = new RecordingChannelStateWriter();
         InputChannelInfo channelInfo = new InputChannelInfo(0, 0);
@@ -50,8 +52,7 @@ public class ChannelStatePersisterTest {
                 new ChannelStatePersister(channelStateWriter, channelInfo);
 
         long checkpointId = 1L;
-        channelStateWriter.start(
-                checkpointId, CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, getDefault()));
+        channelStateWriter.start(checkpointId, CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, getDefault()));
 
         persister.checkForBarrier(barrier(checkpointId));
         persister.startPersisting(checkpointId, Arrays.asList(buildSomeBuffer()));
@@ -60,29 +61,29 @@ public class ChannelStatePersisterTest {
         persister.maybePersist(buildSomeBuffer());
         assertEquals(1, channelStateWriter.getAddedInput().get(channelInfo).size());
 
-        // meanwhile, checkpoint coordinator timed out the 1st checkpoint and started the 2nd
-        // now task thread is picking up the barrier and aborts the 1st:
+		// meanwhile, checkpoint coordinator timed out the 1st checkpoint and started the 2nd
+		// now task thread is picking up the barrier and aborts the 1st:
         persister.checkForBarrier(barrier(checkpointId + 1));
         persister.maybePersist(buildSomeBuffer());
         persister.stopPersisting(checkpointId);
         persister.maybePersist(buildSomeBuffer());
         assertEquals(1, channelStateWriter.getAddedInput().get(channelInfo).size());
 
-        assertTrue(persister.hasBarrierReceived());
-    }
+		assertTrue(persister.hasBarrierReceived());
+	}
 
-    @Test
+	@Test
     public void testNewBarrierNotOverwrittenByCheckForBarrier() throws Exception {
         ChannelStatePersister persister =
                 new ChannelStatePersister(ChannelStateWriter.NO_OP, new InputChannelInfo(0, 0));
 
-        persister.startPersisting(1L, Collections.emptyList());
-        persister.startPersisting(2L, Collections.emptyList());
+		persister.startPersisting(1L, Collections.emptyList());
+		persister.startPersisting(2L, Collections.emptyList());
 
-        assertFalse(persister.checkForBarrier(barrier(1L)).isPresent());
+		assertFalse(persister.checkForBarrier(barrier(1L)).isPresent());
 
-        assertFalse(persister.hasBarrierReceived());
-    }
+		assertFalse(persister.hasBarrierReceived());
+	}
 
     @Test
     public void testLateBarrierOnStartedAndCancelledCheckpoint() throws Exception {
@@ -117,8 +118,7 @@ public class ChannelStatePersisterTest {
             persister.stopPersisting(lateCheckpointId);
         }
         persister.checkForBarrier(barrier(lateCheckpointId));
-        channelStateWriter.start(
-                checkpointId, CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, getDefault()));
+        channelStateWriter.start(checkpointId, CheckpointOptions.unaligned(CheckpointType.CHECKPOINT, getDefault()));
         persister.startPersisting(checkpointId, Arrays.asList(buildSomeBuffer()));
         persister.maybePersist(buildSomeBuffer());
         persister.checkForBarrier(barrier(checkpointId));
@@ -140,9 +140,10 @@ public class ChannelStatePersisterTest {
         persister.startPersisting(lateCheckpointId, Collections.emptyList());
     }
 
-    private static Buffer barrier(long id) throws IOException {
-        return EventSerializer.toBuffer(
-                new CheckpointBarrier(id, 1L, CheckpointOptions.forCheckpointWithDefaultLocation()),
-                true);
-    }
+	private static Buffer barrier(long id) throws IOException {
+		return EventSerializer.toBuffer(
+			new CheckpointBarrier(id, 1L, CheckpointOptions.forCheckpointWithDefaultLocation()),
+			true
+		);
+	}
 }

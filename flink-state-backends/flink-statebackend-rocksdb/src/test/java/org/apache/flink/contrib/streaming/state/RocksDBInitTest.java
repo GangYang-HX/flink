@@ -28,48 +28,45 @@ import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import org.rocksdb.NativeLibraryLoader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.rocksdb.RocksDB;
 
 import java.io.File;
 import java.io.IOException;
 
 import static org.junit.Assert.fail;
 
-/** Tests for {@link EmbeddedRocksDBStateBackend} on initialization. */
+/**
+ * Tests for {@link RocksDBStateBackend} on initialization.
+ */
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({NativeLibraryLoader.class})
+@PrepareForTest({RocksDB.class})
 public class RocksDBInitTest {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RocksDBInitTest.class);
+	@Rule
+	public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-    @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+	/**
+	 * This test checks that the RocksDB native code loader still responds to resetting the init flag.
+	 */
+	@Test
+	public void testResetInitFlag() throws Exception {
+		RocksDBStateBackend.resetRocksDBLoadedFlag();
+	}
 
-    /**
-     * This test checks that the RocksDB native code loader still responds to resetting the init
-     * flag.
-     */
-    @Test
-    public void testResetInitFlag() throws Exception {
-        EmbeddedRocksDBStateBackend.resetRocksDBLoadedFlag();
-    }
+	@Test
+	public void testTempLibFolderDeletedOnFail() throws Exception {
+		PowerMockito.spy(RocksDB.class);
+		PowerMockito.when(RocksDB.class, "loadLibrary").thenThrow(new ExpectedTestException());
 
-    @Test
-    public void testTempLibFolderDeletedOnFail() throws Exception {
-        PowerMockito.spy(NativeLibraryLoader.class);
-        PowerMockito.when(NativeLibraryLoader.class, "getInstance")
-                .thenThrow(new ExpectedTestException());
-
-        File tempFolder = temporaryFolder.newFolder();
-        try {
-            EmbeddedRocksDBStateBackend.ensureRocksDBIsLoaded(tempFolder.getAbsolutePath());
-            fail("Not throwing expected exception.");
-        } catch (IOException ignored) {
-            // ignored
-        }
-        File[] files = tempFolder.listFiles();
-        Assert.assertNotNull(files);
-        Assert.assertEquals(0, files.length);
-    }
+		File tempFolder = temporaryFolder.newFolder();
+		try {
+			RocksDBStateBackend.ensureRocksDBIsLoaded(tempFolder.getAbsolutePath());
+			fail("Not throwing expected exception.");
+		} catch (IOException ignored) {
+			// ignored
+		}
+		File[] files = tempFolder.listFiles();
+		Assert.assertNotNull(files);
+		Assert.assertEquals(0, files.length);
+	}
 }

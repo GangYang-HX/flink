@@ -1,0 +1,4 @@
+{
+  "name": "haozhugogo_test",
+  "sql": "CREATE TABLE MyResult2 (\nPRIMARY KEY (test_1) NOT ENFORCED\n) WITH(\n'parallelism' = '10'\n)like Hive1.b_dwd.ods;\nINSERT INTO MyResult2 SELECT ai, bi, ci, xx, ddd, xx, ai, bi from `Kafka_hw-sh-dc-lancer-kafka-ext`.`r_ods`.`ods_s_bigdata_dwd_to_bi_test_task_rt` tmp;"
+}

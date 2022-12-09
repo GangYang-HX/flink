@@ -32,6 +32,8 @@ import java.io.Serializable;
 @FunctionalInterface
 public interface ParquetBuilder<T> extends Serializable {
 
-    /** Creates and configures a parquet writer to the given output file. */
-    ParquetWriter<T> createWriter(OutputFile out) throws IOException;
+	/**
+	 * Creates and configures a parquet writer to the given output file.
+	 */
+	ParquetWriter<T> createWriter(OutputFile out) throws IOException;
 }

@@ -21,60 +21,55 @@ package org.apache.flink.yarn.configuration;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DeploymentOptions;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
-/** Tests for the {@link YarnDeploymentTarget}. */
-class YarnDeploymentTargetTest {
+/**
+ * Tests for the {@link YarnDeploymentTarget}.
+ */
+public class YarnDeploymentTargetTest {
 
-    @Test
-    void testCorrectInstantiationFromConfiguration() {
-        for (YarnDeploymentTarget t : YarnDeploymentTarget.values()) {
-            testCorrectInstantiationFromConfigurationHelper(t);
-        }
-    }
+	@Test
+	public void testCorrectInstantiationFromConfiguration() {
+		for (YarnDeploymentTarget t : YarnDeploymentTarget.values()) {
+			testCorrectInstantiationFromConfigurationHelper(t);
+		}
+	}
 
-    @Test
-    void testInvalidInstantiationFromConfiguration() {
-        final Configuration configuration = getConfigurationWithTarget("invalid-target");
-        assertThatThrownBy(() -> YarnDeploymentTarget.fromConfig(configuration))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
+	@Test(expected = IllegalArgumentException.class)
+	public void testInvalidInstantiationFromConfiguration() {
+		final Configuration configuration = getConfigurationWithTarget("invalid-target");
+		YarnDeploymentTarget.fromConfig(configuration);
+	}
 
-    @Test
-    void testNullInstantiationFromConfiguration() {
-        assertThatThrownBy(() -> YarnDeploymentTarget.fromConfig(new Configuration()))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
+	@Test(expected = IllegalArgumentException.class)
+	public void testNullInstantiationFromConfiguration() {
+		YarnDeploymentTarget.fromConfig(new Configuration());
+	}
 
-    @Test
-    void testThatAValidOptionIsValid() {
-        assertThat(
-                        YarnDeploymentTarget.isValidYarnTarget(
-                                YarnDeploymentTarget.APPLICATION.getName()))
-                .isTrue();
-    }
+	@Test
+	public void testThatAValidOptionIsValid() {
+		assertTrue(YarnDeploymentTarget.isValidYarnTarget(YarnDeploymentTarget.APPLICATION.getName()));
+	}
 
-    @Test
-    void testThatAnInvalidOptionIsInvalid() {
-        assertThat(YarnDeploymentTarget.isValidYarnTarget("invalid-target")).isFalse();
-    }
+	@Test
+	public void testThatAnInvalidOptionIsInvalid() {
+		assertFalse(YarnDeploymentTarget.isValidYarnTarget("invalid-target"));
+	}
 
-    private void testCorrectInstantiationFromConfigurationHelper(
-            final YarnDeploymentTarget expectedDeploymentTarget) {
-        final Configuration configuration =
-                getConfigurationWithTarget(expectedDeploymentTarget.getName().toUpperCase());
-        final YarnDeploymentTarget actualDeploymentTarget =
-                YarnDeploymentTarget.fromConfig(configuration);
+	private void testCorrectInstantiationFromConfigurationHelper(final YarnDeploymentTarget expectedDeploymentTarget) {
+		final Configuration configuration = getConfigurationWithTarget(expectedDeploymentTarget.getName().toUpperCase());
+		final YarnDeploymentTarget actualDeploymentTarget = YarnDeploymentTarget.fromConfig(configuration);
 
-        assertThat(actualDeploymentTarget).isEqualTo(expectedDeploymentTarget);
-    }
+		assertSame(actualDeploymentTarget, expectedDeploymentTarget);
+	}
 
-    private Configuration getConfigurationWithTarget(final String target) {
-        final Configuration configuration = new Configuration();
-        configuration.set(DeploymentOptions.TARGET, target);
-        return configuration;
-    }
+	private Configuration getConfigurationWithTarget(final String target) {
+		final Configuration configuration = new Configuration();
+		configuration.set(DeploymentOptions.TARGET,  target);
+		return configuration;
+	}
 }

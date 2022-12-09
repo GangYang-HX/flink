@@ -40,216 +40,184 @@ import java.io.IOException;
 
 /**
  * A {@link TypeSerializer} for {@link MapData}. It should be noted that the header will not be
- * encoded. Currently Python doesn't support BinaryMapData natively, so we can't use
- * BaseArraySerializer directly.
+ * encoded. Currently Python doesn't support BinaryMapData natively, so we can't use BaseArraySerializer
+ * in blink directly.
  */
 @Internal
 public class MapDataSerializer extends org.apache.flink.table.runtime.typeutils.MapDataSerializer {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private final LogicalType keyType;
+	private final LogicalType keyType;
 
-    private final LogicalType valueType;
+	private final LogicalType valueType;
 
-    private final TypeSerializer keyTypeSerializer;
+	private final TypeSerializer keyTypeSerializer;
 
-    private final TypeSerializer valueTypeSerializer;
+	private final TypeSerializer valueTypeSerializer;
 
-    private final BinaryWriter.ValueSetter keySetter;
+	private final int keySize;
 
-    private final BinaryWriter.ValueSetter valueSetter;
+	private final int valueSize;
 
-    private final ArrayData.ElementGetter keyGetter;
+	public MapDataSerializer(LogicalType keyType, LogicalType valueType
+		, TypeSerializer keyTypeSerializer, TypeSerializer valueTypeSerializer) {
+		super(keyType, valueType, null);
+		this.keyType = keyType;
+		this.valueType = valueType;
+		this.keyTypeSerializer = keyTypeSerializer;
+		this.valueTypeSerializer = valueTypeSerializer;
+		this.keySize = BinaryArrayData.calculateFixLengthPartSize(this.keyType);
+		this.valueSize = BinaryArrayData.calculateFixLengthPartSize(this.valueType);
+	}
 
-    private final ArrayData.ElementGetter valueGetter;
+	@Override
+	public void serialize(MapData map, DataOutputView target) throws IOException {
+		BinaryMapData binaryMap = toBinaryMap(map);
+		final int size = binaryMap.size();
+		target.writeInt(size);
+		BinaryArrayData keyArray = binaryMap.keyArray();
+		BinaryArrayData valueArray = binaryMap.valueArray();
+		for (int i = 0; i < size; i++) {
+			if (keyArray.isNullAt(i)) {
+				throw new IllegalArgumentException("The key of BinaryMapData must not be null.");
+			}
+			Object key = ArrayData.get(keyArray, i, keyType);
+			keyTypeSerializer.serialize(key, target);
+			if (valueArray.isNullAt(i)) {
+				target.writeBoolean(true);
+			} else {
+				target.writeBoolean(false);
+				Object value = ArrayData.get(valueArray, i, valueType);
+				valueTypeSerializer.serialize(value, target);
+			}
+		}
+	}
 
-    private final BinaryArrayWriter.NullSetter nullValueSetter;
+	@Override
+	public MapData deserialize(DataInputView source) throws IOException {
+		BinaryArrayData keyArray = new BinaryArrayData();
+		BinaryArrayData valueArray = new BinaryArrayData();
+		return deserializeInternal(source, keyArray, valueArray);
+	}
 
-    private final int keySize;
+	@Override
+	public MapData deserialize(MapData reuse, DataInputView source) throws IOException {
+		if (reuse instanceof GenericMapData) {
+			return deserialize(source);
+		}
+		BinaryMapData binaryMap = (BinaryMapData) reuse;
+		return deserializeInternal(source, binaryMap.keyArray(), binaryMap.valueArray());
+	}
 
-    private final int valueSize;
+	private MapData deserializeInternal(DataInputView source, BinaryArrayData keyArray, BinaryArrayData valueArray) throws IOException {
+		final int size = source.readInt();
+		BinaryArrayWriter keyWriter = new BinaryArrayWriter(keyArray, size, keySize);
+		BinaryArrayWriter valueWriter = new BinaryArrayWriter(valueArray, size, valueSize);
+		for (int i = 0; i < size; i++) {
+			Object key = keyTypeSerializer.deserialize(source);
+			BinaryWriter.write(keyWriter, i, key, keyType, keyTypeSerializer);
+			boolean isNull = source.readBoolean();
+			if (isNull) {
+				valueWriter.setNullAt(i);
+			} else {
+				Object value = valueTypeSerializer.deserialize(source);
+				BinaryWriter.write(valueWriter, i, value, valueType, valueTypeSerializer);
+			}
+		}
+		keyWriter.complete();
+		valueWriter.complete();
+		return BinaryMapData.valueOf(keyArray, valueArray);
+	}
 
-    public MapDataSerializer(
-            LogicalType keyType,
-            LogicalType valueType,
-            TypeSerializer keyTypeSerializer,
-            TypeSerializer valueTypeSerializer) {
-        super(keyType, valueType);
-        this.keyType = keyType;
-        this.valueType = valueType;
-        this.keyTypeSerializer = keyTypeSerializer;
-        this.valueTypeSerializer = valueTypeSerializer;
-        this.keySize = BinaryArrayData.calculateFixLengthPartSize(this.keyType);
-        this.valueSize = BinaryArrayData.calculateFixLengthPartSize(this.valueType);
-        this.keyGetter = ArrayData.createElementGetter(keyType);
-        this.valueGetter = ArrayData.createElementGetter(valueType);
-        this.nullValueSetter = BinaryArrayWriter.createNullSetter(valueType);
-        this.keySetter = BinaryWriter.createValueSetter(keyType);
-        this.valueSetter = BinaryWriter.createValueSetter(valueType);
-    }
+	@Override
+	public void copy(DataInputView source, DataOutputView target) throws IOException {
+		serialize(deserialize(source), target);
+	}
 
-    @Override
-    public void serialize(MapData map, DataOutputView target) throws IOException {
-        BinaryMapData binaryMap = toBinaryMap(map);
-        final int size = binaryMap.size();
-        target.writeInt(size);
-        BinaryArrayData keyArray = binaryMap.keyArray();
-        BinaryArrayData valueArray = binaryMap.valueArray();
-        for (int i = 0; i < size; i++) {
-            if (keyArray.isNullAt(i)) {
-                throw new IllegalArgumentException("The key of BinaryMapData must not be null.");
-            }
-            Object key = keyGetter.getElementOrNull(keyArray, i);
-            keyTypeSerializer.serialize(key, target);
-            if (valueArray.isNullAt(i)) {
-                target.writeBoolean(true);
-            } else {
-                target.writeBoolean(false);
-                Object value = valueGetter.getElementOrNull(valueArray, i);
-                valueTypeSerializer.serialize(value, target);
-            }
-        }
-    }
+	@Override
+	public TypeSerializer<MapData> duplicate() {
+		return new MapDataSerializer(keyType, valueType, keyTypeSerializer, valueTypeSerializer);
+	}
 
-    @Override
-    public MapData deserialize(DataInputView source) throws IOException {
-        BinaryArrayData keyArray = new BinaryArrayData();
-        BinaryArrayData valueArray = new BinaryArrayData();
-        return deserializeInternal(source, keyArray, valueArray);
-    }
+	@Override
+	public TypeSerializerSnapshot<MapData> snapshotConfiguration() {
+		return new BaseMapSerializerSnapshot(keyType, valueType, keyTypeSerializer, valueTypeSerializer);
+	}
 
-    @Override
-    public MapData deserialize(MapData reuse, DataInputView source) throws IOException {
-        if (reuse instanceof GenericMapData) {
-            return deserialize(source);
-        }
-        BinaryMapData binaryMap = (BinaryMapData) reuse;
-        return deserializeInternal(source, binaryMap.keyArray(), binaryMap.valueArray());
-    }
+	/**
+	 * {@link TypeSerializerSnapshot} for {@link MapDataSerializer}.
+	 */
+	public static final class BaseMapSerializerSnapshot implements TypeSerializerSnapshot<MapData> {
+		private static final int CURRENT_VERSION = 1;
 
-    private MapData deserializeInternal(
-            DataInputView source, BinaryArrayData keyArray, BinaryArrayData valueArray)
-            throws IOException {
-        final int size = source.readInt();
-        BinaryArrayWriter keyWriter = new BinaryArrayWriter(keyArray, size, keySize);
-        BinaryArrayWriter valueWriter = new BinaryArrayWriter(valueArray, size, valueSize);
-        for (int i = 0; i < size; i++) {
-            Object key = keyTypeSerializer.deserialize(source);
-            keySetter.setValue(keyWriter, i, key);
-            boolean isNull = source.readBoolean();
-            if (isNull) {
-                nullValueSetter.setNull(valueWriter, i);
-            } else {
-                Object value = valueTypeSerializer.deserialize(source);
-                valueSetter.setValue(valueWriter, i, value);
-            }
-        }
-        keyWriter.complete();
-        valueWriter.complete();
-        return BinaryMapData.valueOf(keyArray, valueArray);
-    }
+		private LogicalType previousKeyType;
+		private LogicalType previousValueType;
 
-    @Override
-    public void copy(DataInputView source, DataOutputView target) throws IOException {
-        serialize(deserialize(source), target);
-    }
+		private TypeSerializer previousKeySerializer;
+		private TypeSerializer previousValueSerializer;
 
-    @Override
-    public TypeSerializer<MapData> duplicate() {
-        return new MapDataSerializer(keyType, valueType, keyTypeSerializer, valueTypeSerializer);
-    }
+		@SuppressWarnings("unused")
+		public BaseMapSerializerSnapshot() {
+			// this constructor is used when restoring from a checkpoint/savepoint.
+		}
 
-    @Override
-    public TypeSerializerSnapshot<MapData> snapshotConfiguration() {
-        return new BaseMapSerializerSnapshot(
-                keyType, valueType, keyTypeSerializer, valueTypeSerializer);
-    }
+		BaseMapSerializerSnapshot(LogicalType keyT, LogicalType valueT, TypeSerializer keySer, TypeSerializer valueSer) {
+			this.previousKeyType = keyT;
+			this.previousValueType = valueT;
 
-    /** {@link TypeSerializerSnapshot} for {@link MapDataSerializer}. */
-    public static final class BaseMapSerializerSnapshot implements TypeSerializerSnapshot<MapData> {
-        private static final int CURRENT_VERSION = 1;
+			this.previousKeySerializer = keySer;
+			this.previousValueSerializer = valueSer;
+		}
 
-        private LogicalType previousKeyType;
-        private LogicalType previousValueType;
+		@Override
+		public int getCurrentVersion() {
+			return CURRENT_VERSION;
+		}
 
-        private TypeSerializer previousKeySerializer;
-        private TypeSerializer previousValueSerializer;
+		@Override
+		public void writeSnapshot(DataOutputView out) throws IOException {
+			DataOutputViewStream outStream = new DataOutputViewStream(out);
+			InstantiationUtil.serializeObject(outStream, previousKeyType);
+			InstantiationUtil.serializeObject(outStream, previousValueType);
+			InstantiationUtil.serializeObject(outStream, previousKeySerializer);
+			InstantiationUtil.serializeObject(outStream, previousValueSerializer);
+		}
 
-        @SuppressWarnings("unused")
-        public BaseMapSerializerSnapshot() {
-            // this constructor is used when restoring from a checkpoint/savepoint.
-        }
+		@Override
+		public void readSnapshot(int readVersion, DataInputView in, ClassLoader userCodeClassLoader) throws IOException {
+			try {
+				DataInputViewStream inStream = new DataInputViewStream(in);
+				this.previousKeyType = InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
+				this.previousValueType = InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
+				this.previousKeySerializer = InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
+				this.previousValueSerializer = InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
+			} catch (ClassNotFoundException e) {
+				throw new IOException(e);
+			}
+		}
 
-        BaseMapSerializerSnapshot(
-                LogicalType keyT,
-                LogicalType valueT,
-                TypeSerializer keySer,
-                TypeSerializer valueSer) {
-            this.previousKeyType = keyT;
-            this.previousValueType = valueT;
+		@Override
+		public TypeSerializer<MapData> restoreSerializer() {
+			return new MapDataSerializer(
+				previousKeyType, previousValueType, previousKeySerializer, previousValueSerializer);
+		}
 
-            this.previousKeySerializer = keySer;
-            this.previousValueSerializer = valueSer;
-        }
+		@Override
+		public TypeSerializerSchemaCompatibility<MapData> resolveSchemaCompatibility(TypeSerializer<MapData> newSerializer) {
+			if (!(newSerializer instanceof MapDataSerializer)) {
+				return TypeSerializerSchemaCompatibility.incompatible();
+			}
 
-        @Override
-        public int getCurrentVersion() {
-            return CURRENT_VERSION;
-        }
-
-        @Override
-        public void writeSnapshot(DataOutputView out) throws IOException {
-            DataOutputViewStream outStream = new DataOutputViewStream(out);
-            InstantiationUtil.serializeObject(outStream, previousKeyType);
-            InstantiationUtil.serializeObject(outStream, previousValueType);
-            InstantiationUtil.serializeObject(outStream, previousKeySerializer);
-            InstantiationUtil.serializeObject(outStream, previousValueSerializer);
-        }
-
-        @Override
-        public void readSnapshot(int readVersion, DataInputView in, ClassLoader userCodeClassLoader)
-                throws IOException {
-            try {
-                DataInputViewStream inStream = new DataInputViewStream(in);
-                this.previousKeyType =
-                        InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
-                this.previousValueType =
-                        InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
-                this.previousKeySerializer =
-                        InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
-                this.previousValueSerializer =
-                        InstantiationUtil.deserializeObject(inStream, userCodeClassLoader);
-            } catch (ClassNotFoundException e) {
-                throw new IOException(e);
-            }
-        }
-
-        @Override
-        public TypeSerializer<MapData> restoreSerializer() {
-            return new MapDataSerializer(
-                    previousKeyType,
-                    previousValueType,
-                    previousKeySerializer,
-                    previousValueSerializer);
-        }
-
-        @Override
-        public TypeSerializerSchemaCompatibility<MapData> resolveSchemaCompatibility(
-                TypeSerializer<MapData> newSerializer) {
-            if (!(newSerializer instanceof MapDataSerializer)) {
-                return TypeSerializerSchemaCompatibility.incompatible();
-            }
-
-            MapDataSerializer newMapDataSerializer = (MapDataSerializer) newSerializer;
-            if (!previousKeyType.equals(newMapDataSerializer.keyType)
-                    || !previousValueType.equals(newMapDataSerializer.valueType)
-                    || !previousKeySerializer.equals(newMapDataSerializer.keyTypeSerializer)
-                    || !previousValueSerializer.equals(newMapDataSerializer.valueTypeSerializer)) {
-                return TypeSerializerSchemaCompatibility.incompatible();
-            } else {
-                return TypeSerializerSchemaCompatibility.compatibleAsIs();
-            }
-        }
-    }
+			MapDataSerializer newMapDataSerializer = (MapDataSerializer) newSerializer;
+			if (!previousKeyType.equals(newMapDataSerializer.keyType) ||
+				!previousValueType.equals(newMapDataSerializer.valueType) ||
+				!previousKeySerializer.equals(newMapDataSerializer.keyTypeSerializer) ||
+				!previousValueSerializer.equals(newMapDataSerializer.valueTypeSerializer)) {
+				return TypeSerializerSchemaCompatibility.incompatible();
+			} else {
+				return TypeSerializerSchemaCompatibility.compatibleAsIs();
+			}
+		}
+	}
 }

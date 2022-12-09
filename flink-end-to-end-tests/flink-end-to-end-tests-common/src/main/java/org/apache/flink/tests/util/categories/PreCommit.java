@@ -18,5 +18,8 @@
 
 package org.apache.flink.tests.util.categories;
 
-/** Marker interface for tests that should be run on every commit. */
-public interface PreCommit {}
+/**
+ * Marker interface for tests that should be run on every commit.
+ */
+public interface PreCommit {
+}

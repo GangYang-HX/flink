@@ -28,4 +28,5 @@ import java.util.Iterator;
  * @param <E> The iterated elements' type.
  */
 @Internal
-public interface IterableIterator<E> extends Iterator<E>, Iterable<E> {}
+public interface IterableIterator<E> extends Iterator<E>, Iterable<E> {
+}

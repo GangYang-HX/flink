@@ -18,37 +18,84 @@
 
 package org.apache.flink.runtime.io.network.api.writer;
 
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.core.io.IOReadableWritable;
+import org.apache.flink.runtime.io.network.partition.PipelinedSubpartition;
+import org.apache.flink.runtime.io.network.partition.listener.BacklogEventChangedListener;
+import org.apache.flink.runtime.io.network.partition.ResultSubpartition;
 
-/** Utility class to encapsulate the logic of building a {@link RecordWriter} instance. */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Utility class to encapsulate the logic of building a {@link RecordWriter} instance.
+ */
 public class RecordWriterBuilder<T extends IOReadableWritable> {
 
-    private ChannelSelector<T> selector = new RoundRobinChannelSelector<>();
+	private static final Logger LOG = LoggerFactory.getLogger(RecordWriterBuilder.class);
 
-    private long timeout = -1;
+	private ChannelSelector<T> selector = new RoundRobinChannelSelector<>();
 
-    private String taskName = "test";
+	private long timeout = -1;
 
-    public RecordWriterBuilder<T> setChannelSelector(ChannelSelector<T> selector) {
-        this.selector = selector;
-        return this;
-    }
+	private String taskName = "test";
 
-    public RecordWriterBuilder<T> setTimeout(long timeout) {
-        this.timeout = timeout;
-        return this;
-    }
+	private ExecutionConfig executionConfig;
 
-    public RecordWriterBuilder<T> setTaskName(String taskName) {
-        this.taskName = taskName;
-        return this;
-    }
+	public RecordWriterBuilder<T> setChannelSelector(ChannelSelector<T> selector) {
+		this.selector = selector;
+		return this;
+	}
 
-    public RecordWriter<T> build(ResultPartitionWriter writer) {
-        if (selector.isBroadcast()) {
-            return new BroadcastRecordWriter<>(writer, timeout, taskName);
-        } else {
-            return new ChannelSelectorRecordWriter<>(writer, selector, timeout, taskName);
-        }
-    }
+	public RecordWriterBuilder<T> setTimeout(long timeout) {
+		this.timeout = timeout;
+		return this;
+	}
+
+	public RecordWriterBuilder<T> setTaskName(String taskName) {
+		this.taskName = taskName;
+		return this;
+	}
+
+	public RecordWriterBuilder<T> setExecutionConfig(ExecutionConfig executionConfig) {
+		this.executionConfig = executionConfig;
+		return this;
+	}
+
+	public RecordWriter<T> build(ResultPartitionWriter writer) {
+		if (selector.isBroadcast()) {
+			return new BroadcastRecordWriter<>(writer, timeout, taskName);
+		} else {
+			if (selector.isLoadBasedChannelSelectorEnabled()) {
+				selector = getLoadBasedChannelSelector(writer);
+			}
+			return new ChannelSelectorRecordWriter<>(writer, selector, timeout, taskName);
+		}
+	}
+
+	private LoadBasedChannelSelector<T> getLoadBasedChannelSelector(ResultPartitionWriter writer) {
+		LoadBasedStrategy loadBasedStrategy = getLoadBasedStrategy();
+		BacklogEventChangedListener backlogEventChangedListener = new BacklogEventChangedListener(loadBasedStrategy);
+		int numberOfSubpartitions = writer.getNumberOfSubpartitions();
+		for (int i = 0; i < numberOfSubpartitions; i++) {
+			ResultSubpartition subpartition = writer.getSubpartition(i);
+			if (subpartition instanceof PipelinedSubpartition) {
+				((PipelinedSubpartition)subpartition).registerListener(backlogEventChangedListener);
+			}
+		}
+		LOG.info("Enable loadBasedChannelSelector with loadBasedStrategy: {} for task: {}",
+			loadBasedStrategy, taskName);
+
+		return new LoadBasedChannelSelector<>(loadBasedStrategy);
+	}
+
+	private LoadBasedStrategy getLoadBasedStrategy() {
+		if ("threshold".equals(executionConfig.getLoadBasedChannelSelectorStrategy())) {
+			return new ThresholdBacklogLoadBasedStrategy(
+				executionConfig.getChannelSelectorStrategyThresholdFactor(),
+				executionConfig.getChannelSelectorStrategyThresholdUpdateFrequencyCount());
+		}
+		// Default use MinBacklogLoadBasedStrategy.
+		return new MinBacklogLoadBasedStrategy(executionConfig.getChannelSelectorStrategyMinUpdateInterval());
+	}
 }

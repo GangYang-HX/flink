@@ -21,48 +21,53 @@ package org.apache.flink.configuration;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.function.Function;
 
-/** Tests for {@link CoreOptions}. */
+/**
+ * Tests for {@link CoreOptions}.
+ */
 public class CoreOptionsTest {
-    @Test
-    public void testGetParentFirstLoaderPatterns() {
-        testParentFirst(
-                CoreOptions::getParentFirstLoaderPatterns,
-                CoreOptions.ALWAYS_PARENT_FIRST_LOADER_PATTERNS,
-                CoreOptions.ALWAYS_PARENT_FIRST_LOADER_PATTERNS_ADDITIONAL);
-    }
+	@Test
+	public void testGetParentFirstLoaderPatterns() {
+		testParentFirst(
+			CoreOptions::getParentFirstLoaderPatterns,
+			CoreOptions.ALWAYS_PARENT_FIRST_LOADER_PATTERNS,
+			CoreOptions.ALWAYS_PARENT_FIRST_LOADER_PATTERNS_ADDITIONAL);
+	}
 
-    @Test
-    public void testGetPluginParentFirstLoaderPatterns() {
-        testParentFirst(
-                CoreOptions::getPluginParentFirstLoaderPatterns,
-                CoreOptions.PLUGIN_ALWAYS_PARENT_FIRST_LOADER_PATTERNS,
-                CoreOptions.PLUGIN_ALWAYS_PARENT_FIRST_LOADER_PATTERNS_ADDITIONAL);
-    }
+	@Test
+	public void testGetPluginParentFirstLoaderPatterns() {
+		testParentFirst(
+			CoreOptions::getPluginParentFirstLoaderPatterns,
+			CoreOptions.PLUGIN_ALWAYS_PARENT_FIRST_LOADER_PATTERNS,
+			CoreOptions.PLUGIN_ALWAYS_PARENT_FIRST_LOADER_PATTERNS_ADDITIONAL);
+	}
 
-    private void testParentFirst(
-            Function<Configuration, String[]> patternGetter,
-            ConfigOption<List<String>> patternOption,
-            ConfigOption<List<String>> additionalOption) {
-        Configuration config = new Configuration();
-        Assert.assertArrayEquals(
-                patternOption.defaultValue().toArray(new String[0]), patternGetter.apply(config));
+	private void testParentFirst(
+			Function<Configuration, String[]> patternGetter,
+			ConfigOption<String> patternOption,
+			ConfigOption<String> additionalOption) {
+		Configuration config = new Configuration();
+		Assert.assertArrayEquals(patternOption.defaultValue().split(";"),
+			patternGetter.apply(config));
 
-        config.set(patternOption, Arrays.asList("hello", "world"));
+		config.setString(patternOption, "hello;world");
 
-        Assert.assertArrayEquals(new String[] {"hello", "world"}, patternGetter.apply(config));
+		Assert.assertArrayEquals(
+			"hello;world".split(";"),
+			patternGetter.apply(config));
 
-        config.set(additionalOption, Arrays.asList("how", "are", "you"));
+		config.setString(additionalOption, "how;are;you");
 
-        Assert.assertArrayEquals(
-                new String[] {"hello", "world", "how", "are", "you"}, patternGetter.apply(config));
+		Assert.assertArrayEquals(
+			"hello;world;how;are;you".split(";"),
+			patternGetter.apply(config));
 
-        config.set(patternOption, Collections.emptyList());
+		config.setString(patternOption, "");
 
-        Assert.assertArrayEquals(new String[] {"how", "are", "you"}, patternGetter.apply(config));
-    }
+		Assert.assertArrayEquals(
+			"how;are;you".split(";"),
+			patternGetter.apply(config));
+	}
+
 }

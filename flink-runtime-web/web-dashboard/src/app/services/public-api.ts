@@ -23,4 +23,3 @@ export * from './jar.service';
 export * from './job-manager.service';
 export * from './task-manager.service';
 export * from './metrics.service';
-export * from './config.service';

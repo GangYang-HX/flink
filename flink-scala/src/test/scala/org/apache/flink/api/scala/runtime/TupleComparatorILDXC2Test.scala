@@ -18,10 +18,11 @@
 package org.apache.flink.api.scala.runtime
 
 import org.apache.flink.api.common.ExecutionConfig
-import org.apache.flink.api.common.typeutils.{TypeComparator, TypeSerializer}
+import org.apache.flink.api.common.typeutils.{TypeSerializer, TypeComparator}
 import org.apache.flink.api.java.typeutils.TupleTypeInfoBase
-import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.runtime.tuple.base.TupleComparatorTestBase
+
+import org.apache.flink.api.scala._
 
 class TupleComparatorILDXC2Test extends TupleComparatorTestBase[(Int, Long, Double)] {
 
@@ -51,3 +52,4 @@ class TupleComparatorILDXC2Test extends TupleComparatorTestBase[(Int, Long, Doub
     (4, 25L, 25.0)
   )
 }
+

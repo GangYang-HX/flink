@@ -27,31 +27,32 @@ import org.apache.flink.yarn.executors.YarnJobClusterExecutor;
 import org.apache.flink.yarn.executors.YarnSessionClusterExecutor;
 
 import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertTrue;
 
-/** Test for the {@link YarnClusterClientFactory} discovery. */
-class YarnClusterClientFactoryTest {
+/**
+ * Test for the {@link YarnClusterClientFactory} discovery.
+ */
+public class YarnClusterClientFactoryTest {
 
-    @Test
-    void testYarnClusterClientFactoryDiscoveryWithPerJobExecutor() {
-        testYarnClusterClientFactoryDiscoveryHelper(YarnJobClusterExecutor.NAME);
-    }
+	@Test
+	public void testYarnClusterClientFactoryDiscoveryWithPerJobExecutor() {
+		testYarnClusterClientFactoryDiscoveryHelper(YarnJobClusterExecutor.NAME);
+	}
 
-    @Test
-    void testYarnClusterClientFactoryDiscoveryWithSessionExecutor() {
-        testYarnClusterClientFactoryDiscoveryHelper(YarnSessionClusterExecutor.NAME);
-    }
+	@Test
+	public void testYarnClusterClientFactoryDiscoveryWithSessionExecutor() {
+		testYarnClusterClientFactoryDiscoveryHelper(YarnSessionClusterExecutor.NAME);
+	}
 
-    private void testYarnClusterClientFactoryDiscoveryHelper(final String targetName) {
-        final Configuration configuration = new Configuration();
-        configuration.setString(DeploymentOptions.TARGET, targetName);
+	private void testYarnClusterClientFactoryDiscoveryHelper(final String targetName) {
+		final Configuration configuration = new Configuration();
+		configuration.setString(DeploymentOptions.TARGET, targetName);
 
-        final ClusterClientServiceLoader serviceLoader = new DefaultClusterClientServiceLoader();
-        final ClusterClientFactory<ApplicationId> factory =
-                serviceLoader.getClusterClientFactory(configuration);
+		final ClusterClientServiceLoader serviceLoader = new DefaultClusterClientServiceLoader();
+		final ClusterClientFactory<ApplicationId> factory = serviceLoader.getClusterClientFactory(configuration);
 
-        assertThat(factory).isInstanceOf(YarnClusterClientFactory.class);
-    }
+		assertTrue(factory instanceof YarnClusterClientFactory);
+	}
 }

@@ -16,34 +16,35 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.operators.drivers;
 
-import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.util.Collector;
+package org.apache.flink.runtime.operators.drivers;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.util.Collector;
+
 public class GatheringCollector<T> implements Collector<T> {
 
-    private final List<T> list = new ArrayList<T>();
+	private final List<T> list = new ArrayList<T>();
+	
+	private final TypeSerializer<T> serializer;
 
-    private final TypeSerializer<T> serializer;
+	public GatheringCollector(TypeSerializer<T> serializer) {
+		this.serializer = serializer;
+	}
+	
+	public List<T> getList() {
+		return list;
+	}
 
-    public GatheringCollector(TypeSerializer<T> serializer) {
-        this.serializer = serializer;
-    }
+	@Override
+	public void collect(T record) {
+		T copy = this.serializer.createInstance();
+		this.list.add(this.serializer.copy(record, copy));
+	}
 
-    public List<T> getList() {
-        return list;
-    }
-
-    @Override
-    public void collect(T record) {
-        T copy = this.serializer.createInstance();
-        this.list.add(this.serializer.copy(record, copy));
-    }
-
-    @Override
-    public void close() {}
+	@Override
+	public void close() {}
 }

@@ -22,104 +22,109 @@ import org.apache.flink.util.Preconditions;
 import java.io.Serializable;
 import java.time.Duration;
 
-/** Configuration for {@link CassandraSinkBase}. */
-public final class CassandraSinkBaseConfig implements Serializable {
-    // ------------------------ Default Configurations ------------------------
+/**
+ * Configuration for {@link CassandraSinkBase}.
+ */
+public final class CassandraSinkBaseConfig implements Serializable  {
+	// ------------------------ Default Configurations ------------------------
 
-    /** The default maximum number of concurrent requests. By default, {@code Integer.MAX_VALUE}. */
-    public static final int DEFAULT_MAX_CONCURRENT_REQUESTS = Integer.MAX_VALUE;
+	/**
+	 * The default maximum number of concurrent requests. By default, {@code Integer.MAX_VALUE}.
+	 */
+	public static final int DEFAULT_MAX_CONCURRENT_REQUESTS = Integer.MAX_VALUE;
 
-    /**
-     * The default timeout duration when acquiring a permit to execute. By default, {@code
-     * Long.MAX_VALUE}.
-     */
-    public static final Duration DEFAULT_MAX_CONCURRENT_REQUESTS_TIMEOUT =
-            Duration.ofMillis(Long.MAX_VALUE);
+	/**
+	 * The default timeout duration when acquiring a permit to execute. By default, {@code Long.MAX_VALUE}.
+	 */
+	public static final Duration DEFAULT_MAX_CONCURRENT_REQUESTS_TIMEOUT = Duration.ofMillis(Long.MAX_VALUE);
 
-    /** The default option to ignore null fields on insertion. By default, {@code false}. */
-    public static final boolean DEFAULT_IGNORE_NULL_FIELDS = false;
+	/**
+	 * The default option to ignore null fields on insertion. By default, {@code false}.
+	 */
+	public static final boolean DEFAULT_IGNORE_NULL_FIELDS = false;
 
-    // ------------------------- Configuration Fields -------------------------
 
-    /** Maximum number of concurrent requests allowed. */
-    private final int maxConcurrentRequests;
+	// ------------------------- Configuration Fields -------------------------
 
-    /** Timeout duration when acquiring a permit to execute. */
-    private final Duration maxConcurrentRequestsTimeout;
+	/** Maximum number of concurrent requests allowed. */
+	private final int maxConcurrentRequests;
 
-    /** Whether to ignore null fields on insert. */
-    private final boolean ignoreNullFields;
+	/** Timeout duration when acquiring a permit to execute. */
+	private final Duration maxConcurrentRequestsTimeout;
 
-    private CassandraSinkBaseConfig(
-            int maxConcurrentRequests,
-            Duration maxConcurrentRequestsTimeout,
-            boolean ignoreNullFields) {
-        Preconditions.checkArgument(
-                maxConcurrentRequests > 0, "Max concurrent requests is expected to be positive");
-        Preconditions.checkNotNull(
-                maxConcurrentRequestsTimeout, "Max concurrent requests timeout cannot be null");
-        Preconditions.checkArgument(
-                !maxConcurrentRequestsTimeout.isNegative(),
-                "Max concurrent requests timeout is expected to be positive");
-        this.maxConcurrentRequests = maxConcurrentRequests;
-        this.maxConcurrentRequestsTimeout = maxConcurrentRequestsTimeout;
-        this.ignoreNullFields = ignoreNullFields;
-    }
+	/** Whether to ignore null fields on insert. */
+	private final boolean ignoreNullFields;
 
-    public int getMaxConcurrentRequests() {
-        return maxConcurrentRequests;
-    }
+	private CassandraSinkBaseConfig(
+			int maxConcurrentRequests,
+			Duration maxConcurrentRequestsTimeout,
+			boolean ignoreNullFields) {
+		Preconditions.checkArgument(maxConcurrentRequests > 0,
+			"Max concurrent requests is expected to be positive");
+		Preconditions.checkNotNull(maxConcurrentRequestsTimeout,
+			"Max concurrent requests timeout cannot be null");
+		Preconditions.checkArgument(!maxConcurrentRequestsTimeout.isNegative(),
+			"Max concurrent requests timeout is expected to be positive");
+		this.maxConcurrentRequests = maxConcurrentRequests;
+		this.maxConcurrentRequestsTimeout = maxConcurrentRequestsTimeout;
+		this.ignoreNullFields = ignoreNullFields;
+	}
 
-    public Duration getMaxConcurrentRequestsTimeout() {
-        return maxConcurrentRequestsTimeout;
-    }
+	public int getMaxConcurrentRequests() {
+		return maxConcurrentRequests;
+	}
 
-    public boolean getIgnoreNullFields() {
-        return ignoreNullFields;
-    }
+	public Duration getMaxConcurrentRequestsTimeout() {
+		return maxConcurrentRequestsTimeout;
+	}
 
-    @Override
-    public String toString() {
-        return "CassandraSinkBaseConfig{"
-                + "maxConcurrentRequests="
-                + maxConcurrentRequests
-                + ", maxConcurrentRequestsTimeout="
-                + maxConcurrentRequestsTimeout
-                + ", ignoreNullFields="
-                + ignoreNullFields
-                + '}';
-    }
+	public boolean getIgnoreNullFields() {
+		return ignoreNullFields;
+	}
 
-    public static Builder newBuilder() {
-        return new Builder();
-    }
+	@Override
+	public String toString() {
+		return "CassandraSinkBaseConfig{" +
+			"maxConcurrentRequests=" + maxConcurrentRequests +
+			", maxConcurrentRequestsTimeout=" + maxConcurrentRequestsTimeout +
+			", ignoreNullFields=" + ignoreNullFields +
+			'}';
+	}
 
-    /** Builder for the {@link CassandraSinkBaseConfig}. */
-    public static class Builder {
-        private int maxConcurrentRequests = DEFAULT_MAX_CONCURRENT_REQUESTS;
-        private Duration maxConcurrentRequestsTimeout = DEFAULT_MAX_CONCURRENT_REQUESTS_TIMEOUT;
-        private boolean ignoreNullFields = DEFAULT_IGNORE_NULL_FIELDS;
+	public static Builder newBuilder() {
+		return new Builder();
+	}
 
-        Builder() {}
+	/**
+	 * Builder for the {@link CassandraSinkBaseConfig}.
+	 */
+	public static class Builder {
+		private int maxConcurrentRequests = DEFAULT_MAX_CONCURRENT_REQUESTS;
+		private Duration maxConcurrentRequestsTimeout = DEFAULT_MAX_CONCURRENT_REQUESTS_TIMEOUT;
+		private boolean ignoreNullFields = DEFAULT_IGNORE_NULL_FIELDS;
 
-        public Builder setMaxConcurrentRequests(int maxConcurrentRequests) {
-            this.maxConcurrentRequests = maxConcurrentRequests;
-            return this;
-        }
+		Builder() { }
 
-        public Builder setMaxConcurrentRequestsTimeout(Duration timeout) {
-            this.maxConcurrentRequestsTimeout = timeout;
-            return this;
-        }
+		public Builder setMaxConcurrentRequests(int maxConcurrentRequests) {
+			this.maxConcurrentRequests = maxConcurrentRequests;
+			return this;
+		}
 
-        public Builder setIgnoreNullFields(boolean ignoreNullFields) {
-            this.ignoreNullFields = ignoreNullFields;
-            return this;
-        }
+		public Builder setMaxConcurrentRequestsTimeout(Duration timeout) {
+			this.maxConcurrentRequestsTimeout = timeout;
+			return this;
+		}
 
-        public CassandraSinkBaseConfig build() {
-            return new CassandraSinkBaseConfig(
-                    maxConcurrentRequests, maxConcurrentRequestsTimeout, ignoreNullFields);
-        }
-    }
+		public Builder setIgnoreNullFields(boolean ignoreNullFields) {
+			this.ignoreNullFields = ignoreNullFields;
+			return this;
+		}
+
+		public CassandraSinkBaseConfig build() {
+			return new CassandraSinkBaseConfig(
+				maxConcurrentRequests,
+				maxConcurrentRequestsTimeout,
+				ignoreNullFields);
+		}
+	}
 }

@@ -20,14 +20,12 @@ package org.apache.flink.table.api.internal;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ResultKind;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.TableResult;
-import org.apache.flink.table.catalog.ResolvedSchema;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.utils.print.PrintStyle;
-import org.apache.flink.table.utils.print.RowDataToStringConverter;
-import org.apache.flink.table.utils.print.TableauStyle;
+import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.utils.PrintUtils;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.Preconditions;
@@ -35,201 +33,238 @@ import org.apache.flink.util.Preconditions;
 import javax.annotation.Nullable;
 
 import java.io.PrintWriter;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
-/** Implementation for {@link TableResult}. */
+/**
+ * Implementation for {@link TableResult}.
+ */
 @Internal
-public class TableResultImpl implements TableResultInternal {
+class TableResultImpl implements TableResult {
+	public static final TableResult TABLE_RESULT_OK = TableResultImpl.builder()
+			.resultKind(ResultKind.SUCCESS)
+			.tableSchema(TableSchema.builder().field("result", DataTypes.STRING()).build())
+			.data(Collections.singletonList(Row.of("OK")))
+			.build();
 
-    private final JobClient jobClient;
-    private final ResolvedSchema resolvedSchema;
-    private final ResultKind resultKind;
-    private final ResultProvider resultProvider;
-    private final PrintStyle printStyle;
+	private final JobClient jobClient;
+	private final TableSchema tableSchema;
+	private final ResultKind resultKind;
+	private final CloseableIterator<Row> data;
+	private final PrintStyle printStyle;
 
-    private TableResultImpl(
-            @Nullable JobClient jobClient,
-            ResolvedSchema resolvedSchema,
-            ResultKind resultKind,
-            ResultProvider resultProvider,
-            PrintStyle printStyle) {
-        this.jobClient = jobClient;
-        this.resolvedSchema =
-                Preconditions.checkNotNull(resolvedSchema, "resolvedSchema should not be null");
-        this.resultKind = Preconditions.checkNotNull(resultKind, "resultKind should not be null");
-        Preconditions.checkNotNull(resultProvider, "result provider should not be null");
-        this.resultProvider = resultProvider;
-        this.printStyle = Preconditions.checkNotNull(printStyle, "printStyle should not be null");
-    }
+	private TableResultImpl(
+			@Nullable JobClient jobClient,
+			TableSchema tableSchema,
+			ResultKind resultKind,
+			CloseableIterator<Row> data,
+			PrintStyle printStyle) {
+		this.jobClient = jobClient;
+		this.tableSchema = Preconditions.checkNotNull(tableSchema, "tableSchema should not be null");
+		this.resultKind = Preconditions.checkNotNull(resultKind, "resultKind should not be null");
+		this.data = Preconditions.checkNotNull(data, "data should not be null");
+		this.printStyle = Preconditions.checkNotNull(printStyle, "printStyle should not be null");
+	}
 
-    @Override
-    public Optional<JobClient> getJobClient() {
-        return Optional.ofNullable(jobClient);
-    }
+	@Override
+	public Optional<JobClient> getJobClient() {
+		return Optional.ofNullable(jobClient);
+	}
 
-    @Override
-    public void await() throws InterruptedException, ExecutionException {
-        try {
-            awaitInternal(-1, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            // do nothing
-        }
-    }
+	@Override
+	public TableSchema getTableSchema() {
+		return tableSchema;
+	}
 
-    @Override
-    public void await(long timeout, TimeUnit unit)
-            throws InterruptedException, ExecutionException, TimeoutException {
-        awaitInternal(timeout, unit);
-    }
+	@Override
+	public ResultKind getResultKind() {
+		return resultKind;
+	}
 
-    private void awaitInternal(long timeout, TimeUnit unit)
-            throws InterruptedException, ExecutionException, TimeoutException {
-        if (jobClient == null) {
-            return;
-        }
+	@Override
+	public CloseableIterator<Row> collect() {
+		return data;
+	}
 
-        ExecutorService executor =
-                Executors.newFixedThreadPool(1, r -> new Thread(r, "TableResult-await-thread"));
-        try {
-            CompletableFuture<Void> future =
-                    CompletableFuture.runAsync(
-                            () -> {
-                                while (!resultProvider.isFirstRowReady()) {
-                                    try {
-                                        Thread.sleep(100);
-                                    } catch (InterruptedException e) {
-                                        throw new TableException("Thread is interrupted");
-                                    }
-                                }
-                            },
-                            executor);
+	@Override
+	public void print() {
+		Iterator<Row> it = collect();
+		if (printStyle instanceof TableauStyle) {
+			int maxColumnWidth = ((TableauStyle) printStyle).getMaxColumnWidth();
+			String nullColumn = ((TableauStyle) printStyle).getNullColumn();
+			boolean deriveColumnWidthByType =  ((TableauStyle) printStyle).isDeriveColumnWidthByType();
+			PrintUtils.printAsTableauForm(
+					getTableSchema(),
+					it,
+					new PrintWriter(System.out),
+					maxColumnWidth,
+					nullColumn,
+					deriveColumnWidthByType);
+		} else if (printStyle instanceof RawContentStyle) {
+			while (it.hasNext()) {
+				System.out.println(String.join(",", PrintUtils.rowToString(it.next())));
+			}
+		} else {
+			throw new TableException("Unsupported print style: " + printStyle);
+		}
+	}
 
-            if (timeout >= 0) {
-                future.get(timeout, unit);
-            } else {
-                future.get();
-            }
-        } finally {
-            executor.shutdown();
-        }
-    }
+	public static Builder builder() {
+		return new Builder();
+	}
 
-    @Override
-    public ResolvedSchema getResolvedSchema() {
-        return resolvedSchema;
-    }
+	/**
+	 * Builder for creating a {@link TableResultImpl}.
+	 */
+	public static class Builder {
+		private JobClient jobClient = null;
+		private TableSchema tableSchema = null;
+		private ResultKind resultKind = null;
+		private CloseableIterator<Row> data = null;
+		private PrintStyle printStyle = PrintStyle.tableau(Integer.MAX_VALUE, PrintUtils.NULL_COLUMN, false);
 
-    @Override
-    public ResultKind getResultKind() {
-        return resultKind;
-    }
+		private Builder() {
+		}
 
-    @Override
-    public CloseableIterator<Row> collect() {
-        return resultProvider.toExternalIterator();
-    }
+		/**
+		 * Specifies job client which associates the submitted Flink job.
+		 *
+		 * @param jobClient a {@link JobClient} for the submitted Flink job.
+		 */
+		public Builder jobClient(JobClient jobClient) {
+			this.jobClient = jobClient;
+			return this;
+		}
 
-    @Override
-    public CloseableIterator<RowData> collectInternal() {
-        return resultProvider.toInternalIterator();
-    }
+		/**
+		 * Specifies table schema of the execution result.
+		 *
+		 * @param tableSchema a {@link TableSchema} for the execution result.
+		 */
+		public Builder tableSchema(TableSchema tableSchema) {
+			Preconditions.checkNotNull(tableSchema, "tableSchema should not be null");
+			this.tableSchema = tableSchema;
+			return this;
+		}
 
-    @Override
-    public RowDataToStringConverter getRowDataToStringConverter() {
-        return resultProvider.getRowDataStringConverter();
-    }
+		/**
+		 * Specifies result kind of the execution result.
+		 *
+		 * @param resultKind a {@link ResultKind} for the execution result.
+		 */
+		public Builder resultKind(ResultKind resultKind) {
+			Preconditions.checkNotNull(resultKind, "resultKind should not be null");
+			this.resultKind = resultKind;
+			return this;
+		}
 
-    @Override
-    public void print() {
-        Iterator<RowData> it = resultProvider.toInternalIterator();
-        printStyle.print(it, new PrintWriter(System.out));
-    }
+		/**
+		 * Specifies an row iterator as the execution result.
+		 *
+		 * @param rowIterator a row iterator as the execution result.
+		 */
+		public Builder data(CloseableIterator<Row> rowIterator) {
+			Preconditions.checkNotNull(rowIterator, "rowIterator should not be null");
+			this.data = rowIterator;
+			return this;
+		}
 
-    public static Builder builder() {
-        return new Builder();
-    }
+		/**
+		 * Specifies an row list as the execution result.
+		 *
+		 * @param rowList a row list as the execution result.
+		 */
+		public Builder data(List<Row> rowList) {
+			Preconditions.checkNotNull(rowList, "listRows should not be null");
+			this.data = CloseableIterator.adapterForIterator(rowList.iterator());
+			return this;
+		}
 
-    /** Builder for creating a {@link TableResultImpl}. */
-    public static class Builder {
-        private JobClient jobClient = null;
-        private ResolvedSchema resolvedSchema = null;
-        private ResultKind resultKind = null;
-        private ResultProvider resultProvider = null;
-        private PrintStyle printStyle = null;
+		/**
+		 * Specifies print style. Default is {@link TableauStyle} with max integer column width.
+		 */
+		public Builder setPrintStyle(PrintStyle printStyle) {
+			Preconditions.checkNotNull(printStyle, "printStyle should not be null");
+			this.printStyle = printStyle;
+			return this;
+		}
 
-        private Builder() {}
+		/**
+		 * Returns a {@link TableResult} instance.
+		 */
+		public TableResult build() {
+			return new TableResultImpl(jobClient, tableSchema, resultKind, data, printStyle);
+		}
+	}
 
-        /**
-         * Specifies job client which associates the submitted Flink job.
-         *
-         * @param jobClient a {@link JobClient} for the submitted Flink job.
-         */
-        public Builder jobClient(JobClient jobClient) {
-            this.jobClient = jobClient;
-            return this;
-        }
+	/**
+	 * Root interface for all print styles.
+	 */
+	public interface PrintStyle {
+		/**
+		 * Create a tableau print style with given max column width, null column,
+		 * and a flag to indicate whether the column width is derived from type (true) or content (false),
+		 * which prints the result schema and content as tableau form.
+		 */
+		static PrintStyle tableau(
+				int maxColumnWidth,
+				String nullColumn,
+				boolean deriveColumnWidthByType) {
+			Preconditions.checkArgument(maxColumnWidth > 0, "maxColumnWidth should be greater than 0");
+			Preconditions.checkNotNull(nullColumn, "nullColumn should not be null");
+			return new TableauStyle(maxColumnWidth, nullColumn, deriveColumnWidthByType);
+		}
 
-        /**
-         * Specifies schema of the execution result.
-         *
-         * @param resolvedSchema a {@link ResolvedSchema} for the execution result.
-         */
-        public Builder schema(ResolvedSchema resolvedSchema) {
-            Preconditions.checkNotNull(resolvedSchema, "resolvedSchema should not be null");
-            this.resolvedSchema = resolvedSchema;
-            return this;
-        }
+		/**
+		 * Create a raw content print style,
+		 * which only print the result content as raw form.
+		 * column delimiter is ",", row delimiter is "\n".
+		 */
+		static PrintStyle rawContent() {
+			return new RawContentStyle();
+		}
+	}
 
-        /**
-         * Specifies result kind of the execution result.
-         *
-         * @param resultKind a {@link ResultKind} for the execution result.
-         */
-        public Builder resultKind(ResultKind resultKind) {
-            Preconditions.checkNotNull(resultKind, "resultKind should not be null");
-            this.resultKind = resultKind;
-            return this;
-        }
+	/**
+	 * print the result schema and content as tableau form.
+	 */
+	private static final class TableauStyle implements PrintStyle {
+		/**
+		 * A flag to indicate whether the column width is derived from type (true) or content (false).
+		 */
+		private final boolean deriveColumnWidthByType;
+		private final int maxColumnWidth;
+		private final String nullColumn;
 
-        public Builder resultProvider(ResultProvider resultProvider) {
-            Preconditions.checkNotNull(resultProvider, "resultProvider should not be null");
-            this.resultProvider = resultProvider;
-            return this;
-        }
+		private TableauStyle(
+				int maxColumnWidth,
+				String nullColumn,
+				boolean deriveColumnWidthByType) {
+			this.deriveColumnWidthByType = deriveColumnWidthByType;
+			this.maxColumnWidth = maxColumnWidth;
+			this.nullColumn = nullColumn;
+		}
 
-        /**
-         * Specifies an row list as the execution result.
-         *
-         * @param rowList a row list as the execution result.
-         */
-        public Builder data(List<Row> rowList) {
-            Preconditions.checkNotNull(rowList, "listRows should not be null");
-            this.resultProvider = new StaticResultProvider(rowList);
-            return this;
-        }
+		public boolean isDeriveColumnWidthByType() {
+			return deriveColumnWidthByType;
+		}
 
-        /** Specifies print style. Default is {@link TableauStyle} with max integer column width. */
-        public Builder setPrintStyle(PrintStyle printStyle) {
-            Preconditions.checkNotNull(printStyle, "printStyle should not be null");
-            this.printStyle = printStyle;
-            return this;
-        }
+		int getMaxColumnWidth() {
+			return maxColumnWidth;
+		}
 
-        /** Returns a {@link TableResult} instance. */
-        public TableResultInternal build() {
-            if (printStyle == null) {
-                printStyle = PrintStyle.rawContent(resultProvider.getRowDataStringConverter());
-            }
-            return new TableResultImpl(
-                    jobClient, resolvedSchema, resultKind, resultProvider, printStyle);
-        }
-    }
+		String getNullColumn() {
+			return nullColumn;
+		}
+	}
+
+	/**
+	 * only print the result content as raw form.
+	 * column delimiter is ",", row delimiter is "\n".
+	 */
+	private static final class RawContentStyle implements PrintStyle {
+	}
+
 }

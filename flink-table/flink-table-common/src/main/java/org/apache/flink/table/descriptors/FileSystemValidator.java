@@ -18,25 +18,21 @@
 
 package org.apache.flink.table.descriptors;
 
-import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.PublicEvolving;
 
 /**
- * Validator for the options of the filesystem connector.
- *
- * @deprecated The legacy CSV connector has been replaced by {@code FileSource} / {@code FileSink}.
- *     It is kept only to support tests for the legacy connector stack.
+ * Validator for {@link FileSystem}.
  */
-@Internal
-@Deprecated
+@PublicEvolving
 public class FileSystemValidator extends ConnectorDescriptorValidator {
 
-    public static final String CONNECTOR_TYPE_VALUE = "filesystem";
-    public static final String CONNECTOR_PATH = "connector.path";
+	public static final String CONNECTOR_TYPE_VALUE = "filesystem";
+	public static final String CONNECTOR_PATH = "connector.path";
 
-    @Override
-    public void validate(DescriptorProperties properties) {
-        super.validate(properties);
-        properties.validateValue(CONNECTOR_TYPE, CONNECTOR_TYPE_VALUE, false);
-        properties.validateString(CONNECTOR_PATH, false, 1);
-    }
+	@Override
+	public void validate(DescriptorProperties properties) {
+		super.validate(properties);
+		properties.validateValue(CONNECTOR_TYPE, CONNECTOR_TYPE_VALUE, false);
+		properties.validateString(CONNECTOR_PATH, false, 1);
+	}
 }

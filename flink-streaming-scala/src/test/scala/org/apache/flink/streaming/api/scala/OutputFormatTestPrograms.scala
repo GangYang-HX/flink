@@ -17,23 +17,25 @@
  */
 package org.apache.flink.streaming.api.scala
 
+
 import org.apache.flink.api.common.serialization.SimpleStringSchema
 import org.apache.flink.core.fs.FileSystem
 
 import scala.language.existentials
 
-/** Test programs for built in output formats. Invoked from OutputFormatTest. */
+/**
+ * Test programs for built in output formats. Invoked from OutputFormatTest.
+ */
 object OutputFormatTestPrograms {
 
   def wordCountProgram(input: DataStream[String]): DataStream[(String, Int)] = {
-    input
-      .flatMap(_.toLowerCase.split("\\W+").filter(_.nonEmpty))
-      .map((_, 1))
+    input.flatMap { _.toLowerCase.split("\\W+") filter { _.nonEmpty } }
+      .map { (_, 1) }
       .keyBy(0)
       .sum(1)
   }
 
-  def wordCountToText(input: String, outputPath: String): Unit = {
+  def wordCountToText(input: String, outputPath : String) : Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val text = env.fromElements(input)
 
@@ -44,7 +46,11 @@ object OutputFormatTestPrograms {
     env.execute("Scala WordCountToText")
   }
 
-  def wordCountToText(input: String, outputPath: String, writeMode: FileSystem.WriteMode): Unit = {
+
+  def wordCountToText(
+      input : String,
+      outputPath : String,
+      writeMode : FileSystem.WriteMode) : Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val text = env.fromElements(input)
 
@@ -55,7 +61,8 @@ object OutputFormatTestPrograms {
     env.execute("Scala WordCountToText")
   }
 
-  def wordCountToCsv(input: String, outputPath: String): Unit = {
+
+  def wordCountToCsv(input : String, outputPath : String) : Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val text = env.fromElements(input)
 
@@ -66,7 +73,11 @@ object OutputFormatTestPrograms {
     env.execute("Scala WordCountToCsv")
   }
 
-  def wordCountToCsv(input: String, outputPath: String, writeMode: FileSystem.WriteMode): Unit = {
+
+  def wordCountToCsv(
+      input : String,
+      outputPath : String,
+      writeMode : FileSystem.WriteMode) : Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val text = env.fromElements(input)
 
@@ -77,12 +88,13 @@ object OutputFormatTestPrograms {
     env.execute("Scala WordCountToCsv")
   }
 
+
   def wordCountToCsv(
-      input: String,
-      outputPath: String,
-      writeMode: FileSystem.WriteMode,
+      input : String,
+      outputPath : String,
+      writeMode : FileSystem.WriteMode,
       rowDelimiter: String,
-      fieldDelimiter: String): Unit = {
+      fieldDelimiter: String) : Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val text = env.fromElements(input)
 
@@ -93,10 +105,10 @@ object OutputFormatTestPrograms {
     env.execute("Scala WordCountToCsv")
   }
 
-  def wordCountToSocket(input: String, outputHost: String, outputPort: Int): Unit = {
+  def wordCountToSocket(input : String, outputHost : String, outputPort : Int) : Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
 
-    // Create streams for names and ages by mapping the inputs to the corresponding objects
+    //Create streams for names and ages by mapping the inputs to the corresponding objects
     val text = env.fromElements(input)
     val counts = wordCountProgram(text)
       .map(tuple => tuple.toString() + "\n")

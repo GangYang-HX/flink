@@ -18,21 +18,15 @@
 
 package org.apache.flink.metrics;
 
-import org.apache.flink.annotation.Public;
-
-/** A Gauge is a {@link Metric} that calculates a specific value at a point in time. */
-@Public
+/**
+ * A Gauge is a {@link Metric} that calculates a specific value at a point in time.
+ */
 public interface Gauge<T> extends Metric {
 
-    /**
-     * Calculates and returns the measured value.
-     *
-     * @return calculated value
-     */
-    T getValue();
-
-    @Override
-    default MetricType getMetricType() {
-        return MetricType.GAUGE;
-    }
+	/**
+	 * Calculates and returns the measured value.
+	 *
+	 * @return calculated value
+	 */
+	T getValue();
 }

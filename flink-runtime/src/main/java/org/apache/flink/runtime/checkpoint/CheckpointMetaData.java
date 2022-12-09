@@ -20,75 +20,59 @@ package org.apache.flink.runtime.checkpoint;
 
 import java.io.Serializable;
 
-/** Encapsulates all the meta data for a checkpoint. */
+/**
+ * Encapsulates all the meta data for a checkpoint.
+ */
 public class CheckpointMetaData implements Serializable {
 
-    private static final long serialVersionUID = -2387652345781312442L;
+	private static final long serialVersionUID = -2387652345781312442L;
 
-    /** The ID of the checkpoint. */
-    private final long checkpointId;
+	/** The ID of the checkpoint. */
+	private final long checkpointId;
 
-    /** The timestamp of the checkpoint triggering. */
-    private final long timestamp;
+	/** The timestamp of the checkpoint. */
+	private final long timestamp;
 
-    /** The timestamp of the checkpoint receiving by this subtask. */
-    private final long receiveTimestamp;
+	public CheckpointMetaData(long checkpointId, long timestamp) {
+		this.checkpointId = checkpointId;
+		this.timestamp = timestamp;
+	}
 
-    public CheckpointMetaData(long checkpointId, long timestamp) {
-        this(checkpointId, timestamp, System.currentTimeMillis());
-    }
+	public long getCheckpointId() {
+		return checkpointId;
+	}
 
-    public CheckpointMetaData(long checkpointId, long timestamp, long receiveTimestamp) {
-        this.checkpointId = checkpointId;
-        this.timestamp = timestamp;
-        this.receiveTimestamp = receiveTimestamp;
-    }
+	public long getTimestamp() {
+		return timestamp;
+	}
 
-    public long getCheckpointId() {
-        return checkpointId;
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
 
-    public long getTimestamp() {
-        return timestamp;
-    }
+		CheckpointMetaData that = (CheckpointMetaData) o;
 
-    public long getReceiveTimestamp() {
-        return receiveTimestamp;
-    }
+		return (checkpointId == that.checkpointId)
+				&& (timestamp == that.timestamp);
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
+	@Override
+	public int hashCode() {
+		int result = (int) (checkpointId ^ (checkpointId >>> 32));
+		result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
+		return result;
+	}
 
-        CheckpointMetaData that = (CheckpointMetaData) o;
-
-        return (checkpointId == that.checkpointId)
-                && (timestamp == that.timestamp)
-                && (receiveTimestamp == that.receiveTimestamp);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = (int) (checkpointId ^ (checkpointId >>> 32));
-        result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
-        result = 31 * result + (int) (receiveTimestamp ^ (receiveTimestamp >>> 32));
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "CheckpointMetaData{"
-                + "checkpointId="
-                + checkpointId
-                + ", receiveTimestamp="
-                + receiveTimestamp
-                + ", timestamp="
-                + timestamp
-                + '}';
-    }
+	@Override
+	public String toString() {
+		return "CheckpointMetaData{" +
+				"checkpointId=" + checkpointId +
+				", timestamp=" + timestamp +
+				'}';
+	}
 }

@@ -20,74 +20,65 @@ package org.apache.flink.runtime.webmonitor.handlers;
 
 import org.apache.flink.client.program.ProgramInvocationException;
 import org.apache.flink.runtime.webmonitor.TestingDispatcherGateway;
-import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.testutils.executor.TestExecutorExtension;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.TestLogger;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.Assert;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 
-/** Tests for the {@link JarRunHandler} and {@link JarPlanHandler}. */
-class JarHandlerTest {
+/**
+ * Tests for the {@link JarRunHandler} and  {@link JarPlanHandler}.
+ */
+public class JarHandlerTest extends TestLogger {
 
-    private static final String JAR_NAME = "output-test-program.jar";
+	private static final String JAR_NAME = "output-test-program.jar";
 
-    @RegisterExtension
-    private static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_EXTENSION =
-            TestingUtils.defaultExecutorExtension();
+	@ClassRule
+	public static final TemporaryFolder TMP = new TemporaryFolder();
 
-    @Test
-    void testPlanJar(@TempDir File tmp1, @TempDir File tmp2) throws Exception {
-        final TestingDispatcherGateway restfulGateway =
-                TestingDispatcherGateway.newBuilder().build();
+	@Test
+	public void testPlanJar() throws Exception {
+		runTest("hello out!", "hello err!");
+	}
 
-        final JarHandlers handlers =
-                new JarHandlers(tmp1.toPath(), restfulGateway, EXECUTOR_EXTENSION.getExecutor());
+	private static void runTest(String expectedCapturedStdOut, String expectedCapturedStdErr) throws Exception {
+		final TestingDispatcherGateway restfulGateway = new TestingDispatcherGateway.Builder().build();
 
-        final Path originalJar = Paths.get(System.getProperty("targetDir")).resolve(JAR_NAME);
-        final Path jar = Files.copy(originalJar, tmp2.toPath().resolve(JAR_NAME));
+		final JarHandlers handlers = new JarHandlers(TMP.newFolder().toPath(), restfulGateway);
 
-        final String storedJarPath =
-                JarHandlers.uploadJar(handlers.uploadHandler, jar, restfulGateway);
-        final String storedJarName = Paths.get(storedJarPath).getFileName().toString();
+		final Path originalJar = Paths.get(System.getProperty("targetDir")).resolve(JAR_NAME);
+		final Path jar = Files.copy(originalJar, TMP.newFolder().toPath().resolve(JAR_NAME));
 
-        assertThatThrownBy(
-                        () ->
-                                JarHandlers.showPlan(
-                                        handlers.planHandler, storedJarName, restfulGateway))
-                .satisfies(
-                        e -> {
-                            assertThat(
-                                            ExceptionUtils.findThrowable(
-                                                    e, ProgramInvocationException.class))
-                                    .map(Exception::getMessage)
-                                    .hasValueSatisfying(
-                                            message -> {
-                                                assertThat(message)
-                                                        // original cause is preserved in stack
-                                                        // trace
-                                                        .contains(
-                                                                "The program plan could not be fetched - the program aborted pre-maturely")
-                                                        // implies the jar was registered for the
-                                                        // job graph
-                                                        // (otherwise the jar name would
-                                                        // not occur in the exception)
-                                                        .contains(JAR_NAME)
-                                                        // ensure that no stdout/stderr has been
-                                                        // captured
-                                                        .contains("System.out: " + "hello out!")
-                                                        .contains("System.err: " + "hello err!");
-                                            });
-                        });
-    }
+		final String storedJarPath = JarHandlers.uploadJar(handlers.uploadHandler, jar, restfulGateway);
+		final String storedJarName = Paths.get(storedJarPath).getFileName().toString();
+
+		try {
+			JarHandlers.showPlan(handlers.planHandler, storedJarName, restfulGateway);
+			Assert.fail("Should have failed with an exception.");
+		} catch (Exception e) {
+			Optional<ProgramInvocationException> expected = ExceptionUtils.findThrowable(e, ProgramInvocationException.class);
+			if (expected.isPresent()) {
+				String message = expected.get().getMessage();
+				// original cause is preserved in stack trace
+				assertThat(message, containsString("The program plan could not be fetched - the program aborted pre-maturely"));
+				// implies the jar was registered for the job graph (otherwise the jar name would not occur in the exception)
+				assertThat(message, containsString(JAR_NAME));
+				// ensure that no stdout/stderr has been captured
+				assertThat(message, containsString("System.out: " + expectedCapturedStdOut));
+				assertThat(message, containsString("System.err: " + expectedCapturedStdErr));
+			} else {
+				throw e;
+			}
+		}
+	}
 }

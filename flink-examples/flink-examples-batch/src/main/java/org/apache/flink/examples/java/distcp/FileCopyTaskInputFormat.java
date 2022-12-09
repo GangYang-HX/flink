@@ -40,86 +40,87 @@ import java.util.Queue;
  */
 public class FileCopyTaskInputFormat implements InputFormat<FileCopyTask, FileCopyTaskInputSplit> {
 
-    private static final long serialVersionUID = -644394866425221151L;
+	private static final long serialVersionUID = -644394866425221151L;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(FileCopyTaskInputFormat.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(FileCopyTaskInputFormat.class);
 
-    private final List<FileCopyTask> tasks;
 
-    public FileCopyTaskInputFormat(List<FileCopyTask> tasks) {
-        this.tasks = tasks;
-    }
+	private final List<FileCopyTask> tasks;
 
-    private class FileCopyTaskAssigner implements InputSplitAssigner {
-        private Queue<FileCopyTaskInputSplit> splits;
+	public FileCopyTaskInputFormat(List<FileCopyTask> tasks) {
+		this.tasks = tasks;
+	}
 
-        public FileCopyTaskAssigner(FileCopyTaskInputSplit[] inputSplits) {
-            splits = new LinkedList<>(Arrays.asList(inputSplits));
-        }
+	private class FileCopyTaskAssigner implements InputSplitAssigner {
+		private Queue<FileCopyTaskInputSplit> splits;
 
-        @Override
-        public InputSplit getNextInputSplit(String host, int taskId) {
-            LOGGER.info("Getting copy task for task: " + taskId);
-            return splits.poll();
-        }
+		public FileCopyTaskAssigner(FileCopyTaskInputSplit[] inputSplits) {
+			splits = new LinkedList<>(Arrays.asList(inputSplits));
+		}
 
-        @Override
-        public void returnInputSplit(List<InputSplit> splits, int taskId) {
-            synchronized (this.splits) {
-                for (InputSplit split : splits) {
-                    Preconditions.checkState(this.splits.add((FileCopyTaskInputSplit) split));
-                }
-            }
-        }
-    }
+		@Override
+		public InputSplit getNextInputSplit(String host, int taskId) {
+			LOGGER.info("Getting copy task for task: " + taskId);
+			return splits.poll();
+		}
 
-    @Override
-    public void configure(Configuration parameters) {
-        // no op
-    }
+		@Override
+		public void returnInputSplit(List<InputSplit> splits, int taskId) {
+			synchronized (this.splits) {
+				for (InputSplit split : splits) {
+					Preconditions.checkState(this.splits.add((FileCopyTaskInputSplit) split));
+				}
+			}
+		}
+	}
 
-    @Override
-    public BaseStatistics getStatistics(BaseStatistics cachedStatistics) throws IOException {
-        return null;
-    }
+	@Override
+	public void configure(Configuration parameters) {
+		//no op
+	}
 
-    @Override
-    public FileCopyTaskInputSplit[] createInputSplits(int minNumSplits) throws IOException {
-        FileCopyTaskInputSplit[] splits = new FileCopyTaskInputSplit[tasks.size()];
-        int i = 0;
-        for (FileCopyTask t : tasks) {
-            splits[i] = new FileCopyTaskInputSplit(t, i);
-            i++;
-        }
-        return splits;
-    }
+	@Override
+	public BaseStatistics getStatistics(BaseStatistics cachedStatistics) throws IOException {
+		return null;
+	}
 
-    @Override
-    public InputSplitAssigner getInputSplitAssigner(FileCopyTaskInputSplit[] inputSplits) {
-        return new FileCopyTaskAssigner(inputSplits);
-    }
+	@Override
+	public FileCopyTaskInputSplit[] createInputSplits(int minNumSplits) throws IOException {
+		FileCopyTaskInputSplit[] splits = new FileCopyTaskInputSplit[tasks.size()];
+		int i = 0;
+		for (FileCopyTask t : tasks) {
+			splits[i] = new FileCopyTaskInputSplit(t, i);
+			i++;
+		}
+		return splits;
+	}
 
-    private FileCopyTaskInputSplit curInputSplit = null;
+	@Override
+	public InputSplitAssigner getInputSplitAssigner(FileCopyTaskInputSplit[] inputSplits) {
+		return new FileCopyTaskAssigner(inputSplits);
+	}
 
-    @Override
-    public void open(FileCopyTaskInputSplit split) throws IOException {
-        curInputSplit = split;
-    }
+	private FileCopyTaskInputSplit curInputSplit = null;
 
-    @Override
-    public boolean reachedEnd() throws IOException {
-        return curInputSplit == null;
-    }
+	@Override
+	public void open(FileCopyTaskInputSplit split) throws IOException {
+		curInputSplit = split;
+	}
 
-    @Override
-    public FileCopyTask nextRecord(FileCopyTask reuse) throws IOException {
-        FileCopyTask toReturn = curInputSplit.getTask();
-        curInputSplit = null;
-        return toReturn;
-    }
+	@Override
+	public boolean reachedEnd() throws IOException {
+		return curInputSplit == null;
+	}
 
-    @Override
-    public void close() throws IOException {
-        // no op
-    }
+	@Override
+	public FileCopyTask nextRecord(FileCopyTask reuse) throws IOException {
+		FileCopyTask toReturn = curInputSplit.getTask();
+		curInputSplit = null;
+		return toReturn;
+	}
+
+	@Override
+	public void close() throws IOException {
+		//no op
+	}
 }

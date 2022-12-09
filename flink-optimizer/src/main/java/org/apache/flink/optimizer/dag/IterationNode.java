@@ -20,8 +20,11 @@ package org.apache.flink.optimizer.dag;
 
 import org.apache.flink.util.Visitor;
 
-/** */
+/**
+ *
+ */
 public interface IterationNode {
+	
+	void acceptForStepFunction(Visitor<OptimizerNode> visitor);
 
-    void acceptForStepFunction(Visitor<OptimizerNode> visitor);
 }

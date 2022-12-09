@@ -18,37 +18,33 @@
 
 package org.apache.flink.runtime.dispatcher;
 
-import org.apache.flink.runtime.dispatcher.cleanup.CheckpointResourcesCleanupRunnerFactory;
-import org.apache.flink.runtime.jobgraph.JobGraph;
-import org.apache.flink.runtime.jobmaster.JobResult;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.runtime.rpc.RpcService;
 
-import java.util.Collection;
+import java.lang.reflect.Constructor;
 
-/** {@link DispatcherFactory} which creates a {@link StandaloneDispatcher}. */
+/**
+ * {@link DispatcherFactory} which creates a {@link StandaloneDispatcher}.
+ */
 public enum SessionDispatcherFactory implements DispatcherFactory {
-    INSTANCE;
+	INSTANCE;
 
-    @Override
-    public StandaloneDispatcher createDispatcher(
-            RpcService rpcService,
-            DispatcherId fencingToken,
-            Collection<JobGraph> recoveredJobs,
-            Collection<JobResult> recoveredDirtyJobResults,
-            DispatcherBootstrapFactory dispatcherBootstrapFactory,
-            PartialDispatcherServicesWithJobPersistenceComponents
-                    partialDispatcherServicesWithJobPersistenceComponents)
-            throws Exception {
-        // create the default dispatcher
-        return new StandaloneDispatcher(
-                rpcService,
-                fencingToken,
-                recoveredJobs,
-                recoveredDirtyJobResults,
-                dispatcherBootstrapFactory,
-                DispatcherServices.from(
-                        partialDispatcherServicesWithJobPersistenceComponents,
-                        JobMasterServiceLeadershipRunnerFactory.INSTANCE,
-                        CheckpointResourcesCleanupRunnerFactory.INSTANCE));
-    }
+	@Override
+	public StandaloneDispatcher createDispatcher(
+			RpcService rpcService,
+			DispatcherId fencingToken,
+			DispatcherBootstrap dispatcherBootstrap,
+			PartialDispatcherServicesWithJobGraphStore partialDispatcherServicesWithJobGraphStore) throws Exception {
+		Configuration configuration = partialDispatcherServicesWithJobGraphStore.getConfiguration();
+		Class<? extends StandaloneDispatcher> dispatcherClass = Class.forName(configuration.getString(CoreOptions.EXTEND_DISPATCHER_CLASSNAME)).asSubclass(StandaloneDispatcher.class);
+		Constructor<? extends StandaloneDispatcher> constructor = dispatcherClass.getConstructor(RpcService.class, DispatcherId.class, DispatcherBootstrap.class, DispatcherServices.class);
+
+		// create the default dispatcher
+		return constructor.newInstance(
+			rpcService,
+			fencingToken,
+			dispatcherBootstrap,
+			DispatcherServices.from(partialDispatcherServicesWithJobGraphStore, DefaultJobManagerRunnerFactory.INSTANCE));
+	}
 }

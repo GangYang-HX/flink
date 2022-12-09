@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.graph.scala.test.operations
 
 import org.apache.flink.api.scala._
@@ -23,15 +24,15 @@ import org.apache.flink.graph.scala._
 import org.apache.flink.graph.scala.test.TestGraphUtils
 import org.apache.flink.graph.scala.utils.VertexToTuple2Map
 import org.apache.flink.test.util.{MultipleProgramsTestBase, TestBaseUtils}
-
-import _root_.scala.collection.JavaConverters._
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 
+import _root_.scala.collection.JavaConverters._
+
 @RunWith(classOf[Parameterized])
-class JoinWithVerticesITCase(mode: MultipleProgramsTestBase.TestExecutionMode)
-  extends MultipleProgramsTestBase(mode) {
+class JoinWithVerticesITCase(mode: MultipleProgramsTestBase.TestExecutionMode) extends
+MultipleProgramsTestBase(mode) {
 
   private var expectedResult: String = null
 
@@ -39,14 +40,10 @@ class JoinWithVerticesITCase(mode: MultipleProgramsTestBase.TestExecutionMode)
   @throws(classOf[Exception])
   def testJoinWithVertexSet {
     val env: ExecutionEnvironment = ExecutionEnvironment.getExecutionEnvironment
-    val graph: Graph[Long, Long, Long] = Graph.fromDataSet(
-      TestGraphUtils
-        .getLongLongVertexData(env),
-      TestGraphUtils.getLongLongEdgeData(env),
-      env)
-    val result: Graph[Long, Long, Long] = graph.joinWithVertices(
-      graph.getVertices.map(new VertexToTuple2Map[Long, Long]),
-      new AddValuesMapper)
+    val graph: Graph[Long, Long, Long] = Graph.fromDataSet(TestGraphUtils
+      .getLongLongVertexData(env), TestGraphUtils.getLongLongEdgeData(env), env)
+    val result: Graph[Long, Long, Long] = graph.joinWithVertices(graph.getVertices.map(new
+        VertexToTuple2Map[Long, Long]), new AddValuesMapper)
     val res = result.getVertices.collect().toList
     expectedResult = "1,2\n" + "2,4\n" + "3,6\n" + "4,8\n" + "5,10\n"
     TestBaseUtils.compareResultAsTuples(res.asJava, expectedResult)
@@ -56,14 +53,10 @@ class JoinWithVerticesITCase(mode: MultipleProgramsTestBase.TestExecutionMode)
   @throws(classOf[Exception])
   def testJoinWithVertexSetSugar {
     val env: ExecutionEnvironment = ExecutionEnvironment.getExecutionEnvironment
-    val graph: Graph[Long, Long, Long] = Graph.fromDataSet(
-      TestGraphUtils
-        .getLongLongVertexData(env),
-      TestGraphUtils.getLongLongEdgeData(env),
-      env)
+    val graph: Graph[Long, Long, Long] = Graph.fromDataSet(TestGraphUtils
+      .getLongLongVertexData(env), TestGraphUtils.getLongLongEdgeData(env), env)
     val tupleSet = graph.getVertices.map(new VertexToTuple2Map[Long, Long])
-    val result: Graph[Long, Long, Long] = graph.joinWithVertices[Long](
-      tupleSet,
+    val result: Graph[Long, Long, Long] = graph.joinWithVertices[Long](tupleSet,
       (originalvalue: Long, tuplevalue: Long) => originalvalue + tuplevalue)
     val res = result.getVertices.collect().toList
     expectedResult = "1,2\n" + "2,4\n" + "3,6\n" + "4,8\n" + "5,10\n"

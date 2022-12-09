@@ -28,4 +28,5 @@ import org.apache.flink.table.operations.Operation;
  * operation may have a target table name and a flag to describe if is exists.
  */
 @Internal
-public interface AlterOperation extends Operation {}
+public interface AlterOperation extends Operation {
+}

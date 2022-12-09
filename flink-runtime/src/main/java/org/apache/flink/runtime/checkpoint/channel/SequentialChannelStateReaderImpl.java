@@ -43,21 +43,23 @@ import static java.util.Comparator.comparingLong;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 
-/** {@link SequentialChannelStateReader} implementation. */
+/**
+ * {@link SequentialChannelStateReader} implementation.
+ */
 public class SequentialChannelStateReaderImpl implements SequentialChannelStateReader {
 
-    private final TaskStateSnapshot taskStateSnapshot;
-    private final ChannelStateSerializer serializer;
-    private final ChannelStateChunkReader chunkReader;
+	private final TaskStateSnapshot taskStateSnapshot;
+	private final ChannelStateSerializer serializer;
+	private final ChannelStateChunkReader chunkReader;
 
-    public SequentialChannelStateReaderImpl(TaskStateSnapshot taskStateSnapshot) {
-        this.taskStateSnapshot = taskStateSnapshot;
+	public SequentialChannelStateReaderImpl(TaskStateSnapshot taskStateSnapshot) {
+		this.taskStateSnapshot = taskStateSnapshot;
         serializer = new ChannelStateSerializerImpl();
         chunkReader = new ChannelStateChunkReader(serializer);
-    }
+	}
 
-    @Override
-    public void readInputData(InputGate[] inputGates) throws IOException, InterruptedException {
+	@Override
+	public void readInputData(InputGate[] inputGates) throws IOException, InterruptedException {
         try (InputChannelRecoveredStateHandler stateHandler =
                 new InputChannelRecoveredStateHandler(
                         inputGates, taskStateSnapshot.getInputRescalingDescriptor())) {
@@ -65,10 +67,10 @@ public class SequentialChannelStateReaderImpl implements SequentialChannelStateR
                     stateHandler,
                     groupByDelegate(
                             streamSubtaskStates(), OperatorSubtaskState::getInputChannelState));
-        }
-    }
+		}
+	}
 
-    @Override
+	@Override
     public void readOutputData(ResultPartitionWriter[] writers, boolean notifyAndBlockOnCompletion)
             throws IOException, InterruptedException {
         try (ResultSubpartitionRecoveredStateHandler stateHandler =
@@ -81,27 +83,23 @@ public class SequentialChannelStateReaderImpl implements SequentialChannelStateR
                     groupByDelegate(
                             streamSubtaskStates(),
                             OperatorSubtaskState::getResultSubpartitionState));
-        }
-    }
+		}
+	}
 
-    private <Info, Context, Handle extends AbstractChannelStateHandle<Info>> void read(
-            RecoveredChannelStateHandler<Info, Context> stateHandler,
-            Map<StreamStateHandle, List<Handle>> streamStateHandleListMap)
-            throws IOException, InterruptedException {
-        for (Map.Entry<StreamStateHandle, List<Handle>> delegateAndHandles :
-                streamStateHandleListMap.entrySet()) {
-            readSequentially(
-                    delegateAndHandles.getKey(), delegateAndHandles.getValue(), stateHandler);
-        }
-    }
+	private <Info, Context, Handle extends AbstractChannelStateHandle<Info>> void read(
+			RecoveredChannelStateHandler<Info, Context> stateHandler,
+			Map<StreamStateHandle, List<Handle>> streamStateHandleListMap) throws IOException, InterruptedException {
+		for (Map.Entry<StreamStateHandle, List<Handle>> delegateAndHandles : streamStateHandleListMap.entrySet()) {
+			readSequentially(delegateAndHandles.getKey(), delegateAndHandles.getValue(), stateHandler);
+		}
+	}
 
-    private <Info, Context, Handle extends AbstractChannelStateHandle<Info>> void readSequentially(
-            StreamStateHandle streamStateHandle,
-            List<Handle> channelStateHandles,
-            RecoveredChannelStateHandler<Info, Context> stateHandler)
-            throws IOException, InterruptedException {
-        try (FSDataInputStream is = streamStateHandle.openInputStream()) {
-            serializer.readHeader(is);
+	private <Info, Context, Handle extends AbstractChannelStateHandle<Info>> void readSequentially(
+			StreamStateHandle streamStateHandle,
+			List<Handle> channelStateHandles,
+			RecoveredChannelStateHandler<Info, Context> stateHandler) throws IOException, InterruptedException {
+		try (FSDataInputStream is = streamStateHandle.openInputStream()) {
+			serializer.readHeader(is);
             for (RescaledOffset<Info> offsetAndChannelInfo :
                     extractOffsetsSorted(channelStateHandles)) {
                 chunkReader.readChunk(
@@ -110,24 +108,22 @@ public class SequentialChannelStateReaderImpl implements SequentialChannelStateR
                         stateHandler,
                         offsetAndChannelInfo.channelInfo,
                         offsetAndChannelInfo.oldSubtaskIndex);
-            }
-        }
-    }
+			}
+		}
+	}
 
-    private Stream<OperatorSubtaskState> streamSubtaskStates() {
-        return taskStateSnapshot.getSubtaskStateMappings().stream().map(Map.Entry::getValue);
-    }
+	private Stream<OperatorSubtaskState> streamSubtaskStates() {
+		return taskStateSnapshot.getSubtaskStateMappings().stream().map(Map.Entry::getValue);
+	}
 
-    private static <Info, Handle extends AbstractChannelStateHandle<Info>>
-            Map<StreamStateHandle, List<Handle>> groupByDelegate(
-                    Stream<OperatorSubtaskState> states,
-                    Function<OperatorSubtaskState, StateObjectCollection<Handle>>
-                            stateHandleExtractor) {
-        return states.map(stateHandleExtractor)
-                .flatMap(Collection::stream)
-                .peek(validate())
-                .collect(groupingBy(AbstractChannelStateHandle::getDelegate));
-    }
+	private static <Info, Handle extends AbstractChannelStateHandle<Info>> Map<StreamStateHandle, List<Handle>> groupByDelegate(
+			Stream<OperatorSubtaskState> states,
+			Function<OperatorSubtaskState, StateObjectCollection<Handle>> stateHandleExtractor) {
+		return states
+			.map(stateHandleExtractor).flatMap(Collection::stream)
+			.peek(validate())
+			.collect(groupingBy(AbstractChannelStateHandle::getDelegate));
+	}
 
     private static <Info, Handle extends AbstractChannelStateHandle<Info>>
             Consumer<Handle> validate() {
@@ -140,15 +136,15 @@ public class SequentialChannelStateReaderImpl implements SequentialChannelStateR
                 throw new IllegalStateException("Duplicate channel info: " + handle);
             }
         };
-    }
+	}
 
     private static <Info, Handle extends AbstractChannelStateHandle<Info>>
             List<RescaledOffset<Info>> extractOffsetsSorted(List<Handle> channelStateHandles) {
         return channelStateHandles.stream()
-                .flatMap(SequentialChannelStateReaderImpl::extractOffsets)
-                .sorted(comparingLong(offsetAndInfo -> offsetAndInfo.offset))
-                .collect(toList());
-    }
+			.flatMap(SequentialChannelStateReaderImpl::extractOffsets)
+			.sorted(comparingLong(offsetAndInfo -> offsetAndInfo.offset))
+			.collect(toList());
+	}
 
     private static <Info, Handle extends AbstractChannelStateHandle<Info>>
             Stream<RescaledOffset<Info>> extractOffsets(Handle handle) {
@@ -157,9 +153,9 @@ public class SequentialChannelStateReaderImpl implements SequentialChannelStateR
                         offset ->
                                 new RescaledOffset<>(
                                         offset, handle.getInfo(), handle.getSubtaskIndex()));
-    }
+	}
 
-    @Override
+	@Override
     public void close() throws Exception {}
 
     static class RescaledOffset<Info> {
@@ -176,39 +172,38 @@ public class SequentialChannelStateReaderImpl implements SequentialChannelStateR
 }
 
 class ChannelStateChunkReader {
-    private final ChannelStateSerializer serializer;
+	private final ChannelStateSerializer serializer;
 
-    ChannelStateChunkReader(ChannelStateSerializer serializer) {
-        this.serializer = serializer;
-    }
+	ChannelStateChunkReader(ChannelStateSerializer serializer) {
+		this.serializer = serializer;
+	}
 
     <Info, Context> void readChunk(
-            FSDataInputStream source,
-            long sourceOffset,
-            RecoveredChannelStateHandler<Info, Context> stateHandler,
+			FSDataInputStream source,
+			long sourceOffset,
+			RecoveredChannelStateHandler<Info, Context> stateHandler,
             Info channelInfo,
             int oldSubtaskIndex)
             throws IOException, InterruptedException {
-        if (source.getPos() != sourceOffset) {
-            source.seek(sourceOffset);
-        }
-        int length = serializer.readLength(source);
-        while (length > 0) {
-            RecoveredChannelStateHandler.BufferWithContext<Context> bufferWithContext =
-                    stateHandler.getBuffer(channelInfo);
-            try (Closeable ignored =
-                    NetworkActionsLogger.measureIO(
-                            "ChannelStateChunkReader#readChunk", bufferWithContext.buffer)) {
-                while (length > 0 && bufferWithContext.buffer.isWritable()) {
-                    length -= serializer.readData(source, bufferWithContext.buffer, length);
+		if (source.getPos() != sourceOffset) {
+			source.seek(sourceOffset);
+		}
+		int length = serializer.readLength(source);
+		while (length > 0) {
+			RecoveredChannelStateHandler.BufferWithContext<Context> bufferWithContext = stateHandler.getBuffer(channelInfo);
+			try {
+                try (Closeable ignored =
+                        NetworkActionsLogger.measureIO(
+                                "ChannelStateChunkReader#readChunk", bufferWithContext.buffer)) {
+					while (length > 0 && bufferWithContext.buffer.isWritable()) {
+						length -= serializer.readData(source, bufferWithContext.buffer, length);
+					}
                 }
-            } catch (Exception e) {
-                bufferWithContext.close();
-                throw e;
-            }
-
-            // Passing the ownership of buffer to inside.
-            stateHandler.recover(channelInfo, oldSubtaskIndex, bufferWithContext);
-        }
-    }
+                stateHandler.recover(channelInfo, oldSubtaskIndex, bufferWithContext.context);
+			} catch (Exception e) {
+				bufferWithContext.buffer.recycle();
+				throw e;
+			}
+		}
+	}
 }

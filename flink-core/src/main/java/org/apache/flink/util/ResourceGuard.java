@@ -23,143 +23,157 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * This class is a guard for shared resources with the following invariants. The resource can be
- * acquired by multiple clients in parallel through the {@link #acquireResource()} call. As a result
- * of the call, each client gets a {@link Lease}. The {@link #close()} method of the lease releases
- * the resources and reduces the client count in the {@link ResourceGuard} object. The protected
- * resource should only be disposed once the corresponding resource guard is successfully closed,
- * but the guard can only be closed once all clients that acquired a lease for the guarded resource
- * have released it. Before this is happened, the call to {@link #close()} will block until the
- * zero-open-leases condition is triggered. After the resource guard is closed, calls to {@link
- * #acquireResource()} will fail with exception. Notice that, obviously clients are responsible to
- * release the resource after usage. All clients are considered equal, i.e. there is only a global
- * count maintained how many times the resource was acquired but not by whom.
+ * This class is a guard for shared resources with the following invariants. The resource can be acquired by multiple
+ * clients in parallel through the {@link #acquireResource()} call. As a result of the call, each client gets a
+ * {@link Lease}. The {@link #close()} method of the lease releases the resources and reduces the client count in
+ * the {@link ResourceGuard} object.
+ * The protected resource should only be disposed once the corresponding resource guard is successfully closed, but
+ * the guard can only be closed once all clients that acquired a lease for the guarded resource have released it.
+ * Before this is happened, the call to {@link #close()} will block until the zero-open-leases condition is triggered.
+ * After the resource guard is closed, calls to {@link #acquireResource()} will fail with exception. Notice that,
+ * obviously clients are responsible to release the resource after usage. All clients are considered equal, i.e. there
+ * is only a global count maintained how many times the resource was acquired but not by whom.
  */
 public class ResourceGuard implements AutoCloseable, Serializable {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    /** The object that serves as lock for count and the closed-flag. */
-    private final SerializableObject lock;
+	/**
+	 * The object that serves as lock for count and the closed-flag.
+	 */
+	private final SerializableObject lock;
 
-    /** Number of clients that have ongoing access to the resource. */
-    private volatile int leaseCount;
+	/**
+	 * Number of clients that have ongoing access to the resource.
+	 */
+	private volatile int leaseCount;
 
-    /** This flag indicated if it is still possible to acquire access to the resource. */
-    private volatile boolean closed;
+	/**
+	 * This flag indicated if it is still possible to acquire access to the resource.
+	 */
+	private volatile boolean closed;
 
-    public ResourceGuard() {
-        this.lock = new SerializableObject();
-        this.leaseCount = 0;
-        this.closed = false;
-    }
+	public ResourceGuard() {
+		this.lock = new SerializableObject();
+		this.leaseCount = 0;
+		this.closed = false;
+	}
 
-    /**
-     * Acquired access from one new client for the guarded resource.
-     *
-     * @throws IOException when the resource guard is already closed.
-     */
-    public Lease acquireResource() throws IOException {
+	/**
+	 * Acquired access from one new client for the guarded resource.
+	 *
+	 * @throws IOException when the resource guard is already closed.
+	 */
+	public Lease acquireResource() throws IOException {
 
-        synchronized (lock) {
-            if (closed) {
-                throw new IOException("Resource guard was already closed.");
-            }
+		synchronized (lock) {
 
-            ++leaseCount;
-        }
+			if (closed) {
+				throw new IOException("Resource guard was already closed.");
+			}
 
-        return new Lease();
-    }
+			++leaseCount;
+		}
 
-    /**
-     * Releases access for one client of the guarded resource. This method must only be called after
-     * a matching call to {@link #acquireResource()}.
-     */
-    private void releaseResource() {
+		return new Lease();
+	}
 
-        synchronized (lock) {
-            --leaseCount;
+	/**
+	 * Releases access for one client of the guarded resource. This method must only be called after a matching call to
+	 * {@link #acquireResource()}.
+	 */
+	private void releaseResource() {
 
-            if (closed && leaseCount == 0) {
-                lock.notifyAll();
-            }
-        }
-    }
+		synchronized (lock) {
 
-    public void closeInterruptibly() throws InterruptedException {
-        synchronized (lock) {
-            closed = true;
+			--leaseCount;
 
-            while (leaseCount > 0) {
-                lock.wait();
-            }
-        }
-    }
+			if (closed && leaseCount == 0) {
+				lock.notifyAll();
+			}
+		}
+	}
 
-    /**
-     * If the current thread is {@linkplain Thread#interrupt interrupted} while waiting for the
-     * close method to complete, then it will continue to wait. When the thread does return from
-     * this method its interrupt status will be set.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public void closeUninterruptibly() {
+	public void closeInterruptibly() throws InterruptedException {
+		synchronized (lock) {
 
-        boolean interrupted = false;
-        synchronized (lock) {
-            closed = true;
+			closed = true;
 
-            while (leaseCount > 0) {
+			while (leaseCount > 0) {
+				lock.wait();
+			}
+		}
+	}
 
-                try {
-                    lock.wait();
-                } catch (InterruptedException e) {
-                    interrupted = true;
-                }
-            }
-        }
+	/**
+	 * If the current thread is {@linkplain Thread#interrupt interrupted}
+	 * while waiting for the close method to complete, then it will continue to wait.
+	 * When the thread does return from this method its interrupt
+	 * status will be set.
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public void closeUninterruptibly()  {
 
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
-    }
+		boolean interrupted = false;
+		synchronized (lock) {
 
-    /**
-     * Closed the resource guard. This method will block until all calls to {@link
-     * #acquireResource()} have seen their matching call to {@link #releaseResource()}.
-     */
-    @Override
-    public void close() {
-        closeUninterruptibly();
-    }
+			closed = true;
 
-    /** Returns true if the resource guard is closed, i.e. after {@link #close()} was called. */
-    public boolean isClosed() {
-        return closed;
-    }
+			while (leaseCount > 0) {
 
-    /** Returns the current count of open leases. */
-    public int getLeaseCount() {
-        return leaseCount;
-    }
+				try {
+					lock.wait();
+				} catch (InterruptedException e) {
+					interrupted = true;
+				}
+			}
+		}
 
-    /**
-     * A lease is issued by the {@link ResourceGuard} as result of calls to {@link
-     * #acquireResource()}. The owner of the lease can release it via the {@link #close()} call.
-     */
-    public class Lease implements AutoCloseable {
+		if (interrupted) {
+			Thread.currentThread().interrupt();
+		}
+	}
 
-        private final AtomicBoolean closed;
+	/**
+	 * Closed the resource guard. This method will block until all calls to {@link #acquireResource()} have seen their
+	 * matching call to {@link #releaseResource()}.
+	 */
+	@Override
+	public void close()  {
+		closeUninterruptibly();
+	}
 
-        private Lease() {
-            this.closed = new AtomicBoolean(false);
-        }
+	/**
+	 * Returns true if the resource guard is closed, i.e. after {@link #close()} was called.
+	 */
+	public boolean isClosed() {
+		return closed;
+	}
 
-        @Override
-        public void close() {
-            if (closed.compareAndSet(false, true)) {
-                releaseResource();
-            }
-        }
-    }
+	/**
+	 * Returns the current count of open leases.
+	 */
+	public int getLeaseCount() {
+		return leaseCount;
+	}
+
+	/**
+	 * A lease is issued by the {@link ResourceGuard} as result of calls to {@link #acquireResource()}. The owner of the
+	 * lease can release it via the {@link #close()} call.
+	 */
+	public class Lease implements AutoCloseable {
+
+		private final AtomicBoolean closed;
+
+		private Lease() {
+			this.closed = new AtomicBoolean(false);
+		}
+
+		@Override
+		public void close() {
+			if (closed.compareAndSet(false, true)) {
+				releaseResource();
+			}
+		}
+	}
 }

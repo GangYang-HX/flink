@@ -31,97 +31,87 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/** The wrapper of user defined python scalar function. */
+/**
+ * The wrapper of user defined python scalar function.
+ */
 @Internal
 public class PythonScalarFunction extends ScalarFunction implements PythonFunction {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private final String name;
-    private final byte[] serializedScalarFunction;
-    private final DataType[] inputTypes;
-    private final DataType resultType;
-    private final PythonFunctionKind pythonFunctionKind;
-    private final boolean deterministic;
-    private final PythonEnv pythonEnv;
-    private final boolean takesRowAsInput;
+	private final String name;
+	private final byte[] serializedScalarFunction;
+	private final TypeInformation[] inputTypes;
+	private final TypeInformation resultType;
+	private final PythonFunctionKind pythonFunctionKind;
+	private final boolean deterministic;
+	private final PythonEnv pythonEnv;
 
-    public PythonScalarFunction(
-            String name,
-            byte[] serializedScalarFunction,
-            DataType[] inputTypes,
-            DataType resultType,
-            PythonFunctionKind pythonFunctionKind,
-            boolean deterministic,
-            boolean takesRowAsInput,
-            PythonEnv pythonEnv) {
-        this.name = name;
-        this.serializedScalarFunction = serializedScalarFunction;
-        this.inputTypes = inputTypes;
-        this.resultType = resultType;
-        this.pythonFunctionKind = pythonFunctionKind;
-        this.deterministic = deterministic;
-        this.pythonEnv = pythonEnv;
-        this.takesRowAsInput = takesRowAsInput;
-    }
+	public PythonScalarFunction(
+		String name,
+		byte[] serializedScalarFunction,
+		TypeInformation[] inputTypes,
+		TypeInformation resultType,
+		PythonFunctionKind pythonFunctionKind,
+		boolean deterministic,
+		PythonEnv pythonEnv) {
+		this.name = name;
+		this.serializedScalarFunction = serializedScalarFunction;
+		this.inputTypes = inputTypes;
+		this.resultType = resultType;
+		this.pythonFunctionKind = pythonFunctionKind;
+		this.deterministic = deterministic;
+		this.pythonEnv = pythonEnv;
+	}
 
-    public Object eval(Object... args) {
-        throw new UnsupportedOperationException(
-                "This method is a placeholder and should not be called.");
-    }
+	public Object eval(Object... args) {
+		throw new UnsupportedOperationException(
+			"This method is a placeholder and should not be called.");
+	}
 
-    @Override
-    public byte[] getSerializedPythonFunction() {
-        return serializedScalarFunction;
-    }
+	@Override
+	public byte[] getSerializedPythonFunction() {
+		return serializedScalarFunction;
+	}
 
-    @Override
-    public PythonEnv getPythonEnv() {
-        return pythonEnv;
-    }
+	@Override
+	public PythonEnv getPythonEnv() {
+		return pythonEnv;
+	}
 
-    @Override
-    public PythonFunctionKind getPythonFunctionKind() {
-        return pythonFunctionKind;
-    }
+	@Override
+	public PythonFunctionKind getPythonFunctionKind() {
+		return pythonFunctionKind;
+	}
 
-    @Override
-    public boolean takesRowAsInput() {
-        return takesRowAsInput;
-    }
+	@Override
+	public boolean isDeterministic() {
+		return deterministic;
+	}
 
-    @Override
-    public boolean isDeterministic() {
-        return deterministic;
-    }
+	@Override
+	public TypeInformation[] getParameterTypes(Class[] signature) {
+		return inputTypes;
+	}
 
-    @Override
-    public TypeInformation[] getParameterTypes(Class[] signature) {
-        if (inputTypes != null) {
-            return TypeConversions.fromDataTypeToLegacyInfo(inputTypes);
-        } else {
-            return super.getParameterTypes(signature);
-        }
-    }
+	@Override
+	public TypeInformation getResultType(Class[] signature) {
+		return resultType;
+	}
 
-    @Override
-    public TypeInformation getResultType(Class[] signature) {
-        return TypeConversions.fromDataTypeToLegacyInfo(resultType);
-    }
+	@Override
+	public TypeInference getTypeInference(DataTypeFactory typeFactory) {
+		final List<DataType> argumentDataTypes = Stream.of(inputTypes)
+			.map(TypeConversions::fromLegacyInfoToDataType)
+			.collect(Collectors.toList());
+		return TypeInference.newBuilder()
+			.typedArguments(argumentDataTypes)
+			.outputTypeStrategy(TypeStrategies.explicit(TypeConversions.fromLegacyInfoToDataType(resultType)))
+			.build();
+	}
 
-    @Override
-    public TypeInference getTypeInference(DataTypeFactory typeFactory) {
-        TypeInference.Builder builder = TypeInference.newBuilder();
-        if (inputTypes != null) {
-            final List<DataType> argumentDataTypes =
-                    Stream.of(inputTypes).collect(Collectors.toList());
-            builder.typedArguments(argumentDataTypes);
-        }
-        return builder.outputTypeStrategy(TypeStrategies.explicit(resultType)).build();
-    }
-
-    @Override
-    public String toString() {
-        return name;
-    }
+	@Override
+	public String toString() {
+		return name;
+	}
 }

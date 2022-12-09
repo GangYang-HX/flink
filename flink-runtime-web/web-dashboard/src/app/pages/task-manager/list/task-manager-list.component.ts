@@ -18,17 +18,11 @@
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of, Subject } from 'rxjs';
-import { catchError, mergeMap, takeUntil } from 'rxjs/operators';
-
-import { TaskManagersItem } from '@flink-runtime-web/interfaces';
-import { StatusService, TaskManagerService } from '@flink-runtime-web/services';
-import { typeDefinition } from '@flink-runtime-web/utils/strong-type';
-import { NzTableSortFn } from 'ng-zorro-antd/table/src/table.types';
-
-function createSortFn(selector: (item: TaskManagersItem) => number): NzTableSortFn<TaskManagersItem> {
-  return (pre, next) => (selector(pre) > selector(next) ? 1 : -1);
-}
+import { TaskmanagersItemInterface } from 'interfaces';
+import { Subject } from 'rxjs';
+import { flatMap, takeUntil } from 'rxjs/operators';
+import { StatusService, TaskManagerService } from 'services';
+import { deepFind } from 'utils';
 
 @Component({
   selector: 'flink-task-manager-list',
@@ -37,51 +31,69 @@ function createSortFn(selector: (item: TaskManagersItem) => number): NzTableSort
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TaskManagerListComponent implements OnInit, OnDestroy {
-  public readonly trackById = (_: number, node: TaskManagersItem): string => node.id;
-  public readonly narrowType = typeDefinition<TaskManagersItem[]>();
+  listOfTaskManager: TaskmanagersItemInterface[] = [];
+  isLoading = true;
+  destroy$ = new Subject();
+  sortName: string;
+  sortValue: string;
 
-  public readonly sortDataPortFn = createSortFn(item => item.dataPort);
-  public readonly sortHeartBeatFn = createSortFn(item => item.timeSinceLastHeartbeat);
-  public readonly sortSlotsNumberFn = createSortFn(item => item.slotsNumber);
-  public readonly sortFreeSlotsFn = createSortFn(item => item.freeSlots);
-  public readonly sortCpuCoresFn = createSortFn(item => item.hardware?.cpuCores);
-  public readonly sortPhysicalMemoryFn = createSortFn(item => item.hardware?.physicalMemory);
-  public readonly sortFreeMemoryFn = createSortFn(item => item.hardware?.freeMemory);
-  public readonly sortManagedMemoryFn = createSortFn(item => item.hardware?.managedMemory);
+  sort(sort: { key: string; value: string }) {
+    this.sortName = sort.key;
+    this.sortValue = sort.value;
+    this.search();
+  }
 
-  public listOfTaskManager: TaskManagersItem[] = [];
-  public isLoading = true;
+  search() {
+    if (this.sortName) {
+      this.listOfTaskManager = [
+        ...this.listOfTaskManager.sort((pre, next) => {
+          if (this.sortValue === 'ascend') {
+            return deepFind(pre, this.sortName) > deepFind(next, this.sortName) ? 1 : -1;
+          } else {
+            return deepFind(next, this.sortName) > deepFind(pre, this.sortName) ? 1 : -1;
+          }
+        })
+      ];
+    }
+  }
 
-  private readonly destroy$ = new Subject<void>();
+  trackManagerBy(_: number, node: TaskmanagersItemInterface) {
+    return node.id;
+  }
 
-  public navigateTo(taskManager: TaskManagersItem): void {
-    this.router
-      .navigate([taskManager.id, 'metrics'], { relativeTo: this.activatedRoute, queryParamsHandling: 'preserve' })
-      .then();
+  navigateTo(taskManager: TaskmanagersItemInterface) {
+    this.router.navigate([taskManager.id, 'metrics'], { relativeTo: this.activatedRoute }).then();
   }
 
   constructor(
-    private readonly cdr: ChangeDetectorRef,
-    private readonly statusService: StatusService,
-    private readonly taskManagerService: TaskManagerService,
-    private readonly router: Router,
-    private readonly activatedRoute: ActivatedRoute
+    private cdr: ChangeDetectorRef,
+    private statusService: StatusService,
+    private taskManagerService: TaskManagerService,
+    private router: Router,
+    private activatedRoute: ActivatedRoute
   ) {}
 
-  public ngOnInit(): void {
+  ngOnInit() {
     this.statusService.refresh$
       .pipe(
-        mergeMap(() => this.taskManagerService.loadManagers().pipe(catchError(() => of([] as TaskManagersItem[])))),
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
+        flatMap(() => this.taskManagerService.loadManagers())
       )
-      .subscribe(data => {
-        this.isLoading = false;
-        this.listOfTaskManager = data;
-        this.cdr.markForCheck();
-      });
+      .subscribe(
+        data => {
+          this.isLoading = false;
+          this.listOfTaskManager = data;
+          this.search();
+          this.cdr.markForCheck();
+        },
+        () => {
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        }
+      );
   }
 
-  public ngOnDestroy(): void {
+  ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
   }

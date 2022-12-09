@@ -15,14 +15,12 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 ################################################################################
-from enum import Enum
-
 from pyflink.java_gateway import get_gateway
 
 __all__ = ['TimeCharacteristic']
 
 
-class TimeCharacteristic(Enum):
+class TimeCharacteristic(object):
     """
     The time characteristic defines how the system determines time for time-dependent
     order and operations that depend on time (such as time windows).
@@ -75,9 +73,9 @@ class TimeCharacteristic(Enum):
     "time watermarks", this means that the cost typically depends on how early or late the
     watermarks can be generated for their timestamp.
 
-    In relation to :data:`IngestionTime`, the event time is similar, but refers the event's
-    original time, rather than the time assigned at the data source. Practically, that means
-    that event time has generally more meaning, but also that it takes longer to determine
+    In relation to :data:`IngestionTime`, the event time is similar, but refers the the
+    event's original time, rather than the time assigned at the data source. Practically, that
+    means that event time has generally more meaning, but also that it takes longer to determine
     that all elements for a certain time have arrived.
     """
 
@@ -86,10 +84,30 @@ class TimeCharacteristic(Enum):
     EventTime = 2
 
     @staticmethod
-    def _from_j_time_characteristic(j_time_characteristic) -> 'TimeCharacteristic':
-        return TimeCharacteristic[j_time_characteristic.name()]
-
-    def _to_j_time_characteristic(self):
+    def _from_j_time_characteristic(j_time_characteristic):
         gateway = get_gateway()
         JTimeCharacteristic = gateway.jvm.org.apache.flink.streaming.api.TimeCharacteristic
-        return getattr(JTimeCharacteristic, self.name)
+        if j_time_characteristic == JTimeCharacteristic.EventTime:
+            return TimeCharacteristic.EventTime
+        elif j_time_characteristic == JTimeCharacteristic.ProcessingTime:
+            return TimeCharacteristic.ProcessingTime
+        elif j_time_characteristic == JTimeCharacteristic.IngestionTime:
+            return TimeCharacteristic.IngestionTime
+        else:
+            raise Exception("Unsupported java time characteristic: %s." % j_time_characteristic)
+
+    @staticmethod
+    def _to_j_time_characteristic(time_characteristic):
+        gateway = get_gateway()
+        JTimeCharacteristic = gateway.jvm.org.apache.flink.streaming.api.TimeCharacteristic
+        if time_characteristic == TimeCharacteristic.EventTime:
+            j_characteristic = JTimeCharacteristic.EventTime
+        elif time_characteristic == TimeCharacteristic.IngestionTime:
+            j_characteristic = JTimeCharacteristic.IngestionTime
+        elif time_characteristic == TimeCharacteristic.ProcessingTime:
+            j_characteristic = JTimeCharacteristic.ProcessingTime
+        else:
+            raise TypeError("Unsupported time characteristic: %s, supported time characteristic "
+                            "are: TimeCharacteristic.EventTime, TimeCharacteristic.IngestionTime, "
+                            "TimeCharacteristic.ProcessingTime." % time_characteristic)
+        return j_characteristic

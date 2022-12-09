@@ -16,32 +16,34 @@
  * limitations under the License.
  */
 
+
 package org.apache.flink.runtime.operators.testutils;
 
 import org.apache.flink.types.Record;
 
-public class DelayingInfinitiveInputIterator extends InfiniteInputIterator {
-    private int delay;
+public class DelayingInfinitiveInputIterator extends InfiniteInputIterator
+{
+	private int delay;
+	
+	public DelayingInfinitiveInputIterator(int delay) {
+		this.delay = delay;
+	}
+	
+	@Override
+	public Record next(Record reuse) {
+		try {
+			Thread.sleep(delay);
+		}
+		catch (InterruptedException e) { }
+		return super.next(reuse);
+	}
 
-    public DelayingInfinitiveInputIterator(int delay) {
-        this.delay = delay;
-    }
-
-    @Override
-    public Record next(Record reuse) {
-        try {
-            Thread.sleep(delay);
-        } catch (InterruptedException e) {
-        }
-        return super.next(reuse);
-    }
-
-    @Override
-    public Record next() {
-        try {
-            Thread.sleep(delay);
-        } catch (InterruptedException e) {
-        }
-        return super.next();
-    }
+	@Override
+	public Record next() {
+		try {
+			Thread.sleep(delay);
+		}
+		catch (InterruptedException e) { }
+		return super.next();
+	}
 }

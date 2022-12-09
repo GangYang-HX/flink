@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.api.scala.typeutils
 
 import org.apache.flink.api.common.ExecutionConfig
@@ -22,8 +23,11 @@ import org.apache.flink.api.common.typeutils.SerializerTestBase
 import org.apache.flink.api.scala.createTypeInformation
 import org.apache.flink.api.scala.typeutils.ScalaCaseClassSerializerTest.SimpleCaseClass
 
-/** Test [[ScalaCaseClassSerializer]]. */
-class ScalaCaseClassSerializerTest extends SerializerTestBase[SimpleCaseClass] {
+/**
+  * Test [[ScalaCaseClassSerializer]].
+  */
+class ScalaCaseClassSerializerTest
+    extends SerializerTestBase[SimpleCaseClass] {
 
   val serializer = createTypeInformation[SimpleCaseClass]
     .createSerializer(new ExecutionConfig)

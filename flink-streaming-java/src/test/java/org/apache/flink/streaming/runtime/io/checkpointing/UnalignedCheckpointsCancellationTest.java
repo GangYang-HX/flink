@@ -17,9 +17,8 @@
 
 package org.apache.flink.streaming.runtime.io.checkpointing;
 
-import org.apache.flink.runtime.checkpoint.CheckpointException;
 import org.apache.flink.runtime.checkpoint.CheckpointMetaData;
-import org.apache.flink.runtime.checkpoint.CheckpointMetricsBuilder;
+import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
 import org.apache.flink.runtime.checkpoint.channel.InputChannelInfo;
 import org.apache.flink.runtime.event.RuntimeEvent;
@@ -45,11 +44,11 @@ import static org.junit.Assert.assertEquals;
 /** Unaligned checkpoints cancellation test. */
 @RunWith(Parameterized.class)
 public class UnalignedCheckpointsCancellationTest {
-    private final List<RuntimeEvent> events;
-    private final boolean expectTriggerCheckpoint;
-    private final boolean expectAbortCheckpoint;
-    private final int numChannels;
-    private final int channel;
+	private final List<RuntimeEvent> events;
+	private final boolean expectTriggerCheckpoint;
+	private final boolean expectAbortCheckpoint;
+	private final int numChannels;
+	private final int channel;
 
     public UnalignedCheckpointsCancellationTest(
             boolean expectTriggerCheckpoint,
@@ -57,101 +56,89 @@ public class UnalignedCheckpointsCancellationTest {
             List<RuntimeEvent> events,
             int numChannels,
             int channel) {
-        this.events = events;
-        this.expectTriggerCheckpoint = expectTriggerCheckpoint;
-        this.expectAbortCheckpoint = expectAbortCheckpoint;
-        this.numChannels = numChannels;
-        this.channel = channel;
-    }
+		this.events = events;
+		this.expectTriggerCheckpoint = expectTriggerCheckpoint;
+		this.expectAbortCheckpoint = expectAbortCheckpoint;
+		this.numChannels = numChannels;
+		this.channel = channel;
+	}
 
-    @Parameterized.Parameters(
-            name =
-                    "expect trigger: {0}, expect abort {1}, numChannels: {3}, chan: {4}, events: {2}")
-    public static Object[][] parameters() {
-        return new Object[][] {
-            new Object[] {false, true, Arrays.asList(cancel(10), cancel(20)), 1, 0},
-            new Object[] {false, true, Arrays.asList(cancel(20), cancel(10)), 1, 0},
-            new Object[] {false, true, Arrays.asList(cancel(10), checkpoint(10)), 1, 0},
-            new Object[] {true, true, Arrays.asList(cancel(10), checkpoint(20)), 1, 0},
-            new Object[] {false, true, Arrays.asList(cancel(20), checkpoint(10)), 1, 0},
-            new Object[] {true, false, Arrays.asList(checkpoint(10), checkpoint(10)), 1, 0},
-            new Object[] {true, false, Arrays.asList(checkpoint(10), checkpoint(20)), 1, 0},
-            new Object[] {true, true, Arrays.asList(checkpoint(10), checkpoint(20)), 2, 0},
-            new Object[] {true, false, Arrays.asList(checkpoint(20), checkpoint(10)), 1, 0},
-            new Object[] {true, false, Arrays.asList(checkpoint(10), cancel(10)), 1, 0},
-            new Object[] {true, true, Arrays.asList(checkpoint(10), cancel(10)), 2, 0},
-            new Object[] {true, true, Arrays.asList(checkpoint(10), cancel(20)), 1, 0},
-            new Object[] {true, false, Arrays.asList(checkpoint(20), cancel(10)), 1, 0},
-        };
-    }
+	@Parameterized.Parameters(name = "expect trigger: {0}, expect abort {1}, numChannels: {3}, chan: {4}, events: {2}")
+	public static Object[][] parameters() {
+		return new Object[][]{
+				new Object[]{false, true, Arrays.asList(cancel(10), cancel(20)), 1, 0},
+				new Object[]{false, true, Arrays.asList(cancel(20), cancel(10)), 1, 0},
+				new Object[]{false, true, Arrays.asList(cancel(10), checkpoint(10)), 1, 0},
+				new Object[]{true, true, Arrays.asList(cancel(10), checkpoint(20)), 1, 0},
+				new Object[]{false, true, Arrays.asList(cancel(20), checkpoint(10)), 1, 0},
+				new Object[]{true, false, Arrays.asList(checkpoint(10), checkpoint(10)), 1, 0},
+				new Object[]{true, false, Arrays.asList(checkpoint(10), checkpoint(20)), 1, 0},
+				new Object[]{true, true, Arrays.asList(checkpoint(10), checkpoint(20)), 2, 0},
+				new Object[]{true, false, Arrays.asList(checkpoint(20), checkpoint(10)), 1, 0},
+				new Object[]{true, false, Arrays.asList(checkpoint(10), cancel(10)), 1, 0},
+				new Object[]{true, true, Arrays.asList(checkpoint(10), cancel(10)), 2, 0},
+				new Object[]{true, true, Arrays.asList(checkpoint(10), cancel(20)), 1, 0},
+				new Object[]{true, false, Arrays.asList(checkpoint(20), cancel(10)), 1, 0},
+		};
+	}
 
-    @Test
-    public void test() throws Exception {
-        TestInvokable invokable = new TestInvokable();
-        final SingleInputGate inputGate =
-                new SingleInputGateBuilder()
-                        .setNumberOfChannels(numChannels)
-                        .setChannelFactory(InputChannelBuilder::buildLocalChannel)
-                        .build();
+	@Test
+	public void test() throws Exception {
+		TestInvokable invokable = new TestInvokable();
+		final SingleInputGate inputGate = new SingleInputGateBuilder()
+			.setNumberOfChannels(numChannels)
+			.setChannelFactory(InputChannelBuilder::buildLocalChannel)
+			.build();
         SingleCheckpointBarrierHandler unaligner =
                 SingleCheckpointBarrierHandler.createUnalignedCheckpointBarrierHandler(
                         TestSubtaskCheckpointCoordinator.INSTANCE,
                         "test",
                         invokable,
                         SystemClock.getInstance(),
-                        true,
                         inputGate);
 
-        for (RuntimeEvent e : events) {
-            if (e instanceof CancelCheckpointMarker) {
-                unaligner.processCancellationBarrier(
-                        (CancelCheckpointMarker) e, new InputChannelInfo(0, channel));
-            } else if (e instanceof CheckpointBarrier) {
-                unaligner.processBarrier(
-                        (CheckpointBarrier) e, new InputChannelInfo(0, channel), false);
-            } else {
-                throw new IllegalArgumentException("unexpected event type: " + e);
-            }
-        }
+		for (RuntimeEvent e : events) {
+			if (e instanceof CancelCheckpointMarker) {
+				unaligner.processCancellationBarrier((CancelCheckpointMarker) e);
+			} else if (e instanceof CheckpointBarrier) {
+				unaligner.processBarrier((CheckpointBarrier) e, new InputChannelInfo(0, channel));
+			} else {
+				throw new IllegalArgumentException("unexpected event type: " + e);
+			}
+		}
 
-        assertEquals("expectAbortCheckpoint", expectAbortCheckpoint, invokable.checkpointAborted);
-        assertEquals(
-                "expectTriggerCheckpoint", expectTriggerCheckpoint, invokable.checkpointTriggered);
-    }
+		assertEquals("expectAbortCheckpoint", expectAbortCheckpoint, invokable.checkpointAborted);
+		assertEquals("expectTriggerCheckpoint", expectTriggerCheckpoint, invokable.checkpointTriggered);
+	}
 
-    private static CheckpointBarrier checkpoint(int checkpointId) {
-        return new CheckpointBarrier(
-                checkpointId,
-                1,
-                CheckpointOptions.forCheckpointWithDefaultLocation().toUnaligned());
-    }
+	private static CheckpointBarrier checkpoint(int checkpointId) {
+		return new CheckpointBarrier(checkpointId, 1, CheckpointOptions.forCheckpointWithDefaultLocation().toUnaligned());
+	}
 
-    private static CancelCheckpointMarker cancel(int checkpointId) {
-        return new CancelCheckpointMarker(checkpointId);
-    }
+	private static CancelCheckpointMarker cancel(int checkpointId) {
+		return new CancelCheckpointMarker(checkpointId);
+	}
 
-    private static class TestInvokable extends AbstractInvokable {
-        TestInvokable() {
-            super(new DummyEnvironment());
-        }
+	private static class TestInvokable extends AbstractInvokable {
+		TestInvokable() {
+			super(new DummyEnvironment());
+		}
 
-        private boolean checkpointAborted;
-        private boolean checkpointTriggered;
+		private boolean checkpointAborted;
+		private boolean checkpointTriggered;
 
-        @Override
-        public void invoke() {}
+		@Override
+		public void invoke() {
+		}
 
-        @Override
-        public void triggerCheckpointOnBarrier(
-                CheckpointMetaData checkpointMetaData,
-                CheckpointOptions checkpointOptions,
-                CheckpointMetricsBuilder checkpointMetrics) {
-            checkpointTriggered = true;
-        }
+		@Override
+		public void triggerCheckpointOnBarrier(CheckpointMetaData checkpointMetaData, CheckpointOptions checkpointOptions, CheckpointMetrics checkpointMetrics) {
+			checkpointTriggered = true;
+		}
 
-        @Override
-        public void abortCheckpointOnBarrier(long checkpointId, CheckpointException cause) {
-            checkpointAborted = true;
-        }
-    }
+		@Override
+		public void abortCheckpointOnBarrier(long checkpointId, Throwable cause) {
+			checkpointAborted = true;
+		}
+	}
 }

@@ -18,14 +18,17 @@
 
 package org.openjdk.jol.info;
 
-/** Mock class avoid a dependency on OpenJDK JOL, which is incompatible with the Apache License. */
+/**
+ * Mock class avoid a dependency on OpenJDK JOL,
+ * which is incompatible with the Apache License.
+ */
 public class ClassLayout {
 
-    public static ClassLayout parseClass(Class<?> ignored) {
-        return new ClassLayout();
-    }
+	public static ClassLayout parseClass(Class<?> ignored) {
+		return new ClassLayout();
+	}
 
-    public int instanceSize() {
-        return 64; // random, means nothing
-    }
+	public int instanceSize() {
+		return 64; // random, means nothing
+	}
 }

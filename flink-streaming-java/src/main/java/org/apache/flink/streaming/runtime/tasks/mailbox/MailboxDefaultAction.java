@@ -18,6 +18,7 @@
 package org.apache.flink.streaming.runtime.tasks.mailbox;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.runtime.metrics.TimerGauge;
 
 /** Interface for the default action that is repeatedly invoked in the mailbox-loop. */
 @Internal
@@ -42,8 +43,8 @@ public interface MailboxDefaultAction {
     }
 
     /**
-     * This controller is a feedback interface for the default action to interact with the mailbox
-     * execution. In particular, it offers ways to signal that the execution of the default action
+     * This context is a feedback interface for the default action to interact with the mailbox
+     * execution. In particular it offers ways to signal that the execution of the default action
      * should be finished or temporarily suspended.
      */
     @Internal
@@ -60,11 +61,11 @@ public interface MailboxDefaultAction {
          * the default action, e.g. because there is currently no input available. This method must
          * be invoked from the mailbox-thread only!
          *
-         * @param suspensionPeriodTimer started (ticking) {@link PeriodTimer} that measures how long
+         * @param suspensionIdleTimer started (ticking) {@link PeriodTimer} that measures how long
          *     the default action was suspended/idling. If mailbox loop is busy processing mails,
          *     this timer should be paused for the time required to process the mails.
          */
-        Suspension suspendDefaultAction(PeriodTimer suspensionPeriodTimer);
+        Suspension suspendDefaultAction(PeriodTimer suspensionIdleTimer);
 
         /**
          * Same as {@link #suspendDefaultAction(PeriodTimer)} but without any associated timer

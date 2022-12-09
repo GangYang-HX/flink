@@ -18,19 +18,21 @@
 
 package org.apache.flink.util;
 
-/** Exception which occurs when creating a configuration object fails. */
+/**
+ * Exception which occurs when creating a configuration object fails.
+ */
 public class ConfigurationException extends FlinkException {
-    private static final long serialVersionUID = 3971647332059381556L;
+	private static final long serialVersionUID = 3971647332059381556L;
 
-    public ConfigurationException(String message) {
-        super(message);
-    }
+	public ConfigurationException(String message) {
+		super(message);
+	}
 
-    public ConfigurationException(String message, Throwable cause) {
-        super(message, cause);
-    }
+	public ConfigurationException(String message, Throwable cause) {
+		super(message, cause);
+	}
 
-    public ConfigurationException(Throwable cause) {
-        super(cause);
-    }
+	public ConfigurationException(Throwable cause) {
+		super(cause);
+	}
 }

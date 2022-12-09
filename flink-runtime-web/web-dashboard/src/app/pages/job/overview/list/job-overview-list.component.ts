@@ -16,16 +16,9 @@
  * limitations under the License.
  */
 
-import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output } from '@angular/core';
-
-import { NodesItemCorrect } from '@flink-runtime-web/interfaces';
-import { NzTableSortFn } from 'ng-zorro-antd/table/src/table.types';
-
-function createSortFn(
-  selector: (item: NodesItemCorrect) => number | string | undefined
-): NzTableSortFn<NodesItemCorrect> {
-  return (pre, next) => (selector(pre)! > selector(next)! ? 1 : -1);
-}
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy, ElementRef } from '@angular/core';
+import { deepFind } from 'utils';
+import { NodesItemCorrectInterface } from 'interfaces';
 
 @Component({
   selector: 'flink-job-overview-list',
@@ -34,39 +27,50 @@ function createSortFn(
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class JobOverviewListComponent {
-  public readonly trackById = (_: number, node: NodesItemCorrect): string => node.id;
-
-  public readonly sortStatusFn = createSortFn(item => item.detail?.status);
-  public readonly sortReadBytesFn = createSortFn(item => item.detail?.metrics?.['read-bytes']);
-  public readonly sortReadRecordsFn = createSortFn(item => item.detail?.metrics?.['read-records']);
-  public readonly sortWriteBytesFn = createSortFn(item => item.detail?.metrics?.['write-bytes']);
-  public readonly sortWriteRecordsFn = createSortFn(item => item.detail?.metrics?.['write-records']);
-  public readonly sortParallelismFn = createSortFn(item => item.parallelism);
-  public readonly sortStartTimeFn = createSortFn(item => item.detail?.['start-time']);
-  public readonly sortDurationFn = createSortFn(item => item.detail?.duration);
-  public readonly sortEndTimeFn = createSortFn(item => item.detail?.['end-time']);
-
-  public innerNodes: NodesItemCorrect[] = [];
-  public sortName: string;
-  public sortValue: string;
-  public left = 390;
-
-  @Output() public readonly nodeClick = new EventEmitter<NodesItemCorrect>();
-
-  @Input() public selectedNode: NodesItemCorrect;
+  innerNodes: NodesItemCorrectInterface[] = [];
+  sortName: string;
+  sortValue: string;
+  left = 390;
+  @Output() nodeClick = new EventEmitter();
+  @Input() selectedNode: NodesItemCorrectInterface;
 
   @Input()
-  public set nodes(value: NodesItemCorrect[]) {
+  set nodes(value: NodesItemCorrectInterface[]) {
     this.innerNodes = value;
+    this.search();
   }
 
-  public get nodes(): NodesItemCorrect[] {
+  get nodes() {
     return this.innerNodes;
   }
 
-  constructor(public readonly elementRef: ElementRef) {}
+  sort(sort: { key: string; value: string }) {
+    this.sortName = sort.key;
+    this.sortValue = sort.value;
+    this.search();
+  }
 
-  public clickNode(node: NodesItemCorrect): void {
+  search() {
+    if (this.sortName) {
+      this.innerNodes = [
+        ...this.innerNodes.sort((pre, next) => {
+          if (this.sortValue === 'ascend') {
+            return deepFind(pre, this.sortName) > deepFind(next, this.sortName) ? 1 : -1;
+          } else {
+            return deepFind(next, this.sortName) > deepFind(pre, this.sortName) ? 1 : -1;
+          }
+        })
+      ];
+    }
+  }
+
+  trackJobBy(_: number, node: NodesItemCorrectInterface) {
+    return node.id;
+  }
+
+  clickNode(node: NodesItemCorrectInterface) {
     this.nodeClick.emit(node);
   }
+
+  constructor(public elementRef: ElementRef) {}
 }

@@ -18,55 +18,62 @@
 
 package org.apache.flink.streaming.connectors.elasticsearch.table;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.Schema;
+import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.catalog.CatalogTable;
-import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.CatalogTableImpl;
 import org.apache.flink.table.catalog.ObjectIdentifier;
-import org.apache.flink.table.catalog.ResolvedCatalogTable;
-import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.factories.DynamicTableFactory;
-import org.apache.flink.table.factories.FactoryUtil;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-/** A utility class for mocking {@link DynamicTableFactory.Context}. */
+/**
+ * A utility class for mocking {@link DynamicTableFactory.Context}.
+ */
 class TestContext {
+	private TableSchema schema;
+	private Map<String, String> properties = new HashMap<>();
 
-    private ResolvedSchema schema = ResolvedSchema.of(Column.physical("a", DataTypes.TIME()));
+	public static TestContext context() {
+		return new TestContext();
+	}
 
-    private final Map<String, String> options = new HashMap<>();
+	public TestContext withSchema(TableSchema schema) {
+		this.schema = schema;
+		return this;
+	}
 
-    public static TestContext context() {
-        return new TestContext();
-    }
+	DynamicTableFactory.Context build() {
+		return new DynamicTableFactory.Context() {
+			@Override
+			public ObjectIdentifier getObjectIdentifier() {
+				return null;
+			}
 
-    public TestContext withSchema(ResolvedSchema schema) {
-        this.schema = schema;
-        return this;
-    }
+			@Override
+			public CatalogTable getCatalogTable() {
+				return new CatalogTableImpl(
+					schema,
+					properties,
+					""
+				);
+			}
 
-    DynamicTableFactory.Context build() {
-        return new FactoryUtil.DefaultDynamicTableContext(
-                ObjectIdentifier.of("default", "default", "t1"),
-                new ResolvedCatalogTable(
-                        CatalogTable.of(
-                                Schema.newBuilder().fromResolvedSchema(schema).build(),
-                                "mock context",
-                                Collections.emptyList(),
-                                options),
-                        schema),
-                Collections.emptyMap(),
-                new Configuration(),
-                TestContext.class.getClassLoader(),
-                false);
-    }
+			@Override
+			public ReadableConfig getConfiguration() {
+				return null;
+			}
 
-    public TestContext withOption(String key, String value) {
-        options.put(key, value);
-        return this;
-    }
+			@Override
+			public ClassLoader getClassLoader() {
+				return TestContext.class.getClassLoader();
+			}
+		};
+	}
+
+	public TestContext withOption(String key, String value) {
+		properties.put(key, value);
+		return this;
+	}
 }

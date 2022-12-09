@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.io.network.buffer;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.memory.MemorySegment;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -29,216 +30,226 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /**
- * Not thread safe class for filling in the content of the {@link MemorySegment}. To access written
- * data please use {@link BufferConsumer} which allows to build {@link Buffer} instances from the
- * written data.
+ * Not thread safe class for filling in the content of the {@link MemorySegment}. To access written data please use
+ * {@link BufferConsumer} which allows to build {@link Buffer} instances from the written data.
  */
 @NotThreadSafe
-public class BufferBuilder implements AutoCloseable {
-    private final Buffer buffer;
-    private final MemorySegment memorySegment;
-    private int maxCapacity;
+public class BufferBuilder {
+	private final MemorySegment memorySegment;
 
-    private final SettablePositionMarker positionMarker = new SettablePositionMarker();
+	private final BufferRecycler recycler;
 
-    private boolean bufferConsumerCreated = false;
+	private int maxCapacity;
 
-    public BufferBuilder(MemorySegment memorySegment, BufferRecycler recycler) {
-        this.memorySegment = checkNotNull(memorySegment);
-        this.buffer = new NetworkBuffer(memorySegment, recycler);
-        this.maxCapacity = buffer.getMaxCapacity();
-    }
+	private final SettablePositionMarker positionMarker = new SettablePositionMarker();
 
-    /**
-     * This method always creates a {@link BufferConsumer} starting from the current writer offset.
-     * Data written to {@link BufferBuilder} before creation of {@link BufferConsumer} won't be
-     * visible for that {@link BufferConsumer}.
-     *
-     * @return created matching instance of {@link BufferConsumer} to this {@link BufferBuilder}.
-     */
-    public BufferConsumer createBufferConsumer() {
-        return createBufferConsumer(positionMarker.cachedPosition);
-    }
+	private boolean bufferConsumerCreated = false;
 
-    /**
-     * This method always creates a {@link BufferConsumer} starting from position 0 of {@link
-     * MemorySegment}.
-     *
-     * @return created matching instance of {@link BufferConsumer} to this {@link BufferBuilder}.
-     */
-    public BufferConsumer createBufferConsumerFromBeginning() {
-        return createBufferConsumer(0);
-    }
+	public BufferBuilder(MemorySegment memorySegment, BufferRecycler recycler) {
+		this.memorySegment = checkNotNull(memorySegment);
+		this.recycler = checkNotNull(recycler);
+		this.maxCapacity = memorySegment.size();
+	}
 
-    private BufferConsumer createBufferConsumer(int currentReaderPosition) {
-        checkState(
-                !bufferConsumerCreated, "Two BufferConsumer shouldn't exist for one BufferBuilder");
-        bufferConsumerCreated = true;
-        return new BufferConsumer(buffer.retainBuffer(), positionMarker, currentReaderPosition);
-    }
+	/**
+	 * This method always creates a {@link BufferConsumer} starting from the current writer offset. Data written to
+	 * {@link BufferBuilder} before creation of {@link BufferConsumer} won't be visible for that {@link BufferConsumer}.
+	 *
+	 * @return created matching instance of {@link BufferConsumer} to this {@link BufferBuilder}.
+	 */
+	public BufferConsumer createBufferConsumer() {
+		return createBufferConsumer(positionMarker.cachedPosition);
+	}
 
-    /** Same as {@link #append(ByteBuffer)} but additionally {@link #commit()} the appending. */
-    public int appendAndCommit(ByteBuffer source) {
-        int writtenBytes = append(source);
-        commit();
-        return writtenBytes;
-    }
+	/**
+	 * This method always creates a {@link BufferConsumer} starting from position 0 of {@link MemorySegment}.
+	 *
+	 * @return created matching instance of {@link BufferConsumer} to this {@link BufferBuilder}.
+	 */
+	public BufferConsumer createBufferConsumerFromBeginning() {
+		return createBufferConsumer(0);
+	}
 
-    /**
-     * Append as many data as possible from {@code source}. Not everything might be copied if there
-     * is not enough space in the underlying {@link MemorySegment}
-     *
-     * @return number of copied bytes
-     */
-    public int append(ByteBuffer source) {
-        checkState(!isFinished());
+	/**
+	 * Same as {@link #append(ByteBuffer)} but additionally {@link #commit()} the appending.
+	 */
+	public int appendAndCommit(ByteBuffer source) {
+		int writtenBytes = append(source);
+		commit();
+		return writtenBytes;
+	}
 
-        int needed = source.remaining();
-        int available = getMaxCapacity() - positionMarker.getCached();
-        int toCopy = Math.min(needed, available);
+	/**
+	 * Append as many data as possible from {@code source}. Not everything might be copied if there is not enough
+	 * space in the underlying {@link MemorySegment}
+	 *
+	 * @return number of copied bytes
+	 */
+	public int append(ByteBuffer source) {
+		checkState(!isFinished());
 
-        memorySegment.put(positionMarker.getCached(), source, toCopy);
-        positionMarker.move(toCopy);
-        return toCopy;
-    }
+		int needed = source.remaining();
+		int available = getMaxCapacity() - positionMarker.getCached();
+		int toCopy = Math.min(needed, available);
 
-    /**
-     * Make the change visible to the readers. This is costly operation (volatile access) thus in
-     * case of bulk writes it's better to commit them all together instead one by one.
-     */
-    public void commit() {
-        positionMarker.commit();
-    }
+		memorySegment.put(positionMarker.getCached(), source, toCopy);
+		positionMarker.move(toCopy);
+		return toCopy;
+	}
 
-    /**
-     * Mark this {@link BufferBuilder} and associated {@link BufferConsumer} as finished - no new
-     * data writes will be allowed.
-     *
-     * <p>This method should be idempotent to handle failures and task interruptions. Check
-     * FLINK-8948 for more details.
-     *
-     * @return number of written bytes.
-     */
-    public int finish() {
-        int writtenBytes = positionMarker.markFinished();
-        commit();
-        return writtenBytes;
-    }
+	/**
+	 * Make the change visible to the readers. This is costly operation (volatile access) thus in case of bulk writes
+	 * it's better to commit them all together instead one by one.
+	 */
+	public void commit() {
+		positionMarker.commit();
+	}
 
-    public boolean isFinished() {
-        return positionMarker.isFinished();
-    }
+	/**
+	 * Mark this {@link BufferBuilder} and associated {@link BufferConsumer} as finished - no new data writes will be
+	 * allowed.
+	 *
+	 * <p>This method should be idempotent to handle failures and task interruptions. Check FLINK-8948 for more details.
+	 *
+	 * @return number of written bytes.
+	 */
+	public int finish() {
+		int writtenBytes = positionMarker.markFinished();
+		commit();
+		return writtenBytes;
+	}
 
-    public boolean isFull() {
-        checkState(positionMarker.getCached() <= getMaxCapacity());
-        return positionMarker.getCached() == getMaxCapacity();
-    }
+	public boolean isFinished() {
+		return positionMarker.isFinished();
+	}
 
-    public int getWritableBytes() {
-        checkState(positionMarker.getCached() <= getMaxCapacity());
-        return getMaxCapacity() - positionMarker.getCached();
-    }
+	public boolean isFull() {
+		checkState(positionMarker.getCached() <= getMaxCapacity());
+		return positionMarker.getCached() == getMaxCapacity();
+	}
 
-    public int getCommittedBytes() {
-        return positionMarker.getCached();
-    }
+	public int getWritableBytes() {
+		checkState(positionMarker.getCached() <= getMaxCapacity());
+		return getMaxCapacity() - positionMarker.getCached();
+	}
 
-    public int getMaxCapacity() {
-        return maxCapacity;
-    }
+	public int getCommittedBytes() {
+		return positionMarker.getCached();
+	}
 
-    /**
-     * The result capacity can not be greater than allocated memorySegment. It also can not be less
-     * than already written data.
-     */
-    public void trim(int newSize) {
-        maxCapacity =
-                Math.min(Math.max(newSize, positionMarker.getCached()), buffer.getMaxCapacity());
-    }
+	public int getMaxCapacity() {
+		return this.maxCapacity;
+	}
 
-    @Override
-    public void close() {
-        buffer.recycleBuffer();
-    }
+	/**
+	 * The result capacity can not be greater than allocated memorySegment. It also can not be less
+	 * than already written data.
+	 */
+	public void trim(int newSize) {
+		maxCapacity =
+				Math.min(Math.max(newSize, positionMarker.getCached()), memorySegment.size());
+	}
 
-    /**
-     * Holds a reference to the current writer position. Negative values indicate that writer
-     * ({@link BufferBuilder} has finished. Value {@code Integer.MIN_VALUE} represents finished
-     * empty buffer.
-     */
-    @ThreadSafe
-    interface PositionMarker {
-        int FINISHED_EMPTY = Integer.MIN_VALUE;
+	@VisibleForTesting
+	public BufferRecycler getRecycler() {
+		return recycler;
+	}
 
-        int get();
+	public void recycle() {
+		recycler.recycle(memorySegment);
+	}
 
-        static boolean isFinished(int position) {
-            return position < 0;
-        }
+	@VisibleForTesting
+	public MemorySegment getMemorySegment() {
+		return memorySegment;
+	}
 
-        static int getAbsolute(int position) {
-            if (position == FINISHED_EMPTY) {
-                return 0;
-            }
-            return Math.abs(position);
-        }
-    }
+	private BufferConsumer createBufferConsumer(int currentReaderPosition) {
+		checkState(!bufferConsumerCreated, "Two BufferConsumer shouldn't exist for one BufferBuilder");
+		bufferConsumerCreated = true;
+		return new BufferConsumer(
+				memorySegment,
+				recycler,
+				positionMarker,
+				currentReaderPosition);
+	}
 
-    /**
-     * Cached writing implementation of {@link PositionMarker}.
-     *
-     * <p>Writer ({@link BufferBuilder}) and reader ({@link BufferConsumer}) caches must be
-     * implemented independently of one another - so that the cached values can not accidentally
-     * leak from one to another.
-     *
-     * <p>Remember to commit the {@link SettablePositionMarker} to make the changes visible.
-     */
-    static class SettablePositionMarker implements PositionMarker {
-        private volatile int position = 0;
+	/**
+	 * Holds a reference to the current writer position. Negative values indicate that writer ({@link BufferBuilder}
+	 * has finished. Value {@code Integer.MIN_VALUE} represents finished empty buffer.
+	 */
+	@ThreadSafe
+	interface PositionMarker {
+		int FINISHED_EMPTY = Integer.MIN_VALUE;
 
-        /**
-         * Locally cached value of volatile {@code position} to avoid unnecessary volatile accesses.
-         */
-        private int cachedPosition = 0;
+		int get();
 
-        @Override
-        public int get() {
-            return position;
-        }
+		static boolean isFinished(int position) {
+			return position < 0;
+		}
 
-        public boolean isFinished() {
-            return PositionMarker.isFinished(cachedPosition);
-        }
+		static int getAbsolute(int position) {
+			if (position == FINISHED_EMPTY) {
+				return 0;
+			}
+			return Math.abs(position);
+		}
+	}
 
-        public int getCached() {
-            return PositionMarker.getAbsolute(cachedPosition);
-        }
+	/**
+	 * Cached writing implementation of {@link PositionMarker}.
+	 *
+	 * <p>Writer ({@link BufferBuilder}) and reader ({@link BufferConsumer}) caches must be implemented independently
+	 * of one another - so that the cached values can not accidentally leak from one to another.
+	 *
+	 * <p>Remember to commit the {@link SettablePositionMarker} to make the changes visible.
+	 */
+	static class SettablePositionMarker implements PositionMarker {
+		private volatile int position = 0;
 
-        /**
-         * Marks this position as finished and returns the current position.
-         *
-         * @return current position as of {@link #getCached()}
-         */
-        public int markFinished() {
-            int currentPosition = getCached();
-            int newValue = -currentPosition;
-            if (newValue == 0) {
-                newValue = FINISHED_EMPTY;
-            }
-            set(newValue);
-            return currentPosition;
-        }
+		/**
+		 * Locally cached value of volatile {@code position} to avoid unnecessary volatile accesses.
+		 */
+		private int cachedPosition = 0;
 
-        public void move(int offset) {
-            set(cachedPosition + offset);
-        }
+		@Override
+		public int get() {
+			return position;
+		}
 
-        public void set(int value) {
-            cachedPosition = value;
-        }
+		public boolean isFinished() {
+			return PositionMarker.isFinished(cachedPosition);
+		}
 
-        public void commit() {
-            position = cachedPosition;
-        }
-    }
+		public int getCached() {
+			return PositionMarker.getAbsolute(cachedPosition);
+		}
+
+		/**
+		 * Marks this position as finished and returns the current position.
+		 *
+		 * @return current position as of {@link #getCached()}
+		 */
+		public int markFinished() {
+			int currentPosition = getCached();
+			int newValue = -currentPosition;
+			if (newValue == 0) {
+				newValue = FINISHED_EMPTY;
+			}
+			set(newValue);
+			return currentPosition;
+		}
+
+		public void move(int offset) {
+			set(cachedPosition + offset);
+		}
+
+		public void set(int value) {
+			cachedPosition = value;
+		}
+
+		public void commit() {
+			position = cachedPosition;
+		}
+	}
 }

@@ -19,10 +19,10 @@ package org.apache.flink.api.scala.operators
 
 import org.apache.flink.api.common.InvalidProgramException
 import org.apache.flink.api.common.operators.Order
-import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.ExecutionEnvironment
-
 import org.junit.{Assert, Test}
+
+import org.apache.flink.api.scala._
 
 class FirstNOperatorTest {
 
@@ -36,14 +36,16 @@ class FirstNOperatorTest {
 
     try {
       tupleDs.first(1)
-    } catch {
+    }
+    catch {
       case e: Exception => {
         Assert.fail()
       }
     }
     try {
       tupleDs.first(10)
-    } catch {
+    }
+    catch {
       case e: Exception => {
         Assert.fail()
       }
@@ -51,8 +53,10 @@ class FirstNOperatorTest {
     try {
       tupleDs.first(0)
       Assert.fail()
-    } catch {
-      case ipe: InvalidProgramException => {}
+    }
+    catch {
+      case ipe: InvalidProgramException => {
+      }
       case e: Exception => {
         Assert.fail()
       }
@@ -60,8 +64,10 @@ class FirstNOperatorTest {
     try {
       tupleDs.first(-1)
       Assert.fail()
-    } catch {
-      case ipe: InvalidProgramException => {}
+    }
+    catch {
+      case ipe: InvalidProgramException => {
+      }
       case e: Exception => {
         Assert.fail()
       }
@@ -75,14 +81,16 @@ class FirstNOperatorTest {
 
     try {
       tupleDs.groupBy(2).first(1)
-    } catch {
+    }
+    catch {
       case e: Exception => {
         Assert.fail()
       }
     }
     try {
       tupleDs.groupBy(1, 3).first(10)
-    } catch {
+    }
+    catch {
       case e: Exception => {
         Assert.fail()
       }
@@ -90,8 +98,10 @@ class FirstNOperatorTest {
     try {
       tupleDs.groupBy(0).first(0)
       Assert.fail()
-    } catch {
-      case ipe: InvalidProgramException => {}
+    }
+    catch {
+      case ipe: InvalidProgramException => {
+      }
       case e: Exception => {
         Assert.fail()
       }
@@ -99,8 +109,10 @@ class FirstNOperatorTest {
     try {
       tupleDs.groupBy(2).first(-1)
       Assert.fail()
-    } catch {
-      case ipe: InvalidProgramException => {}
+    }
+    catch {
+      case ipe: InvalidProgramException => {
+      }
       case e: Exception => {
         Assert.fail()
       }
@@ -111,17 +123,19 @@ class FirstNOperatorTest {
   def testGroupedSortedFirstN(): Unit = {
     val env = ExecutionEnvironment.getExecutionEnvironment
     val tupleDs = env.fromCollection(emptyTupleData)
-
+    
     try {
       tupleDs.groupBy(2).sortGroup(4, Order.ASCENDING).first(1)
-    } catch {
+    }
+    catch {
       case e: Exception => {
         Assert.fail()
       }
     }
     try {
       tupleDs.groupBy(1, 3).sortGroup(4, Order.ASCENDING).first(10)
-    } catch {
+    }
+    catch {
       case e: Exception => {
         Assert.fail()
       }
@@ -129,8 +143,10 @@ class FirstNOperatorTest {
     try {
       tupleDs.groupBy(0).sortGroup(4, Order.ASCENDING).first(0)
       Assert.fail()
-    } catch {
-      case ipe: InvalidProgramException => {}
+    }
+    catch {
+      case ipe: InvalidProgramException => {
+      }
       case e: Exception => {
         Assert.fail()
       }
@@ -138,8 +154,10 @@ class FirstNOperatorTest {
     try {
       tupleDs.groupBy(2).sortGroup(4, Order.ASCENDING).first(-1)
       Assert.fail()
-    } catch {
-      case ipe: InvalidProgramException => {}
+    }
+    catch {
+      case ipe: InvalidProgramException => {
+      }
       case e: Exception => {
         Assert.fail()
       }
@@ -147,3 +165,4 @@ class FirstNOperatorTest {
   }
 
 }
+

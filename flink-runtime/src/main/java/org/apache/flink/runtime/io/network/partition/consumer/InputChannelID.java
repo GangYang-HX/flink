@@ -22,38 +22,33 @@ import org.apache.flink.util.AbstractID;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
-/** Identifier for input channels. */
+/**
+ * Identifier for input channels.
+ */
 public class InputChannelID extends AbstractID {
 
-    private static final long serialVersionUID = 1L;
-    // Represent the number of bytes occupied when writes InputChannelID to the ByteBuf.
-    // It is the sum of two long types(lowerPart and upperPart).
-    private static final int BYTEBUF_LEN = 16;
+	private static final long serialVersionUID = 1L;
 
-    public InputChannelID() {
-        super();
-    }
+	public InputChannelID() {
+		super();
+	}
 
-    public InputChannelID(long lowerPart, long upperPart) {
-        super(lowerPart, upperPart);
-    }
+	public InputChannelID(long lowerPart, long upperPart) {
+		super(lowerPart, upperPart);
+	}
 
-    public InputChannelID(AbstractID id) {
-        super(id);
-    }
+	public InputChannelID(AbstractID id) {
+		super(id);
+	}
 
-    public void writeTo(ByteBuf buf) {
-        buf.writeLong(this.lowerPart);
-        buf.writeLong(this.upperPart);
-    }
+	public void writeTo(ByteBuf buf) {
+		buf.writeLong(this.lowerPart);
+		buf.writeLong(this.upperPart);
+	}
 
-    public static InputChannelID fromByteBuf(ByteBuf buf) {
-        long lower = buf.readLong();
-        long upper = buf.readLong();
-        return new InputChannelID(lower, upper);
-    }
-
-    public static int getByteBufLength() {
-        return BYTEBUF_LEN;
-    }
+	public static InputChannelID fromByteBuf(ByteBuf buf) {
+		long lower = buf.readLong();
+		long upper = buf.readLong();
+		return new InputChannelID(lower, upper);
+	}
 }

@@ -74,355 +74,329 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * This traversal creates the optimizer DAG from a program. It works as a visitor that walks the
- * program's flow in a depth-first fashion, starting from the data sinks. During the descent it
- * creates an optimizer node for each operator, respectively data source or sink. During the ascent
- * it connects the nodes to the full graph.
+ * This traversal creates the optimizer DAG from a program.
+ * It works as a visitor that walks the program's flow in a depth-first fashion, starting from the data sinks.
+ * During the descent it creates an optimizer node for each operator, respectively data source or sink.
+ * During the ascent it connects the nodes to the full graph.
  */
 public class GraphCreatingVisitor implements Visitor<Operator<?>> {
 
-    private final Map<Operator<?>, OptimizerNode>
-            con2node; // map from the operator objects to their
-    // corresponding optimizer nodes
+	private final Map<Operator<?>, OptimizerNode> con2node; // map from the operator objects to their
+															// corresponding optimizer nodes
 
-    private final List<DataSinkNode> sinks; // all data sink nodes in the optimizer plan
+	private final List<DataSinkNode> sinks; // all data sink nodes in the optimizer plan
 
-    private final int defaultParallelism; // the default parallelism
+	private final int defaultParallelism; // the default parallelism
 
-    private final GraphCreatingVisitor
-            parent; // reference to enclosing creator, in case of a recursive translation
+	private final GraphCreatingVisitor parent;	// reference to enclosing creator, in case of a recursive translation
 
-    private final ExecutionMode defaultDataExchangeMode;
+	private final ExecutionMode defaultDataExchangeMode;
 
-    private final boolean forceParallelism;
+	private final boolean forceParallelism;
 
-    public GraphCreatingVisitor(int defaultParallelism, ExecutionMode defaultDataExchangeMode) {
-        this(null, false, defaultParallelism, defaultDataExchangeMode, null);
-    }
 
-    private GraphCreatingVisitor(
-            GraphCreatingVisitor parent,
-            boolean forceParallelism,
-            int defaultParallelism,
-            ExecutionMode dataExchangeMode,
-            HashMap<Operator<?>, OptimizerNode> closure) {
-        if (closure == null) {
-            con2node = new HashMap<Operator<?>, OptimizerNode>();
-        } else {
-            con2node = closure;
-        }
+	public GraphCreatingVisitor(int defaultParallelism, ExecutionMode defaultDataExchangeMode) {
+		this(null, false, defaultParallelism, defaultDataExchangeMode, null);
+	}
 
-        this.sinks = new ArrayList<DataSinkNode>(2);
-        this.defaultParallelism = defaultParallelism;
-        this.parent = parent;
-        this.defaultDataExchangeMode = dataExchangeMode;
-        this.forceParallelism = forceParallelism;
-    }
+	private GraphCreatingVisitor(GraphCreatingVisitor parent, boolean forceParallelism, int defaultParallelism,
+									ExecutionMode dataExchangeMode, HashMap<Operator<?>, OptimizerNode> closure) {
+		if (closure == null){
+			con2node = new HashMap<Operator<?>, OptimizerNode>();
+		} else {
+			con2node = closure;
+		}
 
-    public List<DataSinkNode> getSinks() {
-        return sinks;
-    }
+		this.sinks = new ArrayList<DataSinkNode>(2);
+		this.defaultParallelism = defaultParallelism;
+		this.parent = parent;
+		this.defaultDataExchangeMode = dataExchangeMode;
+		this.forceParallelism = forceParallelism;
+	}
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public boolean preVisit(Operator<?> c) {
-        // check if we have been here before
-        if (this.con2node.containsKey(c)) {
-            return false;
-        }
+	public List<DataSinkNode> getSinks() {
+		return sinks;
+	}
 
-        final OptimizerNode n;
+	@SuppressWarnings("deprecation")
+	@Override
+	public boolean preVisit(Operator<?> c) {
+		// check if we have been here before
+		if (this.con2node.containsKey(c)) {
+			return false;
+		}
 
-        // create a node for the operator (or sink or source) if we have not been here before
-        if (c instanceof GenericDataSinkBase) {
-            DataSinkNode dsn = new DataSinkNode((GenericDataSinkBase<?>) c);
-            this.sinks.add(dsn);
-            n = dsn;
-        } else if (c instanceof GenericDataSourceBase) {
-            n = new DataSourceNode((GenericDataSourceBase<?, ?>) c);
-        } else if (c instanceof MapOperatorBase) {
-            n = new MapNode((MapOperatorBase<?, ?, ?>) c);
-        } else if (c instanceof MapPartitionOperatorBase) {
-            n = new MapPartitionNode((MapPartitionOperatorBase<?, ?, ?>) c);
-        } else if (c instanceof FlatMapOperatorBase) {
-            n = new FlatMapNode((FlatMapOperatorBase<?, ?, ?>) c);
-        } else if (c instanceof FilterOperatorBase) {
-            n = new FilterNode((FilterOperatorBase<?, ?>) c);
-        } else if (c instanceof ReduceOperatorBase) {
-            n = new ReduceNode((ReduceOperatorBase<?, ?>) c);
-        } else if (c instanceof GroupCombineOperatorBase) {
-            n = new GroupCombineNode((GroupCombineOperatorBase<?, ?, ?>) c);
-        } else if (c instanceof GroupReduceOperatorBase) {
-            n = new GroupReduceNode((GroupReduceOperatorBase<?, ?, ?>) c);
-        } else if (c instanceof InnerJoinOperatorBase) {
-            n = new JoinNode((InnerJoinOperatorBase<?, ?, ?, ?>) c);
-        } else if (c instanceof OuterJoinOperatorBase) {
-            n = new OuterJoinNode((OuterJoinOperatorBase<?, ?, ?, ?>) c);
-        } else if (c instanceof CoGroupOperatorBase) {
-            n = new CoGroupNode((CoGroupOperatorBase<?, ?, ?, ?>) c);
-        } else if (c instanceof CoGroupRawOperatorBase) {
-            n = new CoGroupRawNode((CoGroupRawOperatorBase<?, ?, ?, ?>) c);
-        } else if (c instanceof CrossOperatorBase) {
-            n = new CrossNode((CrossOperatorBase<?, ?, ?, ?>) c);
-        } else if (c instanceof BulkIterationBase) {
-            n = new BulkIterationNode((BulkIterationBase<?>) c);
-        } else if (c instanceof DeltaIterationBase) {
-            n = new WorksetIterationNode((DeltaIterationBase<?, ?>) c);
-        } else if (c instanceof Union) {
-            n = new BinaryUnionNode((Union<?>) c);
-        } else if (c instanceof PartitionOperatorBase) {
-            n = new PartitionNode((PartitionOperatorBase<?>) c);
-        } else if (c instanceof SortPartitionOperatorBase) {
-            n = new SortPartitionNode((SortPartitionOperatorBase<?>) c);
-        } else if (c instanceof BulkIterationBase.PartialSolutionPlaceHolder) {
-            if (this.parent == null) {
-                throw new InvalidProgramException(
-                        "It is currently not supported to create data sinks inside iterations.");
-            }
+		final OptimizerNode n;
 
-            final BulkIterationBase.PartialSolutionPlaceHolder<?> holder =
-                    (BulkIterationBase.PartialSolutionPlaceHolder<?>) c;
-            final BulkIterationBase<?> enclosingIteration = holder.getContainingBulkIteration();
-            final BulkIterationNode containingIterationNode =
-                    (BulkIterationNode) this.parent.con2node.get(enclosingIteration);
+		// create a node for the operator (or sink or source) if we have not been here before
+		if (c instanceof GenericDataSinkBase) {
+			DataSinkNode dsn = new DataSinkNode((GenericDataSinkBase<?>) c);
+			this.sinks.add(dsn);
+			n = dsn;
+		}
+		else if (c instanceof GenericDataSourceBase) {
+			n = new DataSourceNode((GenericDataSourceBase<?, ?>) c);
+		}
+		else if (c instanceof MapOperatorBase) {
+			n = new MapNode((MapOperatorBase<?, ?, ?>) c);
+		}
+		else if (c instanceof MapPartitionOperatorBase) {
+			n = new MapPartitionNode((MapPartitionOperatorBase<?, ?, ?>) c);
+		}
+		else if (c instanceof FlatMapOperatorBase) {
+			n = new FlatMapNode((FlatMapOperatorBase<?, ?, ?>) c);
+		}
+		else if (c instanceof FilterOperatorBase) {
+			n = new FilterNode((FilterOperatorBase<?, ?>) c);
+		}
+		else if (c instanceof ReduceOperatorBase) {
+			n = new ReduceNode((ReduceOperatorBase<?, ?>) c);
+		}
+		else if (c instanceof GroupCombineOperatorBase) {
+			n = new GroupCombineNode((GroupCombineOperatorBase<?, ?, ?>) c);
+		}
+		else if (c instanceof GroupReduceOperatorBase) {
+			n = new GroupReduceNode((GroupReduceOperatorBase<?, ?, ?>) c);
+		}
+		else if (c instanceof InnerJoinOperatorBase) {
+			n = new JoinNode((InnerJoinOperatorBase<?, ?, ?, ?>) c);
+		}
+		else if (c instanceof OuterJoinOperatorBase) {
+			n = new OuterJoinNode((OuterJoinOperatorBase<?, ?, ?, ?>) c);
+		}
+		else if (c instanceof CoGroupOperatorBase) {
+			n = new CoGroupNode((CoGroupOperatorBase<?, ?, ?, ?>) c);
+		}
+		else if (c instanceof CoGroupRawOperatorBase) {
+			n = new CoGroupRawNode((CoGroupRawOperatorBase<?, ?, ?, ?>) c);
+		}
+		else if (c instanceof CrossOperatorBase) {
+			n = new CrossNode((CrossOperatorBase<?, ?, ?, ?>) c);
+		}
+		else if (c instanceof BulkIterationBase) {
+			n = new BulkIterationNode((BulkIterationBase<?>) c);
+		}
+		else if (c instanceof DeltaIterationBase) {
+			n = new WorksetIterationNode((DeltaIterationBase<?, ?>) c);
+		}
+		else if (c instanceof Union){
+			n = new BinaryUnionNode((Union<?>) c);
+		}
+		else if (c instanceof PartitionOperatorBase) {
+			n = new PartitionNode((PartitionOperatorBase<?>) c);
+		}
+		else if (c instanceof SortPartitionOperatorBase) {
+			n = new SortPartitionNode((SortPartitionOperatorBase<?>) c);
+		}
+		else if (c instanceof BulkIterationBase.PartialSolutionPlaceHolder) {
+			if (this.parent == null) {
+				throw new InvalidProgramException("It is currently not supported to create data sinks inside iterations.");
+			}
 
-            // catch this for the recursive translation of step functions
-            BulkPartialSolutionNode p =
-                    new BulkPartialSolutionNode(holder, containingIterationNode);
-            p.setParallelism(containingIterationNode.getParallelism());
-            n = p;
-        } else if (c instanceof DeltaIterationBase.WorksetPlaceHolder) {
-            if (this.parent == null) {
-                throw new InvalidProgramException(
-                        "It is currently not supported to create data sinks inside iterations.");
-            }
+			final BulkIterationBase.PartialSolutionPlaceHolder<?> holder = (BulkIterationBase.PartialSolutionPlaceHolder<?>) c;
+			final BulkIterationBase<?> enclosingIteration = holder.getContainingBulkIteration();
+			final BulkIterationNode containingIterationNode =
+						(BulkIterationNode) this.parent.con2node.get(enclosingIteration);
 
-            final DeltaIterationBase.WorksetPlaceHolder<?> holder =
-                    (DeltaIterationBase.WorksetPlaceHolder<?>) c;
-            final DeltaIterationBase<?, ?> enclosingIteration =
-                    holder.getContainingWorksetIteration();
-            final WorksetIterationNode containingIterationNode =
-                    (WorksetIterationNode) this.parent.con2node.get(enclosingIteration);
+			// catch this for the recursive translation of step functions
+			BulkPartialSolutionNode p = new BulkPartialSolutionNode(holder, containingIterationNode);
+			p.setParallelism(containingIterationNode.getParallelism());
+			n = p;
+		}
+		else if (c instanceof DeltaIterationBase.WorksetPlaceHolder) {
+			if (this.parent == null) {
+				throw new InvalidProgramException("It is currently not supported to create data sinks inside iterations.");
+			}
 
-            // catch this for the recursive translation of step functions
-            WorksetNode p = new WorksetNode(holder, containingIterationNode);
-            p.setParallelism(containingIterationNode.getParallelism());
-            n = p;
-        } else if (c instanceof DeltaIterationBase.SolutionSetPlaceHolder) {
-            if (this.parent == null) {
-                throw new InvalidProgramException(
-                        "It is currently not supported to create data sinks inside iterations.");
-            }
+			final DeltaIterationBase.WorksetPlaceHolder<?> holder = (DeltaIterationBase.WorksetPlaceHolder<?>) c;
+			final DeltaIterationBase<?, ?> enclosingIteration = holder.getContainingWorksetIteration();
+			final WorksetIterationNode containingIterationNode =
+						(WorksetIterationNode) this.parent.con2node.get(enclosingIteration);
 
-            final DeltaIterationBase.SolutionSetPlaceHolder<?> holder =
-                    (DeltaIterationBase.SolutionSetPlaceHolder<?>) c;
-            final DeltaIterationBase<?, ?> enclosingIteration =
-                    holder.getContainingWorksetIteration();
-            final WorksetIterationNode containingIterationNode =
-                    (WorksetIterationNode) this.parent.con2node.get(enclosingIteration);
+			// catch this for the recursive translation of step functions
+			WorksetNode p = new WorksetNode(holder, containingIterationNode);
+			p.setParallelism(containingIterationNode.getParallelism());
+			n = p;
+		}
+		else if (c instanceof DeltaIterationBase.SolutionSetPlaceHolder) {
+			if (this.parent == null) {
+				throw new InvalidProgramException("It is currently not supported to create data sinks inside iterations.");
+			}
 
-            // catch this for the recursive translation of step functions
-            SolutionSetNode p = new SolutionSetNode(holder, containingIterationNode);
-            p.setParallelism(containingIterationNode.getParallelism());
-            n = p;
-        } else {
-            throw new IllegalArgumentException("Unknown operator type: " + c);
-        }
+			final DeltaIterationBase.SolutionSetPlaceHolder<?> holder = (DeltaIterationBase.SolutionSetPlaceHolder<?>) c;
+			final DeltaIterationBase<?, ?> enclosingIteration = holder.getContainingWorksetIteration();
+			final WorksetIterationNode containingIterationNode =
+						(WorksetIterationNode) this.parent.con2node.get(enclosingIteration);
 
-        this.con2node.put(c, n);
+			// catch this for the recursive translation of step functions
+			SolutionSetNode p = new SolutionSetNode(holder, containingIterationNode);
+			p.setParallelism(containingIterationNode.getParallelism());
+			n = p;
+		}
+		else {
+			throw new IllegalArgumentException("Unknown operator type: " + c);
+		}
 
-        // set the parallelism only if it has not been set before. some nodes have a fixed
-        // parallelism, such as the
-        // key-less reducer (all-reduce)
-        if (n.getParallelism() < 1) {
-            // set the parallelism
-            int par = c.getParallelism();
-            if (n instanceof BinaryUnionNode) {
-                // Keep parallelism of union undefined for now.
-                // It will be determined based on the parallelism of its successor.
-                par = -1;
-            } else if (par > 0) {
-                if (this.forceParallelism && par != this.defaultParallelism) {
-                    par = this.defaultParallelism;
-                    Optimizer.LOG.warn(
-                            "The parallelism of nested dataflows (such as step functions in iterations) is "
-                                    + "currently fixed to the parallelism of the surrounding operator (the iteration).");
-                }
-            } else {
-                par = this.defaultParallelism;
-            }
-            n.setParallelism(par);
-        }
+		this.con2node.put(c, n);
 
-        return true;
-    }
+		// set the parallelism only if it has not been set before. some nodes have a fixed parallelism, such as the
+		// key-less reducer (all-reduce)
+		if (n.getParallelism() < 1) {
+			// set the parallelism
+			int par = c.getParallelism();
+			if (n instanceof BinaryUnionNode) {
+				// Keep parallelism of union undefined for now.
+				// It will be determined based on the parallelism of its successor.
+				par = -1;
+			} else if (par > 0) {
+				if (this.forceParallelism && par != this.defaultParallelism) {
+					par = this.defaultParallelism;
+					Optimizer.LOG.warn("The parallelism of nested dataflows (such as step functions in iterations) is " +
+						"currently fixed to the parallelism of the surrounding operator (the iteration).");
+				}
+			} else {
+				par = this.defaultParallelism;
+			}
+			n.setParallelism(par);
+		}
 
-    @Override
-    public void postVisit(Operator<?> c) {
+		return true;
+	}
 
-        OptimizerNode n = this.con2node.get(c);
+	@Override
+	public void postVisit(Operator<?> c) {
 
-        // first connect to the predecessors
-        n.setInput(this.con2node, this.defaultDataExchangeMode);
-        n.setBroadcastInputs(this.con2node, this.defaultDataExchangeMode);
+		OptimizerNode n = this.con2node.get(c);
 
-        // if the node represents a bulk iteration, we recursively translate the data flow now
-        if (n instanceof BulkIterationNode) {
-            final BulkIterationNode iterNode = (BulkIterationNode) n;
-            final BulkIterationBase<?> iter = iterNode.getIterationContract();
+		// first connect to the predecessors
+		n.setInput(this.con2node, this.defaultDataExchangeMode);
+		n.setBroadcastInputs(this.con2node, this.defaultDataExchangeMode);
 
-            // pass a copy of the no iterative part into the iteration translation,
-            // in case the iteration references its closure
-            HashMap<Operator<?>, OptimizerNode> closure =
-                    new HashMap<Operator<?>, OptimizerNode>(con2node);
+		// if the node represents a bulk iteration, we recursively translate the data flow now
+		if (n instanceof BulkIterationNode) {
+			final BulkIterationNode iterNode = (BulkIterationNode) n;
+			final BulkIterationBase<?> iter = iterNode.getIterationContract();
 
-            // first, recursively build the data flow for the step function
-            final GraphCreatingVisitor recursiveCreator =
-                    new GraphCreatingVisitor(
-                            this,
-                            true,
-                            iterNode.getParallelism(),
-                            defaultDataExchangeMode,
-                            closure);
+			// pass a copy of the no iterative part into the iteration translation,
+			// in case the iteration references its closure
+			HashMap<Operator<?>, OptimizerNode> closure = new HashMap<Operator<?>, OptimizerNode>(con2node);
 
-            BulkPartialSolutionNode partialSolution;
+			// first, recursively build the data flow for the step function
+			final GraphCreatingVisitor recursiveCreator = new GraphCreatingVisitor(this, true,
+				iterNode.getParallelism(), defaultDataExchangeMode, closure);
 
-            iter.getNextPartialSolution().accept(recursiveCreator);
+			BulkPartialSolutionNode partialSolution;
 
-            partialSolution =
-                    (BulkPartialSolutionNode)
-                            recursiveCreator.con2node.get(iter.getPartialSolution());
-            OptimizerNode rootOfStepFunction =
-                    recursiveCreator.con2node.get(iter.getNextPartialSolution());
-            if (partialSolution == null) {
-                throw new CompilerException(
-                        "Error: The step functions result does not depend on the partial solution.");
-            }
+			iter.getNextPartialSolution().accept(recursiveCreator);
 
-            OptimizerNode terminationCriterion = null;
+			partialSolution =  (BulkPartialSolutionNode) recursiveCreator.con2node.get(iter.getPartialSolution());
+			OptimizerNode rootOfStepFunction = recursiveCreator.con2node.get(iter.getNextPartialSolution());
+			if (partialSolution == null) {
+				throw new CompilerException("Error: The step functions result does not depend on the partial solution.");
+			}
 
-            if (iter.getTerminationCriterion() != null) {
-                terminationCriterion =
-                        recursiveCreator.con2node.get(iter.getTerminationCriterion());
 
-                // no intermediate node yet, traverse from the termination criterion to build the
-                // missing parts
-                if (terminationCriterion == null) {
-                    iter.getTerminationCriterion().accept(recursiveCreator);
-                    terminationCriterion =
-                            recursiveCreator.con2node.get(iter.getTerminationCriterion());
-                }
-            }
+			OptimizerNode terminationCriterion = null;
 
-            iterNode.setPartialSolution(partialSolution);
-            iterNode.setNextPartialSolution(rootOfStepFunction, terminationCriterion);
+			if (iter.getTerminationCriterion() != null) {
+				terminationCriterion = recursiveCreator.con2node.get(iter.getTerminationCriterion());
 
-            // go over the contained data flow and mark the dynamic path nodes
-            StaticDynamicPathIdentifier identifier =
-                    new StaticDynamicPathIdentifier(iterNode.getCostWeight());
-            iterNode.acceptForStepFunction(identifier);
-        } else if (n instanceof WorksetIterationNode) {
-            final WorksetIterationNode iterNode = (WorksetIterationNode) n;
-            final DeltaIterationBase<?, ?> iter = iterNode.getIterationContract();
+				// no intermediate node yet, traverse from the termination criterion to build the missing parts
+				if (terminationCriterion == null) {
+					iter.getTerminationCriterion().accept(recursiveCreator);
+					terminationCriterion = recursiveCreator.con2node.get(iter.getTerminationCriterion());
+				}
+			}
 
-            // we need to ensure that both the next-workset and the solution-set-delta depend on the
-            // workset.
-            // One check is for free during the translation, we do the other check here as a
-            // pre-condition
-            {
-                StepFunctionValidator wsf = new StepFunctionValidator();
-                iter.getNextWorkset().accept(wsf);
-                if (!wsf.hasFoundWorkset()) {
-                    throw new CompilerException(
-                            "In the given program, the next workset does not depend on the workset. "
-                                    + "This is a prerequisite in delta iterations.");
-                }
-            }
+			iterNode.setPartialSolution(partialSolution);
+			iterNode.setNextPartialSolution(rootOfStepFunction, terminationCriterion);
 
-            // calculate the closure of the anonymous function
-            HashMap<Operator<?>, OptimizerNode> closure =
-                    new HashMap<Operator<?>, OptimizerNode>(con2node);
+			// go over the contained data flow and mark the dynamic path nodes
+			StaticDynamicPathIdentifier identifier = new StaticDynamicPathIdentifier(iterNode.getCostWeight());
+			iterNode.acceptForStepFunction(identifier);
+		}
+		else if (n instanceof WorksetIterationNode) {
+			final WorksetIterationNode iterNode = (WorksetIterationNode) n;
+			final DeltaIterationBase<?, ?> iter = iterNode.getIterationContract();
 
-            // first, recursively build the data flow for the step function
-            final GraphCreatingVisitor recursiveCreator =
-                    new GraphCreatingVisitor(
-                            this,
-                            true,
-                            iterNode.getParallelism(),
-                            defaultDataExchangeMode,
-                            closure);
+			// we need to ensure that both the next-workset and the solution-set-delta depend on the workset.
+			// One check is for free during the translation, we do the other check here as a pre-condition
+			{
+				StepFunctionValidator wsf = new StepFunctionValidator();
+				iter.getNextWorkset().accept(wsf);
+				if (!wsf.hasFoundWorkset()) {
+					throw new CompilerException("In the given program, the next workset does not depend on the workset. " +
+														"This is a prerequisite in delta iterations.");
+				}
+			}
 
-            // descend from the solution set delta. check that it depends on both the workset
-            // and the solution set. If it does depend on both, this descend should create both
-            // nodes
-            iter.getSolutionSetDelta().accept(recursiveCreator);
+			// calculate the closure of the anonymous function
+			HashMap<Operator<?>, OptimizerNode> closure = new HashMap<Operator<?>, OptimizerNode>(con2node);
 
-            final WorksetNode worksetNode =
-                    (WorksetNode) recursiveCreator.con2node.get(iter.getWorkset());
+			// first, recursively build the data flow for the step function
+			final GraphCreatingVisitor recursiveCreator = new GraphCreatingVisitor(
+					this, true, iterNode.getParallelism(), defaultDataExchangeMode, closure);
 
-            if (worksetNode == null) {
-                throw new CompilerException(
-                        "In the given program, the solution set delta does not depend on the workset."
-                                + "This is a prerequisite in delta iterations.");
-            }
+			// descend from the solution set delta. check that it depends on both the workset
+			// and the solution set. If it does depend on both, this descend should create both nodes
+			iter.getSolutionSetDelta().accept(recursiveCreator);
 
-            iter.getNextWorkset().accept(recursiveCreator);
+			final WorksetNode worksetNode = (WorksetNode) recursiveCreator.con2node.get(iter.getWorkset());
 
-            SolutionSetNode solutionSetNode =
-                    (SolutionSetNode) recursiveCreator.con2node.get(iter.getSolutionSet());
+			if (worksetNode == null) {
+				throw new CompilerException("In the given program, the solution set delta does not depend on the workset." +
+													"This is a prerequisite in delta iterations.");
+			}
 
-            if (solutionSetNode == null
-                    || solutionSetNode.getOutgoingConnections() == null
-                    || solutionSetNode.getOutgoingConnections().isEmpty()) {
-                solutionSetNode =
-                        new SolutionSetNode(
-                                (DeltaIterationBase.SolutionSetPlaceHolder<?>)
-                                        iter.getSolutionSet(),
-                                iterNode);
-            } else {
-                for (DagConnection conn : solutionSetNode.getOutgoingConnections()) {
-                    OptimizerNode successor = conn.getTarget();
+			iter.getNextWorkset().accept(recursiveCreator);
 
-                    if (successor.getClass() == JoinNode.class) {
-                        // find out which input to the match the solution set is
-                        JoinNode mn = (JoinNode) successor;
-                        if (mn.getFirstPredecessorNode() == solutionSetNode) {
-                            mn.makeJoinWithSolutionSet(0);
-                        } else if (mn.getSecondPredecessorNode() == solutionSetNode) {
-                            mn.makeJoinWithSolutionSet(1);
-                        } else {
-                            throw new CompilerException();
-                        }
-                    } else if (successor.getClass() == CoGroupNode.class) {
-                        CoGroupNode cg = (CoGroupNode) successor;
-                        if (cg.getFirstPredecessorNode() == solutionSetNode) {
-                            cg.makeCoGroupWithSolutionSet(0);
-                        } else if (cg.getSecondPredecessorNode() == solutionSetNode) {
-                            cg.makeCoGroupWithSolutionSet(1);
-                        } else {
-                            throw new CompilerException();
-                        }
-                    } else {
-                        throw new InvalidProgramException(
-                                "Error: The only operations allowed on the solution set are Join and CoGroup.");
-                    }
-                }
-            }
+			SolutionSetNode solutionSetNode = (SolutionSetNode) recursiveCreator.con2node.get(iter.getSolutionSet());
 
-            final OptimizerNode nextWorksetNode =
-                    recursiveCreator.con2node.get(iter.getNextWorkset());
-            final OptimizerNode solutionSetDeltaNode =
-                    recursiveCreator.con2node.get(iter.getSolutionSetDelta());
+			if (solutionSetNode == null || solutionSetNode.getOutgoingConnections() == null || solutionSetNode.getOutgoingConnections().isEmpty()) {
+				solutionSetNode = new SolutionSetNode((DeltaIterationBase.SolutionSetPlaceHolder<?>) iter.getSolutionSet(), iterNode);
+			}
+			else {
+				for (DagConnection conn : solutionSetNode.getOutgoingConnections()) {
+					OptimizerNode successor = conn.getTarget();
 
-            // set the step function nodes to the iteration node
-            iterNode.setPartialSolution(solutionSetNode, worksetNode);
-            iterNode.setNextPartialSolution(
-                    solutionSetDeltaNode, nextWorksetNode, defaultDataExchangeMode);
+					if (successor.getClass() == JoinNode.class) {
+						// find out which input to the match the solution set is
+						JoinNode mn = (JoinNode) successor;
+						if (mn.getFirstPredecessorNode() == solutionSetNode) {
+							mn.makeJoinWithSolutionSet(0);
+						} else if (mn.getSecondPredecessorNode() == solutionSetNode) {
+							mn.makeJoinWithSolutionSet(1);
+						} else {
+							throw new CompilerException();
+						}
+					}
+					else if (successor.getClass() == CoGroupNode.class) {
+						CoGroupNode cg = (CoGroupNode) successor;
+						if (cg.getFirstPredecessorNode() == solutionSetNode) {
+							cg.makeCoGroupWithSolutionSet(0);
+						} else if (cg.getSecondPredecessorNode() == solutionSetNode) {
+							cg.makeCoGroupWithSolutionSet(1);
+						} else {
+							throw new CompilerException();
+						}
+					}
+					else {
+						throw new InvalidProgramException(
+								"Error: The only operations allowed on the solution set are Join and CoGroup.");
+					}
+				}
+			}
 
-            // go over the contained data flow and mark the dynamic path nodes
-            StaticDynamicPathIdentifier pathIdentifier =
-                    new StaticDynamicPathIdentifier(iterNode.getCostWeight());
-            iterNode.acceptForStepFunction(pathIdentifier);
-        }
-    }
+			final OptimizerNode nextWorksetNode = recursiveCreator.con2node.get(iter.getNextWorkset());
+			final OptimizerNode solutionSetDeltaNode = recursiveCreator.con2node.get(iter.getSolutionSetDelta());
+
+			// set the step function nodes to the iteration node
+			iterNode.setPartialSolution(solutionSetNode, worksetNode);
+			iterNode.setNextPartialSolution(solutionSetDeltaNode, nextWorksetNode, defaultDataExchangeMode);
+
+			// go over the contained data flow and mark the dynamic path nodes
+			StaticDynamicPathIdentifier pathIdentifier = new StaticDynamicPathIdentifier(iterNode.getCostWeight());
+			iterNode.acceptForStepFunction(pathIdentifier);
+		}
+	}
 }

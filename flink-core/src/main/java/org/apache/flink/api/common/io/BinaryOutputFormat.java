@@ -18,169 +18,168 @@
 
 package org.apache.flink.api.common.io;
 
+import java.io.FilterOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+
 import org.apache.flink.annotation.Public;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 
-import java.io.FilterOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
 
 @Public
 public abstract class BinaryOutputFormat<T> extends FileOutputFormat<T> {
+	
+	private static final long serialVersionUID = 1L;
+	
+	/** The config parameter which defines the fixed length of a record. */
+	public static final String BLOCK_SIZE_PARAMETER_KEY = "output.block_size";
 
-    private static final long serialVersionUID = 1L;
+	public static final long NATIVE_BLOCK_SIZE = Long.MIN_VALUE;
 
-    /** The config parameter which defines the fixed length of a record. */
-    public static final String BLOCK_SIZE_PARAMETER_KEY = "output.block_size";
+	/** The block size to use. */
+	private long blockSize = NATIVE_BLOCK_SIZE;
 
-    public static final long NATIVE_BLOCK_SIZE = Long.MIN_VALUE;
+	private transient BlockBasedOutput blockBasedOutput;
+	
+	private transient DataOutputViewStreamWrapper outView;
 
-    /** The block size to use. */
-    private long blockSize = NATIVE_BLOCK_SIZE;
 
-    private transient BlockBasedOutput blockBasedOutput;
+	@Override
+	public void close() throws IOException {
+		try {
+			DataOutputViewStreamWrapper o = this.outView;
+			if (o != null) {
+				o.close();
+			}
+		}
+		finally {
+			super.close();
+		}
+	}
+	
+	protected void complementBlockInfo(BlockInfo blockInfo) {}
 
-    private transient DataOutputViewStreamWrapper outView;
+	@Override
+	public void configure(Configuration parameters) {
+		super.configure(parameters);
 
-    @Override
-    public void close() throws IOException {
-        try {
-            DataOutputViewStreamWrapper o = this.outView;
-            if (o != null) {
-                o.close();
-            }
-        } finally {
-            super.close();
-        }
-    }
+		// read own parameters
+		this.blockSize = parameters.getLong(BLOCK_SIZE_PARAMETER_KEY, NATIVE_BLOCK_SIZE);
+		if (this.blockSize < 1 && this.blockSize != NATIVE_BLOCK_SIZE) {
+			throw new IllegalArgumentException("The block size parameter must be set and larger than 0.");
+		}
+		if (this.blockSize > Integer.MAX_VALUE) {
+			throw new UnsupportedOperationException("Currently only block size up to Integer.MAX_VALUE are supported");
+		}
+	}
 
-    protected void complementBlockInfo(BlockInfo blockInfo) {}
+	protected BlockInfo createBlockInfo() {
+		return new BlockInfo();
+	}
 
-    @Override
-    public void configure(Configuration parameters) {
-        super.configure(parameters);
+	@Override
+	public void open(int taskNumber, int numTasks) throws IOException {
+		super.open(taskNumber, numTasks);
 
-        // read own parameters
-        this.blockSize = parameters.getLong(BLOCK_SIZE_PARAMETER_KEY, NATIVE_BLOCK_SIZE);
-        if (this.blockSize < 1 && this.blockSize != NATIVE_BLOCK_SIZE) {
-            throw new IllegalArgumentException(
-                    "The block size parameter must be set and larger than 0.");
-        }
-        if (this.blockSize > Integer.MAX_VALUE) {
-            throw new UnsupportedOperationException(
-                    "Currently only block size up to Integer.MAX_VALUE are supported");
-        }
-    }
+		final long blockSize = this.blockSize == NATIVE_BLOCK_SIZE ?
+			this.outputFilePath.getFileSystem().getDefaultBlockSize() : this.blockSize;
 
-    protected BlockInfo createBlockInfo() {
-        return new BlockInfo();
-    }
+		this.blockBasedOutput = new BlockBasedOutput(this.stream, (int) blockSize);
+		this.outView = new DataOutputViewStreamWrapper(this.blockBasedOutput);
+	}
 
-    @Override
-    public void open(int taskNumber, int numTasks) throws IOException {
-        super.open(taskNumber, numTasks);
+	protected abstract void serialize(T record, DataOutputView dataOutput) throws IOException;
 
-        final long blockSize =
-                this.blockSize == NATIVE_BLOCK_SIZE
-                        ? this.outputFilePath.getFileSystem().getDefaultBlockSize()
-                        : this.blockSize;
+	@Override
+	public void writeRecord(T record) throws IOException {
+		this.blockBasedOutput.startRecord();
+		this.serialize(record, outView);
+	}
 
-        this.blockBasedOutput = new BlockBasedOutput(this.stream, (int) blockSize);
-        this.outView = new DataOutputViewStreamWrapper(this.blockBasedOutput);
-    }
+	/**
+	 * Writes a block info at the end of the blocks.<br>
+	 * Current implementation uses only int and not long.
+	 * 
+	 */
+	protected class BlockBasedOutput extends FilterOutputStream {
 
-    protected abstract void serialize(T record, DataOutputView dataOutput) throws IOException;
+		private static final int NO_RECORD = -1;
 
-    @Override
-    public void writeRecord(T record) throws IOException {
-        this.blockBasedOutput.startRecord();
-        this.serialize(record, outView);
-    }
+		private final int maxPayloadSize;
 
-    /**
-     * Writes a block info at the end of the blocks.<br>
-     * Current implementation uses only int and not long.
-     */
-    protected class BlockBasedOutput extends FilterOutputStream {
+		private int blockPos;
 
-        private static final int NO_RECORD = -1;
+		private int blockCount, totalCount;
 
-        private final int maxPayloadSize;
+		private long firstRecordStartPos = NO_RECORD;
 
-        private int blockPos;
+		private BlockInfo blockInfo = BinaryOutputFormat.this.createBlockInfo();
 
-        private int blockCount, totalCount;
+		private DataOutputView headerStream;
 
-        private long firstRecordStartPos = NO_RECORD;
+		public BlockBasedOutput(OutputStream out, int blockSize) {
+			super(out);
+			this.headerStream = new DataOutputViewStreamWrapper(out);
+			this.maxPayloadSize = blockSize - this.blockInfo.getInfoSize();
+		}
 
-        private BlockInfo blockInfo = BinaryOutputFormat.this.createBlockInfo();
+		@Override
+		public void close() throws IOException {
+			if (this.blockPos > 0) {
+				this.writeInfo();
+			}
+			super.flush();
+			super.close();
+		}
 
-        private DataOutputView headerStream;
+		public void startRecord() {
+			if (this.firstRecordStartPos == NO_RECORD) {
+				this.firstRecordStartPos = this.blockPos;
+			}
+			this.blockCount++;
+			this.totalCount++;
+		}
 
-        public BlockBasedOutput(OutputStream out, int blockSize) {
-            super(out);
-            this.headerStream = new DataOutputViewStreamWrapper(out);
-            this.maxPayloadSize = blockSize - this.blockInfo.getInfoSize();
-        }
+		@Override
+		public void write(byte[] b) throws IOException {
+			this.write(b, 0, b.length);
+		}
 
-        @Override
-        public void close() throws IOException {
-            if (this.blockPos > 0) {
-                this.writeInfo();
-            }
-            super.flush();
-            super.close();
-        }
+		@Override
+		public void write(byte[] b, int off, int len) throws IOException {
 
-        public void startRecord() {
-            if (this.firstRecordStartPos == NO_RECORD) {
-                this.firstRecordStartPos = this.blockPos;
-            }
-            this.blockCount++;
-            this.totalCount++;
-        }
+			for (int remainingLength = len, offset = off; remainingLength > 0;) {
+				int blockLen = Math.min(remainingLength, this.maxPayloadSize - this.blockPos);
+				this.out.write(b, offset, blockLen);
 
-        @Override
-        public void write(byte[] b) throws IOException {
-            this.write(b, 0, b.length);
-        }
+				this.blockPos += blockLen;
+				if (this.blockPos >= this.maxPayloadSize) {
+					this.writeInfo();
+				}
+				remainingLength -= blockLen;
+				offset += blockLen;
+			}
+		}
 
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
+		@Override
+		public void write(int b) throws IOException {
+			super.write(b);
+			if (++this.blockPos >= this.maxPayloadSize) {
+				this.writeInfo();
+			}
+		}
 
-            for (int remainingLength = len, offset = off; remainingLength > 0; ) {
-                int blockLen = Math.min(remainingLength, this.maxPayloadSize - this.blockPos);
-                this.out.write(b, offset, blockLen);
-
-                this.blockPos += blockLen;
-                if (this.blockPos >= this.maxPayloadSize) {
-                    this.writeInfo();
-                }
-                remainingLength -= blockLen;
-                offset += blockLen;
-            }
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            super.write(b);
-            if (++this.blockPos >= this.maxPayloadSize) {
-                this.writeInfo();
-            }
-        }
-
-        private void writeInfo() throws IOException {
-            this.blockInfo.setRecordCount(this.blockCount);
-            this.blockInfo.setAccumulatedRecordCount(this.totalCount);
-            this.blockInfo.setFirstRecordStart(
-                    this.firstRecordStartPos == NO_RECORD ? 0 : this.firstRecordStartPos);
-            BinaryOutputFormat.this.complementBlockInfo(this.blockInfo);
-            this.blockInfo.write(this.headerStream);
-            this.blockPos = 0;
-            this.blockCount = 0;
-            this.firstRecordStartPos = NO_RECORD;
-        }
-    }
+		private void writeInfo() throws IOException {
+			this.blockInfo.setRecordCount(this.blockCount);
+			this.blockInfo.setAccumulatedRecordCount(this.totalCount);
+			this.blockInfo.setFirstRecordStart(this.firstRecordStartPos == NO_RECORD ? 0 : this.firstRecordStartPos);
+			BinaryOutputFormat.this.complementBlockInfo(this.blockInfo);
+			this.blockInfo.write(this.headerStream);
+			this.blockPos = 0;
+			this.blockCount = 0;
+			this.firstRecordStartPos = NO_RECORD;
+		}
+	}
 }

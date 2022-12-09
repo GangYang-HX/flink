@@ -16,58 +16,60 @@
  * limitations under the License.
  */
 
+
 package org.apache.flink.runtime.operators.testutils;
 
 import org.apache.flink.runtime.operators.testutils.types.IntPair;
 import org.apache.flink.util.MutableObjectIterator;
 
-public class UniformIntPairGenerator implements MutableObjectIterator<IntPair> {
-    final int numKeys;
-    final int numVals;
+public class UniformIntPairGenerator implements MutableObjectIterator<IntPair>
+{
+	final int numKeys;
+	final int numVals;
+	
+	int keyCnt = 0;
+	int valCnt = 0;
+	boolean repeatKey;
+	
+	public UniformIntPairGenerator(int numKeys, int numVals, boolean repeatKey) {
+		this.numKeys = numKeys;
+		this.numVals = numVals;
+		this.repeatKey = repeatKey;
+	}
 
-    int keyCnt = 0;
-    int valCnt = 0;
-    boolean repeatKey;
+	@Override
+	public IntPair next(IntPair target) {
+		if(!repeatKey) {
+			if(valCnt >= numVals) {
+				return null;
+			}
+			
+			target.setKey(keyCnt++);
+			target.setValue(valCnt);
+			
+			if(keyCnt == numKeys) {
+				keyCnt = 0;
+				valCnt++;
+			}
+		} else {
+			if(keyCnt >= numKeys) {
+				return null;
+			}
+			
+			target.setKey(keyCnt);
+			target.setValue(valCnt++);
+			
+			if(valCnt == numVals) {
+				valCnt = 0;
+				keyCnt++;
+			}
+		}
+		
+		return target;
+	}
 
-    public UniformIntPairGenerator(int numKeys, int numVals, boolean repeatKey) {
-        this.numKeys = numKeys;
-        this.numVals = numVals;
-        this.repeatKey = repeatKey;
-    }
-
-    @Override
-    public IntPair next(IntPair target) {
-        if (!repeatKey) {
-            if (valCnt >= numVals) {
-                return null;
-            }
-
-            target.setKey(keyCnt++);
-            target.setValue(valCnt);
-
-            if (keyCnt == numKeys) {
-                keyCnt = 0;
-                valCnt++;
-            }
-        } else {
-            if (keyCnt >= numKeys) {
-                return null;
-            }
-
-            target.setKey(keyCnt);
-            target.setValue(valCnt++);
-
-            if (valCnt == numVals) {
-                valCnt = 0;
-                keyCnt++;
-            }
-        }
-
-        return target;
-    }
-
-    @Override
-    public IntPair next() {
-        return next(new IntPair());
-    }
+	@Override
+	public IntPair next() {
+		return next(new IntPair());
+	}
 }

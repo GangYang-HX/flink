@@ -35,236 +35,232 @@ import static org.junit.Assert.fail;
 
 public class GenericMessageTester {
 
-    public static void testMessageInstance(Serializable instance) throws Exception {
-        Serializable copy = CommonTestUtils.createCopySerializable(instance);
+	public static void testMessageInstance(Serializable instance) throws Exception {
+		Serializable copy = CommonTestUtils.createCopySerializable(instance);
+		
+		// test equals, hash code, toString
+		assertTrue(instance.equals(copy));
+		assertTrue(copy.equals(instance));
+		assertTrue(instance.hashCode() == copy.hashCode());
+		assertTrue(instance.toString().equals(copy.toString()));
+	}
+	
+	public static void testMessageInstances(Serializable instance1, Serializable instance2) throws Exception {
+		// test equals, hash code, toString
+		assertTrue(instance1.equals(instance2));
+		assertTrue(instance2.equals(instance1));
+		assertTrue(instance1.hashCode() == instance2.hashCode());
+		assertTrue(instance1.toString().equals(instance2.toString()));
 
-        // test equals, hash code, toString
-        assertTrue(instance.equals(copy));
-        assertTrue(copy.equals(instance));
-        assertTrue(instance.hashCode() == copy.hashCode());
-        assertTrue(instance.toString().equals(copy.toString()));
-    }
+		// test serializability
+		Serializable copy = CommonTestUtils.createCopySerializable(instance1);
+		assertTrue(instance1.equals(copy));
+		assertTrue(copy.equals(instance1));
+		assertTrue(instance1.hashCode() == copy.hashCode());
+	}
 
-    public static void testMessageInstances(Serializable instance1, Serializable instance2)
-            throws Exception {
-        // test equals, hash code, toString
-        assertTrue(instance1.equals(instance2));
-        assertTrue(instance2.equals(instance1));
-        assertTrue(instance1.hashCode() == instance2.hashCode());
-        assertTrue(instance1.toString().equals(instance2.toString()));
+	// ------------------------------------------------------------------------
+	//  Random Generators
+	// ------------------------------------------------------------------------
+	
+	@SuppressWarnings("unchecked")
+	public static <T> T instantiateGeneric(Class<T> messageClass, Random rnd, Instantiator<?>... extraInstantiators) {
+		try {
+			// build the map of extra instantiators
+			Map<Class<?>, Instantiator<?>> extraInsts = new HashMap<>();
+			for (Instantiator<?> inst : extraInstantiators) {
+				Class<?> type = (Class<?>) ((ParameterizedType) inst.getClass().getGenericInterfaces()[0]).getActualTypeArguments()[0];
+				assertNotNull("Cannot get type for extra instantiator", type);
+				extraInsts.put(type, inst);
+			}
 
-        // test serializability
-        Serializable copy = CommonTestUtils.createCopySerializable(instance1);
-        assertTrue(instance1.equals(copy));
-        assertTrue(copy.equals(instance1));
-        assertTrue(instance1.hashCode() == copy.hashCode());
-    }
+			Constructor<?>[] constructors = messageClass.getConstructors();
 
-    // ------------------------------------------------------------------------
-    //  Random Generators
-    // ------------------------------------------------------------------------
+			Class<?> missingType = null;
+			
+			outer:
+			for (Constructor<?> constructor : constructors) {
+				
+				Class<?>[] paramTypes = constructor.getParameterTypes();
+				Object[] params = new Object[paramTypes.length];
 
-    @SuppressWarnings("unchecked")
-    public static <T> T instantiateGeneric(
-            Class<T> messageClass, Random rnd, Instantiator<?>... extraInstantiators) {
-        try {
-            // build the map of extra instantiators
-            Map<Class<?>, Instantiator<?>> extraInsts = new HashMap<>();
-            for (Instantiator<?> inst : extraInstantiators) {
-                Class<?> type =
-                        (Class<?>)
-                                ((ParameterizedType) inst.getClass().getGenericInterfaces()[0])
-                                        .getActualTypeArguments()[0];
-                assertNotNull("Cannot get type for extra instantiator", type);
-                extraInsts.put(type, inst);
-            }
+				for (int i = 0; i < paramTypes.length; i++) {
+					Instantiator<?> inst = extraInsts.get(paramTypes[i]);
+					if (inst == null) {
+						inst = INSTANTIATORS.get(paramTypes[i]);
+					}
+					
+					if (inst == null) {
+						missingType = paramTypes[i];
+						continue outer;
+					}
+					
+					params[i] = inst.instantiate(rnd);
+				}
 
-            Constructor<?>[] constructors = messageClass.getConstructors();
+				return (T) constructor.newInstance(params);
+			}
 
-            Class<?> missingType = null;
+			//noinspection ConstantConditions
+			fail("No instantiator available for type " + missingType.getCanonicalName());
+			throw new RuntimeException();
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			fail("Could not perform reflective tests: " + e.getMessage());
+			throw new RuntimeException();
+		}
+	}
+	
+	public static String randomString(Random rnd) {
+		int len = rnd.nextInt(64 + 1);
+		char[] chars = new char[len];
+		for (int i = 0; i < len; i++) {
+			chars[i] = (char) rnd.nextInt();
+		}
+		return new String(chars);
+	}
+	
+	public static JobID randomJobId(Random rnd) {
+		return new JobID(rnd.nextLong(), rnd.nextLong());
+	}
+	
+	public static JobStatus randomJobStatus(Random rnd) {
+		return JobStatus.values()[rnd.nextInt(JobStatus.values().length)];
+	}
 
-            outer:
-            for (Constructor<?> constructor : constructors) {
+	// ------------------------------------------------------------------------
+	//  Map of Instantiators
+	// ------------------------------------------------------------------------
+	
+	private static final Map<Class<?>, Instantiator<?>> INSTANTIATORS = new HashMap<>();
+	
+	static {
+		INSTANTIATORS.put(boolean.class, new BooleanInstantiator());
+		INSTANTIATORS.put(Boolean.class, new BooleanInstantiator());
 
-                Class<?>[] paramTypes = constructor.getParameterTypes();
-                Object[] params = new Object[paramTypes.length];
+		INSTANTIATORS.put(char.class, new CharInstantiator());
+		INSTANTIATORS.put(Character.class, new CharInstantiator());
 
-                for (int i = 0; i < paramTypes.length; i++) {
-                    Instantiator<?> inst = extraInsts.get(paramTypes[i]);
-                    if (inst == null) {
-                        inst = INSTANTIATORS.get(paramTypes[i]);
-                    }
+		INSTANTIATORS.put(byte.class, new ByteInstantiator());
+		INSTANTIATORS.put(Byte.class, new ByteInstantiator());
 
-                    if (inst == null) {
-                        missingType = paramTypes[i];
-                        continue outer;
-                    }
+		INSTANTIATORS.put(short.class, new ShortInstantiator());
+		INSTANTIATORS.put(Short.class, new ShortInstantiator());
 
-                    params[i] = inst.instantiate(rnd);
-                }
+		INSTANTIATORS.put(int.class, new IntInstantiator());
+		INSTANTIATORS.put(Integer.class, new IntInstantiator());
 
-                return (T) constructor.newInstance(params);
-            }
+		INSTANTIATORS.put(long.class, new LongInstantiator());
+		INSTANTIATORS.put(Long.class, new LongInstantiator());
 
-            //noinspection ConstantConditions
-            fail("No instantiator available for type " + missingType.getCanonicalName());
-            throw new RuntimeException();
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail("Could not perform reflective tests: " + e.getMessage());
-            throw new RuntimeException();
-        }
-    }
+		INSTANTIATORS.put(float.class, new FloatInstantiator());
+		INSTANTIATORS.put(Float.class, new FloatInstantiator());
 
-    public static String randomString(Random rnd) {
-        int len = rnd.nextInt(64 + 1);
-        char[] chars = new char[len];
-        for (int i = 0; i < len; i++) {
-            chars[i] = (char) rnd.nextInt();
-        }
-        return new String(chars);
-    }
+		INSTANTIATORS.put(double.class, new DoubleInstantiator());
+		INSTANTIATORS.put(Double.class, new DoubleInstantiator());
 
-    public static JobID randomJobId(Random rnd) {
-        return new JobID(rnd.nextLong(), rnd.nextLong());
-    }
+		INSTANTIATORS.put(String.class, new StringInstantiator());
 
-    public static JobStatus randomJobStatus(Random rnd) {
-        return JobStatus.values()[rnd.nextInt(JobStatus.values().length)];
-    }
+		INSTANTIATORS.put(JobID.class, new JobIdInstantiator());
+		INSTANTIATORS.put(JobStatus.class, new JobStatusInstantiator());
+	}
+	
+	// ------------------------------------------------------------------------
+	//  Instantiators
+	// ------------------------------------------------------------------------
+	
+	public static interface Instantiator<T> {
+		
+		T instantiate(Random rnd);
+	}
 
-    // ------------------------------------------------------------------------
-    //  Map of Instantiators
-    // ------------------------------------------------------------------------
+	public static class ByteInstantiator implements Instantiator<Byte> {
 
-    private static final Map<Class<?>, Instantiator<?>> INSTANTIATORS = new HashMap<>();
+		@Override
+		public Byte instantiate(Random rnd) {
+			int i = rnd.nextInt(100);
+			return (byte) i;
+		}
+	}
 
-    static {
-        INSTANTIATORS.put(boolean.class, new BooleanInstantiator());
-        INSTANTIATORS.put(Boolean.class, new BooleanInstantiator());
+	public static class ShortInstantiator implements Instantiator<Short> {
 
-        INSTANTIATORS.put(char.class, new CharInstantiator());
-        INSTANTIATORS.put(Character.class, new CharInstantiator());
+		@Override
+		public Short instantiate(Random rnd) {
+			return (short) rnd.nextInt(30000);
+		}
+	}
 
-        INSTANTIATORS.put(byte.class, new ByteInstantiator());
-        INSTANTIATORS.put(Byte.class, new ByteInstantiator());
+	public static class IntInstantiator implements Instantiator<Integer> {
 
-        INSTANTIATORS.put(short.class, new ShortInstantiator());
-        INSTANTIATORS.put(Short.class, new ShortInstantiator());
+		@Override
+		public Integer instantiate(Random rnd) {
+			return rnd.nextInt(Integer.MAX_VALUE);
+		}
+	}
 
-        INSTANTIATORS.put(int.class, new IntInstantiator());
-        INSTANTIATORS.put(Integer.class, new IntInstantiator());
+	public static class LongInstantiator implements Instantiator<Long> {
 
-        INSTANTIATORS.put(long.class, new LongInstantiator());
-        INSTANTIATORS.put(Long.class, new LongInstantiator());
+		@Override
+		public Long instantiate(Random rnd) {
+			return (long) rnd.nextInt(Integer.MAX_VALUE);
+		}
+	}
 
-        INSTANTIATORS.put(float.class, new FloatInstantiator());
-        INSTANTIATORS.put(Float.class, new FloatInstantiator());
+	public static class FloatInstantiator implements Instantiator<Float> {
 
-        INSTANTIATORS.put(double.class, new DoubleInstantiator());
-        INSTANTIATORS.put(Double.class, new DoubleInstantiator());
+		@Override
+		public Float instantiate(Random rnd) {
+			return rnd.nextFloat();
+		}
+	}
 
-        INSTANTIATORS.put(String.class, new StringInstantiator());
+	public static class DoubleInstantiator implements Instantiator<Double> {
 
-        INSTANTIATORS.put(JobID.class, new JobIdInstantiator());
-        INSTANTIATORS.put(JobStatus.class, new JobStatusInstantiator());
-    }
+		@Override
+		public Double instantiate(Random rnd) {
+			return rnd.nextDouble();
+		}
+	}
 
-    // ------------------------------------------------------------------------
-    //  Instantiators
-    // ------------------------------------------------------------------------
+	public static class BooleanInstantiator implements Instantiator<Boolean> {
 
-    public static interface Instantiator<T> {
+		@Override
+		public Boolean instantiate(Random rnd) {
+			return rnd.nextBoolean();
+		}
+	}
 
-        T instantiate(Random rnd);
-    }
+	public static class CharInstantiator implements Instantiator<Character> {
 
-    public static class ByteInstantiator implements Instantiator<Byte> {
+		@Override
+		public Character instantiate(Random rnd) {
+			return (char) rnd.nextInt(30000);
+		}
+	}
 
-        @Override
-        public Byte instantiate(Random rnd) {
-            int i = rnd.nextInt(100);
-            return (byte) i;
-        }
-    }
+	public static class StringInstantiator implements Instantiator<String> {
 
-    public static class ShortInstantiator implements Instantiator<Short> {
+		@Override
+		public String instantiate(Random rnd) {
+			return randomString(rnd);
+		}
+	}
 
-        @Override
-        public Short instantiate(Random rnd) {
-            return (short) rnd.nextInt(30000);
-        }
-    }
+	public static class JobIdInstantiator implements Instantiator<JobID> {
 
-    public static class IntInstantiator implements Instantiator<Integer> {
+		@Override
+		public JobID instantiate(Random rnd) {
+			return randomJobId(rnd);
+		}
+	}
 
-        @Override
-        public Integer instantiate(Random rnd) {
-            return rnd.nextInt(Integer.MAX_VALUE);
-        }
-    }
+	public static class JobStatusInstantiator implements Instantiator<JobStatus> {
 
-    public static class LongInstantiator implements Instantiator<Long> {
-
-        @Override
-        public Long instantiate(Random rnd) {
-            return (long) rnd.nextInt(Integer.MAX_VALUE);
-        }
-    }
-
-    public static class FloatInstantiator implements Instantiator<Float> {
-
-        @Override
-        public Float instantiate(Random rnd) {
-            return rnd.nextFloat();
-        }
-    }
-
-    public static class DoubleInstantiator implements Instantiator<Double> {
-
-        @Override
-        public Double instantiate(Random rnd) {
-            return rnd.nextDouble();
-        }
-    }
-
-    public static class BooleanInstantiator implements Instantiator<Boolean> {
-
-        @Override
-        public Boolean instantiate(Random rnd) {
-            return rnd.nextBoolean();
-        }
-    }
-
-    public static class CharInstantiator implements Instantiator<Character> {
-
-        @Override
-        public Character instantiate(Random rnd) {
-            return (char) rnd.nextInt(30000);
-        }
-    }
-
-    public static class StringInstantiator implements Instantiator<String> {
-
-        @Override
-        public String instantiate(Random rnd) {
-            return randomString(rnd);
-        }
-    }
-
-    public static class JobIdInstantiator implements Instantiator<JobID> {
-
-        @Override
-        public JobID instantiate(Random rnd) {
-            return randomJobId(rnd);
-        }
-    }
-
-    public static class JobStatusInstantiator implements Instantiator<JobStatus> {
-
-        @Override
-        public JobStatus instantiate(Random rnd) {
-            return randomJobStatus(rnd);
-        }
-    }
+		@Override
+		public JobStatus instantiate(Random rnd) {
+			return randomJobStatus(rnd);
+		}
+	}
 }

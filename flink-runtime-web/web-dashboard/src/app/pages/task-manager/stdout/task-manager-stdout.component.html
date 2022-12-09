@@ -16,14 +16,5 @@
   ~ limitations under the License.
   -->
 
-<nz-code-editor
-  flinkAutoResize
-  [nzLoading]="loading"
-  [ngModel]="stdout"
-  [nzEditorOption]="editorOptions"
-></nz-code-editor>
-<flink-addon-compact
-  [downloadHref]="downloadUrl"
-  [downloadName]="downloadName"
-  (reload)="reload()"
-></flink-addon-compact>
+<flink-monaco-editor [value]="stdout"></flink-monaco-editor>
+<flink-refresh-download [compactMode]="true" [downloadHref]="'taskmanagers/'+taskManagerDetail?.id+'/stdout'" [downloadName]="'taskmanager_'+taskManagerDetail?.id+'_stdout'" (reload)="reload()"></flink-refresh-download>

@@ -21,9 +21,13 @@ package org.apache.flink.contrib.streaming.state;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.IllegalConfigurationException;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.state.StateBackendFactory;
+import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.Optional;
 
 /**
  * A factory that creates an {@link org.apache.flink.contrib.streaming.state.RocksDBStateBackend}
@@ -31,21 +35,29 @@ import java.io.IOException;
  */
 public class RocksDBStateBackendFactory implements StateBackendFactory<RocksDBStateBackend> {
 
-    @Override
-    public RocksDBStateBackend createFromConfig(ReadableConfig config, ClassLoader classLoader)
-            throws IllegalConfigurationException, IOException {
+	@Override
+	public RocksDBStateBackend createFromConfig(ReadableConfig config, ClassLoader classLoader)
+			throws IllegalConfigurationException, IOException {
 
-        // we need to explicitly read the checkpoint directory here, because that
-        // is a required constructor parameter
-        final String checkpointDirURI = config.get(CheckpointingOptions.CHECKPOINTS_DIRECTORY);
-        if (checkpointDirURI == null) {
-            throw new IllegalConfigurationException(
-                    "Cannot create the RocksDB state backend: The configuration does not specify the "
-                            + "checkpoint directory '"
-                            + CheckpointingOptions.CHECKPOINTS_DIRECTORY.key()
-                            + '\'');
-        }
+		// we need to explicitly read the checkpoint directory here, because that
+		// is a required constructor parameter
+		final String checkpointDirURI = config.get(CheckpointingOptions.CHECKPOINTS_DIRECTORY);
 
-        return new RocksDBStateBackend(checkpointDirURI).configure(config, classLoader);
-    }
+		if (!checkpointEnabled(config)) {
+			// we set a rocksdb state backend without checkpoint backend.
+			return new RocksDBStateBackend((StateBackend) new DummyPersistStateBackend());
+		} else {
+			if (checkpointDirURI == null) {
+				throw new IllegalConfigurationException(
+						"Cannot create the RocksDB state backend: The configuration does not specify the " +
+								"checkpoint directory '" + CheckpointingOptions.CHECKPOINTS_DIRECTORY.key() + '\'');
+			}
+			return new RocksDBStateBackend(checkpointDirURI).configure(config, classLoader);
+		}
+	}
+
+	private boolean checkpointEnabled(ReadableConfig config) {
+		Optional<Duration> duration = config.getOptional(ExecutionCheckpointingOptions.CHECKPOINTING_INTERVAL);
+		return duration.filter(d -> d.toMillis() > 0).isPresent();
+	}
 }

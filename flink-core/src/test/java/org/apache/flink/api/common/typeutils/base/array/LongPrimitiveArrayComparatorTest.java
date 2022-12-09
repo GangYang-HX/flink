@@ -18,28 +18,27 @@
 package org.apache.flink.api.common.typeutils.base.array;
 
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
+import org.junit.Assert;
 
-import static org.assertj.core.api.Assertions.assertThat;
+public class LongPrimitiveArrayComparatorTest extends PrimitiveArrayComparatorTestBase<long[]> {
+	public LongPrimitiveArrayComparatorTest() {
+		super(PrimitiveArrayTypeInfo.LONG_PRIMITIVE_ARRAY_TYPE_INFO);
+	}
 
-class LongPrimitiveArrayComparatorTest extends PrimitiveArrayComparatorTestBase<long[]> {
-    public LongPrimitiveArrayComparatorTest() {
-        super(PrimitiveArrayTypeInfo.LONG_PRIMITIVE_ARRAY_TYPE_INFO);
-    }
+	@Override
+	protected void deepEquals(String message, long[] should, long[] is) {
+		Assert.assertArrayEquals(message, should, is);
+	}
 
-    @Override
-    protected void deepEquals(String message, long[] should, long[] is) {
-        assertThat(is).as(message).containsExactly(is);
-    }
-
-    @Override
-    protected long[][] getSortedTestData() {
-        return new long[][] {
-            new long[] {-1, 0},
-            new long[] {0, -1},
-            new long[] {0, 0},
-            new long[] {0, 1},
-            new long[] {0, 1, 2},
-            new long[] {2}
-        };
-    }
+	@Override
+	protected long[][] getSortedTestData() {
+		return new long[][]{
+			new long[]{-1, 0},
+			new long[]{0, -1},
+			new long[]{0, 0},
+			new long[]{0, 1},
+			new long[]{0, 1, 2},
+			new long[]{2}
+		};
+	}
 }

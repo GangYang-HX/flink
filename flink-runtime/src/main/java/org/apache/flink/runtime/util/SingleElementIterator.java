@@ -22,50 +22,48 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * An {@link Iterator} that contains only a single element. The element can be reset such that the
- * iterator can be used multiple times. Initially, the iterator is empty until an element is set via
- * {@link #set(Object)}.
- *
+ * An {@link Iterator} that contains only a single element. The element can be reset such that the iterator can be used
+ * multiple times. Initially, the iterator is empty until an element is set via {@link #set(Object)}.
+ * 
  * @param <E> The generic type of the iterator.
  */
 public final class SingleElementIterator<E> implements Iterator<E>, Iterable<E> {
+		
+		private E current;
+		private boolean available = false;
+		
+		/**
+		 * Resets the element. After this call, the iterator has one element available, which is the given element.
+		 * 
+		 * @param current The element to make available to the iterator.
+		 */
+		public void set(E current) {
+			this.current = current;
+			this.available = true;
+		}
 
-    private E current;
-    private boolean available = false;
+		@Override
+		public boolean hasNext() {
+			return available;
+		}
 
-    /**
-     * Resets the element. After this call, the iterator has one element available, which is the
-     * given element.
-     *
-     * @param current The element to make available to the iterator.
-     */
-    public void set(E current) {
-        this.current = current;
-        this.available = true;
-    }
+		@Override
+		public E next() {
+			if (available) {
+				available = false;
+				return current;
+			} else {
+				throw new NoSuchElementException();
+			}
+		}
 
-    @Override
-    public boolean hasNext() {
-        return available;
-    }
+		@Override
+		public void remove() {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public E next() {
-        if (available) {
-            available = false;
-            return current;
-        } else {
-            throw new NoSuchElementException();
-        }
-    }
-
-    @Override
-    public void remove() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Iterator<E> iterator() {
-        return this;
-    }
-}
+		@Override
+		public Iterator<E> iterator() {
+			return this;
+		}
+	}

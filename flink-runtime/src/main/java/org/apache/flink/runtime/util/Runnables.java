@@ -18,38 +18,29 @@
 
 package org.apache.flink.runtime.util;
 
-import org.apache.flink.util.FatalExitExceptionHandler;
-
-/** Utils related to {@link Runnable}. */
+/**
+ * Utils related to {@link Runnable}.
+ */
 public class Runnables {
 
-    /**
-     * Asserts that the given {@link Runnable} does not throw exceptions. If the runnable throws
-     * exceptions, then it will call the {@link FatalExitExceptionHandler}.
-     *
-     * @param runnable to assert for no exceptions
-     */
-    public static void assertNoException(Runnable runnable) {
-        withUncaughtExceptionHandler(runnable, FatalExitExceptionHandler.INSTANCE).run();
-    }
-
-    /**
-     * Guard {@link Runnable} with uncaughtException handler, because {@link
-     * java.util.concurrent.ScheduledExecutorService} does not respect the one assigned to executing
-     * {@link Thread} instance.
-     *
-     * @param runnable Runnable future to guard.
-     * @param uncaughtExceptionHandler Handler to call in case of uncaught exception.
-     * @return Future with handler.
-     */
-    public static Runnable withUncaughtExceptionHandler(
-            Runnable runnable, Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
-        return () -> {
-            try {
-                runnable.run();
-            } catch (Throwable t) {
-                uncaughtExceptionHandler.uncaughtException(Thread.currentThread(), t);
-            }
-        };
-    }
+	/**
+	 * Guard {@link Runnable} with uncaughtException handler, because
+	 * {@link java.util.concurrent.ScheduledExecutorService} does not respect the one assigned to
+	 * executing {@link Thread} instance.
+	 *
+	 * @param runnable Runnable future to guard.
+	 * @param uncaughtExceptionHandler Handler to call in case of uncaught exception.
+	 * @return Future with handler.
+	 */
+	public static Runnable withUncaughtExceptionHandler(
+		Runnable runnable,
+		Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
+		return () -> {
+			try {
+				runnable.run();
+			} catch (Throwable t) {
+				uncaughtExceptionHandler.uncaughtException(Thread.currentThread(), t);
+			}
+		};
+	}
 }
